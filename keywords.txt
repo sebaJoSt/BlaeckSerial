@@ -1,0 +1,22 @@
+# Syntax Coloring Map For BlaeckSerial
+
+# Datatypes (KEYWORD1)
+BlaeckSerial    KEYWORD1
+
+# Methods and Functions (KEYWORD2)
+begin	KEYWORD2
+beginMaster	KEYWORD2
+beginSlave	KEYWORD2
+addSignal	KEYWORD2
+deleteSignals	KEYWORD2
+writeSymbols	KEYWORD2
+writeData	KEYWORD2
+timedWriteData	KEYWORD2
+setTimedData	KEYWORD2
+read	KEYWORD2
+attachRead	KEYWORD2
+tick	KEYWORD2
+
+# Instances (KEYWORD2)
+
+# Constants (LITERAL1)
