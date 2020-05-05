@@ -63,7 +63,6 @@ typedef enum DataType
   Blaeck_long,
   Blaeck_ulong,
   Blaeck_float,
-  Blaeck_double
 };
 
 struct Signal {
@@ -89,10 +88,14 @@ class BlaeckSerial {
     //add or delete signals
     void addSignal(String SymbolName, bool * value);
     void addSignal(String SymbolName, byte * value);
-    void addSignal(String SymbolName, float * value);
-    void addSignal(String SymbolName, double * value);
-    void addSignal(String SymbolName, unsigned long * value);
+	void addSignal(String SymbolName, short * value);
+	void addSignal(String SymbolName, unsigned short * value);
     void addSignal(String SymbolName, int * value);
+	void addSignal(String SymbolName, unsigned int * value);
+	void addSignal(String SymbolName, long * value);
+    void addSignal(String SymbolName, unsigned long * value);
+	void addSignal(String SymbolName, float * value);
+    void addSignal(String symbolname, double * value);
     void deleteSignals();
 
     // ----- Symbols -----
@@ -105,16 +108,16 @@ class BlaeckSerial {
 
     // ----- Timed Data -----
     /**
-         @brief Call this function every some milliseconds for writing timed data
+       @brief Call this function every some milliseconds for writing timed data
     */
     void timedWriteData();
     /**
-         @brief Call this function every some milliseconds for writing timed data
+       @brief Call this function every some milliseconds for writing timed data
        @param messageId --> A unique message ID which echoes back to transmitter to indicate a response to a message.
     */
     void timedWriteData(unsigned long messageID);
     /**
-         @brief Call this function for timed data settings
+       @brief Call this function for timed data settings
     */
     void setTimedData(bool timedActivated, unsigned long timedInterval_ms);
 
@@ -153,7 +156,7 @@ class BlaeckSerial {
     unsigned int _signalIndex = 0;
 
 
-    bool _timedActivated = true;
+    bool _timedActivated = false;
     bool _timedFirstTime = true;
     unsigned long _timedFirstTimeDone_ms = 0;
     unsigned long _timedSetPoint_ms = 0;
@@ -205,6 +208,11 @@ class BlaeckSerial {
     } shortCvt;
 
     union {
+      short val;
+      byte bval[2];
+    } ushortCvt;
+		
+    union {
       int val;
       byte bval[2];
     } intCvt;
@@ -228,11 +236,6 @@ class BlaeckSerial {
       float val;
       byte bval[4];
     } fltCvt;
-
-    union {
-      double val;
-      byte bval[8];
-    } dblCvt;
 
 };
 

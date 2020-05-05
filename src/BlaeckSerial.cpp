@@ -53,30 +53,30 @@ void BlaeckSerial::addSignal(String symbolName, bool * value) {
   Signals[_signalIndex].Address = value;
   _signalIndex++;
 }
-void BlaeckSerial::addSignal(String symbolName, double * value) {
+void BlaeckSerial::addSignal(String symbolName, byte * value) {
   Signals[_signalIndex].SymbolName = symbolName;
   if (_masterSlaveConfig == Slave) {
     Signals[_signalIndex].SymbolName = _slaveSymbolPrefix + symbolName;
   }
-  Signals[_signalIndex].DataType = Blaeck_double;
+  Signals[_signalIndex].DataType = Blaeck_byte;
   Signals[_signalIndex].Address = value;
   _signalIndex++;
 }
-void BlaeckSerial::addSignal(String symbolName, float * value) {
+void BlaeckSerial::addSignal(String symbolName, short * value) {
   Signals[_signalIndex].SymbolName = symbolName;
   if (_masterSlaveConfig == Slave) {
     Signals[_signalIndex].SymbolName = _slaveSymbolPrefix + symbolName;
   }
-  Signals[_signalIndex].DataType = Blaeck_float;
+  Signals[_signalIndex].DataType = Blaeck_short;
   Signals[_signalIndex].Address = value;
   _signalIndex++;
 }
-void BlaeckSerial::addSignal(String symbolName, unsigned long * value) {
+void BlaeckSerial::addSignal(String symbolName, unsigned short * value) {
   Signals[_signalIndex].SymbolName = symbolName;
   if (_masterSlaveConfig == Slave) {
     Signals[_signalIndex].SymbolName = _slaveSymbolPrefix + symbolName;
   }
-  Signals[_signalIndex].DataType = Blaeck_ulong;
+  Signals[_signalIndex].DataType = Blaeck_ushort;
   Signals[_signalIndex].Address = value;
   _signalIndex++;
 }
@@ -89,15 +89,52 @@ void BlaeckSerial::addSignal(String symbolName, int * value) {
   Signals[_signalIndex].Address = value;
   _signalIndex++;
 }
-void BlaeckSerial::addSignal(String symbolName, byte * value) {
+void BlaeckSerial::addSignal(String symbolName, unsigned int * value) {
   Signals[_signalIndex].SymbolName = symbolName;
   if (_masterSlaveConfig == Slave) {
     Signals[_signalIndex].SymbolName = _slaveSymbolPrefix + symbolName;
   }
-  Signals[_signalIndex].DataType = Blaeck_byte;
+  Signals[_signalIndex].DataType = Blaeck_uint;
   Signals[_signalIndex].Address = value;
   _signalIndex++;
 }
+void BlaeckSerial::addSignal(String symbolName, long * value) {
+  Signals[_signalIndex].SymbolName = symbolName;
+  if (_masterSlaveConfig == Slave) {
+    Signals[_signalIndex].SymbolName = _slaveSymbolPrefix + symbolName;
+  }
+  Signals[_signalIndex].DataType = Blaeck_long;
+  Signals[_signalIndex].Address = value;
+  _signalIndex++;
+}
+void BlaeckSerial::addSignal(String symbolName, unsigned long * value) {
+  Signals[_signalIndex].SymbolName = symbolName;
+  if (_masterSlaveConfig == Slave) {
+    Signals[_signalIndex].SymbolName = _slaveSymbolPrefix + symbolName;
+  }
+  Signals[_signalIndex].DataType = Blaeck_ulong;
+  Signals[_signalIndex].Address = value;
+  _signalIndex++;
+}
+void BlaeckSerial::addSignal(String symbolName, float * value) {
+  Signals[_signalIndex].SymbolName = symbolName;
+  if (_masterSlaveConfig == Slave) {
+    Signals[_signalIndex].SymbolName = _slaveSymbolPrefix + symbolName;
+  }
+  Signals[_signalIndex].DataType = Blaeck_float;
+  Signals[_signalIndex].Address = value;
+  _signalIndex++;
+}
+void BlaeckSerial::addSignal(String symbolName, double * value) {
+  Signals[_signalIndex].SymbolName = symbolName;
+  if (_masterSlaveConfig == Slave) {
+    Signals[_signalIndex].SymbolName = _slaveSymbolPrefix + symbolName;
+  }
+  Signals[_signalIndex].DataType = Blaeck_float;
+  Signals[_signalIndex].Address = value;
+  _signalIndex++;
+}
+
 void BlaeckSerial::deleteSignals() {
   _signalIndex = 0;
 }
@@ -132,14 +169,14 @@ void BlaeckSerial::read() {
       unsigned long unit_multiplicator = 1000;
       unsigned long timedInterval_ms = parameter * unit_multiplicator;
 
-      setTimedData(true, timedInterval_ms);
+      this->setTimedData(true, timedInterval_ms);
 
     }  else if (strcmp(COMMAND, "BLAECK.DEACTIVATE_TIMED") == 0)
     {
-      setTimedData(false, _timedInterval_ms);
+      this->setTimedData(false, _timedInterval_ms);
     }
 
-    _readCallback(COMMAND, PARAMETER, STRING_01);
+    if (_readCallback != NULL) _readCallback(COMMAND, PARAMETER, STRING_01);
   }
 }
 void BlaeckSerial::attachRead(void (*readCallback) (char * command, int * parameter, char * string01)) {
@@ -309,6 +346,10 @@ void BlaeckSerial::writeLocalData(unsigned long msg_id, bool send_eol) {
           shortCvt.val = *((short*)signal.Address);
           SerialRef->write(shortCvt.bval, 2);
         } break;
+      case (Blaeck_ushort): {
+          ushortCvt.val = *((unsigned short*)signal.Address);
+          SerialRef->write(ushortCvt.bval, 2);
+        } break;
       case (Blaeck_int): {
           intCvt.val = *((int*)signal.Address);
           SerialRef->write(intCvt.bval, 2);
@@ -328,10 +369,6 @@ void BlaeckSerial::writeLocalData(unsigned long msg_id, bool send_eol) {
       case (Blaeck_float): {
           fltCvt.val = *((float*)signal.Address);
           SerialRef->write(fltCvt.bval, 4);
-        } break;
-      case (Blaeck_double): {
-          dblCvt.val = *((double*)signal.Address);
-          SerialRef->write(dblCvt.bval, 8);
         } break;
     }
   }
@@ -438,27 +475,27 @@ void BlaeckSerial::writeLocalSymbols(unsigned long msg_id, bool send_eol) {
           SerialRef->write(0x2);
           break;
         }
-      case (Blaeck_int): {
+      case (Blaeck_ushort): {
           SerialRef->write(0x3);
           break;
         }
-      case (Blaeck_uint): {
+      case (Blaeck_int): {
           SerialRef->write(0x4);
           break;
         }
-      case (Blaeck_long): {
+      case (Blaeck_uint): {
           SerialRef->write(0x5);
           break;
         }
-      case (Blaeck_ulong): {
+      case (Blaeck_long): {
           SerialRef->write(0x6);
           break;
         }
-      case (Blaeck_float): {
+      case (Blaeck_ulong): {
           SerialRef->write(0x7);
           break;
         }
-      case (Blaeck_double): {
+      case (Blaeck_float): {
           SerialRef->write(0x8);
           break;
         }
@@ -577,27 +614,27 @@ void BlaeckSerial::wireSlaveTransmitSingleSymbol() {
         Wire.write(0x2);
         break;
       }
-    case (Blaeck_int): {
+    case (Blaeck_ushort): {
         Wire.write(0x3);
         break;
       }
-    case (Blaeck_uint): {
+    case (Blaeck_int): {
         Wire.write(0x4);
         break;
       }
-    case (Blaeck_long): {
+    case (Blaeck_uint): {
         Wire.write(0x5);
         break;
       }
-    case (Blaeck_ulong): {
+    case (Blaeck_long): {
         Wire.write(0x6);
         break;
       }
-    case (Blaeck_float): {
+    case (Blaeck_ulong): {
         Wire.write(0x7);
         break;
       }
-    case (Blaeck_double): {
+    case (Blaeck_float): {
         Wire.write(0x8);
         break;
       }
@@ -630,6 +667,11 @@ void BlaeckSerial::wireSlaveTransmitSingleDataPoint() {
         Wire.write(2);
         Wire.write(shortCvt.bval, 2);
       } break;
+	case (Blaeck_ushort): {
+        ushortCvt.val = *((unsigned short*)signal.Address);
+        Wire.write(2);
+        Wire.write(ushortCvt.bval, 2);
+      } break;
     case (Blaeck_int): {
         intCvt.val = *((int*)signal.Address);
         Wire.write(2);
@@ -654,11 +696,6 @@ void BlaeckSerial::wireSlaveTransmitSingleDataPoint() {
         fltCvt.val = *((float*)signal.Address);
         Wire.write(4);
         Wire.write(fltCvt.bval, 4);
-      } break;
-    case (Blaeck_double): {
-        dblCvt.val = *((double*)signal.Address);
-        Wire.write(8);
-        Wire.write(dblCvt.bval, 8);
       } break;
   }
 
