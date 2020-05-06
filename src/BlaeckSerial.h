@@ -4,9 +4,10 @@
 */
 
 
-/*  MESSAGE DECODER
+/*  Message Decoder
 
-  -INCOMING MESSAGES----------------------------------------------------
+  
+  * Incoming Messages
   Message:         <COMMAND,PARAMETER_01,PARAMETER_02,...,PARAMETER_10>
   StringMessage:   <COMMAND, STRING_01  ,PARAMETER_02,...,PARAMETER_10>
                    <---------max. 64 chars---------------------------->
@@ -14,30 +15,33 @@
   PARAMETER:           Int 16 Bit, max 10 parameters
   STRING_01:           max. 15 chars
 
-
-    -BLAECK MESSAGES-----------------
+	* Internal Messages:
     <BLAECK.WRITE_SYMBOLS, MessageID_firstByte, MessageID_secondByte, MessageID_thirdByte, MessageID_fourthByte>
     <BLAECK.WRITE_DATA, MessageID_firstByte, MessageID_secondByte, MessageID_thirdByte, MessageID_fourthByte>
-    <BLAECK.ACTIVATE_TIMED, intervalInSeconds>
+    <BLAECK.ACTIVATE, intervalInSeconds>
           intervalInSeconds: from 1 to 32767 [s]
-        <BLAECK.DEACTIVATE_TIMED>
+    <BLAECK.DEACTIVATE>
 
-  -OUTGOING MESSAGES-----------------------------------------------------
-   |--Header------------|-DATA--------------------|-EOT---------|
-   #BLA:<MSGKEY>:<MSGID>:..........................ENDOFBLA<CRNL>
+	
+	
+  * Outgoing Messages
+   |    Header         ||         Data           ||   EOT    |
+   <BLAECK:MSGKEY:MSGID:........................../BLAECK>\r\n
+   012345678       9 10-131415  
 
    MSGKEY:   DATA#:    DATA:                           DESCRIPTION:
-    B0       N         <SymbolID><SymbolName><DTYPE>   Up to N Items. Response to request for available symbols.
-    B1       N         <SymbolID><DATA>                Up to N Items. Response to request for data.
+    B0        n        <SymbolID><SymbolName><DTYPE>   Up to n Items. Response to request for available symbols. (< and > just for illustration, not transmitted)
+    B1        n        <SymbolID><DATA>                Up to n Items. Response to request for data. (< and > just for illustration, not transmitted)
 
                    TYPE:            DESCRIPTION:
-   <MSGKEY>        byte             Message KEY, A unique key for the type of message being sent
-   <MSGID>         uint32/ulong     Message ID,  A unique message ID which echoes back to transmitter to indicate a response to a message (0 to 4294967295)
-   <DATA>          (varying)        Message Data, varying data types and length depending on message
-   ENDOFBLA <CRNL> char             'ENDOFBLA' + Carriage Return + New Line Character signifying the end of a transmission.
-   <SymbolID>      uint             Symbol ID number
-   <SymbolName>    String0          Symbol Name - Null Terminated String
-   <DTYPE>         byte             DataType  0=Boolean, 1=Byte, 2=short,...
+   MSGKEY          byte             Message KEY, A unique key for the type of message being sent
+   MSGID           ulong            Message ID,  A unique message ID which echoes back to transmitter to indicate a response to a message (0 to 4294967295)
+   DATA           (varying)         Message Data, varying data types and length depending on message
+   <BLAECK         char             Start of a transmission
+   /BLAECK>\r\n    char             End of a transmission
+   SymbolID        uint             Symbol ID number
+   SymbolName      String0          Symbol Name - Null Terminated String
+   DTYPE           byte             DataType  0=bool, 1=byte, 2=short, 3=ushort, 4=int, 5=uint, 6=long, 7=ulong, 8=float
 
 */
 

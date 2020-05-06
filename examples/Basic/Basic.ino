@@ -14,9 +14,9 @@
 
     <BLAECK.WRITE_SYMBOLS>      Write the symbol list to the PC
     <BLAECK.WRITE_DATA>         Write the data to the PC
-    <BLAECK.ACTIVATE_TIMED,60>  The data is written every 60s to the PC
+    <BLAECK.ACTIVATE,60>        The data is written every 60s to the PC
                                 Minimum: 1[seconds] Maximum: 32767[seconds]
-    <BLAECK.DEACTIVATE_TIMED>   Stops writing the data every 60s
+    <BLAECK.DEACTIVATE>         Stops writing the data every 60s
 */
 
 #include "Arduino.h"

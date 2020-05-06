@@ -61,6 +61,7 @@ void setup()
 
 void loop()
 {
+  Serial.println("This is text sent from the master sketch.");
   /*Keeps watching for serial input (Serial.read) and
     transmits the data at the user-set interval (Serial.write)*/
   BlaeckSerial.tick();

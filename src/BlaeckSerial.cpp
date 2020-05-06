@@ -126,6 +126,8 @@ void BlaeckSerial::addSignal(String symbolName, float * value) {
   _signalIndex++;
 }
 void BlaeckSerial::addSignal(String symbolName, double * value) {
+  /*On the Uno and other ATMEGA based boards, the double implementation occupies 4 bytes
+  and is exactly the same as the float, with no gain in precision.*/
   Signals[_signalIndex].SymbolName = symbolName;
   if (_masterSlaveConfig == Slave) {
     Signals[_signalIndex].SymbolName = _slaveSymbolPrefix + symbolName;
@@ -162,7 +164,7 @@ void BlaeckSerial::read() {
 
       this->writeData(msg_id);
 
-    }  else if (strcmp(COMMAND, "BLAECK.ACTIVATE_TIMED") == 0)
+    }  else if (strcmp(COMMAND, "BLAECK.ACTIVATE") == 0)
     {
       unsigned long parameter = PARAMETER[0];
       if (parameter > 32767) parameter = 32767;
@@ -171,7 +173,7 @@ void BlaeckSerial::read() {
 
       this->setTimedData(true, timedInterval_ms);
 
-    }  else if (strcmp(COMMAND, "BLAECK.DEACTIVATE_TIMED") == 0)
+    }  else if (strcmp(COMMAND, "BLAECK.DEACTIVATE") == 0)
     {
       this->setTimedData(false, _timedInterval_ms);
     }
@@ -322,7 +324,7 @@ void BlaeckSerial::timedWriteData(unsigned long msg_id) {
 }
 
 void BlaeckSerial::writeLocalData(unsigned long msg_id, bool send_eol) {
-  SerialRef->write("#BLA:");
+  SerialRef->write("<BLAECK:");
   byte msg_key = 0xB1;
   SerialRef->write(msg_key);
   SerialRef->write(":");
@@ -374,7 +376,7 @@ void BlaeckSerial::writeLocalData(unsigned long msg_id, bool send_eol) {
   }
 
   if (send_eol) {
-    SerialRef->write("ENDOFBLA");
+    SerialRef->write("/BLAECK>");
     SerialRef->write("\r\n");
     SerialRef->flush();
   }
@@ -438,7 +440,7 @@ void BlaeckSerial::writeSlaveData(bool send_eol) {
     }
   }
   if (send_eol) {
-    SerialRef->write("ENDOFBLA");
+    SerialRef->write("/BLAECK>");
     SerialRef->write("\r\n");
     SerialRef->flush();
   }
@@ -447,7 +449,7 @@ void BlaeckSerial::writeSlaveData(bool send_eol) {
 }
 
 void BlaeckSerial::writeLocalSymbols(unsigned long msg_id, bool send_eol) {
-  SerialRef->write("#BLA:");
+  SerialRef->write("<BLAECK:");
   byte msg_key = 0xB0;
   SerialRef->write(msg_key);
   SerialRef->write(":");
@@ -502,7 +504,7 @@ void BlaeckSerial::writeLocalSymbols(unsigned long msg_id, bool send_eol) {
     }
   }
   if (send_eol) {
-    SerialRef->write("ENDOFBLA");
+    SerialRef->write("/BLAECK>");
     SerialRef->write("\r\n");
     SerialRef->flush();
   }
@@ -576,7 +578,7 @@ void BlaeckSerial::writeSlaveSymbols(bool send_eol) {
     }
   }
   if (send_eol) {
-    SerialRef->write("ENDOFBLA");
+    SerialRef->write("/BLAECK>");
     SerialRef->write("\r\n");
     SerialRef->flush();
   }
