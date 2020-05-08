@@ -50,7 +50,7 @@ void loop()
 }
 ```
 
-## BlaeckSerial Serial commands to control the output
+## BlaeckSerial commands
 
 Here's a full list of serial commands handled by this library:
 
@@ -84,8 +84,6 @@ Data | B1 | n | `<SymbolID><DATA>` | Up to n Items. Response to request for data
  `SymbolName` |String0 | Symbol Name - Null Terminated String
  `DTYPE` | byte | DataType  0=bool, 1=byte, 2=short, 3=ushort, 4=int, 5=uint, 6=long, 7=ulong, 8=float
  
-On the Uno and other ATMEGA based boards, the double implementation occupies 4 byte and is exactly the same as the float, with no gain in precision. Therefore if you add a double signal with `addSignal(&doubleVariable)` the symbol list will return the `DTYPE` 8 (float).
-
  MSGID is supported by `<BLAECK.WRITE_SYMBOLS>` and `<BLAECK.WRITE_DATA>`:
  ````
  <BLAECK.WRITE_SYMBOLS, firstByteMSGID, secondByteMSGID, thirdByteMSGID, fourthByteMSGID>
@@ -101,6 +99,7 @@ On the Uno and other ATMEGA based boards, the double implementation occupies 4 b
 ASCII: <  B  L  A  E  C  K  :  °  :  °  °  °  °  :  °  °  S  m  a  l  l     N  u  m  b
 HEX:   3C 42 4C 41 45 43 4B 3A B0 3A 00 FF 00 00 3A 00 00 53 6D 61 6C 6C 20 4E 75 6D 62
 Byte:  0  1  2  3  4  5  6  7  8  9  10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26
+-----------------------------------------------------------------------------------
 ASCII: e  r  °  °  °  °  B  i  g     N  u  m  b  e  r  °  °  /  B  L  A  E  C  K  >
 HEX:   65 72 00 08 01 00 42 69 67 20 4E 75 6D 62 65 72 00 06 2F 42 4C 41 45 43 4B 3E
 Byte:  27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 56 47 48 49 50 51 52
@@ -133,11 +132,20 @@ Byte:  0  1  2  3  4  5  6  7  8  9  10 11 12 13 14 15 16 17 18 19 20 21 22 23 2
 15-16| `SymbolID`: Hex: 00 00 -> Decimal: 0
 17-20| `DATA`: Float -> 4 Bytes; Hex: B8 1E FD 40 -> Float: 7.91
 21-22| `SymbolID`: Hex: 01 00 -> Decimal: 1
-23-26| `DATA`: Long  -> 4 Bytes; Hex: D8 E6 32 7C -> Long: 1090330296
+23-26| `DATA`: Long  -> 4 Bytes; Hex: D8 E6 32 7C -> Long: 2083710680
 
+### Datatypes
 
+`DTYPE` | Datatype | Bytes
+-- |----|---------------------------------------------
+0| bool | 1
+1|byte | 1
+2|short| 2
+3|unsigned short| 2
+4|int| 2
+5|unsigned int | 2
+6|long | 4
+7|unsigned long | 4
+8|float | 4
 
-
-
-  
-
+On the Uno and other ATMEGA based boards, the double implementation occupies 4 byte and is exactly the same as the float, with no gain in precision. Therefore if you add a double signal with `addSignal(&doubleVariable)` the symbol list will return the `DTYPE` 8 (float).
