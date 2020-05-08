@@ -1,22 +1,14 @@
 /*
-  Basic.ino
+  BasicSlave.ino
 
   This is a sample sketch to show how to use the BlaeckSerial library to transmit data
-  from the Arduino board to your PC every minute (or the user-set interval).
+  from multiple Arduino boards in a master/slave configuration to your PC.
+  Upload this sketch to the slave Arduino. 
+  You can find more documentation about the test circuit, setup, etc. in 
+  the example BasicMaster.ino
 
   Copyright (c) by Sebastian Strobl,
   More information on: https://github.com/sebaJoSt/BlaeckSerial
-
-  Setup:
-    Upload the sketch to your Arduino.
-    Open the Serial Monitor and set the baudrate to 9600 baud.
-    Type the following commands and press enter:
-
-    <BLAECK.WRITE_SYMBOLS>      Write the symbol list to the PC
-    <BLAECK.WRITE_DATA>         Write the data to the PC
-    <BLAECK.ACTIVATE_TIMED,60>  The data is written every 60s to the PC
-                                Minimum: 1[seconds] Maximum: 32767[seconds]
-    <BLAECK.DEACTIVATE_TIMED>   Stops writing the data every 60s
 */
 
 #include "Arduino.h"
@@ -26,40 +18,39 @@
 BlaeckSerial BlaeckSerial;
 
 //Signals
-float randomSmallNumber;
 long randomBigNumber;
+long randomBigNumber2;
 
 void setup()
 {
   // Initialize Serial port
   Serial.begin(9600);
-  //Initialize BlaeckSerial
-  BlaeckSerial.begin(&Serial, 100);
 
-  // Add signals to BlaeckSerial
-  BlaeckSerial.addSignal("Small Number", &randomSmallNumber);
+/*Setup BlaeckSerial slave with ID 1
+ * First parameter: Serial reference
+ * Second parameter: Maxmimal signal count used;
+ * Third parameter: Slave ID: Each slave device on the bus 
+     should have a unique 7-bit address:
+     Minimum value: 0
+     Maximal value; 127     
+*/ 
+  BlaeckSerial.beginSlave(&Serial, 10, 1);
+
+  // Add signals to BlaeckSerial slave
   BlaeckSerial.addSignal("Big Number", &randomBigNumber);
-
-  /*Uncomment this function for initial settings
-    first parameter: timedActivated
-    second parameter: timedInterval_ms */
-  // BlaeckSerial.setTimedData(true, 60000);
+  BlaeckSerial.addSignal("Big Number 2", &randomBigNumber2);
 }
 
 void loop()
 {
   UpdateRandomNumbers();
-
-  /*Keeps watching for serial input (Serial.read) and
-    transmits the data at the user-set interval (Serial.write)*/
-  BlaeckSerial.tick();
 }
 
 void UpdateRandomNumbers()
 {
-  // Random small number from 0.00 to 10.00
-  randomSmallNumber = random(1001) / 100.0;
+  // Random big number from 800 000 to 900 000
+  randomBigNumber = random(800000, 900001);
 
-  // Random big number from 2 000 000 000 to 2 100 000 000
-  randomBigNumber = random(2000000000, 2100000001);
+    // Random small number from 1 000 000 000 to 2 000 000 000
+  randomBigNumber2 = random(1000000000, 2000000001);
 }

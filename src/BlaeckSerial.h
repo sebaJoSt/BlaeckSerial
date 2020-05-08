@@ -1,21 +1,38 @@
 /*
         File: BlaeckSerial.h
         Author: Sebastian Strobl
+		
+		A library which extends Serial functionality to transmit binary data.
+		It supports Master/Slave I2C configuration to include data from slaves. 
+		Also included is a Message Parser for incoming data in the syntax of 
+		<HelloWorld, 12, 47>. The parsed command 'HelloWorld' and its parameters 
+		are available in your own sketch by attaching a callback function.
+		
+		The library is heavily inspired by Nick Dodd's 
+		AdvancedSerial Library https://github.com/Nick1787/AdvancedSerial/
+		The message parser uses code from Robin2's Arduino forum thread
+		"Serial Basic Input" https://forum.arduino.cc/index.php?topic=396450.0
 */
 
 
 /*  Message Decoder
 
-  
-  * Incoming Messages
-  Message:         <COMMAND,PARAMETER_01,PARAMETER_02,...,PARAMETER_10>
-  StringMessage:   <COMMAND, STRING_01  ,PARAMETER_02,...,PARAMETER_10>
-                   <---------max. 64 chars---------------------------->
-  COMMAND:             String, not allowed chars: comma, <, >
-  PARAMETER:           Int 16 Bit, max 10 parameters
-  STRING_01:           max. 15 chars
+  * Incoming messages
+    Command:         <COMMAND,PARAMETER01,PARAMETER02,...,PARAMETER10>
+    StringCommand:   <COMMAND, STRING01  ,PARAMETER02,...,PARAMETER10>
+                     <-           --  max. 64 chars ---             ->
+                     <-         --  max. 10 Parameters ---          ->
 
-	* Internal Messages:
+    COMMAND:         String
+    PARAMETER01..10  Int 16 Bit
+    STRING01:        max. 15 chars
+    Start Marker*:    <
+    End Marker*:      >
+    Separation*:      ,
+
+      * Not allowed in COMMAND, PARAMETER & STRING01
+
+	* Internal commands:
     <BLAECK.WRITE_SYMBOLS, MessageID_firstByte, MessageID_secondByte, MessageID_thirdByte, MessageID_fourthByte>
     <BLAECK.WRITE_DATA, MessageID_firstByte, MessageID_secondByte, MessageID_thirdByte, MessageID_fourthByte>
     <BLAECK.ACTIVATE, intervalInSeconds>
@@ -24,7 +41,7 @@
 
 	
 	
-  * Outgoing Messages
+  * Outgoing messages
    |    Header         ||         Data           ||   EOT    |
    <BLAECK:MSGKEY:MSGID:........................../BLAECK>\r\n
    012345678       9 10-131415  

@@ -222,9 +222,9 @@ void BlaeckSerial::parseData() {
   char tempChars[sizeof(receivedChars)];
   strcpy(tempChars, receivedChars);
   char * strtokIndx;
-  strtokIndx = strtok(tempChars, ", ");
+  strtokIndx = strtok(tempChars, ",");
   strcpy(COMMAND, strtokIndx);
-  strtokIndx = strtok(NULL, ", ");
+  strtokIndx = strtok(NULL, ",");
   //PARAMETER 1 is stored in PARAMETER_01 & STRING_01 (if PARAMETER 1 is a string)
   //Only copy first 15 chars
   strncpy(STRING_01, strtokIndx, 15);
