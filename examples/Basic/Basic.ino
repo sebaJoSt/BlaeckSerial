@@ -35,7 +35,10 @@ void setup()
   Serial.begin(9600);
 
   //Setup BlaeckSerial
-  BlaeckSerial.begin(&Serial, 100);
+  BlaeckSerial.begin(
+    &Serial,   //Serial reference
+    2          //Maxmimal signal count used;
+  );
 
   // Add signals to BlaeckSerial
   BlaeckSerial.addSignal("Small Number", &randomSmallNumber);

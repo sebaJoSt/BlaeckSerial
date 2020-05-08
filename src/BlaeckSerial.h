@@ -44,7 +44,6 @@
   * Outgoing messages
    |    Header         ||         Data           ||   EOT    |
    <BLAECK:MSGKEY:MSGID:........................../BLAECK>\r\n
-   012345678       9 10-131415  
 
    MSGKEY:   DATA#:    DATA:                           DESCRIPTION:
     B0        n        <SymbolID><SymbolName><DTYPE>   Up to n Items. Response to request for available symbols. (< and > just for illustration, not transmitted)
@@ -54,8 +53,6 @@
    MSGKEY          byte             Message KEY, A unique key for the type of message being sent
    MSGID           ulong            Message ID,  A unique message ID which echoes back to transmitter to indicate a response to a message (0 to 4294967295)
    DATA           (varying)         Message Data, varying data types and length depending on message
-   <BLAECK         char             Start of a transmission
-   /BLAECK>\r\n    char             End of a transmission
    SymbolID        uint             Symbol ID number
    SymbolName      String0          Symbol Name - Null Terminated String
    DTYPE           byte             DataType  0=bool, 1=byte, 2=short, 3=ushort, 4=int, 5=uint, 6=long, 7=ulong, 8=float
