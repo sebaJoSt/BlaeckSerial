@@ -7,20 +7,24 @@ assignees: ''
 
 ---
 
+**Before sending a bug report**
+1. Try reducing your sketch to the bare minimum.
+2. Remove other Arduino libraries (if possible) and check if the bug still exists
+3. Try to reproduce the problem consistently
+
 **Describe the bug**
 A clear and concise description of what the bug is.
 
-**Before sending a bug report**
-1. Try reducing your sketch to the bare minimum.
-2. (If possible) Remove other Arduino libraries and check if the bug still exists
-3. Try to reproduce the problem consistently
+**Minimal Sketch**
+Insert your minimal sketch below, use "Insert code"-Button <>
 
 **To Reproduce**
 Steps to reproduce the behavior e.g.:
-1. Include minimal sketch which has just the code to reproduce the error
-2. Send <BLAECK.WRITE_DATA>
-3. Check the data bytes of the first signal
-4. See error
+1. Upload the sketch
+2. Open Serial Port Monitor
+3. Send <BLAECK.WRITE_DATA>
+4. Check the data bytes of the first signal
+5. See error
 
 No additional hardware should be required to reproduce the error.
 
