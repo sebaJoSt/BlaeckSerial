@@ -3,6 +3,9 @@ BlaeckSerial
 
 This Arduino library extends Serial functionality to transmit binary data. It supports Master/Slave I2C configuration to include data from slaves. Also included is a message parser which reads input in the syntax of `<HelloWorld, 12, 47>`. The parsed command `HelloWorld` and its parameters are available in your own sketch by attaching a callback function.
 
+BlaeckSerial is heavily inspired by Nick Dodd's [AdvancedSerial Library](https://github.com/Nick1787/AdvancedSerial/).
+The message parser uses code from Robin2's Arduino forum thread [Serial Basic Input](https://forum.arduino.cc/index.php?topic=396450.0).
+
 ## Getting Started
 
 Clone this repository into `Arduino/Libraries` or use the built-in Arduino IDE Library manager to install
@@ -54,16 +57,16 @@ void loop()
 
 Here's a full list of serial commands handled by this library:
 
-| Command                      | Description                                                                     |
-| ---------------------------- | ------------------------------------------------------------------------------- |
-| `<BLAECK.WRITE_SYMBOLS> `    | Writes symbol list including datatype information.                              |
-| `<BLAECK.WRITE_DATA> `       | Writes the binary data.                                                         |
-| `<BLAECK.ACTIVATE, interval>`| Activates writing the binary data in user-set interval [s] (Min: 1s Max:32767s) |
-| `<BLAECK.DEACTIVATE> `       | Deactivates writing in intervals.                                               |
+| Command                      | Description                                                                      |
+| ---------------------------- | -------------------------------------------------------------------------------- |
+| `<BLAECK.WRITE_SYMBOLS> `    | Writes symbol list including datatype information.                               |
+| `<BLAECK.WRITE_DATA> `       | Writes the binary data.                                                          |
+| `<BLAECK.ACTIVATE, interval>`| Activates writing the binary data in user-set interval [s] (Min: 1s Max: 32767s) |
+| `<BLAECK.DEACTIVATE> `       | Deactivates writing in intervals.                                                |
 
 ## The Symbol List and Data Codec
 
-The format of the Symbol List and Data is in the following format:
+The Symbol List and Data is in the following format:
 ````
 |--  Header       --||--       Data         --||-- EOT  --|
 <BLAECK:MSGKEY:MSGID:........................../BLAECK>\r\n
