@@ -93,9 +93,9 @@ Data | B1 | n | `<SymbolID><DATA>` | Up to n Items. Response to request for data
  <BLAECK.WRITE_DATA   , firstByteMSGID, secondByteMSGID, thirdByteMSGID, fourthByteMSGID>
  ````
  
- ### Decoding Examples
+ ## Decoding Examples
  
- #### Symbol List Decoding
+ ### Symbol List Decoding
  Example from `Basic.ino`:
  `<BLAECK.WRITE_SYMBOLS, 0, 255, 0, 0>`:
  ````
@@ -119,7 +119,7 @@ Byte:  27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 56 47 48 49 50 5
 33-43| `SymbolName`: ASCII: Big Number + Null Termination '\0'
 44   | `DTYPE`: Hex: 06 -> Long
 
- #### Data Decoding
+ ### Data Decoding
  Example from `Basic.ino`:
  `<BLAECK.WRITE_DATA, 255, 255, 255, 255>`:
  ````
@@ -137,7 +137,7 @@ Byte:  0  1  2  3  4  5  6  7  8  9  10 11 12 13 14 15 16 17 18 19 20 21 22 23 2
 21-22| `SymbolID`: Hex: 01 00 -> Decimal: 1
 23-26| `DATA`: Long  -> 4 Bytes; Hex: D8 E6 32 7C -> Long: 2083710680
 
-### Datatypes
+## Datatypes
 
 `DTYPE` | Datatype | Bytes
 -- |----|---------------------------------------------
