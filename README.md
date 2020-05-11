@@ -1,6 +1,6 @@
 BlaeckSerial
 ===
-BlaeckSerial is a simple library to send binary (sensor) data via Serial port to your PC. The data can be sent periodically or requested on demand with [serial commands](##BlaeckSerial-Commands). It supports Master/Slave configuration to include data from additional slave boards connected to the master Arduino over I2C.<br>
+BlaeckSerial is a simple library to send binary (sensor) data via Serial port to your PC. The data can be sent periodically or requested on demand with [serial commands](#BlaeckSerial-Commands). It supports Master/Slave configuration to include data from additional slave boards connected to the master Arduino over I2C.<br>
 Also included is a message parser which reads input in the syntax of `<HelloWorld, 12, 47>`. The parsed command `HelloWorld` and its parameters are available in your own sketch by attaching a callback function.
 
 BlaeckSerial is heavily inspired by Nick Dodd's [AdvancedSerial Library](https://github.com/Nick1787/AdvancedSerial/).
