@@ -69,7 +69,7 @@ typedef enum MasterSlaveConfig
 { Single,
   Master,
   Slave
-};
+} masterSlaveConfig;
 
 typedef enum DataType
 { Blaeck_bool,
@@ -81,11 +81,11 @@ typedef enum DataType
   Blaeck_long,
   Blaeck_ulong,
   Blaeck_float,
-};
+} dataType;
 
 struct Signal {
   String SymbolName;
-  DataType DataType;
+  dataType DataType;
   void * Address;
 };
 
@@ -167,11 +167,14 @@ class BlaeckSerial {
     void wireSlaveReceive();
     void wireSlaveTransmitSingleSymbol();
     void wireSlaveTransmitSingleDataPoint();
+	
+	bool slaveFound(const unsigned int index);
+	void storeSlave(const unsigned int index, const boolean value);
 
 
     HardwareSerial* SerialRef;
     Signal* Signals;
-    unsigned int _signalIndex = 0;
+    int _signalIndex = 0;
 
 
     bool _timedActivated = false;
@@ -181,14 +184,14 @@ class BlaeckSerial {
     unsigned long _timedInterval_ms = 1000;
 
 
-    MasterSlaveConfig _masterSlaveConfig = Single;
+    masterSlaveConfig _masterSlaveConfig = Single;
     byte _slaveID;
-    bool _slaveFound[128];
+	unsigned char _slaveFound[128/8]; //128 bit storage
     String _slaveSymbolPrefix;
 
 
     byte _wireMode = 0;
-    unsigned int _wireSignalIndex = 0;
+    int _wireSignalIndex = 0;
 
     static const int MAXIMUM_CHAR_COUNT = 64;
     char receivedChars[MAXIMUM_CHAR_COUNT];
@@ -205,7 +208,7 @@ class BlaeckSerial {
         _pSingletonInstance->wireSlaveTransmitToMaster();
     }
 
-    static void OnSendHandler() {
+    static void OnSendHandler(int numBytes) {
       if (_pSingletonInstance)
         _pSingletonInstance->wireSlaveReceive();
     }

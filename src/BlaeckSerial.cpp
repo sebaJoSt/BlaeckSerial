@@ -37,8 +37,8 @@ void BlaeckSerial::beginSlave(HardwareSerial *Ref, unsigned int size, byte slave
   String s = "S";
   _slaveSymbolPrefix = s + _slaveID + "_";
 
-  Wire.onReceive(BlaeckSerial::OnSendHandler);
-  Wire.onRequest(BlaeckSerial::OnReceiveHandler);
+  Wire.onReceive(OnSendHandler);
+  Wire.onRequest(OnReceiveHandler);
   Wire.begin(_slaveID);
 
   begin(Ref, size);
@@ -386,7 +386,7 @@ void BlaeckSerial::writeSlaveData(bool send_eol) {
   int signalCount = 0;
 
   for (int slaveindex = 0; slaveindex <= 127; slaveindex++) { //Cycle through slaves
-    if (_slaveFound[slaveindex]) {
+    if (slaveFound(slaveindex)) {
       byte transmissionIsSuccess = false;
 
       for (byte retries = 0; retries < 4; retries++) {
@@ -405,7 +405,6 @@ void BlaeckSerial::writeSlaveData(bool send_eol) {
           //try again
           if (receivedBytes < 2) continue;
 
-          bool eosignal_found = false;
 
           //Signal Key
           Serial.write(lowByte(_signalIndex + signalCount));
@@ -527,7 +526,7 @@ void BlaeckSerial::writeSlaveSymbols(bool send_eol) {
 
     if (transmissionIsSuccess == 0) {
 
-      _slaveFound[slaveindex] = false;
+	  storeSlave(slaveindex, false);
       bool eolist_found = false;
 
       for (int i = 0; i < 1000; i++) {
@@ -542,16 +541,15 @@ void BlaeckSerial::writeSlaveSymbols(bool send_eol) {
           char c = Wire.read();
 
           if (c == char(0xAA)) {
-            _slaveFound[slaveindex] = true;
-
+			storeSlave(slaveindex, true);
           } else {
-            _slaveFound[slaveindex] = false;
+			storeSlave(slaveindex, false);
             //exit loop
             break;
           }
         }
 
-        if (_slaveFound[slaveindex]) {
+        if (slaveFound(slaveindex)) {
           //Signal Key
           Serial.write(lowByte(_signalIndex + signalCount));
           Serial.write(highByte(_signalIndex + signalCount));
@@ -722,4 +720,16 @@ void BlaeckSerial::wireSlaveReceive() {
 void BlaeckSerial::wireSlaveTransmitToMaster() {
   if (_wireMode == 0) this->wireSlaveTransmitSingleSymbol();
   if (_wireMode == 1) this->wireSlaveTransmitSingleDataPoint();
+}
+
+bool BlaeckSerial::slaveFound(const unsigned int index) {
+   if (index > 127)
+      return false;
+   return (boolean) bitRead(_slaveFound[index/8], index%8);
+}
+
+void BlaeckSerial::storeSlave(const unsigned int index, const boolean value) {
+   if (index > 127)
+      return;
+   bitWrite(_slaveFound[index/8], index%8, value);
 }
