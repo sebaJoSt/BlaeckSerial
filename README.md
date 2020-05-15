@@ -90,7 +90,7 @@ Data | B1 | n | `<SymbolID><DATA>` | Up to n Items. Response to request for data
  MSGID is supported by `<BLAECK.WRITE_SYMBOLS>` and `<BLAECK.WRITE_DATA>`:
  ````
  <BLAECK.WRITE_SYMBOLS, firstByteMSGID, secondByteMSGID, thirdByteMSGID, fourthByteMSGID>
- <BLAECK.WRITE_DATA   , firstByteMSGID, secondByteMSGID, thirdByteMSGID, fourthByteMSGID>
+ <BLAECK.WRITE_DATA, firstByteMSGID, secondByteMSGID, thirdByteMSGID, fourthByteMSGID>
  ````
  
  ## Decoding Examples
