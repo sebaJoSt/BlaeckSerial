@@ -138,6 +138,21 @@ class BlaeckSerial {
        @brief Call this function for timed data settings
     */
     void setTimedData(bool timedActivated, unsigned long timedInterval_ms);
+	
+	// ----- Update before data write Callback function  -----
+	/**
+	  @brief Attach a function that will be called just before transmitting data. 
+	  In single device or master mode the function is called just before sending data over serial,
+	  In slave mode the function is called just before sending data over i2c to master. Because the attached function is inside a ISR (interrupt service routine) it should as short and fast as possible.
+	  
+	  About ISRs: ISRs are special kinds of functions that have some unique limitations most other functions do not have. An ISR cannot have any parameters, and they shouldn’t return anything. Generally, an ISR 
+	  should be as short and fast as possible. If your sketch uses multiple ISRs, only one can run at a time, other interrupts will be executed after the current one finishes in an order that depends on the priority they have. 
+	  millis() relies on interrupts to count, so it will never increment inside an ISR. Since delay() requires interrupts to work, it will not work if called inside an ISR. micros() works initially but will start behaving 
+	  erratically after 1-2 ms. delayMicroseconds() does not use any counter, so it will work as normal. Typically global variables are used to pass data between an ISR and the main program. To make sure variables shared between 
+	  an ISR and the main program are updated correctly, declare them as volatile.
+      For more information on interrupts, see Nick Gammon’s notes (http://gammon.com.au/interrupts).
+    */
+	void attachUpdate(void (*updateCallback)());
 
     // ----- Read  -----
     /**
@@ -148,7 +163,6 @@ class BlaeckSerial {
       @brief Attach a function that will be called when a valid message was received;
     */
     void attachRead(void (*readCallback)(char * command, int * parameter, char * string_01));
-
 
     // ----- All-in-one  -----
     /**
@@ -170,8 +184,8 @@ class BlaeckSerial {
 	
 	bool slaveFound(const unsigned int index);
 	void storeSlave(const unsigned int index, const boolean value);
-
-
+	
+	
     HardwareSerial* SerialRef;
     Signal* Signals;
     int _signalIndex = 0;
@@ -216,7 +230,8 @@ class BlaeckSerial {
     void (*_readCallback)(char * command, int * parameter, char * string01);
     bool recvWithStartEndMarkers();
     void parseData();
-
+	
+	void (*_updateCallback)();
 
     union {
       bool val;

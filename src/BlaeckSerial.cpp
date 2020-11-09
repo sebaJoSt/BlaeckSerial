@@ -184,6 +184,11 @@ void BlaeckSerial::read() {
 void BlaeckSerial::attachRead(void (*readCallback) (char * command, int * parameter, char * string01)) {
   _readCallback = readCallback;
 }
+
+void BlaeckSerial::attachUpdate(void (*updateCallback)()) {
+  _updateCallback = updateCallback;
+}
+
 bool BlaeckSerial::recvWithStartEndMarkers() {
   bool newData = false;
   static boolean recvInProgress = false;
@@ -294,12 +299,19 @@ void BlaeckSerial::writeData() {
   this->writeData(1);
 }
 void BlaeckSerial::writeData(unsigned long msg_id) {
-  if (_masterSlaveConfig == Single || _masterSlaveConfig == Slave)
+  if (_masterSlaveConfig == Single)
   {
+	if (_updateCallback != NULL) _updateCallback();
     this->writeLocalData(msg_id, true);
   }
+  else if (_masterSlaveConfig == Slave) 
+  {
+	//updateCallback is called in BlaeckSerial::wireSlaveReceive()
+    this->writeLocalData(msg_id, true);
+  }  
   else if (_masterSlaveConfig == Master)
   {
+    if (_updateCallback != NULL) _updateCallback();
     this->writeLocalData(msg_id, false);
     this->writeSlaveData(true);
   }
@@ -649,7 +661,7 @@ void BlaeckSerial::wireSlaveTransmitSingleSymbol() {
   }
 }
 void BlaeckSerial::wireSlaveTransmitSingleDataPoint() {
-
+  
   Signal signal = Signals[_wireSignalIndex];
 
   switch (signal.DataType) {
@@ -716,6 +728,9 @@ void BlaeckSerial::wireSlaveTransmitSingleDataPoint() {
 void BlaeckSerial::wireSlaveReceive() {
   _wireMode = Wire.read();
   _wireSignalIndex = 0;
+  if (_masterSlaveConfig == Slave && _wireMode == 1) {
+	 if (_updateCallback != NULL) _updateCallback();
+  };
 }
 void BlaeckSerial::wireSlaveTransmitToMaster() {
   if (_wireMode == 0) this->wireSlaveTransmitSingleSymbol();

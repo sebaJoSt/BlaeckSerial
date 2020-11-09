@@ -15,6 +15,7 @@ timedWriteData	KEYWORD2
 setTimedData	KEYWORD2
 read	KEYWORD2
 attachRead	KEYWORD2
+attachUpdate	KEYWORD2
 tick	KEYWORD2
 
 # Instances (KEYWORD2)
