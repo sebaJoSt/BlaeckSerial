@@ -34,7 +34,7 @@ void setup()
   // Initialize Serial port
   Serial.begin(9600);
   //Initialize BlaeckSerial Slave with ID 1
-  BlaeckSerial.beginSlave(&Serial, 100, 1);
+  BlaeckSerial.beginSlave(&Serial, 20, 1);
 
   // Add signals to BlaeckSerial
   BlaeckSerial.addSignal("Bool_false", &boolTest[0]);

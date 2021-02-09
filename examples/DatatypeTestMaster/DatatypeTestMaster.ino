@@ -34,7 +34,7 @@ void setup()
   // Initialize Serial port
   Serial.begin(9600);
   //Initialize BlaeckSerial Master
-  BlaeckSerial.beginMaster(&Serial, 100, 400000L);
+  BlaeckSerial.beginMaster(&Serial, 20, 400000L);
 
   // Add signals to BlaeckSerial
   BlaeckSerial.addSignal("Bool_false", &boolTest[0]);
@@ -61,7 +61,7 @@ void setup()
 
 void loop()
 {
-  Serial.println("This is text sent from the master sketch.");
+  //Serial.println("This is text sent from the master sketch.");
   /*Keeps watching for serial input (Serial.read) and
     transmits the data at the user-set interval (Serial.write)*/
   BlaeckSerial.tick();
