@@ -67,7 +67,7 @@ void setup()
        * 3400000 (high speed mode)
      Please refer to the specific processor documentation to make sure the desired mode is supported.
 */ 
-  BlaeckSerial.beginMaster(&Serial, 10, 400000L);
+  BlaeckSerial.beginMaster(&Serial, 2, 400000L);
 
   // Add signals to BlaeckSerial master
   BlaeckSerial.addSignal("Small Number", &randomSmallNumber);

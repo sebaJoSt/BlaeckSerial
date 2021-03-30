@@ -34,7 +34,7 @@ void setup()
      Minimum value: 0
      Maximal value; 127     
 */ 
-  BlaeckSerial.beginSlave(&Serial, 10, 1);
+  BlaeckSerial.beginSlave(&Serial, 2, 1);
 
   // Add signals to BlaeckSerial slave
   BlaeckSerial.addSignal("Big Number", &randomBigNumber);
