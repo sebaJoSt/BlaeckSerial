@@ -164,7 +164,14 @@ void BlaeckSerial::read() {
 
       this->writeData(msg_id);
 
-    }  else if (strcmp(COMMAND, "BLAECK.ACTIVATE") == 0)
+    }  else if (strcmp(COMMAND, "BLAECK.WRITE_VERSION") == 0)
+    {
+      unsigned long msg_id = ((unsigned long)PARAMETER[3] << 24) | ((unsigned long)PARAMETER[2] << 16)
+                             | ((unsigned long)PARAMETER[1] << 8) | ((unsigned long)PARAMETER[0]);
+
+      this->writeVersionNumber(msg_id, true);
+
+    } else if (strcmp(COMMAND, "BLAECK.ACTIVATE") == 0)
     {
       unsigned long parameter = PARAMETER[0];
       if (parameter > 32767) parameter = 32767;
@@ -335,6 +342,23 @@ void BlaeckSerial::timedWriteData(unsigned long msg_id) {
   }
 }
 
+void BlaeckSerial::writeVersionNumber(unsigned long msg_id, bool send_eol) {
+  SerialRef->write("<BLAECK:");
+  byte msg_key = 0xB2;
+  SerialRef->write(msg_key);
+  SerialRef->write(":");
+  ulngCvt.val = msg_id;
+  SerialRef->write(ulngCvt.bval, 4);
+  SerialRef->write(":");
+  SerialRef->write(BLAECKSERIAL_VERSION);
+
+  if (send_eol) {
+    SerialRef->write("/BLAECK>");
+    SerialRef->write("\r\n");
+    SerialRef->flush();
+  }
+}
+
 void BlaeckSerial::writeLocalData(unsigned long msg_id, bool send_eol) {
   SerialRef->write("<BLAECK:");
   byte msg_key = 0xB1;
@@ -393,6 +417,7 @@ void BlaeckSerial::writeLocalData(unsigned long msg_id, bool send_eol) {
     SerialRef->flush();
   }
 }
+
 void BlaeckSerial::writeSlaveData(bool send_eol) {
 
   int signalCount = 0;

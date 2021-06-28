@@ -38,6 +38,7 @@
     <BLAECK.ACTIVATE, intervalInSeconds>
           intervalInSeconds: from 1 to 32767 [s]
     <BLAECK.DEACTIVATE>
+	<BLAECK.WRITE_VERSION, MessageID_firstByte, MessageID_secondByte, MessageID_thirdByte, MessageID_fourthByte>
 
 	
 	
@@ -48,6 +49,7 @@
    MSGKEY:   DATA#:    DATA:                           DESCRIPTION:
     B0        n        <SymbolID><SymbolName><DTYPE>   Up to n Items. Response to request for available symbols. (< and > just for illustration, not transmitted)
     B1        n        <SymbolID><DATA>                Up to n Items. Response to request for data. (< and > just for illustration, not transmitted)
+	B2        n        <VersionNumber>                 One Item. Response to request for version number. (< and > just for illustration, not transmitted)
 
                    TYPE:            DESCRIPTION:
    MSGKEY          byte             Message KEY, A unique key for the type of message being sent
@@ -56,6 +58,7 @@
    SymbolID        uint             Symbol ID number
    SymbolName      String0          Symbol Name - Null Terminated String
    DTYPE           byte             DataType  0=bool, 1=byte, 2=short, 3=ushort, 4=int, 5=uint, 6=long, 7=ulong, 8=float
+   VersionNumber   String0          X.Y.Z, e.g. 1.0.0
 
 */
 
@@ -64,6 +67,8 @@
 
 #include <Wire.h>
 #include <Arduino.h>
+
+#define BLAECKSERIAL_VERSION "1.0.4"
 
 typedef enum MasterSlaveConfig
 { Single,
@@ -173,6 +178,7 @@ class BlaeckSerial {
 
 
   private:
+    void writeVersionNumber(unsigned long MessageID, bool send_eol);
     void writeLocalData(unsigned long MessageID, bool send_eol);
     void writeSlaveData(bool send_eol);
     void writeLocalSymbols(unsigned long MessageID, bool send_eol);
@@ -184,7 +190,6 @@ class BlaeckSerial {
 	
 	bool slaveFound(const unsigned int index);
 	void storeSlave(const unsigned int index, const boolean value);
-	
 	
     HardwareSerial* SerialRef;
     Signal* Signals;
