@@ -17,7 +17,7 @@
     <BLAECK.ACTIVATE,60>        The data is written every 60s to the PC
                                 Minimum: 1[seconds] Maximum: 32767[seconds]
     <BLAECK.DEACTIVATE>         Stops writing the data every 60s
-	<BLAECK.WRITE_VERSION>      Writes the BlaeckSerial version number
+	  <BLAECK.WRITE_VERSION>      Writes the BlaeckSerial version number
 */
 
 #include "Arduino.h"
