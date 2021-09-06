@@ -18,6 +18,12 @@ attachRead	KEYWORD2
 attachUpdate	KEYWORD2
 tick	KEYWORD2
 
+
+# Variables (KEYWORD2)
+DeviceName	KEYWORD2
+DeviceHWVersion	KEYWORD2
+DeviceFWVersion	KEYWORD2
+
 # Instances (KEYWORD2)
 
 # Constants (LITERAL1)

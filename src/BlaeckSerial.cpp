@@ -127,7 +127,7 @@ void BlaeckSerial::addSignal(String symbolName, float * value) {
 }
 void BlaeckSerial::addSignal(String symbolName, double * value) {
   /*On the Uno and other ATMEGA based boards, the double implementation occupies 4 bytes
-  and is exactly the same as the float, with no gain in precision.*/
+    and is exactly the same as the float, with no gain in precision.*/
   Signals[_signalIndex].SymbolName = symbolName;
   if (_masterSlaveConfig == Slave) {
     Signals[_signalIndex].SymbolName = _slaveSymbolPrefix + symbolName;
@@ -156,22 +156,48 @@ void BlaeckSerial::read() {
 
       this->writeSymbols(msg_id);
 
-
-    } else if (strcmp(COMMAND, "BLAECK.WRITE_DATA") == 0)
+    }
+    else if (strcmp(COMMAND, "BLAECK.WRITE_DATA") == 0)
     {
       unsigned long msg_id = ((unsigned long)PARAMETER[3] << 24) | ((unsigned long)PARAMETER[2] << 16)
                              | ((unsigned long)PARAMETER[1] << 8) | ((unsigned long)PARAMETER[0]);
 
       this->writeData(msg_id);
 
-    }  else if (strcmp(COMMAND, "BLAECK.WRITE_VERSION") == 0)
+    }
+    else if (strcmp(COMMAND, "BLAECK.WRITE_VERSION") == 0)
     {
       unsigned long msg_id = ((unsigned long)PARAMETER[3] << 24) | ((unsigned long)PARAMETER[2] << 16)
                              | ((unsigned long)PARAMETER[1] << 8) | ((unsigned long)PARAMETER[0]);
 
       this->writeVersionNumber(msg_id, true);
 
-    } else if (strcmp(COMMAND, "BLAECK.ACTIVATE") == 0)
+    }
+    else if (strcmp(COMMAND, "BLAECK.WRITE_DEVICE_NAME") == 0)
+    {
+      unsigned long msg_id = ((unsigned long)PARAMETER[3] << 24) | ((unsigned long)PARAMETER[2] << 16)
+                             | ((unsigned long)PARAMETER[1] << 8) | ((unsigned long)PARAMETER[0]);
+
+      this->writeDeviceName(msg_id, true);
+
+    }
+    else if (strcmp(COMMAND, "BLAECK.WRITE_DEVICE_HW_VERSION") == 0)
+    {
+      unsigned long msg_id = ((unsigned long)PARAMETER[3] << 24) | ((unsigned long)PARAMETER[2] << 16)
+                             | ((unsigned long)PARAMETER[1] << 8) | ((unsigned long)PARAMETER[0]);
+
+      this->writeDeviceHWVersion(msg_id, true);
+
+    }
+    else if (strcmp(COMMAND, "BLAECK.WRITE_DEVICE_FW_VERSION") == 0)
+    {
+      unsigned long msg_id = ((unsigned long)PARAMETER[3] << 24) | ((unsigned long)PARAMETER[2] << 16)
+                             | ((unsigned long)PARAMETER[1] << 8) | ((unsigned long)PARAMETER[0]);
+
+      this->writeDeviceFWVersion(msg_id, true);
+
+    }
+    else if (strcmp(COMMAND, "BLAECK.ACTIVATE") == 0)
     {
       unsigned long parameter = PARAMETER[0];
       if (parameter > 32767) parameter = 32767;
@@ -180,7 +206,8 @@ void BlaeckSerial::read() {
 
       this->setTimedData(true, timedInterval_ms);
 
-    }  else if (strcmp(COMMAND, "BLAECK.DEACTIVATE") == 0)
+    }
+    else if (strcmp(COMMAND, "BLAECK.DEACTIVATE") == 0)
     {
       this->setTimedData(false, _timedInterval_ms);
     }
@@ -308,14 +335,14 @@ void BlaeckSerial::writeData() {
 void BlaeckSerial::writeData(unsigned long msg_id) {
   if (_masterSlaveConfig == Single)
   {
-	if (_updateCallback != NULL) _updateCallback();
+    if (_updateCallback != NULL) _updateCallback();
     this->writeLocalData(msg_id, true);
   }
-  else if (_masterSlaveConfig == Slave) 
+  else if (_masterSlaveConfig == Slave)
   {
-	//updateCallback is called in BlaeckSerial::wireSlaveReceive()
+    //updateCallback is called in BlaeckSerial::wireSlaveReceive()
     this->writeLocalData(msg_id, true);
-  }  
+  }
   else if (_masterSlaveConfig == Master)
   {
     if (_updateCallback != NULL) _updateCallback();
@@ -351,6 +378,57 @@ void BlaeckSerial::writeVersionNumber(unsigned long msg_id, bool send_eol) {
   SerialRef->write(ulngCvt.bval, 4);
   SerialRef->write(":");
   SerialRef->write(BLAECKSERIAL_VERSION);
+
+  if (send_eol) {
+    SerialRef->write("/BLAECK>");
+    SerialRef->write("\r\n");
+    SerialRef->flush();
+  }
+}
+
+void BlaeckSerial::writeDeviceName(unsigned long msg_id, bool send_eol) {
+  SerialRef->write("<BLAECK:");
+  byte msg_key = 0xB3;
+  SerialRef->write(msg_key);
+  SerialRef->write(":");
+  ulngCvt.val = msg_id;
+  SerialRef->write(ulngCvt.bval, 4);
+  SerialRef->write(":");
+  SerialRef->print(DeviceName);
+
+  if (send_eol) {
+    SerialRef->write("/BLAECK>");
+    SerialRef->write("\r\n");
+    SerialRef->flush();
+  }
+}
+
+void BlaeckSerial::writeDeviceHWVersion(unsigned long msg_id, bool send_eol) {
+  SerialRef->write("<BLAECK:");
+  byte msg_key = 0xB4;
+  SerialRef->write(msg_key);
+  SerialRef->write(":");
+  ulngCvt.val = msg_id;
+  SerialRef->write(ulngCvt.bval, 4);
+  SerialRef->write(":");
+  SerialRef->print(DeviceHWVersion);
+
+  if (send_eol) {
+    SerialRef->write("/BLAECK>");
+    SerialRef->write("\r\n");
+    SerialRef->flush();
+  }
+}
+
+void BlaeckSerial::writeDeviceFWVersion(unsigned long msg_id, bool send_eol) {
+  SerialRef->write("<BLAECK:");
+  byte msg_key = 0xB5;
+  SerialRef->write(msg_key);
+  SerialRef->write(":");
+  ulngCvt.val = msg_id;
+  SerialRef->write(ulngCvt.bval, 4);
+  SerialRef->write(":");
+  SerialRef->print(DeviceFWVersion);
 
   if (send_eol) {
     SerialRef->write("/BLAECK>");
@@ -480,8 +558,6 @@ void BlaeckSerial::writeSlaveData(bool send_eol) {
     SerialRef->write("\r\n");
     SerialRef->flush();
   }
-
-
 }
 
 void BlaeckSerial::writeLocalSymbols(unsigned long msg_id, bool send_eol) {
@@ -563,7 +639,7 @@ void BlaeckSerial::writeSlaveSymbols(bool send_eol) {
 
     if (transmissionIsSuccess == 0) {
 
-	  storeSlave(slaveindex, false);
+      storeSlave(slaveindex, false);
       bool eolist_found = false;
 
       for (int i = 0; i < 1000; i++) {
@@ -578,9 +654,9 @@ void BlaeckSerial::writeSlaveSymbols(bool send_eol) {
           char c = Wire.read();
 
           if (c == char(0xAA)) {
-			storeSlave(slaveindex, true);
+            storeSlave(slaveindex, true);
           } else {
-			storeSlave(slaveindex, false);
+            storeSlave(slaveindex, false);
             //exit loop
             break;
           }
@@ -686,7 +762,7 @@ void BlaeckSerial::wireSlaveTransmitSingleSymbol() {
   }
 }
 void BlaeckSerial::wireSlaveTransmitSingleDataPoint() {
-  
+
   Signal signal = Signals[_wireSignalIndex];
 
   switch (signal.DataType) {
@@ -704,7 +780,7 @@ void BlaeckSerial::wireSlaveTransmitSingleDataPoint() {
         Wire.write(2);
         Wire.write(shortCvt.bval, 2);
       } break;
-	case (Blaeck_ushort): {
+    case (Blaeck_ushort): {
         ushortCvt.val = *((unsigned short*)signal.Address);
         Wire.write(2);
         Wire.write(ushortCvt.bval, 2);
@@ -754,7 +830,7 @@ void BlaeckSerial::wireSlaveReceive() {
   _wireMode = Wire.read();
   _wireSignalIndex = 0;
   if (_masterSlaveConfig == Slave && _wireMode == 1) {
-	 if (_updateCallback != NULL) _updateCallback();
+    if (_updateCallback != NULL) _updateCallback();
   };
 }
 void BlaeckSerial::wireSlaveTransmitToMaster() {
@@ -763,13 +839,13 @@ void BlaeckSerial::wireSlaveTransmitToMaster() {
 }
 
 bool BlaeckSerial::slaveFound(const unsigned int index) {
-   if (index > 127)
-      return false;
-   return (boolean) bitRead(_slaveFound[index/8], index%8);
+  if (index > 127)
+    return false;
+  return (boolean) bitRead(_slaveFound[index / 8], index % 8);
 }
 
 void BlaeckSerial::storeSlave(const unsigned int index, const boolean value) {
-   if (index > 127)
-      return;
-   bitWrite(_slaveFound[index/8], index%8, value);
+  if (index > 127)
+    return;
+  bitWrite(_slaveFound[index / 8], index % 8, value);
 }

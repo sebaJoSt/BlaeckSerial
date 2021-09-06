@@ -1,23 +1,23 @@
 /*
         File: BlaeckSerial.h
         Author: Sebastian Strobl
-		
-		A library which extends Serial functionality to transmit binary data.
-		It supports Master/Slave I2C configuration to include data from slaves. 
-		Also included is a Message Parser for incoming data in the syntax of 
-		<HelloWorld, 12, 47>. The parsed command 'HelloWorld' and its parameters 
-		are available in your own sketch by attaching a callback function.
-		
-		The library is heavily inspired by Nick Dodd's 
-		AdvancedSerial Library https://github.com/Nick1787/AdvancedSerial/
-		The message parser uses code from Robin2's Arduino forum thread
-		"Serial Basic Input" https://forum.arduino.cc/index.php?topic=396450.0
+
+    A library which extends Serial functionality to transmit binary data.
+    It supports Master/Slave I2C configuration to include data from slaves.
+    Also included is a Message Parser for incoming data in the syntax of
+    <HelloWorld, 12, 47>. The parsed command 'HelloWorld' and its parameters
+    are available in your own sketch by attaching a callback function.
+
+    The library is heavily inspired by Nick Dodd's
+    AdvancedSerial Library https://github.com/Nick1787/AdvancedSerial/
+    The message parser uses code from Robin2's Arduino forum thread
+    "Serial Basic Input" https://forum.arduino.cc/index.php?topic=396450.0
 */
 
 
 /*  Message Decoder
 
-  * Incoming messages
+    Incoming messages
     Command:         <COMMAND,PARAMETER01,PARAMETER02,...,PARAMETER10>
     StringCommand:   <COMMAND, STRING01  ,PARAMETER02,...,PARAMETER10>
                      <-           --  max. 64 chars ---             ->
@@ -30,35 +30,45 @@
     End Marker*:      >
     Separation*:      ,
 
-      * Not allowed in COMMAND, PARAMETER & STRING01
+        Not allowed in COMMAND, PARAMETER & STRING01
 
-	* Internal commands:
+    Internal commands:
     <BLAECK.WRITE_SYMBOLS, MessageID_firstByte, MessageID_secondByte, MessageID_thirdByte, MessageID_fourthByte>
     <BLAECK.WRITE_DATA, MessageID_firstByte, MessageID_secondByte, MessageID_thirdByte, MessageID_fourthByte>
     <BLAECK.ACTIVATE, intervalInSeconds>
           intervalInSeconds: from 1 to 32767 [s]
     <BLAECK.DEACTIVATE>
-	<BLAECK.WRITE_VERSION, MessageID_firstByte, MessageID_secondByte, MessageID_thirdByte, MessageID_fourthByte>
+    <BLAECK.WRITE_VERSION, MessageID_firstByte, MessageID_secondByte, MessageID_thirdByte, MessageID_fourthByte>
+    <BLAECK.WRITE_DEVICE_NAME, MessageID_firstByte, MessageID_secondByte, MessageID_thirdByte, MessageID_fourthByte>
+    <BLAECK.WRITE_DEVICE_HW_VERSION, MessageID_firstByte, MessageID_secondByte, MessageID_thirdByte, MessageID_fourthByte>
+    <BLAECK.WRITE_DEVICE_FW_VERSION, MessageID_firstByte, MessageID_secondByte, MessageID_thirdByte, MessageID_fourthByte>
 
-	
-	
-  * Outgoing messages
+
+    Outgoing messages
    |    Header         ||         Data           ||   EOT    |
    <BLAECK:MSGKEY:MSGID:........................../BLAECK>\r\n
 
    MSGKEY:   DATA#:    DATA:                           DESCRIPTION:
-    B0        n        <SymbolID><SymbolName><DTYPE>   Up to n Items. Response to request for available symbols. (< and > just for illustration, not transmitted)
-    B1        n        <SymbolID><DATA>                Up to n Items. Response to request for data. (< and > just for illustration, not transmitted)
-	B2        n        <VersionNumber>                 One Item. Response to request for version number. (< and > just for illustration, not transmitted)
+    B0        n        <SymbolID><SymbolName><DTYPE>   Up to n Items. Response to request for available symbols: <BLAECK.WRITE_SYMBOLS>
+    B1        n        <SymbolID><DATA>                Up to n Items. Response to request for data: <BLAECK.WRITE_DATA>
+    B2        n        <VersionNumber>                 One Item. Response to request for BlaeckSerial library version number: <BLAECK.WRITE_VERSION>
+    B3        n        <DeviceName>                    One Item. Response to request for device name: <BLAECK.WRITE_DEVICE_NAME>
+    B4        n        <DeviceHWVersion>               One Item. Response to request for device harware version: <BLAECK.WRITE_DEVICE_HW_VERSION>
+    B5        n        <DeviceFWVersion>               One Item. Response to request for device firmware version: <BLAECK.WRITE_DEVICE_FW_VERSION>
+
+  < and > just for illustration, not transmitted
 
                    TYPE:            DESCRIPTION:
-   MSGKEY          byte             Message KEY, A unique key for the type of message being sent
-   MSGID           ulong            Message ID,  A unique message ID which echoes back to transmitter to indicate a response to a message (0 to 4294967295)
-   DATA           (varying)         Message Data, varying data types and length depending on message
-   SymbolID        uint             Symbol ID number
-   SymbolName      String0          Symbol Name - Null Terminated String
-   DTYPE           byte             DataType  0=bool, 1=byte, 2=short, 3=ushort, 4=int, 5=uint, 6=long, 7=ulong, 8=float
-   VersionNumber   String0          X.Y.Z, e.g. 1.0.0
+   MSGKEY            byte             Message KEY, A unique key for the type of message being sent
+   MSGID             ulong            Message ID,  A unique message ID which echoes back to transmitter to indicate a response to a message (0 to 4294967295)
+   DATA             (varying)         Message Data, varying data types and length depending on message
+   SymbolID          uint             Symbol ID number
+   SymbolName        String0          Symbol Name - Null Terminated String
+   DTYPE             byte             DataType  0=bool, 1=byte, 2=short, 3=ushort, 4=int, 5=uint, 6=long, 7=ulong, 8=float
+   VersionNumber     String0          set with: #define BLAECKSERIAL_VERSION "X.Y.Z"
+   DeviceName        String0          set with public variable DeviceName
+   DeviceHWVersion   String0          set with public variable DeviceHWVersion
+   DeviceFWVersion   String0          set with public variable DeviceFWVersion
 
 */
 
@@ -68,7 +78,7 @@
 #include <Wire.h>
 #include <Arduino.h>
 
-#define BLAECKSERIAL_VERSION "1.0.4"
+#define BLAECKSERIAL_VERSION "1.0.5"
 
 typedef enum MasterSlaveConfig
 { Single,
@@ -107,17 +117,24 @@ class BlaeckSerial {
     void beginMaster(HardwareSerial *Ref, unsigned int Size, uint32_t WireClockFrequency);
     void beginSlave(HardwareSerial *Ref, unsigned int Size, byte SlaveID);
 
+    /**
+       @brief Set these variables in your Arduino sketch
+    */
+    String DeviceName = "Unknown Device";
+    String DeviceHWVersion = "n/a";
+    String DeviceFWVersion = "n/a";
+
     // ----- Signals -----
     //add or delete signals
     void addSignal(String SymbolName, bool * value);
     void addSignal(String SymbolName, byte * value);
-	void addSignal(String SymbolName, short * value);
-	void addSignal(String SymbolName, unsigned short * value);
+    void addSignal(String SymbolName, short * value);
+    void addSignal(String SymbolName, unsigned short * value);
     void addSignal(String SymbolName, int * value);
-	void addSignal(String SymbolName, unsigned int * value);
-	void addSignal(String SymbolName, long * value);
+    void addSignal(String SymbolName, unsigned int * value);
+    void addSignal(String SymbolName, long * value);
     void addSignal(String SymbolName, unsigned long * value);
-	void addSignal(String SymbolName, float * value);
+    void addSignal(String SymbolName, float * value);
     void addSignal(String symbolname, double * value);
     void deleteSignals();
 
@@ -143,21 +160,21 @@ class BlaeckSerial {
        @brief Call this function for timed data settings
     */
     void setTimedData(bool timedActivated, unsigned long timedInterval_ms);
-	
-	// ----- Update before data write Callback function  -----
-	/**
-	  @brief Attach a function that will be called just before transmitting data. 
-	  In single device or master mode the function is called just before sending data over serial,
-	  In slave mode the function is called just before sending data over i2c to master. Because the attached function is inside a ISR (interrupt service routine) it should as short and fast as possible.
-	  
-	  About ISRs: ISRs are special kinds of functions that have some unique limitations most other functions do not have. An ISR cannot have any parameters, and they shouldn’t return anything. Generally, an ISR 
-	  should be as short and fast as possible. If your sketch uses multiple ISRs, only one can run at a time, other interrupts will be executed after the current one finishes in an order that depends on the priority they have. 
-	  millis() relies on interrupts to count, so it will never increment inside an ISR. Since delay() requires interrupts to work, it will not work if called inside an ISR. micros() works initially but will start behaving 
-	  erratically after 1-2 ms. delayMicroseconds() does not use any counter, so it will work as normal. Typically global variables are used to pass data between an ISR and the main program. To make sure variables shared between 
-	  an ISR and the main program are updated correctly, declare them as volatile.
-      For more information on interrupts, see Nick Gammon’s notes (http://gammon.com.au/interrupts).
+
+    // ----- Update before data write Callback function  -----
+    /**
+      @brief Attach a function that will be called just before transmitting data.
+      In single device or master mode the function is called just before sending data over serial,
+      In slave mode the function is called just before sending data over i2c to master. Because the attached function is inside a ISR (interrupt service routine) it should as short and fast as possible.
+
+      About ISRs: ISRs are special kinds of functions that have some unique limitations most other functions do not have. An ISR cannot have any parameters, and they shouldn’t return anything. Generally, an ISR
+      should be as short and fast as possible. If your sketch uses multiple ISRs, only one can run at a time, other interrupts will be executed after the current one finishes in an order that depends on the priority they have.
+      millis() relies on interrupts to count, so it will never increment inside an ISR. Since delay() requires interrupts to work, it will not work if called inside an ISR. micros() works initially but will start behaving
+      erratically after 1-2 ms. delayMicroseconds() does not use any counter, so it will work as normal. Typically global variables are used to pass data between an ISR and the main program. To make sure variables shared between
+      an ISR and the main program are updated correctly, declare them as volatile.
+        For more information on interrupts, see Nick Gammon’s notes (http://gammon.com.au/interrupts).
     */
-	void attachUpdate(void (*updateCallback)());
+    void attachUpdate(void (*updateCallback)());
 
     // ----- Read  -----
     /**
@@ -179,6 +196,9 @@ class BlaeckSerial {
 
   private:
     void writeVersionNumber(unsigned long MessageID, bool send_eol);
+    void writeDeviceName(unsigned long MessageID, bool send_eol);
+    void writeDeviceHWVersion(unsigned long MessageID, bool send_eol);
+    void writeDeviceFWVersion(unsigned long MessageID, bool send_eol);
     void writeLocalData(unsigned long MessageID, bool send_eol);
     void writeSlaveData(bool send_eol);
     void writeLocalSymbols(unsigned long MessageID, bool send_eol);
@@ -187,10 +207,10 @@ class BlaeckSerial {
     void wireSlaveReceive();
     void wireSlaveTransmitSingleSymbol();
     void wireSlaveTransmitSingleDataPoint();
-	
-	bool slaveFound(const unsigned int index);
-	void storeSlave(const unsigned int index, const boolean value);
-	
+
+    bool slaveFound(const unsigned int index);
+    void storeSlave(const unsigned int index, const boolean value);
+
     HardwareSerial* SerialRef;
     Signal* Signals;
     int _signalIndex = 0;
@@ -205,7 +225,7 @@ class BlaeckSerial {
 
     masterSlaveConfig _masterSlaveConfig = Single;
     byte _slaveID;
-	unsigned char _slaveFound[128/8]; //128 bit storage
+    unsigned char _slaveFound[128 / 8]; //128 bit storage
     String _slaveSymbolPrefix;
 
 
@@ -235,8 +255,8 @@ class BlaeckSerial {
     void (*_readCallback)(char * command, int * parameter, char * string01);
     bool recvWithStartEndMarkers();
     void parseData();
-	
-	void (*_updateCallback)();
+
+    void (*_updateCallback)();
 
     union {
       bool val;
@@ -252,7 +272,7 @@ class BlaeckSerial {
       short val;
       byte bval[2];
     } ushortCvt;
-		
+
     union {
       int val;
       byte bval[2];
