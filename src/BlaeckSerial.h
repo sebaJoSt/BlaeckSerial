@@ -45,9 +45,9 @@
    |    Header         ||         Data           ||   EOT    |
    <BLAECK:MSGKEY:MSGID:........................../BLAECK>\r\n
 
-   MSGKEY:   DATA#:    DATA:                           DESCRIPTION:
-    B0        n        <SymbolID><SymbolName><DTYPE>                                                   Up to n Items. Response to request for available symbols: <BLAECK.WRITE_SYMBOLS>
-    B1        n        <SymbolID><DATA>                                                                Up to n Items. Response to request for data: <BLAECK.WRITE_DATA>
+   MSGKEY:   DATA#:    DATA:                                                                           DESCRIPTION:
+    B0        n        <SymbolID><SymbolName><DTYPE>                                                   Up to n Items. Response to request for available symbols:  <BLAECK.WRITE_SYMBOLS>
+    B1        n        <SymbolID><DATA>                                                                Up to n Items. Response to request for data:               <BLAECK.WRITE_DATA>
     B2        n        <DeviceID><DeviceName><DeviceHWVersion><DeviceFWVersion><BlaeckSerialVersion>   Up to n Items. Response to request for device information: <BLAECK.GET_DEVICES>
 
   < and > just for illustration, not transmitted
