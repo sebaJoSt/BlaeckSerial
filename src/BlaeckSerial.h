@@ -52,7 +52,7 @@
 
   < and > just for illustration, not transmitted
 
-                   TYPE:            DESCRIPTION:
+                     TYPE:            DESCRIPTION:
    MSGKEY            byte             Message KEY, A unique key for the type of message being sent
    MSGID             ulong            Message ID,  A unique message ID which echoes back to transmitter to indicate a response to a message (0 to 4294967295)
    DATA             (varying)         Message Data, varying data types and length depending on message
