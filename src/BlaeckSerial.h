@@ -1,3 +1,4 @@
+#pragma once
 /*
         File: BlaeckSerial.h
         Author: Sebastian Strobl
@@ -13,7 +14,6 @@
     The message parser uses code from Robin2's Arduino forum thread
     "Serial Basic Input" https://forum.arduino.cc/index.php?topic=396450.0
 */
-
 
 /*  Message Decoder
 
@@ -33,15 +33,12 @@
         Not allowed in COMMAND, PARAMETER & STRING01
 
     Internal commands:
+    <BLAECK.GET_DEVICES, MessageID_firstByte, MessageID_secondByte, MessageID_thirdByte, MessageID_fourthByte>
     <BLAECK.WRITE_SYMBOLS, MessageID_firstByte, MessageID_secondByte, MessageID_thirdByte, MessageID_fourthByte>
     <BLAECK.WRITE_DATA, MessageID_firstByte, MessageID_secondByte, MessageID_thirdByte, MessageID_fourthByte>
     <BLAECK.ACTIVATE, intervalInSeconds>
           intervalInSeconds: from 1 to 32767 [s]
     <BLAECK.DEACTIVATE>
-    <BLAECK.WRITE_VERSION, MessageID_firstByte, MessageID_secondByte, MessageID_thirdByte, MessageID_fourthByte>
-    <BLAECK.WRITE_DEVICE_NAME, MessageID_firstByte, MessageID_secondByte, MessageID_thirdByte, MessageID_fourthByte>
-    <BLAECK.WRITE_DEVICE_HW_VERSION, MessageID_firstByte, MessageID_secondByte, MessageID_thirdByte, MessageID_fourthByte>
-    <BLAECK.WRITE_DEVICE_FW_VERSION, MessageID_firstByte, MessageID_secondByte, MessageID_thirdByte, MessageID_fourthByte>
 
 
     Outgoing messages
@@ -49,12 +46,9 @@
    <BLAECK:MSGKEY:MSGID:........................../BLAECK>\r\n
 
    MSGKEY:   DATA#:    DATA:                           DESCRIPTION:
-    B0        n        <SymbolID><SymbolName><DTYPE>   Up to n Items. Response to request for available symbols: <BLAECK.WRITE_SYMBOLS>
-    B1        n        <SymbolID><DATA>                Up to n Items. Response to request for data: <BLAECK.WRITE_DATA>
-    B2        n        <VersionNumber>                 One Item. Response to request for BlaeckSerial library version number: <BLAECK.WRITE_VERSION>
-    B3        n        <DeviceName>                    One Item. Response to request for device name: <BLAECK.WRITE_DEVICE_NAME>
-    B4        n        <DeviceHWVersion>               One Item. Response to request for device harware version: <BLAECK.WRITE_DEVICE_HW_VERSION>
-    B5        n        <DeviceFWVersion>               One Item. Response to request for device firmware version: <BLAECK.WRITE_DEVICE_FW_VERSION>
+    B0        n        <SymbolID><SymbolName><DTYPE>                                                   Up to n Items. Response to request for available symbols: <BLAECK.WRITE_SYMBOLS>
+    B1        n        <SymbolID><DATA>                                                                Up to n Items. Response to request for data: <BLAECK.WRITE_DATA>
+    B2        n        <DeviceID><DeviceName><DeviceHWVersion><DeviceFWVersion><BlaeckSerialVersion>   Up to n Items. Response to request for device information: <BLAECK.GET_DEVICES>
 
   < and > just for illustration, not transmitted
 
@@ -65,11 +59,12 @@
    SymbolID          uint             Symbol ID number
    SymbolName        String0          Symbol Name - Null Terminated String
    DTYPE             byte             DataType  0=bool, 1=byte, 2=short, 3=ushort, 4=int, 5=uint, 6=long, 7=ulong, 8=float
-   VersionNumber     String0          set with: #define BLAECKSERIAL_VERSION "X.Y.Z"
+   DeviceID          byte             first item: Master or Single device: always zero, next items: Slave Address
    DeviceName        String0          set with public variable DeviceName
    DeviceHWVersion   String0          set with public variable DeviceHWVersion
    DeviceFWVersion   String0          set with public variable DeviceFWVersion
-
+   BlaeckVersion     String0          set with public const BLAECKSERIAL_VERSION
+   
 */
 
 #ifndef BLAECKSERIAL_H
@@ -78,16 +73,16 @@
 #include <Wire.h>
 #include <Arduino.h>
 
-#define BLAECKSERIAL_VERSION "1.0.5"
-
 typedef enum MasterSlaveConfig
-{ Single,
+{
+  Single,
   Master,
   Slave
 } masterSlaveConfig;
 
 typedef enum DataType
-{ Blaeck_bool,
+{
+  Blaeck_bool,
   Blaeck_byte,
   Blaeck_short,
   Blaeck_ushort,
@@ -98,71 +93,79 @@ typedef enum DataType
   Blaeck_float,
 } dataType;
 
-struct Signal {
+struct Signal
+{
   String SymbolName;
   dataType DataType;
-  void * Address;
+  void *Address;
 };
 
-class BlaeckSerial {
-  public:
-    // ----- Constructor -----
-    BlaeckSerial();
+class BlaeckSerial
+{
+public:
+  // ----- Constructor -----
+  BlaeckSerial();
 
-    // ----- Destructor -----
-    ~BlaeckSerial();
+  // ----- Destructor -----
+  ~BlaeckSerial();
 
-    // ----- Initialize -----
-    void begin(HardwareSerial *Ref, unsigned int Size);
-    void beginMaster(HardwareSerial *Ref, unsigned int Size, uint32_t WireClockFrequency);
-    void beginSlave(HardwareSerial *Ref, unsigned int Size, byte SlaveID);
+  // ----- Initialize -----
+  void begin(HardwareSerial *Ref, unsigned int Size);
+  void beginMaster(HardwareSerial *Ref, unsigned int Size, uint32_t WireClockFrequency);
+  void beginSlave(HardwareSerial *Ref, unsigned int Size, byte SlaveID);
 
-    /**
+  /**
        @brief Set these variables in your Arduino sketch
     */
-    String DeviceName = "Unknown Device";
-    String DeviceHWVersion = "n/a";
-    String DeviceFWVersion = "n/a";
+  String DeviceName = "Unknown";
+  String DeviceHWVersion = "n/a";
+  String DeviceFWVersion = "n/a";
 
-    // ----- Signals -----
-    //add or delete signals
-    void addSignal(String SymbolName, bool * value);
-    void addSignal(String SymbolName, byte * value);
-    void addSignal(String SymbolName, short * value);
-    void addSignal(String SymbolName, unsigned short * value);
-    void addSignal(String SymbolName, int * value);
-    void addSignal(String SymbolName, unsigned int * value);
-    void addSignal(String SymbolName, long * value);
-    void addSignal(String SymbolName, unsigned long * value);
-    void addSignal(String SymbolName, float * value);
-    void addSignal(String symbolname, double * value);
-    void deleteSignals();
+  const String BLAECKSERIAL_VERSION = "1.0.5";
 
-    // ----- Symbols -----
-    void writeSymbols();
-    void writeSymbols(unsigned long messageID);
+  // ----- Signals -----
+  //add or delete signals
+  void addSignal(String SymbolName, bool *value);
+  void addSignal(String SymbolName, byte *value);
+  void addSignal(String SymbolName, short *value);
+  void addSignal(String SymbolName, unsigned short *value);
+  void addSignal(String SymbolName, int *value);
+  void addSignal(String SymbolName, unsigned int *value);
+  void addSignal(String SymbolName, long *value);
+  void addSignal(String SymbolName, unsigned long *value);
+  void addSignal(String SymbolName, float *value);
+  void addSignal(String symbolname, double *value);
+  void deleteSignals();
 
-    // ----- Data -----
-    void writeData();
-    void writeData(unsigned long messageID);
+  // ----- Devices -----
+  void writeDevices();
+  void writeDevices(unsigned long messageID);
 
-    // ----- Timed Data -----
-    /**
+  // ----- Symbols -----
+  void writeSymbols();
+  void writeSymbols(unsigned long messageID);
+
+  // ----- Data -----
+  void writeData();
+  void writeData(unsigned long messageID);
+
+  // ----- Timed Data -----
+  /**
        @brief Call this function every some milliseconds for writing timed data
     */
-    void timedWriteData();
-    /**
+  void timedWriteData();
+  /**
        @brief Call this function every some milliseconds for writing timed data
        @param messageId --> A unique message ID which echoes back to transmitter to indicate a response to a message.
     */
-    void timedWriteData(unsigned long messageID);
-    /**
+  void timedWriteData(unsigned long messageID);
+  /**
        @brief Call this function for timed data settings
     */
-    void setTimedData(bool timedActivated, unsigned long timedInterval_ms);
+  void setTimedData(bool timedActivated, unsigned long timedInterval_ms);
 
-    // ----- Update before data write Callback function  -----
-    /**
+  // ----- Update before data write Callback function  -----
+  /**
       @brief Attach a function that will be called just before transmitting data.
       In single device or master mode the function is called just before sending data over serial,
       In slave mode the function is called just before sending data over i2c to master. Because the attached function is inside a ISR (interrupt service routine) it should as short and fast as possible.
@@ -174,132 +177,142 @@ class BlaeckSerial {
       an ISR and the main program are updated correctly, declare them as volatile.
         For more information on interrupts, see Nick Gammon’s notes (http://gammon.com.au/interrupts).
     */
-    void attachUpdate(void (*updateCallback)());
+  void attachUpdate(void (*updateCallback)());
 
-    // ----- Read  -----
-    /**
+  // ----- Read  -----
+  /**
        @brief Call this function every some milliseconds for reading serial input
     */
-    void read();
-    /**
+  void read();
+  /**
       @brief Attach a function that will be called when a valid message was received;
     */
-    void attachRead(void (*readCallback)(char * command, int * parameter, char * string_01));
+  void attachRead(void (*readCallback)(char *command, int *parameter, char *string_01));
 
-    // ----- All-in-one  -----
-    /**
+  // ----- All-in-one  -----
+  /**
        @brief Call this function every some milliseconds for reading serial input
        and writing timed data;
     */
-    void tick();
+  void tick();
 
+private:
+  void writeLocalData(unsigned long MessageID, bool send_eol);
+  void writeSlaveData(bool send_eol);
+  
+  void writeLocalSymbols(unsigned long MessageID, bool send_eol);
+  void writeSlaveSymbols(bool send_eol);
+  
+  void writeLocalDevices(unsigned long MessageID, bool send_eol);
+  void writeSlaveDevices(bool send_eol);
+  
+  void scanI2CSlaves(char addressStart, char addressEnd);
+  
+  void wireSlaveTransmitToMaster();
+  void wireSlaveReceive();
+  
+  void wireSlaveTransmitSingleSymbol();
+  void wireSlaveTransmitSingleDataPoint();
+  void wireSlaveTransmitSingleDevice();
+  void wireSlaveTransmitStatusByte();
 
-  private:
-    void writeVersionNumber(unsigned long MessageID, bool send_eol);
-    void writeDeviceName(unsigned long MessageID, bool send_eol);
-    void writeDeviceHWVersion(unsigned long MessageID, bool send_eol);
-    void writeDeviceFWVersion(unsigned long MessageID, bool send_eol);
-    void writeLocalData(unsigned long MessageID, bool send_eol);
-    void writeSlaveData(bool send_eol);
-    void writeLocalSymbols(unsigned long MessageID, bool send_eol);
-    void writeSlaveSymbols(bool send_eol);
-    void wireSlaveTransmitToMaster();
-    void wireSlaveReceive();
-    void wireSlaveTransmitSingleSymbol();
-    void wireSlaveTransmitSingleDataPoint();
+  bool slaveFound(const unsigned int index);
+  void storeSlave(const unsigned int index, const boolean value);
 
-    bool slaveFound(const unsigned int index);
-    void storeSlave(const unsigned int index, const boolean value);
+  HardwareSerial *SerialRef;
+  Signal *Signals;
+  int _signalIndex = 0;
 
-    HardwareSerial* SerialRef;
-    Signal* Signals;
-    int _signalIndex = 0;
+  bool _timedActivated = false;
+  bool _timedFirstTime = true;
+  unsigned long _timedFirstTimeDone_ms = 0;
+  unsigned long _timedSetPoint_ms = 0;
+  unsigned long _timedInterval_ms = 1000;
 
+  masterSlaveConfig _masterSlaveConfig = Single;
+  byte _slaveID;
+  unsigned char _slaveFound[128 / 8]; //128 bit storage
+  String _slaveSymbolPrefix;
 
-    bool _timedActivated = false;
-    bool _timedFirstTime = true;
-    unsigned long _timedFirstTimeDone_ms = 0;
-    unsigned long _timedSetPoint_ms = 0;
-    unsigned long _timedInterval_ms = 1000;
+  byte _wireMode = 0;
+  int _wireSignalIndex = 0;
+  int _wireDeviceIndex = 0;
 
+  static const int MAXIMUM_CHAR_COUNT = 64;
+  char receivedChars[MAXIMUM_CHAR_COUNT];
+  char COMMAND[MAXIMUM_CHAR_COUNT] = {0};
+  int PARAMETER[10];
+  //STRING_01: Max. 15 chars allowed  + Null Terminator '\0' = 16
+  //In case more than 15 chars are sent, the rest is cut off in function void parseData()
+  char STRING_01[16];
 
-    masterSlaveConfig _masterSlaveConfig = Single;
-    byte _slaveID;
-    unsigned char _slaveFound[128 / 8]; //128 bit storage
-    String _slaveSymbolPrefix;
+  static BlaeckSerial *_pSingletonInstance;
 
+  static void OnReceiveHandler()
+  {
+    if (_pSingletonInstance)
+      _pSingletonInstance->wireSlaveTransmitToMaster();
+  }
 
-    byte _wireMode = 0;
-    int _wireSignalIndex = 0;
+  static void OnSendHandler(int numBytes)
+  {
+    if (_pSingletonInstance)
+      _pSingletonInstance->wireSlaveReceive();
+  }
 
-    static const int MAXIMUM_CHAR_COUNT = 64;
-    char receivedChars[MAXIMUM_CHAR_COUNT];
-    char COMMAND[MAXIMUM_CHAR_COUNT] = {0};
-    int PARAMETER[10];
-    //STRING_01: Max. 15 chars allowed  + Null Terminator '\0' = 16
-    //In case more than 15 chars are sent, the rest is cut off in function void parseData()
-    char STRING_01[16];
+  void (*_readCallback)(char *command, int *parameter, char *string01);
+  bool recvWithStartEndMarkers();
+  void parseData();
 
-    static BlaeckSerial* _pSingletonInstance;
+  void (*_updateCallback)();
 
-    static void OnReceiveHandler() {
-      if (_pSingletonInstance)
-        _pSingletonInstance->wireSlaveTransmitToMaster();
-    }
+  union
+  {
+    bool val;
+    byte bval[1];
+  } boolCvt;
 
-    static void OnSendHandler(int numBytes) {
-      if (_pSingletonInstance)
-        _pSingletonInstance->wireSlaveReceive();
-    }
+  union
+  {
+    short val;
+    byte bval[2];
+  } shortCvt;
 
-    void (*_readCallback)(char * command, int * parameter, char * string01);
-    bool recvWithStartEndMarkers();
-    void parseData();
+  union
+  {
+    short val;
+    byte bval[2];
+  } ushortCvt;
 
-    void (*_updateCallback)();
+  union
+  {
+    int val;
+    byte bval[2];
+  } intCvt;
 
-    union {
-      bool val;
-      byte bval[1];
-    } boolCvt;
+  union
+  {
+    unsigned int val;
+    byte bval[2];
+  } uintCvt;
 
-    union {
-      short val;
-      byte bval[2];
-    } shortCvt;
+  union
+  {
+    long val;
+    byte bval[4];
+  } lngCvt;
 
-    union {
-      short val;
-      byte bval[2];
-    } ushortCvt;
+  union
+  {
+    unsigned long val;
+    byte bval[4];
+  } ulngCvt;
 
-    union {
-      int val;
-      byte bval[2];
-    } intCvt;
-
-    union {
-      unsigned int val;
-      byte bval[2];
-    } uintCvt;
-
-    union {
-      long val;
-      byte bval[4];
-    } lngCvt;
-
-    union {
-      unsigned long val;
-      byte bval[4];
-    } ulngCvt;
-
-    union {
-      float val;
-      byte bval[4];
-    } fltCvt;
-
+  union
+  {
+    float val;
+    byte bval[4];
+  } fltCvt;
 };
-
-
 
 #endif //  BLAECKSERIAL_H

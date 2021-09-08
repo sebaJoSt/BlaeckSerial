@@ -34,16 +34,18 @@
   in single device configuration (see Basic.Ino) but the symbol list and data includes all 
   the slave signals.
 
-    <BLAECK.WRITE_SYMBOLS>      Write the symbol list to the PC
-    <BLAECK.WRITE_DATA>         Write the data to the PC
-    <BLAECK.ACTIVATE,60>        The data is written every 60s to the PC
-                                Minimum: 1[seconds] Maximum: 32767[seconds]
-    <BLAECK.DEACTIVATE>         Stops writing the data every 60s
-    <BLAECK.WRITE_VERSION>      Writes the BlaeckSerial version number
+    <BLAECK.GET_DEVICES>              Writes the device's information to the PC
+    <BLAECK.WRITE_SYMBOLS>            Writes the symbol list to the PC
+    <BLAECK.WRITE_DATA>               Writes the data to the PC
+    <BLAECK.ACTIVATE,60>              The data is written every 60s
+                                      Minimum: 1[seconds] Maximum: 32767[seconds]
+    <BLAECK.DEACTIVATE>               Stops writing the data every 60s
 */
 
 #include "Arduino.h"
 #include "BlaeckSerial.h"
+
+#define ExampleVersion "1.0"
 
 //Instantiate a new BlaeckSerial object
 BlaeckSerial BlaeckSerial;
@@ -57,7 +59,7 @@ void setup()
   // Initialize Serial port
   Serial.begin(9600);
 
-/*Setup BlaeckSerial master
+  /*Setup BlaeckSerial master
  * First parameter: Serial reference
  * Second parameter: Maxmimal signal count used;
  * Third parameter: Clock frequency: the value (in Hertz) of desired communication clock. 
@@ -67,8 +69,12 @@ void setup()
        * 1000000 (fast mode plus)
        * 3400000 (high speed mode)
      Please refer to the specific processor documentation to make sure the desired mode is supported.
-*/ 
+*/
   BlaeckSerial.beginMaster(&Serial, 2, 400000L);
+
+  BlaeckSerial.DeviceName = "Small Random Number Generator";
+  BlaeckSerial.DeviceHWVersion = "Arduino Mega 2560 Rev3";
+  BlaeckSerial.DeviceFWVersion = ExampleVersion;
 
   // Add signals to BlaeckSerial master
   BlaeckSerial.addSignal("Small Number", &randomSmallNumber);
@@ -94,6 +100,6 @@ void UpdateRandomNumbers()
   // Random small number from 0.00 to 9.99
   randomSmallNumber = random(1000) / 100.0;
 
-    // Random small number from 10.00 to 20.00
+  // Random small number from 10.00 to 20.00
   randomSmallNumber2 = random(1000, 2001) / 100.0;
 }

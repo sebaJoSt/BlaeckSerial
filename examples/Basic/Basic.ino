@@ -12,19 +12,19 @@
     Open the Serial Monitor and set the baudrate to 9600 baud.
     Type the following commands and press enter:
 
-    <BLAECK.WRITE_SYMBOLS>            Write the symbol list to the PC
-    <BLAECK.WRITE_DATA>               Write the data to the PC
-    <BLAECK.ACTIVATE,60>              The data is written every 60s to the PC
+    <BLAECK.GET_DEVICES>              Writes the device's information to the PC
+    <BLAECK.WRITE_SYMBOLS>            Writes the symbol list to the PC
+    <BLAECK.WRITE_DATA>               Writes the data to the PC
+    <BLAECK.ACTIVATE,60>              The data is written every 60s
                                       Minimum: 1[seconds] Maximum: 32767[seconds]
     <BLAECK.DEACTIVATE>               Stops writing the data every 60s
-    <BLAECK.WRITE_VERSION>            Writes the BlaeckSerial version number
-    <BLAECK.WRITE_DEVICE_NAME>        Writes the device name previously defined with public variable DeviceName
-    <BLAECK.WRITE_DEVICE_HW_VERSION>  Writes the device's hardware version previously defined with public variable DeviceHWVersion
-    <BLAECK.WRITE_DEVICE_FW_VERSION>  Writes the device's firmware version previously defined with public variable DeviceFWVersion
+	  
 */
 
 #include "Arduino.h"
 #include "BlaeckSerial.h"
+
+#define ExampleVersion "1.0"
 
 //Instantiate a new BlaeckSerial object
 BlaeckSerial BlaeckSerial;
@@ -33,8 +33,6 @@ BlaeckSerial BlaeckSerial;
 float randomSmallNumber;
 long randomBigNumber;
 
-#define ExampleVersion "1.0.0"
-
 void setup()
 {
   // Initialize Serial port
@@ -42,12 +40,12 @@ void setup()
 
   //Setup BlaeckSerial
   BlaeckSerial.begin(
-    &Serial,   //Serial reference
-    2          //Maxmimal signal count used;
+      &Serial, //Serial reference
+      2        //Maxmimal signal count used;
   );
 
-  BlaeckSerial.DeviceName = "RandomNumberGenerator";
-  BlaeckSerial.DeviceHWVersion = "ArduinoXYZ RevX";
+  BlaeckSerial.DeviceName = "Random Number Generator";
+  BlaeckSerial.DeviceHWVersion = "Arduino Mega 2560 Rev3";
   BlaeckSerial.DeviceFWVersion = ExampleVersion;
 
   // Add signals to BlaeckSerial

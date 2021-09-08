@@ -15,19 +15,18 @@
 BlaeckSerial BlaeckSerial;
 
 //Signals
-bool boolTest[2]             = {false, true};
-byte byteTest[2]             = {0, 255};
-short shortTest[2]           = { -32768, 32767};
-unsigned short ushortTest[2] = { 0, 65535};
-int intTest[2]               = { -32768, 32767};
-unsigned int uintTest[2]     = {0, 65535};
-long longTest[2]             = { -2147483648, 2147483647};
-unsigned long ulongTest[2]   = {0, 4294967295};
-float floatTest[2]           = { -3.4028235E+38, 3.4028235E+38};
-double doubleTest[2]         = { -3.4028235E+38, 3.4028235E+38};
+bool boolTest[2] = {false, true};
+byte byteTest[2] = {0, 255};
+short shortTest[2] = {-32768, 32767};
+unsigned short ushortTest[2] = {0, 65535};
+int intTest[2] = {-32768, 32767};
+unsigned int uintTest[2] = {0, 65535};
+long longTest[2] = {-2147483648, 2147483647};
+unsigned long ulongTest[2] = {0, 4294967295};
+float floatTest[2] = {-3.4028235E+38, 3.4028235E+38};
+double doubleTest[2] = {-3.4028235E+38, 3.4028235E+38};
 /*On the Uno and other ATMEGA based boards, the double implementation occupies 4 bytes
   and is exactly the same as the float, with no gain in precision.*/
-
 
 void setup()
 {
