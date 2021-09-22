@@ -172,9 +172,9 @@ void BlaeckSerial::read()
   if (recvWithStartEndMarkers() == true)
   {
     parseData();
-    Serial.print("<");
-    Serial.print(receivedChars);
-    Serial.println(">");
+    SerialRef->print("<");
+    SerialRef->print(receivedChars);
+    SerialRef->println(">");
 
     if (strcmp(COMMAND, "BLAECK.WRITE_SYMBOLS") == 0)
     {
@@ -419,8 +419,8 @@ void BlaeckSerial::writeLocalDevices(unsigned long msg_id, bool send_eol)
   ulngCvt.val = msg_id;
   SerialRef->write(ulngCvt.bval, 4);
   SerialRef->write(":");
-  byte masterID = 0;
-  SerialRef->write(masterID);
+  SerialRef->write(_masterSlaveConfig);
+  SerialRef->write(_slaveID);
   SerialRef->print(DeviceName);
   SerialRef->write('\0');
   SerialRef->print(DeviceHWVersion);
@@ -455,13 +455,15 @@ void BlaeckSerial::writeSlaveDevices(bool send_eol)
         transmissionIsSuccess = Wire.endTransmission();
         //0: success
         if (transmissionIsSuccess == 0)
+        {
           break;
+        }
       }
 
       if (transmissionIsSuccess == 0)
       {
-        //SlaveID
-        SerialRef->write(slaveindex);
+        SerialRef->write(2);          //Slave config
+        SerialRef->write(slaveindex); //Slave ID
 
         bool eolist_found = false;
 
@@ -489,7 +491,7 @@ void BlaeckSerial::writeSlaveDevices(bool send_eol)
             if (c == char(0x0A))
               eolist_found = true;
             if (eosignal_found != true && eolist_found != true)
-              Serial.print(c);
+              SerialRef->print(c);
           }
           if (eolist_found)
             break;
@@ -618,8 +620,8 @@ void BlaeckSerial::writeSlaveData(bool send_eol)
             continue;
 
           //Signal Key
-          Serial.write(lowByte(_signalIndex + signalCount));
-          Serial.write(highByte(_signalIndex + signalCount));
+          SerialRef->write(lowByte(_signalIndex + signalCount));
+          SerialRef->write(highByte(_signalIndex + signalCount));
 
           signalCount += 1;
           // slave may send less than requested
@@ -632,7 +634,7 @@ void BlaeckSerial::writeSlaveData(bool send_eol)
             {
               //then read the data bytes
               c = Wire.read();
-              Serial.print(c);
+              SerialRef->print(c);
             }
             char c_before = char(0x7F);
             byte endoflist_count = 0;
@@ -674,8 +676,9 @@ void BlaeckSerial::writeLocalSymbols(unsigned long msg_id, bool send_eol)
 
   for (int i = 0; i < _signalIndex; i++)
   {
-    intCvt.val = i;
-    SerialRef->write(intCvt.bval, 2);
+    SerialRef->write(_masterSlaveConfig);
+    SerialRef->write(_slaveID);
+
     Signal signal = Signals[i];
     SerialRef->print(signal.SymbolName);
     SerialRef->write('\0');
@@ -772,10 +775,9 @@ void BlaeckSerial::writeSlaveSymbols(bool send_eol)
 
           bool eosignal_found = false;
 
-          //Signal Key
-          Serial.write(lowByte(_signalIndex + signalCount));
-          Serial.write(highByte(_signalIndex + signalCount));
-
+          SerialRef->write(2);          //Slave config
+          SerialRef->write(slaveindex); //Slave ID
+        
           int charsToRead = 32;
 
           for (int symbolchar = 0; symbolchar <= charsToRead - 1; symbolchar++)
@@ -794,7 +796,7 @@ void BlaeckSerial::writeSlaveSymbols(bool send_eol)
             if (c == char(0x0A))
               eolist_found = true;
             if (eosignal_found != true && eolist_found != true)
-              Serial.print(c);
+              SerialRef->print(c);
           }
           if (eolist_found)
             break;
@@ -809,8 +811,6 @@ void BlaeckSerial::writeSlaveSymbols(bool send_eol)
     SerialRef->flush();
   }
 }
-
-
 
 void BlaeckSerial::scanI2CSlaves(char addressStart, char addressEnd)
 {
@@ -908,7 +908,7 @@ void BlaeckSerial::wireSlaveTransmitSingleSymbol()
   char little_s_string[32] = "";
   signal.SymbolName.toCharArray(little_s_string, 32);
   Wire.write(little_s_string);
-
+  
   Wire.write('\0');
 
   switch (signal.DataType)

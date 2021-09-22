@@ -49,6 +49,8 @@ void setup()
 
 void loop()
 {
+  BlaeckSerial.read();
+  
   UpdateRandomNumbers();
 }
 
