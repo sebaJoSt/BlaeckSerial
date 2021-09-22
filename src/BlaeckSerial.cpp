@@ -48,10 +48,10 @@ void BlaeckSerial::beginSlave(HardwareSerial *Ref, unsigned int size, byte slave
   begin(Ref, size);
 }
 
-void BlaeckSerial::addSignal(String symbolName, bool *value)
+void BlaeckSerial::addSignal(String symbolName, bool *value, bool prefixSlaveID)
 {
   Signals[_signalIndex].SymbolName = symbolName;
-  if (_masterSlaveConfig == Slave)
+  if (_masterSlaveConfig == Slave && prefixSlaveID)
   {
     Signals[_signalIndex].SymbolName = _slaveSymbolPrefix + symbolName;
   }
@@ -59,10 +59,10 @@ void BlaeckSerial::addSignal(String symbolName, bool *value)
   Signals[_signalIndex].Address = value;
   _signalIndex++;
 }
-void BlaeckSerial::addSignal(String symbolName, byte *value)
+void BlaeckSerial::addSignal(String symbolName, byte *value, bool prefixSlaveID)
 {
   Signals[_signalIndex].SymbolName = symbolName;
-  if (_masterSlaveConfig == Slave)
+  if (_masterSlaveConfig == Slave && prefixSlaveID)
   {
     Signals[_signalIndex].SymbolName = _slaveSymbolPrefix + symbolName;
   }
@@ -70,10 +70,10 @@ void BlaeckSerial::addSignal(String symbolName, byte *value)
   Signals[_signalIndex].Address = value;
   _signalIndex++;
 }
-void BlaeckSerial::addSignal(String symbolName, short *value)
+void BlaeckSerial::addSignal(String symbolName, short *value, bool prefixSlaveID)
 {
   Signals[_signalIndex].SymbolName = symbolName;
-  if (_masterSlaveConfig == Slave)
+  if (_masterSlaveConfig == Slave && prefixSlaveID)
   {
     Signals[_signalIndex].SymbolName = _slaveSymbolPrefix + symbolName;
   }
@@ -81,10 +81,10 @@ void BlaeckSerial::addSignal(String symbolName, short *value)
   Signals[_signalIndex].Address = value;
   _signalIndex++;
 }
-void BlaeckSerial::addSignal(String symbolName, unsigned short *value)
+void BlaeckSerial::addSignal(String symbolName, unsigned short *value, bool prefixSlaveID)
 {
   Signals[_signalIndex].SymbolName = symbolName;
-  if (_masterSlaveConfig == Slave)
+  if (_masterSlaveConfig == Slave && prefixSlaveID)
   {
     Signals[_signalIndex].SymbolName = _slaveSymbolPrefix + symbolName;
   }
@@ -92,10 +92,10 @@ void BlaeckSerial::addSignal(String symbolName, unsigned short *value)
   Signals[_signalIndex].Address = value;
   _signalIndex++;
 }
-void BlaeckSerial::addSignal(String symbolName, int *value)
+void BlaeckSerial::addSignal(String symbolName, int *value, bool prefixSlaveID)
 {
   Signals[_signalIndex].SymbolName = symbolName;
-  if (_masterSlaveConfig == Slave)
+  if (_masterSlaveConfig == Slave && prefixSlaveID)
   {
     Signals[_signalIndex].SymbolName = _slaveSymbolPrefix + symbolName;
   }
@@ -103,10 +103,10 @@ void BlaeckSerial::addSignal(String symbolName, int *value)
   Signals[_signalIndex].Address = value;
   _signalIndex++;
 }
-void BlaeckSerial::addSignal(String symbolName, unsigned int *value)
+void BlaeckSerial::addSignal(String symbolName, unsigned int *value, bool prefixSlaveID)
 {
   Signals[_signalIndex].SymbolName = symbolName;
-  if (_masterSlaveConfig == Slave)
+  if (_masterSlaveConfig == Slave && prefixSlaveID)
   {
     Signals[_signalIndex].SymbolName = _slaveSymbolPrefix + symbolName;
   }
@@ -114,10 +114,10 @@ void BlaeckSerial::addSignal(String symbolName, unsigned int *value)
   Signals[_signalIndex].Address = value;
   _signalIndex++;
 }
-void BlaeckSerial::addSignal(String symbolName, long *value)
+void BlaeckSerial::addSignal(String symbolName, long *value, bool prefixSlaveID)
 {
   Signals[_signalIndex].SymbolName = symbolName;
-  if (_masterSlaveConfig == Slave)
+  if (_masterSlaveConfig == Slave && prefixSlaveID)
   {
     Signals[_signalIndex].SymbolName = _slaveSymbolPrefix + symbolName;
   }
@@ -125,10 +125,10 @@ void BlaeckSerial::addSignal(String symbolName, long *value)
   Signals[_signalIndex].Address = value;
   _signalIndex++;
 }
-void BlaeckSerial::addSignal(String symbolName, unsigned long *value)
+void BlaeckSerial::addSignal(String symbolName, unsigned long *value, bool prefixSlaveID)
 {
   Signals[_signalIndex].SymbolName = symbolName;
-  if (_masterSlaveConfig == Slave)
+  if (_masterSlaveConfig == Slave && prefixSlaveID)
   {
     Signals[_signalIndex].SymbolName = _slaveSymbolPrefix + symbolName;
   }
@@ -136,10 +136,10 @@ void BlaeckSerial::addSignal(String symbolName, unsigned long *value)
   Signals[_signalIndex].Address = value;
   _signalIndex++;
 }
-void BlaeckSerial::addSignal(String symbolName, float *value)
+void BlaeckSerial::addSignal(String symbolName, float *value, bool prefixSlaveID)
 {
   Signals[_signalIndex].SymbolName = symbolName;
-  if (_masterSlaveConfig == Slave)
+  if (_masterSlaveConfig == Slave && prefixSlaveID)
   {
     Signals[_signalIndex].SymbolName = _slaveSymbolPrefix + symbolName;
   }
@@ -147,12 +147,12 @@ void BlaeckSerial::addSignal(String symbolName, float *value)
   Signals[_signalIndex].Address = value;
   _signalIndex++;
 }
-void BlaeckSerial::addSignal(String symbolName, double *value)
+void BlaeckSerial::addSignal(String symbolName, double *value, bool prefixSlaveID)
 {
   /*On the Uno and other ATMEGA based boards, the double implementation occupies 4 bytes
     and is exactly the same as the float, with no gain in precision.*/
   Signals[_signalIndex].SymbolName = symbolName;
-  if (_masterSlaveConfig == Slave)
+  if (_masterSlaveConfig == Slave && prefixSlaveID)
   {
     Signals[_signalIndex].SymbolName = _slaveSymbolPrefix + symbolName;
   }
@@ -777,7 +777,7 @@ void BlaeckSerial::writeSlaveSymbols(bool send_eol)
 
           SerialRef->write(2);          //Slave config
           SerialRef->write(slaveindex); //Slave ID
-        
+
           int charsToRead = 32;
 
           for (int symbolchar = 0; symbolchar <= charsToRead - 1; symbolchar++)
@@ -908,7 +908,7 @@ void BlaeckSerial::wireSlaveTransmitSingleSymbol()
   char little_s_string[32] = "";
   signal.SymbolName.toCharArray(little_s_string, 32);
   Wire.write(little_s_string);
-  
+
   Wire.write('\0');
 
   switch (signal.DataType)
