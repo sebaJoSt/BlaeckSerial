@@ -49,7 +49,7 @@ void setup()
 
 void loop()
 {
-  BlaeckSerial.read();
+  BlaeckSerial.tick();
   
   UpdateRandomNumbers();
 }
