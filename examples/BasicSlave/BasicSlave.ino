@@ -49,9 +49,9 @@ void setup()
 
 void loop()
 {
-  BlaeckSerial.tick();
-  
   UpdateRandomNumbers();
+
+  BlaeckSerial.tick();
 }
 
 void UpdateRandomNumbers()
