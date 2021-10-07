@@ -619,17 +619,19 @@ void BlaeckSerial::writeSlaveData(bool send_eol)
           if (receivedBytes < 2)
             continue;
 
-          //Signal Key
-          SerialRef->write(lowByte(_signalIndex + signalCount));
-          SerialRef->write(highByte(_signalIndex + signalCount));
-
-          signalCount += 1;
           // slave may send less than requested
           for (int symbolchar = 0; symbolchar <= 31; symbolchar++)
           {
             //first receive number of bytes to expect
             char bytecount = Wire.read();
             char c;
+            if (bytecount > 0)
+            {
+              //Signal Key
+              SerialRef->write(lowByte(_signalIndex + signalCount));
+              SerialRef->write(highByte(_signalIndex + signalCount));
+              signalCount += 1;
+            }
             for (int i = 0; i < bytecount; i++)
             {
               //then read the data bytes
@@ -650,6 +652,7 @@ void BlaeckSerial::writeSlaveData(bool send_eol)
             if (endoflist_count == 8)
               eolist_found = true;
           }
+
           if (eolist_found)
             break;
         }
@@ -775,9 +778,6 @@ void BlaeckSerial::writeSlaveSymbols(bool send_eol)
 
           bool eosignal_found = false;
 
-          SerialRef->write(2);          //Slave config
-          SerialRef->write(slaveindex); //Slave ID
-
           int charsToRead = 32;
 
           for (int symbolchar = 0; symbolchar <= charsToRead - 1; symbolchar++)
@@ -786,15 +786,29 @@ void BlaeckSerial::writeSlaveSymbols(bool send_eol)
             //SymbolName + \0 + DataType
             // receive a byte as character
             char c = Wire.read();
+
+            //'\0'
+            if (c != char(0x00) && symbolchar == 0)
+            {
+              SerialRef->write(2);          //Slave config
+              SerialRef->write(slaveindex); //Slave ID
+            }
+            if (c == char(0x00) && symbolchar == 0)
+            {
+              continue;
+            }
+
             //'\r'
             if (c == char(0x0D))
             {
               eosignal_found = true;
               signalCount += 1;
             }
+
             //'\n'
             if (c == char(0x0A))
               eolist_found = true;
+
             if (eosignal_found != true && eolist_found != true)
               SerialRef->print(c);
           }
@@ -1041,6 +1055,11 @@ void BlaeckSerial::wireSlaveTransmitSingleDataPoint()
   }
 
   _wireSignalIndex += 1;
+
+  if (_signalIndex == 0)
+  {
+    Wire.write(0);
+  }
 
   if (_wireSignalIndex >= _signalIndex)
   {
