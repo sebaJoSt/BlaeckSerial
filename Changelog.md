@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.1] - 2021-11-15
+
+### Changed
+- BLAECKSERIAL_VERSION fixed 
+
 ## [2.0.0] - 2021-11-15
 
 ### Changed
@@ -52,6 +57,7 @@ New public function: `attachUpdate(void (*updateCallback)());`
 
 Initial release.
 
+[2.0.1]: https://github.com/sebaJoSt/BlaeckSerial/compare/2.0.0...2.0.1
 [2.0.0]: https://github.com/sebaJoSt/BlaeckSerial/compare/1.0.4...2.0.0
 [1.0.4]: https://github.com/sebaJoSt/BlaeckSerial/compare/1.0.3...1.0.4
 [1.0.3]: https://github.com/sebaJoSt/BlaeckSerial/compare/1.0.2...1.0.3
