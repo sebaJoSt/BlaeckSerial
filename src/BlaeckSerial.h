@@ -122,7 +122,7 @@ public:
   String DeviceHWVersion = "n/a";
   String DeviceFWVersion = "n/a";
 
-  const String BLAECKSERIAL_VERSION = "1.0.5";
+  const String BLAECKSERIAL_VERSION = "2.0.0";
 
   // ----- Signals -----
   //add or delete signals
