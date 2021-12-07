@@ -8,7 +8,7 @@ All notable changes to this project will be documented in this file.
 BlaeckSerial::tick(unsigned long msg_id)
 
 ### Changed
-BlaeckSerial::tick() Default: msg_id = 185273099
+BlaeckSerial::tick() and BlaeckSerial::timedWriteData(): new default msg_id = 185273099
 
 
 ## [2.0.1] - 2021-11-15

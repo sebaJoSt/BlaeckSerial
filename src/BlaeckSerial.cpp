@@ -372,7 +372,7 @@ void BlaeckSerial::writeData(unsigned long msg_id)
 
 void BlaeckSerial::timedWriteData()
 {
-  this->timedWriteData(1);
+  this->timedWriteData(185273099);
 }
 void BlaeckSerial::timedWriteData(unsigned long msg_id)
 {

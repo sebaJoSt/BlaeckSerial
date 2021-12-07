@@ -152,7 +152,7 @@ class BlaeckSerial
 
     // ----- Timed Data -----
     /**
-           @brief Call this function every some milliseconds for writing timed data
+           @brief Call this function every some milliseconds for writing timed data; default messageId = 185273099
     */
     void timedWriteData();
     /**
@@ -193,7 +193,7 @@ class BlaeckSerial
     // ----- All-in-one -----
     /**
           @brief Call this function every some milliseconds for reading serial input
-           and writing timed data; Default messageId = 185273099
+           and writing timed data; default messageId = 185273099
     */
     void tick();
     /**
