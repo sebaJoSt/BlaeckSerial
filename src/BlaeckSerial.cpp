@@ -524,59 +524,59 @@ void BlaeckSerial::writeLocalData(unsigned long msg_id, bool send_eol)
     Signal signal = Signals[i];
     switch (signal.DataType)
     {
-    case (Blaeck_bool):
-    {
-      boolCvt.val = *((bool *)signal.Address);
-      SerialRef->write(boolCvt.bval, 1);
-    }
-    break;
-    case (Blaeck_byte):
-    {
-      SerialRef->write(*((byte *)signal.Address));
-    }
-    break;
-    case (Blaeck_short):
-    {
-      shortCvt.val = *((short *)signal.Address);
-      SerialRef->write(shortCvt.bval, 2);
-    }
-    break;
-    case (Blaeck_ushort):
-    {
-      ushortCvt.val = *((unsigned short *)signal.Address);
-      SerialRef->write(ushortCvt.bval, 2);
-    }
-    break;
-    case (Blaeck_int):
-    {
-      intCvt.val = *((int *)signal.Address);
-      SerialRef->write(intCvt.bval, 2);
-    }
-    break;
-    case (Blaeck_uint):
-    {
-      uintCvt.val = *((unsigned int *)signal.Address);
-      SerialRef->write(uintCvt.bval, 2);
-    }
-    break;
-    case (Blaeck_long):
-    {
-      lngCvt.val = *((long *)signal.Address);
-      SerialRef->write(lngCvt.bval, 4);
-    }
-    break;
-    case (Blaeck_ulong):
-    {
-      ulngCvt.val = *((unsigned long *)signal.Address);
-      SerialRef->write(ulngCvt.bval, 4);
-    }
-    break;
-    case (Blaeck_float):
-    {
-      fltCvt.val = *((float *)signal.Address);
-      SerialRef->write(fltCvt.bval, 4);
-    }
-    break;
+      case (Blaeck_bool):
+        {
+          boolCvt.val = *((bool *)signal.Address);
+          SerialRef->write(boolCvt.bval, 1);
+        }
+        break;
+      case (Blaeck_byte):
+        {
+          SerialRef->write(*((byte *)signal.Address));
+        }
+        break;
+      case (Blaeck_short):
+        {
+          shortCvt.val = *((short *)signal.Address);
+          SerialRef->write(shortCvt.bval, 2);
+        }
+        break;
+      case (Blaeck_ushort):
+        {
+          ushortCvt.val = *((unsigned short *)signal.Address);
+          SerialRef->write(ushortCvt.bval, 2);
+        }
+        break;
+      case (Blaeck_int):
+        {
+          intCvt.val = *((int *)signal.Address);
+          SerialRef->write(intCvt.bval, 2);
+        }
+        break;
+      case (Blaeck_uint):
+        {
+          uintCvt.val = *((unsigned int *)signal.Address);
+          SerialRef->write(uintCvt.bval, 2);
+        }
+        break;
+      case (Blaeck_long):
+        {
+          lngCvt.val = *((long *)signal.Address);
+          SerialRef->write(lngCvt.bval, 4);
+        }
+        break;
+      case (Blaeck_ulong):
+        {
+          ulngCvt.val = *((unsigned long *)signal.Address);
+          SerialRef->write(ulngCvt.bval, 4);
+        }
+        break;
+      case (Blaeck_float):
+        {
+          fltCvt.val = *((float *)signal.Address);
+          SerialRef->write(fltCvt.bval, 4);
+        }
+        break;
     }
   }
 
@@ -688,51 +688,51 @@ void BlaeckSerial::writeLocalSymbols(unsigned long msg_id, bool send_eol)
 
     switch (signal.DataType)
     {
-    case (Blaeck_bool):
-    {
-      SerialRef->write(0x0);
-      break;
-    }
-    case (Blaeck_byte):
-    {
-      SerialRef->write(0x1);
-      break;
-    }
-    case (Blaeck_short):
-    {
-      SerialRef->write(0x2);
-      break;
-    }
-    case (Blaeck_ushort):
-    {
-      SerialRef->write(0x3);
-      break;
-    }
-    case (Blaeck_int):
-    {
-      SerialRef->write(0x4);
-      break;
-    }
-    case (Blaeck_uint):
-    {
-      SerialRef->write(0x5);
-      break;
-    }
-    case (Blaeck_long):
-    {
-      SerialRef->write(0x6);
-      break;
-    }
-    case (Blaeck_ulong):
-    {
-      SerialRef->write(0x7);
-      break;
-    }
-    case (Blaeck_float):
-    {
-      SerialRef->write(0x8);
-      break;
-    }
+      case (Blaeck_bool):
+        {
+          SerialRef->write(0x0);
+          break;
+        }
+      case (Blaeck_byte):
+        {
+          SerialRef->write(0x1);
+          break;
+        }
+      case (Blaeck_short):
+        {
+          SerialRef->write(0x2);
+          break;
+        }
+      case (Blaeck_ushort):
+        {
+          SerialRef->write(0x3);
+          break;
+        }
+      case (Blaeck_int):
+        {
+          SerialRef->write(0x4);
+          break;
+        }
+      case (Blaeck_uint):
+        {
+          SerialRef->write(0x5);
+          break;
+        }
+      case (Blaeck_long):
+        {
+          SerialRef->write(0x6);
+          break;
+        }
+      case (Blaeck_ulong):
+        {
+          SerialRef->write(0x7);
+          break;
+        }
+      case (Blaeck_float):
+        {
+          SerialRef->write(0x8);
+          break;
+        }
     }
   }
   if (send_eol)
@@ -867,8 +867,13 @@ void BlaeckSerial::scanI2CSlaves(char addressStart, char addressEnd)
 
 void BlaeckSerial::tick()
 {
+  this->tick(185273099);
+}
+
+void BlaeckSerial::tick(unsigned long msg_id)
+{
   this->read();
-  this->timedWriteData();
+  this->timedWriteData(msg_id);
 }
 
 void BlaeckSerial::wireSlaveTransmitStatusByte()
@@ -927,51 +932,51 @@ void BlaeckSerial::wireSlaveTransmitSingleSymbol()
 
   switch (signal.DataType)
   {
-  case (Blaeck_bool):
-  {
-    Wire.write(0x0);
-    break;
-  }
-  case (Blaeck_byte):
-  {
-    Wire.write(0x1);
-    break;
-  }
-  case (Blaeck_short):
-  {
-    Wire.write(0x2);
-    break;
-  }
-  case (Blaeck_ushort):
-  {
-    Wire.write(0x3);
-    break;
-  }
-  case (Blaeck_int):
-  {
-    Wire.write(0x4);
-    break;
-  }
-  case (Blaeck_uint):
-  {
-    Wire.write(0x5);
-    break;
-  }
-  case (Blaeck_long):
-  {
-    Wire.write(0x6);
-    break;
-  }
-  case (Blaeck_ulong):
-  {
-    Wire.write(0x7);
-    break;
-  }
-  case (Blaeck_float):
-  {
-    Wire.write(0x8);
-    break;
-  }
+    case (Blaeck_bool):
+      {
+        Wire.write(0x0);
+        break;
+      }
+    case (Blaeck_byte):
+      {
+        Wire.write(0x1);
+        break;
+      }
+    case (Blaeck_short):
+      {
+        Wire.write(0x2);
+        break;
+      }
+    case (Blaeck_ushort):
+      {
+        Wire.write(0x3);
+        break;
+      }
+    case (Blaeck_int):
+      {
+        Wire.write(0x4);
+        break;
+      }
+    case (Blaeck_uint):
+      {
+        Wire.write(0x5);
+        break;
+      }
+    case (Blaeck_long):
+      {
+        Wire.write(0x6);
+        break;
+      }
+    case (Blaeck_ulong):
+      {
+        Wire.write(0x7);
+        break;
+      }
+    case (Blaeck_float):
+      {
+        Wire.write(0x8);
+        break;
+      }
   }
 
   Wire.write(0x0D);
@@ -990,68 +995,68 @@ void BlaeckSerial::wireSlaveTransmitSingleDataPoint()
 
   switch (signal.DataType)
   {
-  case (Blaeck_bool):
-  {
-    boolCvt.val = *((bool *)signal.Address);
-    Wire.write(1);
-    Wire.write(boolCvt.bval, 1);
-  }
-  break;
-  case (Blaeck_byte):
-  {
-    Wire.write(1);
-    Wire.write(*((byte *)signal.Address));
-  }
-  break;
-  case (Blaeck_short):
-  {
-    shortCvt.val = *((short *)signal.Address);
-    Wire.write(2);
-    Wire.write(shortCvt.bval, 2);
-  }
-  break;
-  case (Blaeck_ushort):
-  {
-    ushortCvt.val = *((unsigned short *)signal.Address);
-    Wire.write(2);
-    Wire.write(ushortCvt.bval, 2);
-  }
-  break;
-  case (Blaeck_int):
-  {
-    intCvt.val = *((int *)signal.Address);
-    Wire.write(2);
-    Wire.write(intCvt.bval, 2);
-  }
-  break;
-  case (Blaeck_uint):
-  {
-    uintCvt.val = *((unsigned int *)signal.Address);
-    Wire.write(2);
-    Wire.write(uintCvt.bval, 2);
-  }
-  break;
-  case (Blaeck_long):
-  {
-    lngCvt.val = *((long *)signal.Address);
-    Wire.write(4);
-    Wire.write(lngCvt.bval, 4);
-  }
-  break;
-  case (Blaeck_ulong):
-  {
-    ulngCvt.val = *((unsigned long *)signal.Address);
-    Wire.write(4);
-    Wire.write(ulngCvt.bval, 4);
-  }
-  break;
-  case (Blaeck_float):
-  {
-    fltCvt.val = *((float *)signal.Address);
-    Wire.write(4);
-    Wire.write(fltCvt.bval, 4);
-  }
-  break;
+    case (Blaeck_bool):
+      {
+        boolCvt.val = *((bool *)signal.Address);
+        Wire.write(1);
+        Wire.write(boolCvt.bval, 1);
+      }
+      break;
+    case (Blaeck_byte):
+      {
+        Wire.write(1);
+        Wire.write(*((byte *)signal.Address));
+      }
+      break;
+    case (Blaeck_short):
+      {
+        shortCvt.val = *((short *)signal.Address);
+        Wire.write(2);
+        Wire.write(shortCvt.bval, 2);
+      }
+      break;
+    case (Blaeck_ushort):
+      {
+        ushortCvt.val = *((unsigned short *)signal.Address);
+        Wire.write(2);
+        Wire.write(ushortCvt.bval, 2);
+      }
+      break;
+    case (Blaeck_int):
+      {
+        intCvt.val = *((int *)signal.Address);
+        Wire.write(2);
+        Wire.write(intCvt.bval, 2);
+      }
+      break;
+    case (Blaeck_uint):
+      {
+        uintCvt.val = *((unsigned int *)signal.Address);
+        Wire.write(2);
+        Wire.write(uintCvt.bval, 2);
+      }
+      break;
+    case (Blaeck_long):
+      {
+        lngCvt.val = *((long *)signal.Address);
+        Wire.write(4);
+        Wire.write(lngCvt.bval, 4);
+      }
+      break;
+    case (Blaeck_ulong):
+      {
+        ulngCvt.val = *((unsigned long *)signal.Address);
+        Wire.write(4);
+        Wire.write(ulngCvt.bval, 4);
+      }
+      break;
+    case (Blaeck_float):
+      {
+        fltCvt.val = *((float *)signal.Address);
+        Wire.write(4);
+        Wire.write(fltCvt.bval, 4);
+      }
+      break;
   }
 
   _wireSignalIndex += 1;

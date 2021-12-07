@@ -2,10 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.2] - 2021-12-07
+
+### Added
+BlaeckSerial::tick(unsigned long msg_id)
+
+### Changed
+BlaeckSerial::tick() Default: msg_id = 185273099
+
+
 ## [2.0.1] - 2021-11-15
 
 ### Changed
 - BLAECKSERIAL_VERSION fixed 
+
 
 ## [2.0.0] - 2021-11-15
 
