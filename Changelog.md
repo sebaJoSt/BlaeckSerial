@@ -10,7 +10,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 - `BlaeckSerial::tick()` and `BlaeckSerial::timedWriteData()` message id changed to new default: `msg_id = 185273099`
-- changed minimum timed interval to from 100ms to 10ms
+- changed minimum timed interval from 100ms to 10ms
 
 
 ## [2.0.1] - 2021-11-15
