@@ -5,10 +5,12 @@ All notable changes to this project will be documented in this file.
 ## [2.0.2] - 2021-12-07
 
 ### Added
-`BlaeckSerial::tick(unsigned long msg_id)`
+- `BlaeckSerial::tick(unsigned long msg_id)`
+- New sine wave example added
 
 ### Changed
-`BlaeckSerial::tick()` and `BlaeckSerial::timedWriteData()` message id changed to new default: `msg_id = 185273099`
+- `BlaeckSerial::tick()` and `BlaeckSerial::timedWriteData()` message id changed to new default: `msg_id = 185273099`
+- changed minimum timed interval to from 100ms to 10ms
 
 
 ## [2.0.1] - 2021-11-15
