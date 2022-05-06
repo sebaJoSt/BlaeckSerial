@@ -29,7 +29,7 @@ void setup()
   BlaeckSerial.DeviceFWVersion = ExampleVersion;
 
   // Add signals to BlaeckSerial
-//  BlaeckSerial.addSignal("Sine", &y);
+  //  BlaeckSerial.addSignal("Sine", &y);
 
   for (int i = 1; i <= 200; i++)
   {
