@@ -6,7 +6,8 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 - `BlaeckSerial::tick(unsigned long msg_id)`
-- New sine wave example added
+- New sine wave example SineGeneratorBasic
+- New sine wave example SineGeneratorAdvanced
 
 ### Changed
 - `BlaeckSerial::tick()` and `BlaeckSerial::timedWriteData()` message id changed to new default: `msg_id = 185273099`
@@ -69,6 +70,7 @@ New public function: `attachUpdate(void (*updateCallback)());`
 
 Initial release.
 
+[2.0.2]: https://github.com/sebaJoSt/BlaeckSerial/compare/2.0.1...2.0.2
 [2.0.1]: https://github.com/sebaJoSt/BlaeckSerial/compare/2.0.0...2.0.1
 [2.0.0]: https://github.com/sebaJoSt/BlaeckSerial/compare/1.0.4...2.0.0
 [1.0.4]: https://github.com/sebaJoSt/BlaeckSerial/compare/1.0.3...1.0.4

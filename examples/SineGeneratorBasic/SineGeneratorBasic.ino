@@ -1,5 +1,8 @@
 /*
-  BasicSine.ino
+  SineGeneratorBasic.ino
+
+  This is a sample sketch to show how to use the BlaeckSerial library to transmit 200 identical sine waves
+  from the Arduino board to your PC.
 */
 
 #include "Arduino.h"
@@ -24,7 +27,7 @@ void setup()
     200        //Maxmimal signal count used;
   );
 
-  BlaeckSerial.DeviceName = "Sine Number Generator";
+  BlaeckSerial.DeviceName = "Basic Sine Number Generator";
   BlaeckSerial.DeviceHWVersion = "Arduino Mega 2560 Rev3";
   BlaeckSerial.DeviceFWVersion = ExampleVersion;
 
