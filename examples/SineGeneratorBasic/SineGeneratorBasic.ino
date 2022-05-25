@@ -14,7 +14,7 @@
 BlaeckSerial BlaeckSerial;
 
 //Signals
-float y;
+float sine;
 
 void setup()
 {
@@ -32,12 +32,12 @@ void setup()
   BlaeckSerial.DeviceFWVersion = ExampleVersion;
 
   // Add signals to BlaeckSerial
-  //  BlaeckSerial.addSignal("Sine", &y);
+  //  BlaeckSerial.addSignal("Sine", &sine);
 
   for (int i = 1; i <= 200; i++)
   {
     String signalName = "Sine_";
-    BlaeckSerial.addSignal(signalName + i, &y);
+    BlaeckSerial.addSignal(signalName + i, &sine);
   }
 
   /*Uncomment this function for initial settings
@@ -57,5 +57,5 @@ void loop()
 
 void UpdateSineNumbers()
 {
-  y = sin(millis() * 0.00005);
+  sine = sin(millis() * 0.00005);
 }
