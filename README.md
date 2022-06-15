@@ -70,11 +70,11 @@ Here's a full list of serial commands handled by this library:
 
 The Device List, Symbol List and Data is in the following format:
 ````
-|--  Header       --||--       Data         --||-- EOT  --|
-<BLAECK:MSGKEY:MSGID:........................../BLAECK>\r\n
+|Header|--           Message           --||-- EOT  --|
+<BLAECK:<MSGKEY>:<MSGID>:<ELEMENTS><CRC32>/BLAECK>\r\n
 ````
 
-Type| MSGKEY | DATA# | DATA:| DESCRIPTION:
+Type| MSGKEY | Message Length | Elements| Description
 ----|--------| ------|---------------------------------|---------------------------------------------
 Symbol List | B0 | n | `<MasterSlaveConfig><SlaveID><SymbolName><DTYPE>` | Up to n symbols. Response to request for available symbols `<BLAECK.WRITE_SYMBOLS>`
 Data | B1 | n | `<SymbolID><DATA>` | Up to n data items. Response to request for data `<BLAECK.WRITE_DATA>`
@@ -83,8 +83,8 @@ Devices | B2 | n | `<MasterSlaveConfig><SlaveID><DeviceName><DeviceHWVersion><De
 
  Element|Type    |  DESCRIPTION:
  -------|--------| ---------------------------------------------------------------------------
- `MSGKEY`| byte |  Message Key, A unique key for the type of message being sent
- `MSGID` | ulong|  Message ID,  A unique message ID which echoes back to transmitter to indicate a response to a message (0 to 4294967295)
+ `MSGKEY`| byte |  Message Key, A unique key for the type of message being sent; 1 byte transmitted
+ `MSGID` | ulong|  Message ID,  A unique message ID which echoes back to transmitter to indicate a response to a message (0 to 4294967295); 4 bytes transmitted
  `DATA`  | (varying)| Message Data, varying data types and length depending on message
  `SymbolID` | uint | Symbol ID number
  `SymbolName` |String0 | Symbol Name - Null Terminated String
@@ -95,6 +95,9 @@ Devices | B2 | n | `<MasterSlaveConfig><SlaveID><DeviceName><DeviceHWVersion><De
    `DeviceHWVersion`  | String0 |          set with public variable DeviceHWVersion
    `DeviceFWVersion`  | String0 |          set with public variable DeviceFWVersion
    `BlaeckVersion`    | String0 |          set with public const BLAECKSERIAL_VERSION
+   `CRC32        `    | byte |             4 bytes; CRC order: 32; CRC Polynom (hex): 4C11DB7; Initial value (hex): FFFFFFFF; Final XOR value (hex): FFFFFFFF; reverse data bytes: true; reverse CRC result before Final XOR: true; (http://zorc.breitbandkatze.de/crc.html)
+         
+   
  
  MSGID is supported by `<BLAECK.GET_DEVICES>`, `<BLAECK.WRITE_SYMBOLS>` and `<BLAECK.WRITE_DATA>`:
  ````
@@ -135,9 +138,9 @@ Byte:  27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 56 47 48 49 50 5
  Example from `Basic.ino`:
  `<BLAECK.WRITE_DATA, 255, 255, 255, 255>`:
  ````
-ASCII: <  B  L  A  E  C  K  :  °  :  °  °  °  °  :  °  °  °  °  °  °  °  °  °  °  °  °  /  B  L  A  E  C  K  >
-HEX:   3C 42 4C 41 45 43 4B 3A B1 3A FF FF FF FF 3A 00 00 B8 1E FD 40 01 00 D8 E6 32 7C 2F 42 4C 41 45 43 4B 3E
-Byte:  0  1  2  3  4  5  6  7  8  9  10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34
+ASCII: <  B  L  A  E  C  K  :  °  :  °  °  °  °  :  °  °  °  °  °  °  °  °  °  °  °  °  °  °  °  °  /  B  L  A  E  C  K  >  \r \n
+HEX:   3C 42 4C 41 45 43 4B 3A B1 3A FF FF FF FF 3A 00 00 B8 1E FD 40 01 00 D8 E6 32 7C FE D9 3D 20 2F 42 4C 41 45 43 4B 3E 0D 0A
+Byte:  0  1  2  3  4  5  6  7  8  9  10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40
  ````
  
  Byte | DESCRIPTION:
@@ -148,6 +151,7 @@ Byte:  0  1  2  3  4  5  6  7  8  9  10 11 12 13 14 15 16 17 18 19 20 21 22 23 2
 17-20| `DATA`: Float -> 4 Bytes; Hex: B8 1E FD 40 -> Float: 7.91
 21-22| `SymbolID`: Hex: 01 00 -> Decimal: 1
 23-26| `DATA`: Long  -> 4 Bytes; Hex: D8 E6 32 7C -> Long: 2083710680
+27-30| `CRC32`: 4 Bytes; Hex: 20 3D D9 FE (Calculated from 19 bytes: Byte 8-26)
 
 ## Datatypes
 
