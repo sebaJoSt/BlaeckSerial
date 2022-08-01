@@ -32,8 +32,6 @@ void setup()
   BlaeckSerial.DeviceFWVersion = ExampleVersion;
 
   // Add signals to BlaeckSerial
-  //  BlaeckSerial.addSignal("Sine", &sine);
-
   for (int i = 1; i <= 200; i++)
   {
     String signalName = "Sine_";
