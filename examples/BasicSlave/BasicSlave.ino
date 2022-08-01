@@ -3,8 +3,8 @@
 
   This is a sample sketch to show how to use the BlaeckSerial library to transmit data
   from multiple Arduino boards in a master/slave configuration to your PC.
-  Upload this sketch to the slave Arduino. 
-  You can find more documentation about the test circuit, setup, etc. in 
+  Upload this sketch to the slave Arduino.
+  You can find more documentation about the test circuit, setup, etc. in
   the example BasicMaster.ino
 
   Copyright (c) by Sebastian Strobl,
@@ -19,6 +19,10 @@
 //Instantiate a new BlaeckSerial object
 BlaeckSerial BlaeckSerial;
 
+//Generated values
+long randomGeneratedBigNumber;
+long randomGeneratedBigNumber2;
+
 //Signals
 long randomBigNumber;
 long randomBigNumber2;
@@ -29,13 +33,13 @@ void setup()
   Serial.begin(9600);
 
   /*Setup BlaeckSerial slave with ID 1
- * First parameter: Serial reference
- * Second parameter: Maxmimal signal count used;
- * Third parameter: Slave ID: Each slave device on the bus 
+    First parameter: Serial reference
+    Second parameter: Maxmimal signal count used;
+    Third parameter: Slave ID: Each slave device on the bus
      should have a unique 7-bit address:
      Minimum value: 0
-     Maximal value; 127     
-*/
+     Maximal value; 127
+  */
   BlaeckSerial.beginSlave(&Serial, 2, 1);
 
   BlaeckSerial.DeviceName = "Big Random Number Generator";
@@ -50,6 +54,7 @@ void setup()
 void loop()
 {
   UpdateRandomNumbers();
+  UpdateSignals();
 
   BlaeckSerial.tick();
 }
@@ -57,8 +62,20 @@ void loop()
 void UpdateRandomNumbers()
 {
   // Random big number from 800 000 to 900 000
-  randomBigNumber = random(800000, 900001);
+  randomGeneratedBigNumber = random(800000, 900001);
 
-  // Random small number from 1 000 000 000 to 2 000 000 000
-  randomBigNumber2 = random(1000000000, 2000000001);
+  // Random big number from 1 000 000 000 to 2 000 000 000
+  randomGeneratedBigNumber2 = random(1000000000, 2000000001);
+}
+
+void UpdateSignals()
+{
+  /*
+    On the slave the I2C interrupt could happen between one byte of a multi-byte signal being changed and the next, thus sending corrupted data to the master.
+    To prevent that, you would need to disable interrupts, change the multi-byte signal's value, and then enable interrupts again
+  */
+  noInterrupts();
+  randomBigNumber  = randomGeneratedBigNumber;
+  randomBigNumber2 = randomGeneratedBigNumber2;
+  interrupts();
 }

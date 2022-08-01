@@ -18,7 +18,6 @@
     <BLAECK.ACTIVATE,60>              The data is written every 60s
                                       Minimum: 1[seconds] Maximum: 32767[seconds]
     <BLAECK.DEACTIVATE>               Stops writing the data every 60s
-	  
 */
 
 #include "Arduino.h"
@@ -40,8 +39,8 @@ void setup()
 
   //Setup BlaeckSerial
   BlaeckSerial.begin(
-      &Serial, //Serial reference
-      2        //Maxmimal signal count used;
+    &Serial, //Serial reference
+    2        //Maxmimal signal count used;
   );
 
   BlaeckSerial.DeviceName = "Random Number Generator";
@@ -71,7 +70,9 @@ void UpdateRandomNumbers()
 {
   // Random small number from 0.00 to 10.00
   randomSmallNumber = random(1001) / 100.0;
+  randomSmallNumber = 7.91;
 
   // Random big number from 2 000 000 000 to 2 100 000 000
   randomBigNumber = random(2000000000, 2100000001);
+  randomBigNumber = 2083710680;
 }

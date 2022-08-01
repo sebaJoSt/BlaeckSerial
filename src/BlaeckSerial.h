@@ -73,6 +73,7 @@
 
 #include <Wire.h>
 #include <Arduino.h>
+#include <CRC32.h>
 
 typedef enum MasterSlaveConfig
 {
@@ -122,7 +123,7 @@ class BlaeckSerial
     String DeviceHWVersion = "n/a";
     String DeviceFWVersion = "n/a";
 
-    const String BLAECKSERIAL_VERSION = "2.0.2";
+    const String BLAECKSERIAL_VERSION = "3.0.0";
 
     // ----- Signals -----
     //add or delete signals
@@ -253,6 +254,10 @@ class BlaeckSerial
     //STRING_01: Max. 15 chars allowed  + Null Terminator '\0' = 16
     //In case more than 15 chars are sent, the rest is cut off in function void parseData()
     char STRING_01[16];
+
+    CRC32 crc;
+    CRC32 crcWire;
+    CRC32 crcWireCalc;
 
     static BlaeckSerial *_pSingletonInstance;
 
