@@ -70,14 +70,14 @@ Here's a full list of serial commands handled by this library:
 
 The Device List, Symbol List and Data is in the following format:
 ````
-|Header|--           Message           --||-- EOT  --|
-<BLAECK:<MSGKEY>:<MSGID>:<ELEMENTS><CRC32>/BLAECK>\r\n
+|Header|--       Message        --||-- EOT  --|
+<BLAECK:<MSGKEY>:<MSGID>:<ELEMENTS>/BLAECK>\r\n
 ````
 
 Type| MSGKEY | Message Length | Elements| Description
 ----|--------| ------|---------------------------------|---------------------------------------------
 Symbol List | B0 | n | `<MasterSlaveConfig><SlaveID><SymbolName><DTYPE>` | Up to n symbols. Response to request for available symbols `<BLAECK.WRITE_SYMBOLS>`
-Data | B1 | n | `<SymbolID><DATA>` | Up to n data items. Response to request for data `<BLAECK.WRITE_DATA>`
+Data | B1 | n | `<SymbolID><DATA><StatusByte><CRC32>` | Up to n data items. Response to request for data `<BLAECK.WRITE_DATA>`
 Devices | B2 | n | `<MasterSlaveConfig><SlaveID><DeviceName><DeviceHWVersion><DeviceFWVersion><BlaeckSerialVersion>` | Up to n device items. Response to request for device information `<BLAECK.GET_DEVICES>`
   
 
@@ -89,13 +89,15 @@ Devices | B2 | n | `<MasterSlaveConfig><SlaveID><DeviceName><DeviceHWVersion><De
  `SymbolID` | uint | Symbol ID number
  `SymbolName` |String0 | Symbol Name - Null Terminated String
  `DTYPE` | byte | DataType  0=bool, 1=byte, 2=short, 3=ushort, 4=int, 5=uint, 6=long, 7=ulong, 8=float
-  `MasterSlaveConfig` | byte | 0=Single device, 1=Master, 2=Slave
-   `SlaveID`          | byte |             Slave Address
-   `DeviceName`       | String0 |          set with public variable DeviceName
-   `DeviceHWVersion`  | String0 |          set with public variable DeviceHWVersion
-   `DeviceFWVersion`  | String0 |          set with public variable DeviceFWVersion
-   `BlaeckVersion`    | String0 |          set with public const BLAECKSERIAL_VERSION
-   `CRC32        `    | byte |             4 bytes; CRC order: 32; CRC Polynom (hex): 4C11DB7; Initial value (hex): FFFFFFFF; Final XOR value (hex): FFFFFFFF; reverse data bytes: true; reverse CRC result before Final XOR: true; (http://zorc.breitbandkatze.de/crc.html)
+  `MasterSlaveConfig`     | byte | 0=Single device, 1=Master, 2=Slave
+   `SlaveID`              | byte |             Slave Address
+   `DeviceName`           | String0 |          set with public variable DeviceName
+   `DeviceHWVersion`      | String0 |          set with public variable DeviceHWVersion
+   `DeviceFWVersion`      | String0 |          set with public variable DeviceFWVersion
+   `BlaeckVersion`        | String0 |          set with public const BLAECKSERIAL_VERSION
+   `StatusByte`           | byte |             1 byte; 0: Normal Transmission or 1: I2C CRC error
+   `CRC32` (StatusByte=0) | byte |             4 bytes; CRC order: 32; CRC Polynom (hex): 4C11DB7; Initial value (hex): FFFFFFFF; Final XOR value (hex): FFFFFFFF; reverse data bytes: true; reverse CRC result before Final XOR: true; (http://zorc.breitbandkatze.de/crc.html) 
+   `CRC32` (StatusByte=1) | byte |             4 bytes; First Byte: 0; Second and Third Byte: SymbolID; Fourth Byte: SlaveID
          
    
  
@@ -138,9 +140,9 @@ Byte:  27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 56 47 48 49 50 5
  Example from `Basic.ino`:
  `<BLAECK.WRITE_DATA, 255, 255, 255, 255>`:
  ````
-ASCII: <  B  L  A  E  C  K  :  °  :  °  °  °  °  :  °  °  °  °  °  °  °  °  °  °  °  °  °  °  °  °  /  B  L  A  E  C  K  >  \r \n
-HEX:   3C 42 4C 41 45 43 4B 3A B1 3A FF FF FF FF 3A 00 00 B8 1E FD 40 01 00 D8 E6 32 7C FE D9 3D 20 2F 42 4C 41 45 43 4B 3E 0D 0A
-Byte:  0  1  2  3  4  5  6  7  8  9  10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40
+ASCII: <  B  L  A  E  C  K  :  °  :  °  °  °  °  :  °  °  °  °  °  °  °  °  °  °  °  °  °  °  °  °  °  /  B  L  A  E  C  K  >  \r \n
+HEX:   3C 42 4C 41 45 43 4B 3A B1 3A FF FF FF FF 3A 00 00 B8 1E FD 40 01 00 D8 E6 32 7C 00 FE D9 3D 20 2F 42 4C 41 45 43 4B 3E 0D 0A
+Byte:  0  1  2  3  4  5  6  7  8  9  10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41
  ````
  
  Byte | DESCRIPTION:
@@ -151,7 +153,8 @@ Byte:  0  1  2  3  4  5  6  7  8  9  10 11 12 13 14 15 16 17 18 19 20 21 22 23 2
 17-20| `DATA`: Float -> 4 Bytes; Hex: B8 1E FD 40 -> Float: 7.91
 21-22| `SymbolID`: Hex: 01 00 -> Decimal: 1
 23-26| `DATA`: Long  -> 4 Bytes; Hex: D8 E6 32 7C -> Long: 2083710680
-27-30| `CRC32`: 4 Bytes; Hex: 20 3D D9 FE (Calculated from 19 bytes: Byte 8-26)
+27   | `StatusByte`: 0 -> Normal Transmission
+28-31| `CRC32`: 4 Bytes; Hex: 20 3D D9 FE (Calculated from 19 bytes: Byte 8-26)
 
 ## Datatypes
 
