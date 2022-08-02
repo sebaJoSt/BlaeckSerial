@@ -74,6 +74,7 @@
 #include <Wire.h>
 #include <Arduino.h>
 #include <CRC32.h>
+#include <CRC16.h>
 
 typedef enum MasterSlaveConfig
 {
@@ -255,9 +256,9 @@ class BlaeckSerial
     //In case more than 15 chars are sent, the rest is cut off in function void parseData()
     char STRING_01[16];
 
-    CRC32 crc;
-    CRC32 crcWire;
-    CRC32 crcWireCalc;
+    CRC32 _crc;
+    CRC16 _crcWire;
+    CRC16 _crcWireCalc;
 
     static BlaeckSerial *_pSingletonInstance;
 

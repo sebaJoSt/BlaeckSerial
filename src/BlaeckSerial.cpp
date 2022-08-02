@@ -30,12 +30,6 @@ void BlaeckSerial::beginMaster(HardwareSerial *Ref, unsigned int size, uint32_t 
   Wire.setClock(WireClockFrequency);
   Wire.begin();
 
-  crcWireCalc.setPolynome(0x04C11DB7);
-  crcWireCalc.setStartXOR(0xFFFFFFFF);
-  crcWireCalc.setEndXOR(0xFFFFFFFF);
-  crcWireCalc.setReverseIn(true);
-  crcWireCalc.setReverseOut(true);
-
   begin(Ref, size);
 }
 void BlaeckSerial::beginSlave(HardwareSerial *Ref, unsigned int size, byte slaveID)
@@ -50,12 +44,6 @@ void BlaeckSerial::beginSlave(HardwareSerial *Ref, unsigned int size, byte slave
   Wire.onReceive(OnSendHandler);
   Wire.onRequest(OnReceiveHandler);
   Wire.begin(_slaveID);
-
-  crcWire.setPolynome(0x04C11DB7);
-  crcWire.setStartXOR(0xFFFFFFFF);
-  crcWire.setEndXOR(0xFFFFFFFF);
-  crcWire.setReverseIn(true);
-  crcWire.setReverseOut(true);
 
   begin(Ref, size);
 }
@@ -521,12 +509,12 @@ void BlaeckSerial::writeSlaveDevices(bool send_eol)
 
 void BlaeckSerial::writeLocalData(unsigned long msg_id, bool send_eol)
 {
-  crc.setPolynome(0x04C11DB7);
-  crc.setStartXOR(0xFFFFFFFF);
-  crc.setEndXOR(0xFFFFFFFF);
-  crc.setReverseIn(true);
-  crc.setReverseOut(true);
-  crc.restart();
+  _crc.setPolynome(0x04C11DB7);
+  _crc.setStartXOR(0xFFFFFFFF);
+  _crc.setEndXOR(0xFFFFFFFF);
+  _crc.setReverseIn(true);
+  _crc.setReverseOut(true);
+  _crc.restart();
 
   SerialRef->write("<BLAECK:");
   byte msg_key = 0xB1;
@@ -536,17 +524,17 @@ void BlaeckSerial::writeLocalData(unsigned long msg_id, bool send_eol)
   SerialRef->write(ulngCvt.bval, 4);
   SerialRef->write(":");
 
-  crc.add(msg_key);
-  crc.add(':');
-  crc.add(ulngCvt.bval, 4);
-  crc.add(':');
+  _crc.add(msg_key);
+  _crc.add(':');
+  _crc.add(ulngCvt.bval, 4);
+  _crc.add(':');
 
 
   for (int i = 0; i < _signalIndex; i++)
   {
     intCvt.val = i;
     SerialRef->write(intCvt.bval, 2);
-    crc.add(intCvt.bval, 2);
+    _crc.add(intCvt.bval, 2);
 
     Signal signal = Signals[i];
     switch (signal.DataType)
@@ -555,62 +543,62 @@ void BlaeckSerial::writeLocalData(unsigned long msg_id, bool send_eol)
         {
           boolCvt.val = *((bool *)signal.Address);
           SerialRef->write(boolCvt.bval, 1);
-          crc.add(boolCvt.bval, 1);
+          _crc.add(boolCvt.bval, 1);
         }
         break;
       case (Blaeck_byte):
         {
           SerialRef->write(*((byte *)signal.Address));
-          crc.add(*((byte *)signal.Address));
+          _crc.add(*((byte *)signal.Address));
         }
         break;
       case (Blaeck_short):
         {
           shortCvt.val = *((short *)signal.Address);
           SerialRef->write(shortCvt.bval, 2);
-          crc.add(shortCvt.bval, 2);
+          _crc.add(shortCvt.bval, 2);
         }
         break;
       case (Blaeck_ushort):
         {
           ushortCvt.val = *((unsigned short *)signal.Address);
           SerialRef->write(ushortCvt.bval, 2);
-          crc.add(ushortCvt.bval, 2);
+          _crc.add(ushortCvt.bval, 2);
         }
         break;
       case (Blaeck_int):
         {
           intCvt.val = *((int *)signal.Address);
           SerialRef->write(intCvt.bval, 2);
-          crc.add(intCvt.bval, 2);
+          _crc.add(intCvt.bval, 2);
         }
         break;
       case (Blaeck_uint):
         {
           uintCvt.val = *((unsigned int *)signal.Address);
           SerialRef->write(uintCvt.bval, 2);
-          crc.add(uintCvt.bval, 2);
+          _crc.add(uintCvt.bval, 2);
         }
         break;
       case (Blaeck_long):
         {
           lngCvt.val = *((long *)signal.Address);
           SerialRef->write(lngCvt.bval, 4);
-          crc.add(lngCvt.bval, 4);
+          _crc.add(lngCvt.bval, 4);
         }
         break;
       case (Blaeck_ulong):
         {
           ulngCvt.val = *((unsigned long *)signal.Address);
           SerialRef->write(ulngCvt.bval, 4);
-          crc.add(ulngCvt.bval, 4);
+          _crc.add(ulngCvt.bval, 4);
         }
         break;
       case (Blaeck_float):
         {
           fltCvt.val = *((float *)signal.Address);
           SerialRef->write(fltCvt.bval, 4);
-          crc.add(fltCvt.bval, 4);
+          _crc.add(fltCvt.bval, 4);
         }
         break;
     }
@@ -622,7 +610,7 @@ void BlaeckSerial::writeLocalData(unsigned long msg_id, bool send_eol)
     //StatusByte + CRC First Byte + CRC Second Byte + CRC Third Byte + CRC Fourth Byte
     SerialRef->write(0);
 
-    uint32_t crc_value = crc.getCRC();
+    uint32_t crc_value = _crc.getCRC();
     SerialRef->write((byte *) &crc_value, 4);
 
     SerialRef->write("/BLAECK>");
@@ -673,34 +661,32 @@ void BlaeckSerial::writeSlaveData(bool send_eol)
             char c;
             if (bytecount > 0 && bytecount < 127)
             {
-              crcWireCalc.restart();
-              crcWireCalc.add(bytecount);
+              _crcWireCalc.restart();
+              _crcWireCalc.add(bytecount);
 
               //Signal Key
               SerialRef->write(lowByte(_signalIndex + signalCount));
               SerialRef->write(highByte(_signalIndex + signalCount));
 
               intCvt.val = _signalIndex + signalCount;
-              crc.add(intCvt.bval, 2);
+              _crc.add(intCvt.bval, 2);
 
               for (int i = 0; i < bytecount; i++)
               {
                 //then read the data bytes
                 c = Wire.read();
                 SerialRef->write(c);
-                crc.add(c);
-                crcWireCalc.add(c);
+                _crc.add(c);
+                _crcWireCalc.add(c);
 
                 if (i == (bytecount - 1))
                 {
                   uint8_t crcWireTransmittedByte0 = Wire.read();
                   uint8_t crcWireTransmittedByte1 = Wire.read();
-                  uint8_t crcWireTransmittedByte2 = Wire.read();
-                  uint8_t crcWireTransmittedByte3 = Wire.read();
 
-                  uint32_t crcWireTransmitted = ((uint32_t)crcWireTransmittedByte3 << 24) | ((uint32_t)crcWireTransmittedByte2 << 16) | ((uint32_t)crcWireTransmittedByte1 << 8) | (uint32_t)crcWireTransmittedByte0;
+                  uint16_t crcWireTransmitted = ((uint16_t)crcWireTransmittedByte1 << 8) | ((uint16_t)crcWireTransmittedByte0);
 
-                  uint32_t crcWireCalculated = crcWireCalc.getCRC();
+                  uint16_t crcWireCalculated = _crcWireCalc.getCRC();
 
                   if (crcWireTransmitted != crcWireCalculated && slaveCRCErrorOccured == false)
                   {
@@ -746,7 +732,7 @@ void BlaeckSerial::writeSlaveData(bool send_eol)
       //StatusByte + CRC First Byte + CRC Second Byte + CRC Third Byte + CRC Fourth Byte
       SerialRef->write(0);
 
-      uint32_t crc_value = crc.getCRC();
+      uint32_t crc_value = _crc.getCRC();
       SerialRef->write((byte *) &crc_value, 4);
     }
 
@@ -1080,7 +1066,7 @@ void BlaeckSerial::wireSlaveTransmitSingleSymbol()
 }
 void BlaeckSerial::wireSlaveTransmitSingleDataPoint()
 {
-  crcWire.restart();
+  _crcWire.restart();
 
   Signal signal = Signals[_wireSignalIndex];
 
@@ -1091,16 +1077,16 @@ void BlaeckSerial::wireSlaveTransmitSingleDataPoint()
         boolCvt.val = *((bool *)signal.Address);
         Wire.write(1);
         Wire.write(boolCvt.bval, 1);
-        crcWire.add(1);
-        crcWire.add(boolCvt.bval, 1);
+        _crcWire.add(1);
+        _crcWire.add(boolCvt.bval, 1);
       }
       break;
     case (Blaeck_byte):
       {
         Wire.write(1);
         Wire.write(*((byte *)signal.Address));
-        crcWire.add(1);
-        crcWire.add(*((byte *)signal.Address));
+        _crcWire.add(1);
+        _crcWire.add(*((byte *)signal.Address));
       }
       break;
     case (Blaeck_short):
@@ -1108,8 +1094,8 @@ void BlaeckSerial::wireSlaveTransmitSingleDataPoint()
         shortCvt.val = *((short *)signal.Address);
         Wire.write(2);
         Wire.write(shortCvt.bval, 2);
-        crcWire.add(2);
-        crcWire.add(shortCvt.bval, 2);
+        _crcWire.add(2);
+        _crcWire.add(shortCvt.bval, 2);
       }
       break;
     case (Blaeck_ushort):
@@ -1117,8 +1103,8 @@ void BlaeckSerial::wireSlaveTransmitSingleDataPoint()
         ushortCvt.val = *((unsigned short *)signal.Address);
         Wire.write(2);
         Wire.write(ushortCvt.bval, 2);
-        crcWire.add(2);
-        crcWire.add(ushortCvt.bval, 2);
+        _crcWire.add(2);
+        _crcWire.add(ushortCvt.bval, 2);
       }
       break;
     case (Blaeck_int):
@@ -1126,8 +1112,8 @@ void BlaeckSerial::wireSlaveTransmitSingleDataPoint()
         intCvt.val = *((int *)signal.Address);
         Wire.write(2);
         Wire.write(intCvt.bval, 2);
-        crcWire.add(2);
-        crcWire.add(intCvt.bval, 2);
+        _crcWire.add(2);
+        _crcWire.add(intCvt.bval, 2);
       }
       break;
     case (Blaeck_uint):
@@ -1135,8 +1121,8 @@ void BlaeckSerial::wireSlaveTransmitSingleDataPoint()
         uintCvt.val = *((unsigned int *)signal.Address);
         Wire.write(2);
         Wire.write(uintCvt.bval, 2);
-        crcWire.add(2);
-        crcWire.add(uintCvt.bval, 2);
+        _crcWire.add(2);
+        _crcWire.add(uintCvt.bval, 2);
       }
       break;
     case (Blaeck_long):
@@ -1144,8 +1130,8 @@ void BlaeckSerial::wireSlaveTransmitSingleDataPoint()
         lngCvt.val = *((long *)signal.Address);
         Wire.write(4);
         Wire.write(lngCvt.bval, 4);
-        crcWire.add(4);
-        crcWire.add(lngCvt.bval, 4);
+        _crcWire.add(4);
+        _crcWire.add(lngCvt.bval, 4);
       }
       break;
     case (Blaeck_ulong):
@@ -1153,8 +1139,8 @@ void BlaeckSerial::wireSlaveTransmitSingleDataPoint()
         ulngCvt.val = *((unsigned long *)signal.Address);
         Wire.write(4);
         Wire.write(ulngCvt.bval, 4);
-        crcWire.add(4);
-        crcWire.add(ulngCvt.bval, 4);
+        _crcWire.add(4);
+        _crcWire.add(ulngCvt.bval, 4);
       }
       break;
     case (Blaeck_float):
@@ -1162,8 +1148,8 @@ void BlaeckSerial::wireSlaveTransmitSingleDataPoint()
         fltCvt.val = *((float *)signal.Address);
         Wire.write(4);
         Wire.write(fltCvt.bval, 4);
-        crcWire.add(4);
-        crcWire.add(fltCvt.bval, 4);
+        _crcWire.add(4);
+        _crcWire.add(fltCvt.bval, 4);
       }
       break;
   }
@@ -1176,8 +1162,8 @@ void BlaeckSerial::wireSlaveTransmitSingleDataPoint()
   }
   else
   {
-    uint32_t crc_value = crcWire.getCRC();
-    Wire.write((byte *) &crc_value, 4);
+    uint16_t crc_value = _crcWire.getCRC();
+    Wire.write((byte *) &crc_value, 2);
   }
 
   if (_wireSignalIndex >= _signalIndex)
