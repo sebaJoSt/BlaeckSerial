@@ -1,5 +1,5 @@
 /*
-  DatatypeTestMaster.ino
+  DatatypeTestLimitsMaster.ino
 
   This is a sample sketch to test all the supported datatypes.
 

@@ -1,5 +1,5 @@
 /*
-  DatatypeTestSlave.ino
+  DatatypeTestRandomSlave.ino
 
   This is a sample sketch to test all the supported datatypes.
 
@@ -43,7 +43,7 @@ void setup()
   // Initialize Serial port
   Serial.begin(9600);
   //Initialize BlaeckSerial Slave with ID 1
-  BlaeckSerial.beginSlave(&Serial, 20, 1);
+  BlaeckSerial.beginSlave(&Serial, 9, 1);
 
   BlaeckSerial.DeviceName = "DatatypeTest Random Generator";
   BlaeckSerial.DeviceHWVersion = "Arduino Mega 2560 Rev3";

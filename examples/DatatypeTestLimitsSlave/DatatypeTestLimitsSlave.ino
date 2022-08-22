@@ -1,5 +1,5 @@
 /*
-  DatatypeTestSlave.ino
+  DatatypeTestLimitsSlave.ino
 
   This is a sample sketch to test all the supported datatypes.
 
