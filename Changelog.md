@@ -2,17 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
-## [3.0.0] - 2022-06-15
+## [3.0.0] - 2022-08-22
 
 ### Added
 - CRC32 error detection integrated for serial data and IC2 data
 - `BlaeckSerial::tick(unsigned long msg_id)`
-- New sine wave example SineGeneratorBasic
-- New sine wave example SineGeneratorAdvanced
+- New sine wave example `SineGeneratorBasic`
+- New sine wave example `SineGeneratorAdvanced`
+- New datatype test example `DatatypeTestRandomMaster`
+- New datatype test example `DatatypeTestRandomSlave`
+
 
 ### Changed
 - `BlaeckSerial::tick()` and `BlaeckSerial::timedWriteData()` message id changed to new default: `msg_id = 185273099`
-- changed minimum timed interval from 100ms to 10ms
+- Changed minimum timed interval from 100ms to 10ms
+- Renamed example `DatatypeTestMaster` to `DatatypeTestLimitsMaster`
+- Renamed example `DatatypeTestSlave` to `DatatypeTestLimitsSlave`
 
 
 ## [2.0.1] - 2021-11-15
@@ -71,6 +76,7 @@ New public function: `attachUpdate(void (*updateCallback)());`
 
 Initial release.
 
+[3.0.0]: https://github.com/sebaJoSt/BlaeckSerial/compare/2.0.2...3.0.0
 [2.0.2]: https://github.com/sebaJoSt/BlaeckSerial/compare/2.0.1...2.0.2
 [2.0.1]: https://github.com/sebaJoSt/BlaeckSerial/compare/2.0.0...2.0.1
 [2.0.0]: https://github.com/sebaJoSt/BlaeckSerial/compare/1.0.4...2.0.0
