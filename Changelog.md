@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.0.1] - 2022-09-01
+
+### Added
+- New SHT31 temperature & humidity sensor example `SHT31TempHumiditySensor`
+
+
 ## [3.0.0] - 2022-08-22
 
 ### Added
