@@ -2,7 +2,7 @@
   SHT31TempHumiditySensor.ino
 
   This is an example for the SHT31 Temperature & Humidity Sensor.
-  The sensor uses I2C to communicate, 2 pins are required to interface. 
+  The sensor uses I2C to communicate, 2 pins are required to interface.
   This example requires Adafruit SHT31 Libray to be installed.
 
   Copyright (c) by Sebastian Strobl,
@@ -39,6 +39,7 @@ void setup() {
   Serial.begin(9600);
 
   sht31.begin(0x44);
+  //sht31.heater(true);
 
   //Setup BlaeckSerial
   BlaeckSerial.begin(
