@@ -126,7 +126,7 @@ class BlaeckSerial
     String DeviceHWVersion = "n/a";
     String DeviceFWVersion = "n/a";
 
-    const String BLAECKSERIAL_VERSION = "3.0.1";
+    const String BLAECKSERIAL_VERSION = "3.0.2";
 
     // ----- Signals -----
     //add or delete signals

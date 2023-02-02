@@ -237,8 +237,7 @@ bool BlaeckSerial::recvWithStartEndMarkers()
     rc = SerialRef->read();
     if (recvInProgress == true)
     {
-      if (rc != endMarker)
-      {
+      if (rc != endMarker) {
         receivedChars[ndx] = rc;
         ndx++;
         if (ndx >= MAXIMUM_CHAR_COUNT)
@@ -271,39 +270,80 @@ void BlaeckSerial::parseData()
   char *strtokIndx;
   strtokIndx = strtok(tempChars, ",");
   strcpy(COMMAND, strtokIndx);
+
   strtokIndx = strtok(NULL, ",");
-  //PARAMETER 1 is stored in PARAMETER_01 & STRING_01 (if PARAMETER 1 is a string)
-  //Only copy first 15 chars
-  strncpy(STRING_01, strtokIndx, 15);
-  //16th Char = Null Terminator
-  STRING_01[15] = '\0';
-  PARAMETER[0] = atoi(strtokIndx);
+  if (strtokIndx != NULL)
+  {
+    //PARAMETER 1 is stored in PARAMETER_01 & STRING_01 (if PARAMETER 1 is a string)
+
+    //Only copy first 15 chars
+    strncpy(STRING_01, strtokIndx, 15);
+    //16th Char = Null Terminator
+    STRING_01[15] = '\0';
+
+    PARAMETER[0] = atoi(strtokIndx);
+  }
+
   strtokIndx = strtok(NULL, ", ");
-  PARAMETER[1] = atoi(strtokIndx);
+  if (strtokIndx != NULL)
+  {
+    PARAMETER[1] = atoi(strtokIndx);
+  }
+
   strtokIndx = strtok(NULL, ", ");
-  PARAMETER[2] = atoi(strtokIndx);
+  if (strtokIndx != NULL)
+  {
+    PARAMETER[2] = atoi(strtokIndx);
+  }
+
   strtokIndx = strtok(NULL, ", ");
-  PARAMETER[3] = atoi(strtokIndx);
+  if (strtokIndx != NULL)
+  {
+    PARAMETER[3] = atoi(strtokIndx);
+  }
+
   strtokIndx = strtok(NULL, ", ");
-  PARAMETER[4] = atoi(strtokIndx);
+  if (strtokIndx != NULL)
+  {
+    PARAMETER[4] = atoi(strtokIndx);
+  }
+
   strtokIndx = strtok(NULL, ", ");
-  PARAMETER[5] = atoi(strtokIndx);
+  if (strtokIndx != NULL)
+  {
+    PARAMETER[5] = atoi(strtokIndx);
+  }
+
   strtokIndx = strtok(NULL, ", ");
-  PARAMETER[6] = atoi(strtokIndx);
+  if (strtokIndx != NULL)
+  {
+    PARAMETER[6] = atoi(strtokIndx);
+  }
+
   strtokIndx = strtok(NULL, ", ");
-  PARAMETER[7] = atoi(strtokIndx);
+  if (strtokIndx != NULL)
+  {
+    PARAMETER[7] = atoi(strtokIndx);
+  }
+
   strtokIndx = strtok(NULL, ", ");
-  PARAMETER[8] = atoi(strtokIndx);
+  if (strtokIndx != NULL)
+  {
+    PARAMETER[8] = atoi(strtokIndx);
+  }
+
   strtokIndx = strtok(NULL, ", ");
-  PARAMETER[9] = atoi(strtokIndx);
+  if (strtokIndx != NULL)
+  {
+    PARAMETER[9] = atoi(strtokIndx);
+  }
 }
 
 void BlaeckSerial::setTimedData(bool timedActivated, unsigned long timedInterval_ms)
 {
   _timedActivated = timedActivated;
 
-  if (_timedActivated)
-  {
+  if (_timedActivated) {
     if (timedInterval_ms == 0)
     {
       _timedSetPoint_ms = 10;
@@ -462,8 +502,8 @@ void BlaeckSerial::writeSlaveDevices(bool send_eol)
 
       if (transmissionIsSuccess == 0)
       {
-        SerialRef->write(2);          //Slave config
-        SerialRef->write(slaveindex); //Slave ID
+        SerialRef->write(2);           //Slave config
+        SerialRef->write(slaveindex);  //Slave ID
 
         bool eolist_found = false;
 
@@ -608,10 +648,10 @@ void BlaeckSerial::writeLocalData(unsigned long msg_id, bool send_eol)
   {
     //StatusByte 0: Normal transmission
     //StatusByte + CRC First Byte + CRC Second Byte + CRC Third Byte + CRC Fourth Byte
-    SerialRef->write(0);
+    SerialRef->write((byte)0);
 
     uint32_t crc_value = _crc.getCRC();
-    SerialRef->write((byte *) &crc_value, 4);
+    SerialRef->write((byte *)&crc_value, 4);
 
     SerialRef->write("/BLAECK>");
     SerialRef->write("\r\n");
@@ -699,8 +739,7 @@ void BlaeckSerial::writeSlaveData(bool send_eol)
                 }
               }
               signalCount += 1;
-            }
-            else
+            } else
             {
               if (bytecount == 127)
               {
@@ -721,7 +760,7 @@ void BlaeckSerial::writeSlaveData(bool send_eol)
       //StatusByte 1: CRC Error at I2C transmission from Slave to Master
       //StatusByte + 0 + SignalKey First Byte + SignalKey Second Byte + SlaveID
       SerialRef->write(1);
-      SerialRef->write(0);
+      SerialRef->write((byte)0);
       intCvt.val = slaveSignalKeyWithCRCError;
       SerialRef->write(intCvt.bval, 2);
       SerialRef->write(slaveIDWithCRCError);
@@ -730,10 +769,10 @@ void BlaeckSerial::writeSlaveData(bool send_eol)
     {
       //StatusByte 0: Normal transmission, no wire CRC errors occured
       //StatusByte + CRC First Byte + CRC Second Byte + CRC Third Byte + CRC Fourth Byte
-      SerialRef->write(0);
+      SerialRef->write((byte)0);
 
       uint32_t crc_value = _crc.getCRC();
-      SerialRef->write((byte *) &crc_value, 4);
+      SerialRef->write((byte *)&crc_value, 4);
     }
 
     SerialRef->write("/BLAECK>");
@@ -765,7 +804,7 @@ void BlaeckSerial::writeLocalSymbols(unsigned long msg_id, bool send_eol)
     {
       case (Blaeck_bool):
         {
-          SerialRef->write(0x0);
+          SerialRef->write((byte)0x0);
           break;
         }
       case (Blaeck_byte):
@@ -850,7 +889,7 @@ void BlaeckSerial::writeSlaveSymbols(bool send_eol)
           // request 32 bytes from slave device
           byte receivedBytes = Wire.requestFrom(slaveindex, 32);
           if (receivedBytes < 2)
-            continue; //try again
+            continue;  //try again
 
           bool eosignal_found = false;
 
@@ -866,8 +905,8 @@ void BlaeckSerial::writeSlaveSymbols(bool send_eol)
             //'\0'
             if (c != char(0x00) && symbolchar == 0)
             {
-              SerialRef->write(2);          //Slave config
-              SerialRef->write(slaveindex); //Slave ID
+              SerialRef->write(2);           //Slave config
+              SerialRef->write(slaveindex);  //Slave ID
             }
             if (c == char(0x00) && symbolchar == 0)
             {
@@ -919,8 +958,7 @@ void BlaeckSerial::scanI2CSlaves(char addressStart, char addressEnd)
         break;
     }
 
-    if (transmissionIsSuccess == 0)
-    {
+    if (transmissionIsSuccess == 0) {
       storeSlave(slaveindex, false);
 
       byte receivedBytes = Wire.requestFrom(slaveindex, 1);
@@ -932,9 +970,7 @@ void BlaeckSerial::scanI2CSlaves(char addressStart, char addressEnd)
       if (c == char(0xAA))
       {
         storeSlave(slaveindex, true);
-      }
-      else
-      {
+      } else {
         storeSlave(slaveindex, false);
       }
     }
@@ -1159,11 +1195,9 @@ void BlaeckSerial::wireSlaveTransmitSingleDataPoint()
   if (_signalIndex == 0)
   {
     Wire.write(0);
-  }
-  else
-  {
+  } else {
     uint16_t crc_value = _crcWire.getCRC();
-    Wire.write((byte *) &crc_value, 2);
+    Wire.write((byte *)&crc_value, 2);
   }
 
   if (_wireSignalIndex >= _signalIndex)
