@@ -70,9 +70,7 @@ void UpdateRandomNumbers()
 {
   // Random small number from 0.00 to 10.00
   randomSmallNumber = random(1001) / 100.0;
-  randomSmallNumber = 7.91;
 
   // Random big number from 2 000 000 000 to 2 100 000 000
   randomBigNumber = random(2000000000, 2100000001);
-  randomBigNumber = 2083710680;
 }
