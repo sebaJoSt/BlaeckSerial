@@ -17,7 +17,7 @@ All notable changes to this project will be documented in this file.
 ## [3.0.0] - 2022-08-22
 
 ### Added
-- CRC32 error detection integrated for serial data and IC2 data
+- CRC32 error detection integrated for serial data and I2C data
 - `BlaeckSerial::tick(unsigned long msg_id)`
 - New sine wave example `SineGeneratorBasic`
 - New sine wave example `SineGeneratorAdvanced`
