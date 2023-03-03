@@ -16,7 +16,7 @@ The message parser uses code from Robin2's Arduino forum thread [Serial Basic In
 
 Clone this repository into `Arduino/Libraries` or use the built-in Arduino IDE Library manager to install
 a copy of this library. You can find more detail about installing libraries 
-[here, on Arduino's website](https://www.arduino.cc/en/guide/libraries).
+[here, on Arduino's website](https://docs.arduino.cc/software/ide-v2/tutorials/ide-v2-installing-a-library).
 
 (Open Basic Example under `File -> Examples -> BlaeckSerial` for reference)
 
