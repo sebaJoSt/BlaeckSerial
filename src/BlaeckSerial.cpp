@@ -346,8 +346,8 @@ void BlaeckSerial::setTimedData(bool timedActivated, unsigned long timedInterval
   if (_timedActivated) {
     if (timedInterval_ms == 0)
     {
-      _timedSetPoint_ms = 10;
-      _timedInterval_ms = 10;
+      _timedSetPoint_ms = 100;
+      _timedInterval_ms = 100;
     }
     else if (timedInterval_ms > 32767000)
     {
