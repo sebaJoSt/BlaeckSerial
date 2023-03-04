@@ -6,6 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 - Some code changes to make library work on xmc and esp32 architecture
+- Changed minimum timed interval back to 100ms
 
 
 ## [3.0.1] - 2022-09-01
@@ -23,7 +24,6 @@ All notable changes to this project will be documented in this file.
 - New sine wave example `SineGeneratorAdvanced`
 - New datatype test example `DatatypeTestRandomMaster`
 - New datatype test example `DatatypeTestRandomSlave`
-
 
 ### Changed
 - `BlaeckSerial::tick()` and `BlaeckSerial::timedWriteData()` message id changed to new default: `msg_id = 185273099`
