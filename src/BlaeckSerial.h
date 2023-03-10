@@ -37,7 +37,7 @@
     <BLAECK.WRITE_SYMBOLS, MessageID_firstByte, MessageID_secondByte, MessageID_thirdByte, MessageID_fourthByte>
     <BLAECK.WRITE_DATA, MessageID_firstByte, MessageID_secondByte, MessageID_thirdByte, MessageID_fourthByte>
     <BLAECK.ACTIVATE, intervalInSeconds>
-          intervalInSeconds: from 1 to 32767 [s]
+          intervalInSeconds: from 0 to 32767 [s]
     <BLAECK.DEACTIVATE>
 
 
@@ -126,7 +126,7 @@ class BlaeckSerial
     String DeviceHWVersion = "n/a";
     String DeviceFWVersion = "n/a";
 
-    const String BLAECKSERIAL_VERSION = "3.0.2";
+    const String BLAECKSERIAL_VERSION = "3.0.3";
 
     // ----- Signals -----
     //add or delete signals

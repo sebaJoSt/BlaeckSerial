@@ -38,7 +38,7 @@
     <BLAECK.WRITE_SYMBOLS>            Writes the symbol list to the PC
     <BLAECK.WRITE_DATA>               Writes the data to the PC
     <BLAECK.ACTIVATE,60>              The data is written every 60s
-                                      Minimum: 1[seconds] Maximum: 32767[seconds]
+                                      Minimum: 0[seconds] Maximum: 32767[seconds]
     <BLAECK.DEACTIVATE>               Stops writing the data every 60s
 */
 
