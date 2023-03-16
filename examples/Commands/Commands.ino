@@ -25,9 +25,9 @@
 
       * Not allowed in COMMAND, PARAMETER & STRING01
 
-  Empty PARAMETER are not allowed,
-  e.g. don't do: <COMMAND,,PARAMETER02>   <- PARAMETER02 will be stored in PARAMETER01
-             do: <COMMAND,PARAMETER01,PARAMETER02>
+    Empty PARAMETER are not allowed,
+    e.g. don't do: <COMMAND,,PARAMETER02>   <- PARAMETER02 will be stored in PARAMETER01
+               do: <COMMAND,PARAMETER01,PARAMETER02>
 
   The circuit:
     - No wiring required.
