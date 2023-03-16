@@ -231,53 +231,73 @@ void BlaeckSerial::parseData() {
     strncpy(STRING_01, strtokIndx, 15);
     //16th Char = Null Terminator
     STRING_01[15] = '\0';
-
     PARAMETER[0] = atoi(strtokIndx);
+  } else {
+    STRING_01[0] = '\0';
+    PARAMETER[0] = 0;
   }
 
   strtokIndx = strtok(NULL, ", ");
   if (strtokIndx != NULL) {
     PARAMETER[1] = atoi(strtokIndx);
+  } else {
+    PARAMETER[1] = 0;
   }
 
   strtokIndx = strtok(NULL, ", ");
   if (strtokIndx != NULL) {
     PARAMETER[2] = atoi(strtokIndx);
+  } else {
+    PARAMETER[2] = 0;
   }
 
   strtokIndx = strtok(NULL, ", ");
   if (strtokIndx != NULL) {
     PARAMETER[3] = atoi(strtokIndx);
+  } else {
+    PARAMETER[3] = 0;
   }
 
   strtokIndx = strtok(NULL, ", ");
   if (strtokIndx != NULL) {
     PARAMETER[4] = atoi(strtokIndx);
+  } else {
+    PARAMETER[4] = 0;
   }
 
   strtokIndx = strtok(NULL, ", ");
   if (strtokIndx != NULL) {
     PARAMETER[5] = atoi(strtokIndx);
+  } else {
+    PARAMETER[5] = 0;
   }
 
   strtokIndx = strtok(NULL, ", ");
   if (strtokIndx != NULL) {
     PARAMETER[6] = atoi(strtokIndx);
+  } else {
+    PARAMETER[6] = 0;
   }
 
   strtokIndx = strtok(NULL, ", ");
   if (strtokIndx != NULL) {
     PARAMETER[7] = atoi(strtokIndx);
+  } else {
+    PARAMETER[7] = 0;
   }
 
   strtokIndx = strtok(NULL, ", ");
   if (strtokIndx != NULL) {
     PARAMETER[8] = atoi(strtokIndx);
+  } else {
+    PARAMETER[8] = 0;
   }
 
   strtokIndx = strtok(NULL, ", ");
   if (strtokIndx != NULL) {
     PARAMETER[9] = atoi(strtokIndx);
+  } else {
+    PARAMETER[9] = 0;
   }
 }
 
