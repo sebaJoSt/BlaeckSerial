@@ -124,6 +124,7 @@ void BlaeckSerial::addSignal(String symbolName, float *value, bool prefixSlaveID
   Signals[_signalIndex].Address = value;
   _signalIndex++;
 }
+#ifdef __AVR__
 void BlaeckSerial::addSignal(String symbolName, double *value, bool prefixSlaveID) {
   /*On the Uno and other ATMEGA based boards, the double implementation occupies 4 bytes
     and is exactly the same as the float, with no gain in precision.*/
@@ -135,6 +136,19 @@ void BlaeckSerial::addSignal(String symbolName, double *value, bool prefixSlaveI
   Signals[_signalIndex].Address = value;
   _signalIndex++;
 }
+#else
+void BlaeckSerial::addSignal(String symbolName, double *value, bool prefixSlaveID) {
+  Signals[_signalIndex].SymbolName = symbolName;
+  if (_masterSlaveConfig == Slave && prefixSlaveID) {
+    Signals[_signalIndex].SymbolName = _slaveSymbolPrefix + symbolName;
+  }
+  Signals[_signalIndex].DataType = Blaeck_double;
+  Signals[_signalIndex].Address = value;
+  _signalIndex++;
+}
+#endif
+
+
 
 void BlaeckSerial::deleteSignals() {
   _signalIndex = 0;
@@ -559,6 +573,13 @@ void BlaeckSerial::writeLocalData(unsigned long msg_id, bool send_eol) {
           _crc.add(fltCvt.bval, 4);
         }
         break;
+      case (Blaeck_double):
+        {
+          dblCvt.val = *((double *)signal.Address);
+          SerialRef->write(dblCvt.bval, 8);
+          _crc.add(dblCvt.bval, 8);
+        }
+        break;
     }
   }
 
@@ -742,6 +763,11 @@ void BlaeckSerial::writeLocalSymbols(unsigned long msg_id, bool send_eol) {
       case (Blaeck_float):
         {
           SerialRef->write(0x8);
+          break;
+        }
+      case (Blaeck_double):
+        {
+          SerialRef->write(0x9);
           break;
         }
     }
@@ -956,6 +982,11 @@ void BlaeckSerial::wireSlaveTransmitSingleSymbol() {
         Wire.write(0x8);
         break;
       }
+    case (Blaeck_double):
+      {
+        Wire.write(0x9);
+        break;
+      }
   }
 
   Wire.write(0x0D);
@@ -1050,6 +1081,15 @@ void BlaeckSerial::wireSlaveTransmitSingleDataPoint() {
         Wire.write(fltCvt.bval, 4);
         _crcWire.add(4);
         _crcWire.add(fltCvt.bval, 4);
+      }
+      break;
+    case (Blaeck_double):
+      {
+        dblCvt.val = *((double *)signal.Address);
+        Wire.write(8);
+        Wire.write(dblCvt.bval, 8);
+        _crcWire.add(8);
+        _crcWire.add(dblCvt.bval, 8);
       }
       break;
   }

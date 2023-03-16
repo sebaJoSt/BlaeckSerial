@@ -94,6 +94,7 @@ typedef enum DataType {
   Blaeck_long,
   Blaeck_ulong,
   Blaeck_float,
+  Blaeck_double
 } dataType;
 
 struct Signal {
@@ -315,6 +316,11 @@ private:
     float val;
     byte bval[4];
   } fltCvt;
+
+  union {
+    double val;
+    byte bval[8];
+  } dblCvt;
 };
 
 #endif  //  BLAECKSERIAL_H
