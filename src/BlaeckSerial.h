@@ -78,15 +78,13 @@
 #include <CRC32.h>
 #include <CRC16.h>
 
-typedef enum MasterSlaveConfig
-{
+typedef enum MasterSlaveConfig {
   Single,
   Master,
   Slave
 } masterSlaveConfig;
 
-typedef enum DataType
-{
+typedef enum DataType {
   Blaeck_bool,
   Blaeck_byte,
   Blaeck_short,
@@ -98,79 +96,77 @@ typedef enum DataType
   Blaeck_float,
 } dataType;
 
-struct Signal
-{
+struct Signal {
   String SymbolName;
   dataType DataType;
   void *Address;
 };
 
-class BlaeckSerial
-{
-  public:
-    // ----- Constructor -----
-    BlaeckSerial();
+class BlaeckSerial {
+public:
+  // ----- Constructor -----
+  BlaeckSerial();
 
-    // ----- Destructor -----
-    ~BlaeckSerial();
+  // ----- Destructor -----
+  ~BlaeckSerial();
 
-    // ----- Initialize -----
-    void begin(HardwareSerial *Ref, unsigned int Size);
-    void beginMaster(HardwareSerial *Ref, unsigned int Size, uint32_t WireClockFrequency);
-    void beginSlave(HardwareSerial *Ref, unsigned int Size, byte SlaveID);
+  // ----- Initialize -----
+  void begin(HardwareSerial *Ref, unsigned int Size);
+  void beginMaster(HardwareSerial *Ref, unsigned int Size, uint32_t WireClockFrequency);
+  void beginSlave(HardwareSerial *Ref, unsigned int Size, byte SlaveID);
 
-    /**
+  /**
            @brief Set these variables in your Arduino sketch
     */
-    String DeviceName = "Unknown";
-    String DeviceHWVersion = "n/a";
-    String DeviceFWVersion = "n/a";
+  String DeviceName = "Unknown";
+  String DeviceHWVersion = "n/a";
+  String DeviceFWVersion = "n/a";
 
-    const String BLAECKSERIAL_VERSION = "3.0.3";
+  const String BLAECKSERIAL_VERSION = "3.0.3";
 
-    // ----- Signals -----
-    //add or delete signals
-    void addSignal(String symbolName, bool *value, bool prefixSlaveID = true);
-    void addSignal(String symbolName, byte *value, bool prefixSlaveID = true);
-    void addSignal(String symbolName, short *value, bool prefixSlaveID = true);
-    void addSignal(String symbolName, unsigned short *value, bool prefixSlaveID = true);
-    void addSignal(String symbolName, int *value, bool prefixSlaveID = true);
-    void addSignal(String symbolName, unsigned int *value, bool prefixSlaveID = true);
-    void addSignal(String symbolName, long *value, bool prefixSlaveID = true);
-    void addSignal(String symbolName, unsigned long *value, bool prefixSlaveID = true);
-    void addSignal(String symbolName, float *value, bool prefixSlaveID = true);
-    void addSignal(String symbolName, double *value, bool prefixSlaveID = true);
-    void deleteSignals();
+  // ----- Signals -----
+  //add or delete signals
+  void addSignal(String symbolName, bool *value, bool prefixSlaveID = true);
+  void addSignal(String symbolName, byte *value, bool prefixSlaveID = true);
+  void addSignal(String symbolName, short *value, bool prefixSlaveID = true);
+  void addSignal(String symbolName, unsigned short *value, bool prefixSlaveID = true);
+  void addSignal(String symbolName, int *value, bool prefixSlaveID = true);
+  void addSignal(String symbolName, unsigned int *value, bool prefixSlaveID = true);
+  void addSignal(String symbolName, long *value, bool prefixSlaveID = true);
+  void addSignal(String symbolName, unsigned long *value, bool prefixSlaveID = true);
+  void addSignal(String symbolName, float *value, bool prefixSlaveID = true);
+  void addSignal(String symbolName, double *value, bool prefixSlaveID = true);
+  void deleteSignals();
 
-    // ----- Devices -----
-    void writeDevices();
-    void writeDevices(unsigned long messageID);
+  // ----- Devices -----
+  void writeDevices();
+  void writeDevices(unsigned long messageID);
 
-    // ----- Symbols -----
-    void writeSymbols();
-    void writeSymbols(unsigned long messageID);
+  // ----- Symbols -----
+  void writeSymbols();
+  void writeSymbols(unsigned long messageID);
 
-    // ----- Data -----
-    void writeData();
-    void writeData(unsigned long messageID);
+  // ----- Data -----
+  void writeData();
+  void writeData(unsigned long messageID);
 
-    // ----- Timed Data -----
-    /**
+  // ----- Timed Data -----
+  /**
            @brief Call this function every some milliseconds for writing timed data; default messageId = 185273099
     */
-    void timedWriteData();
-    /**
+  void timedWriteData();
+  /**
            @brief Call this function every some milliseconds for writing timed data
            @param messageId --> A unique message ID which echoes back to transmitter to indicate a response to a message.
     */
-    void timedWriteData(unsigned long messageID);
-    /**
+  void timedWriteData(unsigned long messageID);
+  /**
            @brief Call this function for timed data settings
     */
-    void setTimedData(bool timedActivated, unsigned long timedInterval_ms);
+  void setTimedData(bool timedActivated, unsigned long timedInterval_ms);
 
-    // ----- Update before data write Callback function  -----
-    /**
+  // ----- Update before data write Callback function  -----
+  /**
           @brief Attach a function that will be called just before transmitting data.
           In single device or master mode the function is called just before sending data over serial,
           In slave mode the function is called just before sending data over i2c to master. Because the attached function is inside a ISR (interrupt service routine) it should as short and fast as possible.
@@ -182,153 +178,143 @@ class BlaeckSerial
           an ISR and the main program are updated correctly, declare them as volatile.
             For more information on interrupts, see Nick Gammon’s notes (http://gammon.com.au/interrupts).
     */
-    void attachUpdate(void (*updateCallback)());
+  void attachUpdate(void (*updateCallback)());
 
-    // ----- Read  -----
-    /**
+  // ----- Read  -----
+  /**
            @brief Call this function every some milliseconds for reading serial input
     */
-    void read();
-    /**
+  void read();
+  /**
           @brief Attach a function that will be called when a valid message was received;
     */
-    void attachRead(void (*readCallback)(char *command, int *parameter, char *string_01));
+  void attachRead(void (*readCallback)(char *command, int *parameter, char *string_01));
 
-    // ----- All-in-one -----
-    /**
+  // ----- All-in-one -----
+  /**
           @brief Call this function every some milliseconds for reading serial input
            and writing timed data; default messageId = 185273099
     */
-    void tick();
-    /**
+  void tick();
+  /**
           @brief Call this function every some milliseconds for reading serial input
            and writing timed data with messageID;
           @param messageId --> A unique message ID which echoes back to transmitter to indicate a response to a message.
     */
-    void tick(unsigned long messageID);
+  void tick(unsigned long messageID);
 
 
-  private:
-    void writeLocalData(unsigned long MessageID, bool send_eol);
-    void writeSlaveData(bool send_eol);
+private:
+  void writeLocalData(unsigned long MessageID, bool send_eol);
+  void writeSlaveData(bool send_eol);
 
-    void writeLocalSymbols(unsigned long MessageID, bool send_eol);
-    void writeSlaveSymbols(bool send_eol);
+  void writeLocalSymbols(unsigned long MessageID, bool send_eol);
+  void writeSlaveSymbols(bool send_eol);
 
-    void writeLocalDevices(unsigned long MessageID, bool send_eol);
-    void writeSlaveDevices(bool send_eol);
+  void writeLocalDevices(unsigned long MessageID, bool send_eol);
+  void writeSlaveDevices(bool send_eol);
 
-    void scanI2CSlaves(char addressStart, char addressEnd);
+  void scanI2CSlaves(char addressStart, char addressEnd);
 
-    void wireSlaveTransmitToMaster();
-    void wireSlaveReceive();
+  void wireSlaveTransmitToMaster();
+  void wireSlaveReceive();
 
-    void wireSlaveTransmitSingleSymbol();
-    void wireSlaveTransmitSingleDataPoint();
-    void wireSlaveTransmitSingleDevice();
-    void wireSlaveTransmitStatusByte();
+  void wireSlaveTransmitSingleSymbol();
+  void wireSlaveTransmitSingleDataPoint();
+  void wireSlaveTransmitSingleDevice();
+  void wireSlaveTransmitStatusByte();
 
-    bool slaveFound(const unsigned int index);
-    void storeSlave(const unsigned int index, const boolean value);
+  bool slaveFound(const unsigned int index);
+  void storeSlave(const unsigned int index, const boolean value);
 
-    HardwareSerial *SerialRef;
-    Signal *Signals;
-    int _signalIndex = 0;
+  HardwareSerial *SerialRef;
+  Signal *Signals;
+  int _signalIndex = 0;
 
-    bool _timedActivated = false;
-    bool _timedFirstTime = true;
-    unsigned long _timedFirstTimeDone_ms = 0;
-    unsigned long _timedSetPoint_ms = 0;
-    unsigned long _timedInterval_ms = 1000;
+  bool _timedActivated = false;
+  bool _timedFirstTime = true;
+  unsigned long _timedFirstTimeDone_ms = 0;
+  unsigned long _timedSetPoint_ms = 0;
+  unsigned long _timedInterval_ms = 1000;
 
-    masterSlaveConfig _masterSlaveConfig = Single;
-    byte _slaveID;
-    unsigned char _slaveFound[128 / 8]; //128 bit storage
-    String _slaveSymbolPrefix;
+  masterSlaveConfig _masterSlaveConfig = Single;
+  byte _slaveID;
+  unsigned char _slaveFound[128 / 8];  //128 bit storage
+  String _slaveSymbolPrefix;
 
-    byte _wireMode = 0;
-    int _wireSignalIndex = 0;
-    int _wireDeviceIndex = 0;
+  byte _wireMode = 0;
+  int _wireSignalIndex = 0;
+  int _wireDeviceIndex = 0;
 
-    static const int MAXIMUM_CHAR_COUNT = 64;
-    char receivedChars[MAXIMUM_CHAR_COUNT];
-    char COMMAND[MAXIMUM_CHAR_COUNT] = {0};
-    int PARAMETER[10];
-    //STRING_01: Max. 15 chars allowed  + Null Terminator '\0' = 16
-    //In case more than 15 chars are sent, the rest is cut off in function void parseData()
-    char STRING_01[16];
+  static const int MAXIMUM_CHAR_COUNT = 64;
+  char receivedChars[MAXIMUM_CHAR_COUNT];
+  char COMMAND[MAXIMUM_CHAR_COUNT] = { 0 };
+  int PARAMETER[10];
+  //STRING_01: Max. 15 chars allowed  + Null Terminator '\0' = 16
+  //In case more than 15 chars are sent, the rest is cut off in function void parseData()
+  char STRING_01[16];
 
-    CRC32 _crc;
-    CRC16 _crcWire;
-    CRC16 _crcWireCalc;
+  CRC32 _crc;
+  CRC16 _crcWire;
+  CRC16 _crcWireCalc;
 
-    static BlaeckSerial *_pSingletonInstance;
+  static BlaeckSerial *_pSingletonInstance;
 
-    static void OnReceiveHandler()
-    {
-      if (_pSingletonInstance)
-        _pSingletonInstance->wireSlaveTransmitToMaster();
-    }
+  static void OnReceiveHandler() {
+    if (_pSingletonInstance)
+      _pSingletonInstance->wireSlaveTransmitToMaster();
+  }
 
-    static void OnSendHandler(int numBytes)
-    {
-      if (_pSingletonInstance)
-        _pSingletonInstance->wireSlaveReceive();
-    }
+  static void OnSendHandler(int numBytes) {
+    if (_pSingletonInstance)
+      _pSingletonInstance->wireSlaveReceive();
+  }
 
-    void (*_readCallback)(char *command, int *parameter, char *string01);
-    bool recvWithStartEndMarkers();
-    void parseData();
+  void (*_readCallback)(char *command, int *parameter, char *string01);
+  bool recvWithStartEndMarkers();
+  void parseData();
 
-    void (*_updateCallback)();
+  void (*_updateCallback)();
 
-    union
-    {
-      bool val;
-      byte bval[1];
-    } boolCvt;
+  union {
+    bool val;
+    byte bval[1];
+  } boolCvt;
 
-    union
-    {
-      short val;
-      byte bval[2];
-    } shortCvt;
+  union {
+    short val;
+    byte bval[2];
+  } shortCvt;
 
-    union
-    {
-      short val;
-      byte bval[2];
-    } ushortCvt;
+  union {
+    short val;
+    byte bval[2];
+  } ushortCvt;
 
-    union
-    {
-      int val;
-      byte bval[2];
-    } intCvt;
+  union {
+    int val;
+    byte bval[2];
+  } intCvt;
 
-    union
-    {
-      unsigned int val;
-      byte bval[2];
-    } uintCvt;
+  union {
+    unsigned int val;
+    byte bval[2];
+  } uintCvt;
 
-    union
-    {
-      long val;
-      byte bval[4];
-    } lngCvt;
+  union {
+    long val;
+    byte bval[4];
+  } lngCvt;
 
-    union
-    {
-      unsigned long val;
-      byte bval[4];
-    } ulngCvt;
+  union {
+    unsigned long val;
+    byte bval[4];
+  } ulngCvt;
 
-    union
-    {
-      float val;
-      byte bval[4];
-    } fltCvt;
+  union {
+    float val;
+    byte bval[4];
+  } fltCvt;
 };
 
-#endif //  BLAECKSERIAL_H
+#endif  //  BLAECKSERIAL_H
