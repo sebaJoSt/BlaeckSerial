@@ -6,7 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 - Changed minimum timed interval finally to 0ms
-- Empty parameters are now 0 again (Behaviour change was accidentally introduced in 3.0.2
+- Empty parameters are now 0 again (Behaviour change was accidentally introduced in 3.0.2)
 - Double (8byte precision) integration for 32bit (non AVR) processors
 
 
