@@ -174,5 +174,6 @@ Byte:  0  1  2  3  4  5  6  7  8  9  10 11 12 13 14 15 16 17 18 19 20 21 22 23 2
 6|long | 4
 7|unsigned long | 4
 8|float | 4
+9|double | 8
 
 On the Uno and other ATMEGA based boards, the double implementation occupies 4 byte and is exactly the same as the float, with no gain in precision. Therefore if you add a double signal with `addSignal("My Double Signal", &doubleVariable)` the symbol list will return the `DTYPE` 8 (float).
