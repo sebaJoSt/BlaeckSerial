@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [3.0.3] - 2023-03-10
+## [3.0.3] - 2023-06-13
 
 ### Changed
 - Changed minimum timed interval finally to 0ms
