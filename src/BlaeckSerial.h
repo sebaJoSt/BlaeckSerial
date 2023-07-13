@@ -14,62 +14,6 @@
     "Serial Basic Input" https://forum.arduino.cc/index.php?topic=396450.0
 */
 
-/*  Message Decoder
-
-    Incoming messages
-    Command:         <COMMAND,PARAMETER01,PARAMETER02,...,PARAMETER10>
-    StringCommand:   <COMMAND, STRING01  ,PARAMETER02,...,PARAMETER10>
-                     <-           --  max. 64 chars ---             ->
-                     <-         --  max. 10 Parameters ---          ->
-
-    COMMAND:         String
-    PARAMETER01..10  Int 16 Bit
-    STRING01:        max. 15 chars
-    Start Marker*:    <
-    End Marker*:      >
-    Separation*:      ,
-
-        Not allowed in COMMAND, PARAMETER & STRING01
-
-    Internal commands:
-    <BLAECK.GET_DEVICES, MessageID_firstByte, MessageID_secondByte, MessageID_thirdByte, MessageID_fourthByte>
-    <BLAECK.WRITE_SYMBOLS, MessageID_firstByte, MessageID_secondByte, MessageID_thirdByte, MessageID_fourthByte>
-    <BLAECK.WRITE_DATA, MessageID_firstByte, MessageID_secondByte, MessageID_thirdByte, MessageID_fourthByte>
-    <BLAECK.ACTIVATE, intervalInSeconds>
-          intervalInSeconds: from 0 to 32767 [s]
-    <BLAECK.DEACTIVATE>
-
-
-    Outgoing messages
-   |Header||       Message       ||   EOT    |
-   <BLAECK:MSGKEY:MSGID:<ELEMENTS>/BLAECK>\r\n
-
-   MSGKEY:   Length:   Elements:                                                                                                            DESCRIPTION:
-    B0        n        <MasterSlaveConfig><SlaveID><SymbolName><DTYPE>                                                                      Up to n Items. Response to request for available symbols:  <BLAECK.WRITE_SYMBOLS>
-    B1        n        <SymbolID><DATA><StatusByte><CRC32>                                                                                  Up to n Items. Response to request for data:               <BLAECK.WRITE_DATA>
-    B3        n        <MasterSlaveConfig><SlaveID><DeviceName><DeviceHWVersion><DeviceFWVersion><BlaeckSerialVersion><BlaeckLibraryName>   Up to n Items. Response to request for device information: <BLAECK.GET_DEVICES>
-
-  < and > just for illustration, not transmitted
-
-   ELEMENT            TYPE:            DESCRIPTION:
-   MSGKEY             byte             Message KEY, A unique key for the type of message being sent
-   MSGID              ulong            Message ID,  A unique message ID which echoes back to transmitter to indicate a response to a message (0 to 4294967295)
-   DATA              (varying)         Message Data, varying data types and length depending on message
-   SymbolID           uint             Symbol ID number
-   SymbolName         String0          Symbol Name - Null Terminated String
-   DTYPE              byte             DataType  0=bool, 1=byte, 2=short, 3=ushort, 4=int, 5=uint, 6=long, 7=ulong, 8=float
-   MasterSlaveConfig  byte             0=Single device, 1=Master, 2=Slave
-   SlaveID            byte             Slave Address
-   DeviceName         String0          set with public variable DeviceName
-   DeviceHWVersion    String0          set with public variable DeviceHWVersion
-   DeviceFWVersion    String0          set with public variable DeviceFWVersion
-   BlaeckVersion      String0          set with public const BLAECKSERIAL_VERSION
-   BlaeckLibraryName  String0          set with public const LIBRARY_NAME
-   StatusByte         byte             1 byte; 0: Normal Transmission or 1: I2C CRC error
-   CRC32 (StB=0)      byte             4 bytes; CRC order: 32; CRC Polynom (hex): 4C11DB7; Initial value (hex): FFFFFFFF; Final XOR value (hex): FFFFFFFF; reverse data bytes: true; reverse CRC result before Final XOR: true; (http://zorc.breitbandkatze.de/crc.html)
-   CRC32 (StB=1)      byte             4 bytes; First Byte: 0; Second and Third Byte: SymbolID; Fourth Byte: SlaveID
-*/
-
 #ifndef BLAECKSERIAL_H
 #define BLAECKSERIAL_H
 
@@ -128,7 +72,7 @@ public:
   String DeviceFWVersion = "n/a";
 
   const String LIBRARY_NAME = "BlaeckSerial";
-  const String BLAECKSERIAL_VERSION = "4.0.0";
+  const String LIBRARY_VERSION = "4.0.0";
 
   // ----- Signals -----
   // add or delete signals

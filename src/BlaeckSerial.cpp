@@ -518,7 +518,7 @@ void BlaeckSerial::writeLocalDevices(unsigned long msg_id, bool send_eol)
   StreamRef->write('\0');
   StreamRef->print(DeviceFWVersion);
   StreamRef->write('\0');
-  StreamRef->print(BLAECKSERIAL_VERSION);
+  StreamRef->print(LIBRARY_VERSION);
   StreamRef->write('\0');
   StreamRef->print(LIBRARY_NAME);
   StreamRef->write('\0');
@@ -1086,7 +1086,7 @@ void BlaeckSerial::wireSlaveTransmitSingleDevice()
   }
   else if (_wireDeviceIndex == 3)
   {
-    BLAECKSERIAL_VERSION.toCharArray(little_s_string, 32);
+    LIBRARY_VERSION.toCharArray(little_s_string, 32);
     Wire.write(little_s_string);
     Wire.write('\0');
   }
