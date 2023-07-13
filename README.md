@@ -83,7 +83,8 @@ Type| MSGKEY | Message Length | Elements| Description
 ----|--------| ------|---------------------------------|---------------------------------------------
 Symbol List | B0 | n | `<MasterSlaveConfig><SlaveID><SymbolName><DTYPE>` | Up to n symbols. Response to request for available symbols `<BLAECK.WRITE_SYMBOLS>`
 Data | B1 | n | `<SymbolID><DATA><StatusByte><CRC32>` | Up to n data items. Response to request for data `<BLAECK.WRITE_DATA>`
-Devices | B2 | n | `<MasterSlaveConfig><SlaveID><DeviceName><DeviceHWVersion><DeviceFWVersion><BlaeckSerialVersion>` | Up to n device items. Response to request for device information `<BLAECK.GET_DEVICES>`
+~~Devices~~ | ~~B2~~ | ~~n~~ | ~~`<MasterSlaveConfig><SlaveID><DeviceName><DeviceHWVersion><DeviceFWVersion><LibraryVersion>`~~ | Deprecated (Used in BlaeckSerial version 3.0.3 or before)
+Devices | B3 | n | `<MasterSlaveConfig><SlaveID><DeviceName><DeviceHWVersion><DeviceFWVersion><LibraryVersion><LibraryName>` | Up to n device items. Response to request for device information `<BLAECK.GET_DEVICES>`
   
 
  Element|Type    |  DESCRIPTION:
@@ -99,7 +100,8 @@ Devices | B2 | n | `<MasterSlaveConfig><SlaveID><DeviceName><DeviceHWVersion><De
    `DeviceName`           | String0 |          set with public variable DeviceName
    `DeviceHWVersion`      | String0 |          set with public variable DeviceHWVersion
    `DeviceFWVersion`      | String0 |          set with public variable DeviceFWVersion
-   `BlaeckVersion`        | String0 |          set with public const BLAECKSERIAL_VERSION
+   `LibraryVersion`       | String0 |          set with public const LIBRARY_VERSION
+   `LibraryName`          | String0 |          set with public const LIBRARY_NAME
    `StatusByte`           | byte |             1 byte; 0: Normal Transmission or 1: I2C CRC error
    `CRC32` (StatusByte=0) | byte |             4 bytes; CRC order: 32; CRC Polynom (hex): 4C11DB7; Initial value (hex): FFFFFFFF; Final XOR value (hex): FFFFFFFF; reverse data bytes: true; reverse CRC result before Final XOR: true; (http://zorc.breitbandkatze.de/crc.html) 
    `CRC32` (StatusByte=1) | byte |             4 bytes; First Byte: 0; Second and Third Byte: SymbolID; Fourth Byte: SlaveID
