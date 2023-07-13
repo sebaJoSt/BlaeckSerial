@@ -34,7 +34,7 @@ void PrintInfo(bool IsStartUp)
     sinfo(), Serial.print(F("Firmware Version: "));
     Serial.println(BlaeckSerial.DeviceFWVersion);
     sinfo(), Serial.print(F("BlaeckSerial Version: "));
-    Serial.println(BlaeckSerial.BLAECKSERIAL_VERSION);
+    Serial.println(BlaeckSerial.LIBRARY_VERSION);
   }
 
   //--MASTER SLAVE MODE
