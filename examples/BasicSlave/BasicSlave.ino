@@ -16,14 +16,14 @@
 
 #define ExampleVersion "1.0"
 
-//Instantiate a new BlaeckSerial object
+// Instantiate a new BlaeckSerial object
 BlaeckSerial BlaeckSerial;
 
-//Generated values
+// Generated values
 long randomGeneratedBigNumber;
 long randomGeneratedBigNumber2;
 
-//Signals
+// Signals
 long randomBigNumber;
 long randomBigNumber2;
 
@@ -34,7 +34,7 @@ void setup()
 
   /*Setup BlaeckSerial slave with ID 1
     First parameter: Serial reference
-    Second parameter: Maxmimal signal count used;
+    Second parameter: Maximal signal count used;
     Third parameter: Slave ID: Each slave device on the bus
      should have a unique 7-bit address:
      Minimum value: 0
@@ -75,7 +75,7 @@ void UpdateSignals()
     To prevent that, you would need to disable interrupts, change the multi-byte signal's value, and then enable interrupts again
   */
   noInterrupts();
-  randomBigNumber  = randomGeneratedBigNumber;
+  randomBigNumber = randomGeneratedBigNumber;
   randomBigNumber2 = randomGeneratedBigNumber2;
   interrupts();
 }

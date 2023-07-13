@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [4.0.0] - 2023-07-13
+
+### Changed
+- Breaking change: Include libary name in response to <BLAECK.GET_DEVICES>
+- Changed reference from HardwareSerial to Stream
+- Formatted source code with VSCode
+
 ## [3.0.3] - 2023-06-13
 
 ### Changed
@@ -96,6 +103,7 @@ New public function: `attachUpdate(void (*updateCallback)());`
 
 Initial release.
 
+[4.0.0]: https://github.com/sebaJoSt/BlaeckSerial/compare/3.0.3...4.0.0
 [3.0.3]: https://github.com/sebaJoSt/BlaeckSerial/compare/3.0.2...3.0.3
 [3.0.2]: https://github.com/sebaJoSt/BlaeckSerial/compare/3.0.1...3.0.2
 [3.0.1]: https://github.com/sebaJoSt/BlaeckSerial/compare/3.0.0...3.0.1

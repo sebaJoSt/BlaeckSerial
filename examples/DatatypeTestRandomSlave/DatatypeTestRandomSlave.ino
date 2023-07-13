@@ -13,10 +13,10 @@
 
 #define ExampleVersion "1.0"
 
-//Instantiate a new BlaeckSerial object
+// Instantiate a new BlaeckSerial object
 BlaeckSerial BlaeckSerial;
 
-//Generated values
+// Generated values
 bool boolGeneratedRandom;
 byte byteGeneratedRandom;
 short shortGeneratedRandom;
@@ -27,7 +27,7 @@ long longGeneratedRandom;
 float floatGeneratedRandom;
 double doubleGeneratedRandom;
 
-//Signals
+// Signals
 bool boolRandom;
 byte byteRandom;
 short shortRandom;
@@ -42,7 +42,7 @@ void setup()
 {
   // Initialize Serial port
   Serial.begin(9600);
-  //Initialize BlaeckSerial Slave with ID 1
+  // Initialize BlaeckSerial Slave with ID 1
   BlaeckSerial.beginSlave(&Serial, 9, 1);
 
   BlaeckSerial.DeviceName = "DatatypeTest Random Generator";
@@ -91,7 +91,8 @@ void UpdateRandomNumbers()
 
   // long from -2147483648 to 2147483647
   longGeneratedRandom = random(2147483647);
-  if (boolGeneratedRandom == 1) longGeneratedRandom *= -1;
+  if (boolGeneratedRandom == 1)
+    longGeneratedRandom *= -1;
 
   // float from -9.99999 to 9.99999(datatype limits: -3.4028235E+38 to 3.4028235E+38)
   floatGeneratedRandom = randomDouble(-9.99999, 9.99999);
@@ -107,7 +108,7 @@ void UpdateSignals()
     To prevent that, you would need to disable interrupts, change the multi-byte signal's value, and then enable interrupts again
   */
   noInterrupts();
-  boolRandom  = boolGeneratedRandom;
+  boolRandom = boolGeneratedRandom;
   byteRandom = byteGeneratedRandom;
   shortRandom = shortGeneratedRandom;
   uShortRandom = uShortGeneratedRandom;
@@ -121,5 +122,5 @@ void UpdateSignals()
 
 double randomDouble(double minf, double maxf)
 {
-  return minf + random(1UL << 31) * (maxf - minf) / (1UL << 31);  // use 1ULL<<63 for max double values)
+  return minf + random(1UL << 31) * (maxf - minf) / (1UL << 31); // use 1ULL<<63 for max double values)
 }

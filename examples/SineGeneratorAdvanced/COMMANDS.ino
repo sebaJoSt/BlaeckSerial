@@ -1,13 +1,11 @@
-//Command:         <COMMAND,PARAMETER_01,PARAMETER_02,...,PARAMETER_10>
-//StringCommand:   <COMMAND, STRING_01  ,PARAMETER_02,...,PARAMETER_10>
-//                 <---------max. 64 chars---------------------------->
-//COMMAND:             String, Upper case w/o spaces, e.g. MIPIWRITE
-//PARAMETER:           Int 16 Bit, max 10 parameters
-//STRING_01:           max. 15 chars
+// Command:         <COMMAND,PARAMETER_01,PARAMETER_02,...,PARAMETER_10>
+// StringCommand:   <COMMAND, STRING_01  ,PARAMETER_02,...,PARAMETER_10>
+//                  <---------max. 64 chars---------------------------->
+// COMMAND:             String, Upper case w/o spaces, e.g. MIPIWRITE
+// PARAMETER:           Int 16 Bit, max 10 parameters
+// STRING_01:           max. 15 chars
 
-
-
-void startCommand(char * command, int * parameter, char * string01)
+void startCommand(char *command, int *parameter, char *string01)
 {
   if (strcmp(command, "LS?") == 0)
   {
@@ -32,32 +30,42 @@ void startCommand(char * command, int * parameter, char * string01)
     shelp(), Serial.println(F("e.g. <SIGNAL_ACTIVATE, 900> deactivates all signals"));
     shelp(), Serial.println(F("e.g. <SIGNAL_ACTIVATE, 901> activates all odd numbered signals"));
     shelp(), Serial.println(F("e.g. <SIGNAL_ACTIVATE, 902> activates all even numbered signals"));
-
   }
   if (strcmp(command, "SIGNAL_ACTIVATE") == 0)
   {
     int firstsignalno = parameter[0];
     int secondsignalno = parameter[1];
 
-    if (firstsignalno == 0 && secondsignalno == 0) {
-      for (byte i = 1; i <= MAXIMUM_SIGNALS; i++) sine[i].isActivated = true;
+    if (firstsignalno == 0 && secondsignalno == 0)
+    {
+      for (byte i = 1; i <= MAXIMUM_SIGNALS; i++)
+        sine[i].isActivated = true;
     }
-    if (firstsignalno == 900) {
-      for (byte i = 1; i <= MAXIMUM_SIGNALS; i++) sine[i].isActivated = false;
-    }
-    if (firstsignalno == 901) {
-      for (byte i = 1; i <= MAXIMUM_SIGNALS; i++) {
+    if (firstsignalno == 900)
+    {
+      for (byte i = 1; i <= MAXIMUM_SIGNALS; i++)
         sine[i].isActivated = false;
-        if (i % 2 == 1) sine[i].isActivated = true;
+    }
+    if (firstsignalno == 901)
+    {
+      for (byte i = 1; i <= MAXIMUM_SIGNALS; i++)
+      {
+        sine[i].isActivated = false;
+        if (i % 2 == 1)
+          sine[i].isActivated = true;
       }
     }
-    if (firstsignalno == 902) {
-      for (byte i = 1; i <= MAXIMUM_SIGNALS; i++) {
+    if (firstsignalno == 902)
+    {
+      for (byte i = 1; i <= MAXIMUM_SIGNALS; i++)
+      {
         sine[i].isActivated = false;
-        if (i % 2 == 0) sine[i].isActivated = true;
+        if (i % 2 == 0)
+          sine[i].isActivated = true;
       }
     }
-    if (firstsignalno >= 1 && firstsignalno <= MAXIMUM_SIGNALS && secondsignalno >= 1 && secondsignalno <= MAXIMUM_SIGNALS) {
+    if (firstsignalno >= 1 && firstsignalno <= MAXIMUM_SIGNALS && secondsignalno >= 1 && secondsignalno <= MAXIMUM_SIGNALS)
+    {
       byte minimum = firstsignalno;
       byte maximum = secondsignalno;
       if (firstsignalno > secondsignalno)
@@ -66,18 +74,22 @@ void startCommand(char * command, int * parameter, char * string01)
         minimum = secondsignalno;
       }
 
-      for (byte i = minimum; i <= maximum ; i++) {
+      for (byte i = minimum; i <= maximum; i++)
+      {
         sine[i].isActivated = true;
       }
     }
-    if (firstsignalno >= 1 && firstsignalno <= MAXIMUM_SIGNALS && secondsignalno == 0) {
+    if (firstsignalno >= 1 && firstsignalno <= MAXIMUM_SIGNALS && secondsignalno == 0)
+    {
       sine[firstsignalno].isActivated = true;
     }
 
     sinfo(), Serial.print(F("Activated signals ("));
     byte active_count = 0;
-    for (byte i = 1; i <= MAXIMUM_SIGNALS; i++) {
-      if (sine[i].isActivated) {
+    for (byte i = 1; i <= MAXIMUM_SIGNALS; i++)
+    {
+      if (sine[i].isActivated)
+      {
         active_count += 1;
       }
     }
@@ -85,29 +97,34 @@ void startCommand(char * command, int * parameter, char * string01)
     Serial.print(F("): "));
 
     active_count = 0;
-    for (byte i = 1; i <= MAXIMUM_SIGNALS; i++) {
+    for (byte i = 1; i <= MAXIMUM_SIGNALS; i++)
+    {
 
-      if (sine[i].isActivated) {
-        if (active_count == 0) Serial.print(i);
-        if (active_count > 0) {
+      if (sine[i].isActivated)
+      {
+        if (active_count == 0)
+          Serial.print(i);
+        if (active_count > 0)
+        {
           Serial.print(F(", "));
           Serial.print(i);
         }
         active_count += 1;
       }
     }
-    if (active_count == 0) Serial.print(F("none"));
+    if (active_count == 0)
+      Serial.print(F("none"));
     Serial.println();
 
-
     bool isActivated[MAXIMUM_SIGNALS + 1];
-    for (byte i = 0; i <= MAXIMUM_SIGNALS; i++) {
+    for (byte i = 0; i <= MAXIMUM_SIGNALS; i++)
+    {
       isActivated[i] = sine[i].isActivated;
     }
     EEPROM.updateBlock<bool>(eepromaddress.signalActivated, isActivated, MAXIMUM_SIGNALS + 1);
     UpdateLoggingSignals();
   }
-  
+
   //--------------------
   if (strcmp(command, "MASTER_SLAVE_MODE?") == 0)
   {
@@ -130,22 +147,29 @@ void startCommand(char * command, int * parameter, char * string01)
     if (parameter0 < 0 || parameter0 > 2)
     {
       serror(), Serial.println(F("Only 0 (Single), 1 (Master) or 2 (SLAVE) allowed!"));
-    } else {
+    }
+    else
+    {
 
-      if (parameter0 == 0 || parameter0 == 1) {
+      if (parameter0 == 0 || parameter0 == 1)
+      {
         masterSlaveMode = parameter0;
         EEPROM.update(eepromaddress.masterSlaveMode, masterSlaveMode);
         Serial.print(F("Changed to new mode: "));
-        if (masterSlaveMode == 0) {
+        if (masterSlaveMode == 0)
+        {
           Serial.println(F(" Single Mode"));
         }
-        if (masterSlaveMode == 1) {
+        if (masterSlaveMode == 1)
+        {
           Serial.println(F(" Master Mode"));
         }
       }
 
-      if (parameter0 == 2) {
-        if (parameter1 >= 1 && parameter1 <= 127) {
+      if (parameter0 == 2)
+      {
+        if (parameter1 >= 1 && parameter1 <= 127)
+        {
           masterSlaveMode = parameter0;
           slaveID = parameter1;
           EEPROM.updateByte(eepromaddress.masterSlaveMode, masterSlaveMode);
@@ -154,7 +178,9 @@ void startCommand(char * command, int * parameter, char * string01)
           Serial.print(F(" Slave Mode (ID: "));
           Serial.print(slaveID);
           Serial.println(F(")"));
-        } else {
+        }
+        else
+        {
           serror(), Serial.println(F("slaveID must be between 1 and 127"));
         }
       }
@@ -187,9 +213,9 @@ void startCommand(char * command, int * parameter, char * string01)
     loggingInterval = parameter[0] * 1000L;
     EEPROM.update(eepromaddress.loggingActivated, true);
     EEPROM.updateLong(eepromaddress.loggingInterval, loggingInterval);
-    //Processed in BlaeckSerial library
+    // Processed in BlaeckSerial library
   }
-  
+
   //--------------------
   if (strcmp(command, "BLAECK.DEACTIVATE?") == 0)
   {
@@ -199,22 +225,20 @@ void startCommand(char * command, int * parameter, char * string01)
   {
     loggingActivated = false;
     EEPROM.update(eepromaddress.loggingActivated, false);
-    //Processed in BlaeckSerial library
+    // Processed in BlaeckSerial library
   }
-  
+
   //--------------------
   if (strcmp(command, "BLAECK.WRITE_SYMBOLS?") == 0)
   {
     shelp(), Serial.println(F("Writes the symbols in Blaeck format"));
-    //Processed in BlaeckSerial library
+    // Processed in BlaeckSerial library
   }
-  
+
   //--------------------
   if (strcmp(command, "BLAECK.WRITE_DATA?") == 0)
   {
     shelp(), Serial.println(F("Writes the logging data in Blaeck format"));
-    //Processed in BlaeckSerial library
+    // Processed in BlaeckSerial library
   }
-
-
 }

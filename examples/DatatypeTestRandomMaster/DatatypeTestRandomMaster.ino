@@ -13,10 +13,10 @@
 
 #define ExampleVersion "1.0"
 
-//Instantiate a new BlaeckSerial object
+// Instantiate a new BlaeckSerial object
 BlaeckSerial BlaeckSerial;
 
-//Signals
+// Signals
 bool boolRandom;
 byte byteRandom;
 short shortRandom;
@@ -31,7 +31,7 @@ void setup()
 {
   // Initialize Serial port
   Serial.begin(115200);
-  //Initialize BlaeckSerial Master
+  // Initialize BlaeckSerial Master
   BlaeckSerial.beginMaster(&Serial, 9, 400000L);
 
   BlaeckSerial.DeviceName = "DatatypeTest Random Generator";
@@ -79,7 +79,8 @@ void UpdateRandomNumbers()
 
   // long from -2147483648 to 2147483647
   longRandom = random(2147483647);
-  if (boolRandom == 1) longRandom *= -1;
+  if (boolRandom == 1)
+    longRandom *= -1;
 
   // float from -9.99999 to 9.99999(datatype limits: -3.4028235E+38 to 3.4028235E+38)
   floatRandom = randomDouble(-9.99999, 9.99999);
@@ -90,5 +91,5 @@ void UpdateRandomNumbers()
 
 double randomDouble(double minf, double maxf)
 {
-  return minf + random(1UL << 31) * (maxf - minf) / (1UL << 31);  // use 1ULL<<63 for max double values)
+  return minf + random(1UL << 31) * (maxf - minf) / (1UL << 31); // use 1ULL<<63 for max double values)
 }

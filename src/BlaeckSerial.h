@@ -1,4 +1,3 @@
-#pragma once
 /*
         File: BlaeckSerial.h
         Author: Sebastian Strobl
@@ -45,10 +44,10 @@
    |Header||       Message       ||   EOT    |
    <BLAECK:MSGKEY:MSGID:<ELEMENTS>/BLAECK>\r\n
 
-   MSGKEY:   Length:   Elements:                                                                                         DESCRIPTION:
-    B0        n        <MasterSlaveConfig><SlaveID><SymbolName><DTYPE>                                                   Up to n Items. Response to request for available symbols:  <BLAECK.WRITE_SYMBOLS>
-    B1        n        <SymbolID><DATA><StatusByte><CRC32>                                                               Up to n Items. Response to request for data:               <BLAECK.WRITE_DATA>
-    B2        n        <MasterSlaveConfig><SlaveID><DeviceName><DeviceHWVersion><DeviceFWVersion><BlaeckSerialVersion>   Up to n Items. Response to request for device information: <BLAECK.GET_DEVICES>
+   MSGKEY:   Length:   Elements:                                                                                                            DESCRIPTION:
+    B0        n        <MasterSlaveConfig><SlaveID><SymbolName><DTYPE>                                                                      Up to n Items. Response to request for available symbols:  <BLAECK.WRITE_SYMBOLS>
+    B1        n        <SymbolID><DATA><StatusByte><CRC32>                                                                                  Up to n Items. Response to request for data:               <BLAECK.WRITE_DATA>
+    B3        n        <MasterSlaveConfig><SlaveID><DeviceName><DeviceHWVersion><DeviceFWVersion><BlaeckSerialVersion><BlaeckLibraryName>   Up to n Items. Response to request for device information: <BLAECK.GET_DEVICES>
 
   < and > just for illustration, not transmitted
 
@@ -65,6 +64,7 @@
    DeviceHWVersion    String0          set with public variable DeviceHWVersion
    DeviceFWVersion    String0          set with public variable DeviceFWVersion
    BlaeckVersion      String0          set with public const BLAECKSERIAL_VERSION
+   BlaeckLibraryName  String0          set with public const LIBRARY_NAME
    StatusByte         byte             1 byte; 0: Normal Transmission or 1: I2C CRC error
    CRC32 (StB=0)      byte             4 bytes; CRC order: 32; CRC Polynom (hex): 4C11DB7; Initial value (hex): FFFFFFFF; Final XOR value (hex): FFFFFFFF; reverse data bytes: true; reverse CRC result before Final XOR: true; (http://zorc.breitbandkatze.de/crc.html)
    CRC32 (StB=1)      byte             4 bytes; First Byte: 0; Second and Third Byte: SymbolID; Fourth Byte: SlaveID
@@ -78,13 +78,15 @@
 #include <CRC32.h>
 #include <CRC16.h>
 
-typedef enum MasterSlaveConfig {
+typedef enum MasterSlaveConfig
+{
   Single,
   Master,
   Slave
 } masterSlaveConfig;
 
-typedef enum DataType {
+typedef enum DataType
+{
   Blaeck_bool,
   Blaeck_byte,
   Blaeck_short,
@@ -97,13 +99,15 @@ typedef enum DataType {
   Blaeck_double
 } dataType;
 
-struct Signal {
+struct Signal
+{
   String SymbolName;
   dataType DataType;
   void *Address;
 };
 
-class BlaeckSerial {
+class BlaeckSerial
+{
 public:
   // ----- Constructor -----
   BlaeckSerial();
@@ -112,9 +116,9 @@ public:
   ~BlaeckSerial();
 
   // ----- Initialize -----
-  void begin(HardwareSerial *Ref, unsigned int Size);
-  void beginMaster(HardwareSerial *Ref, unsigned int Size, uint32_t WireClockFrequency);
-  void beginSlave(HardwareSerial *Ref, unsigned int Size, byte SlaveID);
+  void begin(Stream *Ref, unsigned int Size);
+  void beginMaster(Stream *Ref, unsigned int Size, uint32_t WireClockFrequency);
+  void beginSlave(Stream *Ref, unsigned int Size, byte SlaveID);
 
   /**
            @brief Set these variables in your Arduino sketch
@@ -123,10 +127,11 @@ public:
   String DeviceHWVersion = "n/a";
   String DeviceFWVersion = "n/a";
 
-  const String BLAECKSERIAL_VERSION = "3.0.3";
+  const String LIBRARY_NAME = "BlaeckSerial";
+  const String BLAECKSERIAL_VERSION = "4.0.0";
 
   // ----- Signals -----
-  //add or delete signals
+  // add or delete signals
   void addSignal(String symbolName, bool *value, bool prefixSlaveID = true);
   void addSignal(String symbolName, byte *value, bool prefixSlaveID = true);
   void addSignal(String symbolName, short *value, bool prefixSlaveID = true);
@@ -204,7 +209,6 @@ public:
     */
   void tick(unsigned long messageID);
 
-
 private:
   void writeLocalData(unsigned long MessageID, bool send_eol);
   void writeSlaveData(bool send_eol);
@@ -228,7 +232,7 @@ private:
   bool slaveFound(const unsigned int index);
   void storeSlave(const unsigned int index, const boolean value);
 
-  HardwareSerial *SerialRef;
+  Stream *StreamRef;
   Signal *Signals;
   int _signalIndex = 0;
 
@@ -240,7 +244,7 @@ private:
 
   masterSlaveConfig _masterSlaveConfig = Single;
   byte _slaveID;
-  unsigned char _slaveFound[128 / 8];  //128 bit storage
+  unsigned char _slaveFound[128 / 8]; // 128 bit storage
   String _slaveSymbolPrefix;
 
   byte _wireMode = 0;
@@ -249,10 +253,10 @@ private:
 
   static const int MAXIMUM_CHAR_COUNT = 64;
   char receivedChars[MAXIMUM_CHAR_COUNT];
-  char COMMAND[MAXIMUM_CHAR_COUNT] = { 0 };
+  char COMMAND[MAXIMUM_CHAR_COUNT] = {0};
   int PARAMETER[10];
-  //STRING_01: Max. 15 chars allowed  + Null Terminator '\0' = 16
-  //In case more than 15 chars are sent, the rest is cut off in function void parseData()
+  // STRING_01: Max. 15 chars allowed  + Null Terminator '\0' = 16
+  // In case more than 15 chars are sent, the rest is cut off in function void parseData()
   char STRING_01[16];
 
   CRC32 _crc;
@@ -261,12 +265,14 @@ private:
 
   static BlaeckSerial *_pSingletonInstance;
 
-  static void OnReceiveHandler() {
+  static void OnReceiveHandler()
+  {
     if (_pSingletonInstance)
       _pSingletonInstance->wireSlaveTransmitToMaster();
   }
 
-  static void OnSendHandler(int numBytes) {
+  static void OnSendHandler(int numBytes)
+  {
     if (_pSingletonInstance)
       _pSingletonInstance->wireSlaveReceive();
   }
@@ -277,50 +283,59 @@ private:
 
   void (*_updateCallback)();
 
-  union {
+  union
+  {
     bool val;
     byte bval[1];
   } boolCvt;
 
-  union {
+  union
+  {
     short val;
     byte bval[2];
   } shortCvt;
 
-  union {
+  union
+  {
     short val;
     byte bval[2];
   } ushortCvt;
 
-  union {
+  union
+  {
     int val;
     byte bval[2];
   } intCvt;
 
-  union {
+  union
+  {
     unsigned int val;
     byte bval[2];
   } uintCvt;
 
-  union {
+  union
+  {
     long val;
     byte bval[4];
   } lngCvt;
 
-  union {
+  union
+  {
     unsigned long val;
     byte bval[4];
   } ulngCvt;
 
-  union {
+  union
+  {
     float val;
     byte bval[4];
   } fltCvt;
 
-  union {
+  union
+  {
     double val;
     byte bval[8];
   } dblCvt;
 };
 
-#endif  //  BLAECKSERIAL_H
+#endif //  BLAECKSERIAL_H

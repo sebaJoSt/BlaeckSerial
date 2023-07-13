@@ -11,10 +11,10 @@
 #include "Arduino.h"
 #include "BlaeckSerial.h"
 
-//Instantiate a new BlaeckSerial object
+// Instantiate a new BlaeckSerial object
 BlaeckSerial BlaeckSerial;
 
-//Signals
+// Signals
 bool boolTest[2] = {false, true};
 byte byteTest[2] = {0, 255};
 short shortTest[2] = {-32768, 32767};
@@ -32,7 +32,7 @@ void setup()
 {
   // Initialize Serial port
   Serial.begin(9600);
-  //Initialize BlaeckSerial Master
+  // Initialize BlaeckSerial Master
   BlaeckSerial.beginMaster(&Serial, 20, 400000L);
 
   // Add signals to BlaeckSerial

@@ -10,10 +10,10 @@
 
 #define ExampleVersion "1.0"
 
-//Instantiate a new BlaeckSerial object
+// Instantiate a new BlaeckSerial object
 BlaeckSerial BlaeckSerial;
 
-//Signals
+// Signals
 float sine;
 
 void setup()
@@ -21,10 +21,10 @@ void setup()
   // Initialize Serial port
   Serial.begin(115200);
 
-  //Setup BlaeckSerial
+  // Setup BlaeckSerial
   BlaeckSerial.begin(
-    &Serial, //Serial reference
-    200        //Maxmimal signal count used;
+      &Serial, // Serial reference
+      200      // Maximal signal count used;
   );
 
   BlaeckSerial.DeviceName = "Basic Sine Number Generator";

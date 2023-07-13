@@ -44,7 +44,7 @@ void setup() {
   //Setup BlaeckSerial
   BlaeckSerial.begin(
     &Serial, //Serial reference
-    2        //Maxmimal signal count used;
+    2        //Maximal signal count used;
   );
 
   BlaeckSerial.DeviceName = "Temp Humidity Sensor";

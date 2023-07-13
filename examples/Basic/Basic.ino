@@ -25,10 +25,10 @@
 
 #define ExampleVersion "1.0"
 
-//Instantiate a new BlaeckSerial object
+// Instantiate a new BlaeckSerial object
 BlaeckSerial BlaeckSerial;
 
-//Signals
+// Signals
 float randomSmallNumber;
 long randomBigNumber;
 
@@ -37,10 +37,10 @@ void setup()
   // Initialize Serial port
   Serial.begin(9600);
 
-  //Setup BlaeckSerial
+  // Setup BlaeckSerial
   BlaeckSerial.begin(
-    &Serial, //Serial reference
-    2        //Maxmimal signal count used;
+      &Serial, // Serial reference
+      2        // Maximal signal count used;
   );
 
   BlaeckSerial.DeviceName = "Random Number Generator";

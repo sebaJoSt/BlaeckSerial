@@ -1,23 +1,30 @@
-void sinfo() {
+void sinfo()
+{
   Serial.print(F("INFO> "));
 }
-void shelp() {
+void shelp()
+{
   Serial.print(F("HELP> "));
 }
-void swarning() {
+void swarning()
+{
   Serial.print(F("WARNING> "));
 }
-void serror() {
+void serror()
+{
   Serial.print(F("ERROR> "));
 }
 
-void PrintInfo() {
+void PrintInfo()
+{
   PrintInfo(false);
 }
-void PrintInfo(bool IsStartUp) {
+void PrintInfo(bool IsStartUp)
+{
   Serial.println(F("---------------------------------------------"));
 
-  if (IsStartUp) {
+  if (IsStartUp)
+  {
     //--FIRMWARE INFO
     Serial.print(F("Welcome to the "));
 
@@ -32,16 +39,20 @@ void PrintInfo(bool IsStartUp) {
 
   //--MASTER SLAVE MODE
   sinfo(), Serial.print(F("BlaeckSerial Mode: "));
-  if (masterSlaveMode == 0) Serial.println(F("Single Mode"));
-  if (masterSlaveMode == 1) Serial.println(F("Master Mode"));
-  if (masterSlaveMode == 2) {
+  if (masterSlaveMode == 0)
+    Serial.println(F("Single Mode"));
+  if (masterSlaveMode == 1)
+    Serial.println(F("Master Mode"));
+  if (masterSlaveMode == 2)
+  {
     Serial.print(F("Slave Mode ID:"));
     Serial.println(slaveID);
   }
 
   //--LOGGING INFO
   sinfo(), Serial.print(F("BlaeckSerial currently "));
-  if (loggingActivated == false)Serial.print(F("NOT "));
+  if (loggingActivated == false)
+    Serial.print(F("NOT "));
   Serial.println(F("activated."));
   sinfo(), Serial.print(F("BlaeckSerial interval [ms]: "));
   Serial.println(loggingInterval);
@@ -49,8 +60,10 @@ void PrintInfo(bool IsStartUp) {
   //--ACTIVATED SIGNALS INFO
   sinfo(), Serial.print(F("Activated signals ("));
   byte active_count = 0;
-  for (byte i = 1; i <= MAXIMUM_SIGNALS; i++) {
-    if (sine[i].isActivated) {
+  for (byte i = 1; i <= MAXIMUM_SIGNALS; i++)
+  {
+    if (sine[i].isActivated)
+    {
       active_count += 1;
     }
   }
@@ -58,18 +71,23 @@ void PrintInfo(bool IsStartUp) {
   Serial.print(F("): "));
 
   active_count = 0;
-  for (byte i = 1; i <= MAXIMUM_SIGNALS; i++) {
+  for (byte i = 1; i <= MAXIMUM_SIGNALS; i++)
+  {
 
-    if (sine[i].isActivated) {
-      if (active_count == 0) Serial.print(i);
-      if (active_count > 0) {
+    if (sine[i].isActivated)
+    {
+      if (active_count == 0)
+        Serial.print(i);
+      if (active_count > 0)
+      {
         Serial.print(F(", "));
         Serial.print(i);
       }
       active_count += 1;
     }
   }
-  if (active_count == 0) Serial.print(F("none"));
+  if (active_count == 0)
+    Serial.print(F("none"));
   Serial.println();
 
   //--FREE RAM
@@ -78,12 +96,16 @@ void PrintInfo(bool IsStartUp) {
   Serial.println(F(" bytes"));
 
   //--SIGNAL INFO -- ACTIVATED SIGNALS
-  if (IsStartUp == false) {
-    //Signal status - active signals
-    for (byte i = 1; i <= MAXIMUM_SIGNALS; i++) {
-      if (sine[i].isActivated) {
+  if (IsStartUp == false)
+  {
+    // Signal status - active signals
+    for (byte i = 1; i <= MAXIMUM_SIGNALS; i++)
+    {
+      if (sine[i].isActivated)
+      {
         sinfo(), Serial.print(F("Signal "));
-        if (i < 10) Serial.print("0");
+        if (i < 10)
+          Serial.print("0");
         Serial.print(i);
         Serial.print(F(" | "));
         Serial.println(sine[i].value);
@@ -91,7 +113,8 @@ void PrintInfo(bool IsStartUp) {
     }
   }
 
-  if (IsStartUp) {
+  if (IsStartUp)
+  {
     //--COMMANDS INFO
     Serial.println();
     shelp(), Serial.println(F("Enter <LS> for list of available commands"));

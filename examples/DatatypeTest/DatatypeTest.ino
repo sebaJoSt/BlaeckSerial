@@ -11,30 +11,30 @@
 #include "Arduino.h"
 #include "BlaeckSerial.h"
 
-//Instantiate a new BlaeckSerial object
+// Instantiate a new BlaeckSerial object
 BlaeckSerial BlaeckSerial;
 
-//Signals
-bool boolTest[2] = { false, true };
-byte byteTest[2] = { 0, 255 };
-short shortTest[2] = { -32768, 32767 };
-unsigned short ushortTest[2] = { 0, 65535 };
-int intTest[2] = { -32768, 32767 };
-unsigned int uintTest[2] = { 0, 65535 };
-long longTest[2] = { -2147483648, 2147483647 };
-unsigned long ulongTest[2] = { 0, 4294967295 };
-float floatTest[2] = { -3.4028235E+38, 3.4028235E+38 };
+// Signals
+bool boolTest[2] = {false, true};
+byte byteTest[2] = {0, 255};
+short shortTest[2] = {-32768, 32767};
+unsigned short ushortTest[2] = {0, 65535};
+int intTest[2] = {-32768, 32767};
+unsigned int uintTest[2] = {0, 65535};
+long longTest[2] = {-2147483648, 2147483647};
+unsigned long ulongTest[2] = {0, 4294967295};
+float floatTest[2] = {-3.4028235E+38, 3.4028235E+38};
 /*On the Uno and other ATMEGA based boards, the double implementation occupies 4 bytes
   and is exactly the same as the float, with no gain in precision.*/
-double doubleTest[2] = { -3.4028235E+38, 3.4028235E+38 };
+double doubleTest[2] = {-3.4028235E+38, 3.4028235E+38};
 /*8 Byte precision for 32bit processors*/
-//double doubleTest[2] = { -1.79769313486231570E+308, 1.79769313486231570E+308 };
+// double doubleTest[2] = { -1.79769313486231570E+308, 1.79769313486231570E+308 };
 
-
-void setup() {
+void setup()
+{
   // Initialize Serial port
   Serial.begin(9600);
-  //Initialize BlaeckSerial
+  // Initialize BlaeckSerial
   BlaeckSerial.begin(&Serial, 20);
 
   // Add signals to BlaeckSerial
@@ -60,7 +60,8 @@ void setup() {
   BlaeckSerial.addSignal("Double_max", &doubleTest[1]);
 }
 
-void loop() {
+void loop()
+{
   /*Keeps watching for serial input (Serial.read) and
     transmits the data at the user-set interval (Serial.write)*/
   BlaeckSerial.tick();

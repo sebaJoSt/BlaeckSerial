@@ -47,12 +47,11 @@
 #include "Arduino.h"
 #include "BlaeckSerial.h"
 
-//Instantiate a new BlaeckSerial object
+// Instantiate a new BlaeckSerial object
 BlaeckSerial BlaeckSerial;
 
-//Sets the pin number:
-const int ledPin =  LED_BUILTIN;
-
+// Sets the pin number:
+const int ledPin = LED_BUILTIN;
 
 void setup()
 {
@@ -62,10 +61,10 @@ void setup()
   // Initialize Serial port
   Serial.begin(9600);
 
-  //Setup BlaeckSerial
+  // Setup BlaeckSerial
   BlaeckSerial.begin(&Serial, 0);
 
-  //Setup read callback function by passing a function
+  // Setup read callback function by passing a function
   BlaeckSerial.attachRead(startCommand);
 }
 
@@ -80,18 +79,18 @@ void loop()
   BlaeckSerial.read();
 }
 
-//Implement the function, don't forget the arguments
-void startCommand(char * command, int * parameter, char * string01)
+// Implement the function, don't forget the arguments
+void startCommand(char *command, int *parameter, char *string01)
 {
   /* Compares the user input to the string "SwitchLED"
      strcmp takes the two strings to be compared as parameters
      and returns 0 if the strings are equal*/
   if (strcmp(command, "SwitchLED") == 0)
   {
-    //parameter[0] is the first parameter after the command: PARAMETER01
+    // parameter[0] is the first parameter after the command: PARAMETER01
     if (parameter[0] == 1)
     {
-      //Turns on the LED
+      // Turns on the LED
       digitalWrite(ledPin, HIGH);
       Serial.println("LED is ON.");
     }
@@ -103,11 +102,10 @@ void startCommand(char * command, int * parameter, char * string01)
     }
   }
 
-
   /* Here you can add more commands:*/
   if (strcmp(command, "SomeCommand") == 0)
   {
-    //Do something
+    // Do something
   }
 
   /* Exemplary command using the string parameter STRING01:
@@ -118,7 +116,7 @@ void startCommand(char * command, int * parameter, char * string01)
     if (parameter[1] == 0)
     {
       Serial.println(string01);
-    }  
+    }
     if (parameter[1] == 1)
     {
       // Print
@@ -130,5 +128,4 @@ void startCommand(char * command, int * parameter, char * string01)
       Serial.println("This'll be the day that I die");
     }
   }
-
 }
