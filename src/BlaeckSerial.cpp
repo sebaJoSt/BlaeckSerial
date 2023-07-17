@@ -210,12 +210,7 @@ void BlaeckSerial::read()
     }
     else if (strcmp(COMMAND, "BLAECK.ACTIVATE") == 0)
     {
-      unsigned long parameter = PARAMETER[0];
-      if (parameter > 32767)
-        parameter = 32767;
-      unsigned long unit_multiplicator = 1000;
-      unsigned long timedInterval_ms = parameter * unit_multiplicator;
-
+      unsigned long timedInterval_ms = ((unsigned long)PARAMETER[3] << 24) | ((unsigned long)PARAMETER[2] << 16) | ((unsigned long)PARAMETER[1] << 8) | ((unsigned long)PARAMETER[0]);
       this->setTimedData(true, timedInterval_ms);
     }
     else if (strcmp(COMMAND, "BLAECK.DEACTIVATE") == 0)
@@ -400,10 +395,10 @@ void BlaeckSerial::setTimedData(bool timedActivated, unsigned long timedInterval
 
   if (_timedActivated)
   {
-    if (timedInterval_ms > 32767000)
+    if (timedInterval_ms > 4294967)
     {
-      _timedSetPoint_ms = 32767000;
-      _timedInterval_ms = 32767000;
+      _timedSetPoint_ms = 4294967;
+      _timedInterval_ms = 4294967;
     }
     else
     {
@@ -563,7 +558,7 @@ void BlaeckSerial::writeSlaveDevices(bool send_eol)
         for (int i = 0; i < 1000; i++)
         {
           // request 32 bytes from slave device
-          byte receivedBytes = Wire.requestFrom(slaveindex, 32);
+          Wire.requestFrom(slaveindex, 32);
 
           bool eosignal_found = false;
 
@@ -603,8 +598,8 @@ void BlaeckSerial::writeSlaveDevices(bool send_eol)
 void BlaeckSerial::writeLocalData(unsigned long msg_id, bool send_eol)
 {
   _crc.setPolynome(0x04C11DB7);
-  _crc.setStartXOR(0xFFFFFFFF);
-  _crc.setEndXOR(0xFFFFFFFF);
+  _crc.setInitial(0xFFFFFFFF);
+  _crc.setXorOut(0xFFFFFFFF);
   _crc.setReverseIn(true);
   _crc.setReverseOut(true);
   _crc.restart();
@@ -709,7 +704,7 @@ void BlaeckSerial::writeLocalData(unsigned long msg_id, bool send_eol)
     // StatusByte + CRC First Byte + CRC Second Byte + CRC Third Byte + CRC Fourth Byte
     StreamRef->write((byte)0);
 
-    uint32_t crc_value = _crc.getCRC();
+    uint32_t crc_value = _crc.calc();
     StreamRef->write((byte *)&crc_value, 4);
 
     StreamRef->write("/BLAECK>");
@@ -785,7 +780,7 @@ void BlaeckSerial::writeSlaveData(bool send_eol)
 
                   uint16_t crcWireTransmitted = ((uint16_t)crcWireTransmittedByte1 << 8) | ((uint16_t)crcWireTransmittedByte0);
 
-                  uint16_t crcWireCalculated = _crcWireCalc.getCRC();
+                  uint16_t crcWireCalculated = _crcWireCalc.calc();
 
                   if (crcWireTransmitted != crcWireCalculated && slaveCRCErrorOccured == false)
                   {
@@ -832,7 +827,7 @@ void BlaeckSerial::writeSlaveData(bool send_eol)
       // StatusByte + CRC First Byte + CRC Second Byte + CRC Third Byte + CRC Fourth Byte
       StreamRef->write((byte)0);
 
-      uint32_t crc_value = _crc.getCRC();
+      uint32_t crc_value = _crc.calc();
       StreamRef->write((byte *)&crc_value, 4);
     }
 
@@ -1028,7 +1023,7 @@ void BlaeckSerial::scanI2CSlaves(char addressStart, char addressEnd)
     {
       storeSlave(slaveindex, false);
 
-      byte receivedBytes = Wire.requestFrom(slaveindex, 1);
+      Wire.requestFrom(slaveindex, 1);
 
       // Expecting response 0xAA from slave -> Slave found
       // Receive a byte as character
@@ -1287,7 +1282,7 @@ void BlaeckSerial::wireSlaveTransmitSingleDataPoint()
   }
   else
   {
-    uint16_t crc_value = _crcWire.getCRC();
+    uint16_t crc_value = _crcWire.calc();
     Wire.write((byte *)&crc_value, 2);
   }
 
