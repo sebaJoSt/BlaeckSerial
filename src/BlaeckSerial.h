@@ -132,7 +132,7 @@ public:
 
   // ----- Read  -----
   /**
-           @brief Call this function every some milliseconds for reading serial input
+           @brief Call this function every some milliseconds for reading serial input and execution of the command
     */
   void read();
   /**
@@ -142,12 +142,12 @@ public:
 
   // ----- All-in-one -----
   /**
-          @brief Call this function every some milliseconds for reading serial input
+          @brief Call this function every some milliseconds for reading serial input, execution of the command
            and writing timed data; default messageId = 185273099
     */
   void tick();
   /**
-          @brief Call this function every some milliseconds for reading serial input
+          @brief Call this function every some milliseconds for reading serial input, execution of the command
            and writing timed data with messageID;
           @param messageId --> A unique message ID which echoes back to transmitter to indicate a response to a message.
     */

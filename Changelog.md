@@ -2,12 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
-## [4.0.0] - 2023-07-13
+## [4.0.0] - 2023-07-18
+
+### Added
+- New public const `LIBRARY_NAME`
 
 ### Changed
-- Breaking change: Include libary name in response to <BLAECK.GET_DEVICES>
+- Breaking change: `<BLAECK_ACTIVATE, 1st, 2nd, 3rd, 4th byte in milliseconds>` new parameters and new range from 0..4294967295[ms]
+- Breaking change: Include `LIBRARY_NAME` in response to `<BLAECK.GET_DEVICES>`, new message key: `MSGKEY: B3`
+- Public const `BLAECKSERIAL_VERSION` changed to `LIBRARY_VERSION`
+- Updated dependencies: CRC to version 1.0.0
 - Changed reference from HardwareSerial to Stream
 - Formatted source code with VSCode
+- Updated examples
+
 
 ## [3.0.3] - 2023-06-13
 

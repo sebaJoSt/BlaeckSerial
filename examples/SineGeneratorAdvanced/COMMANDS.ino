@@ -210,7 +210,7 @@ void startCommand(char *command, int *parameter, char *string01)
   if (strcmp(command, "BLAECK.ACTIVATE") == 0)
   {
     loggingActivated = true;
-    loggingInterval = parameter[0] * 1000L;
+    loggingInterval = ((unsigned long)parameter[3] << 24) | ((unsigned long)parameter[2] << 16) | ((unsigned long)parameter[1] << 8) | ((unsigned long)parameter[0]);
     EEPROM.update(eepromaddress.loggingActivated, true);
     EEPROM.updateLong(eepromaddress.loggingInterval, loggingInterval);
     // Processed in BlaeckSerial library
