@@ -8,8 +8,8 @@ All notable changes to this project will be documented in this file.
 - New public const `LIBRARY_NAME`
 
 ### Changed
-- Breaking change: `<BLAECK_ACTIVATE, 1st, 2nd, 3rd, 4th byte in milliseconds>` new parameters and new range from 0..4294967295[ms]
-- Breaking change: Include `LIBRARY_NAME` in response to `<BLAECK.GET_DEVICES>`, new message key: `MSGKEY: B3`
+- **Breaking change:** `<BLAECK_ACTIVATE, 1st, 2nd, 3rd, 4th byte in milliseconds>` new parameters and new range from 0..4294967295[ms]
+- **Breaking change:** Include `LIBRARY_NAME` in response to `<BLAECK.GET_DEVICES>`, new message key: `MSGKEY: B3`
 - Public const `BLAECKSERIAL_VERSION` changed to `LIBRARY_VERSION`
 - Updated dependencies: CRC to version 1.0.0
 - Changed reference from HardwareSerial to Stream
