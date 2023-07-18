@@ -17,8 +17,8 @@
     <BLAECK.WRITE_SYMBOLS>            Writes the symbol list to the PC
     <BLAECK.WRITE_DATA>               Writes the temperature and humidity from the sensor to the PC
     <BLAECK.ACTIVATE,96,234>          The data is written every 60 seconds (60 000ms)
-                                      first Byte: 0b01100000 = 96 DEC
-                                      second byte = 0b11101010 = 234 DEC
+                                      first Byte:  0b01100000 = 96 DEC
+                                      second Byte: 0b11101010 = 234 DEC
                                       Minimum: 0[milliseconds] Maximum: 4 294 967 295[milliseconds]
     <BLAECK.DEACTIVATE>               Stops writing the data every 60s
 */
