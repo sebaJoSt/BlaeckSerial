@@ -68,7 +68,7 @@ Here's a full list of serial commands handled by this library:
 | `<BLAECK.GET_DEVICES>`       | Writes the device information including the device name, hardware version, firmware version and BlaeckSerial version |
 | `<BLAECK.WRITE_SYMBOLS> `    | Writes symbol list including datatype information.                               |
 | `<BLAECK.WRITE_DATA> `       | Writes the binary data.                                                          |
-| `<BLAECK.ACTIVATE, interval>`| Activates writing the binary data in user-set interval [s] (Min: 0s Max: 32767s) |
+| `<BLAECK.ACTIVATE,first,second,third,fourth byte>`| Activates writing the binary data in user-set interval [ms]<br />Min: 0ms  Max: 4294967295ms<br /> e.g. `<BLAECK.ACTIVATE,96,234>` The data is written every 60 seconds (60 000ms)<br />first Byte: 0b01100000 = 96 DEC<br />second Byte: 0b11101010 = 234 DEC|
 | `<BLAECK.DEACTIVATE> `       | Deactivates writing in intervals.                                                |
 
 ## The Device List, Symbol List and Data Codec
