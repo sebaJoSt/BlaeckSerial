@@ -34,19 +34,20 @@ float humidity;
 
 Adafruit_SHT31 sht31 = Adafruit_SHT31();
 
-//Instantiate a new BlaeckSerial object
+// Instantiate a new BlaeckSerial object
 BlaeckSerial BlaeckSerial;
 
-void setup() {
+void setup()
+{
   Serial.begin(9600);
 
   sht31.begin(0x44);
-  //sht31.heater(true);
+  // sht31.heater(true);
 
-  //Setup BlaeckSerial
+  // Setup BlaeckSerial
   BlaeckSerial.begin(
-    &Serial, //Serial reference
-    2        //Maximal signal count used;
+      &Serial, // Serial reference
+      2        // Maximal signal count used;
   );
 
   BlaeckSerial.DeviceName = "Temp Humidity Sensor";
@@ -57,8 +58,8 @@ void setup() {
   BlaeckSerial.addSignal("Humidity [%]", &humidity);
 }
 
-
-void loop() {
+void loop()
+{
   temperature = sht31.readTemperature();
   humidity = sht31.readHumidity();
 

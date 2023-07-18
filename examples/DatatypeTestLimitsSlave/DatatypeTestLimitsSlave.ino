@@ -11,10 +11,10 @@
 #include "Arduino.h"
 #include "BlaeckSerial.h"
 
-//Instantiate a new BlaeckSerial object
+// Instantiate a new BlaeckSerial object
 BlaeckSerial BlaeckSerial;
 
-//Signals
+// Signals
 bool boolTest[2] = {false, true};
 byte byteTest[2] = {0, 255};
 short shortTest[2] = {-32768, 32767};
@@ -32,7 +32,7 @@ void setup()
 {
   // Initialize Serial port
   Serial.begin(9600);
-  //Initialize BlaeckSerial Slave with ID 1
+  // Initialize BlaeckSerial Slave with ID 1
   BlaeckSerial.beginSlave(&Serial, 20, 1);
 
   // Add signals to BlaeckSerial
@@ -61,6 +61,6 @@ void setup()
 void loop()
 {
   BlaeckSerial.tick();
-  
+
   Serial.println("This is text sent from the slave sketch. This text is not transmitted to master via I2C.");
 }

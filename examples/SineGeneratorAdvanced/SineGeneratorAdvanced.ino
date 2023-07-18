@@ -3,10 +3,10 @@
 
   This is a sample sketch to show how to use the BlaeckSerial library to transmit sine waves
   from the Arduino board to your PC.
-  
+
   Requirements:
   - EEPROMEx Library
-  
+
   Features:
   - EEPROM stores state
   - Signals can be (de-)activated with <SIGNAL_ACTIVATE>
