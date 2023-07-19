@@ -83,7 +83,7 @@ Type| MSGKEY | Message Length | Elements| Description
 ----|--------| ------|---------------------------------|---------------------------------------------
 Symbol List | B0 | n | `<MasterSlaveConfig><SlaveID><SymbolName><DTYPE>` | Up to n symbols. Response to request for available symbols `<BLAECK.WRITE_SYMBOLS>`
 Data | B1 | n | `<SymbolID><DATA><StatusByte><CRC32>` | Up to n data items. Response to request for data `<BLAECK.WRITE_DATA>`
-~~Devices~~ | ~~B2~~ | ~~n~~ | ~~`<MasterSlaveConfig><SlaveID><DeviceName><DeviceHWVersion><DeviceFWVersion><LibraryVersion>`~~ | Deprecated (Used in BlaeckSerial version 3.0.3 or before)
+~~Devices~~ | ~~B2~~ | ~~n~~ | ~~`<MasterSlaveConfig><SlaveID><DeviceName><DeviceHWVersion><DeviceFWVersion><LibraryVersion>`~~ | Deprecated (Used in BlaeckSerial version 3.0.3 or older)
 Devices | B3 | n | `<MasterSlaveConfig><SlaveID><DeviceName><DeviceHWVersion><DeviceFWVersion><LibraryVersion><LibraryName>` | Up to n device items. Response to request for device information `<BLAECK.GET_DEVICES>`
   
 
