@@ -3,8 +3,8 @@
         Author: Sebastian Strobl
 */
 
+#include <Arduino.h>
 #include "BlaeckSerial.h"
-// #include "Arduino.h"
 
 // static initializer for the static member.
 BlaeckSerial *BlaeckSerial::_pSingletonInstance = 0;
