@@ -59,7 +59,7 @@ void loop()
 }
 ```
 
-## BlaeckSerial commands
+##BlaeckSerial commands
 
 Here's a full list of serial commands handled by this library:
 
