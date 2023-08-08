@@ -11,8 +11,6 @@ Also included is a message parser which reads input in the syntax of `<HelloWorl
 
 ## Usage in Loggbok (Windows Application)
 
-
-
 https://github.com/sebaJoSt/BlaeckSerial/assets/388152/440fdcfb-c30b-45a9-837e-999d8a1426fe
 
 
