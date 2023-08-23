@@ -43,7 +43,7 @@ void setup()
 {
   // Initialize Serial port
   Serial.begin(9600);
-  
+
   // Initialize BlaeckSerial
   BlaeckSerial.begin(&Serial, 26);
 
