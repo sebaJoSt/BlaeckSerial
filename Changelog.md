@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [4.1.0] - 2023-11-20
+
+### Added
+- **Only for AVR Architecture:** Signal names can now be stored in flash memory to save RAM with the new addSignal functions `BlaeckSerial::addSignal(PGM_P const *signalNameTable, int signalNameIndex, ..);`. This is especially helpful for the ATmega328P (Arduino Uno/Nano), which only has 2048 bytes of RAM
+- New example `SignalNamesInFlashLessRAMUsage.ino` added to show how it works
+
+### Changed
+- Changed from `StreamRef->write('\0')` to `StreamRef->print('\0')` because `Call of overloaded function is ambiguous` error was thrown when compiling for Arduino Due and other boards
+
+
 ## [4.0.0] - 2023-07-18
 
 ### Added
@@ -111,6 +121,7 @@ New public function: `attachUpdate(void (*updateCallback)());`
 
 Initial release.
 
+[4.0.1]: https://github.com/sebaJoSt/BlaeckSerial/compare/4.0.0...4.1.0
 [4.0.0]: https://github.com/sebaJoSt/BlaeckSerial/compare/3.0.3...4.0.0
 [3.0.3]: https://github.com/sebaJoSt/BlaeckSerial/compare/3.0.2...3.0.3
 [3.0.2]: https://github.com/sebaJoSt/BlaeckSerial/compare/3.0.1...3.0.2

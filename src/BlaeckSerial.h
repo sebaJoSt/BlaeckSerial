@@ -45,9 +45,15 @@ typedef enum DataType
 
 struct Signal
 {
-  String SymbolName;
+  String SignalName;
   dataType DataType;
   void *Address;
+#ifdef __AVR__
+  bool UseFlashSignalName;
+  PGM_P const *SignalNameTable;
+  int SignalNameIndex;
+  bool PrefixSlaveID;
+#endif
 };
 
 class BlaeckSerial
@@ -72,20 +78,34 @@ public:
   String DeviceFWVersion = "n/a";
 
   const String LIBRARY_NAME = "BlaeckSerial";
-  const String LIBRARY_VERSION = "4.0.0";
+  const String LIBRARY_VERSION = "4.1.0";
 
   // ----- Signals -----
   // add or delete signals
-  void addSignal(String symbolName, bool *value, bool prefixSlaveID = true);
-  void addSignal(String symbolName, byte *value, bool prefixSlaveID = true);
-  void addSignal(String symbolName, short *value, bool prefixSlaveID = true);
-  void addSignal(String symbolName, unsigned short *value, bool prefixSlaveID = true);
-  void addSignal(String symbolName, int *value, bool prefixSlaveID = true);
-  void addSignal(String symbolName, unsigned int *value, bool prefixSlaveID = true);
-  void addSignal(String symbolName, long *value, bool prefixSlaveID = true);
-  void addSignal(String symbolName, unsigned long *value, bool prefixSlaveID = true);
-  void addSignal(String symbolName, float *value, bool prefixSlaveID = true);
-  void addSignal(String symbolName, double *value, bool prefixSlaveID = true);
+  void addSignal(String signalName, bool *value, bool prefixSlaveID = true);
+  void addSignal(String signalName, byte *value, bool prefixSlaveID = true);
+  void addSignal(String signalName, short *value, bool prefixSlaveID = true);
+  void addSignal(String signalName, unsigned short *value, bool prefixSlaveID = true);
+  void addSignal(String signalName, int *value, bool prefixSlaveID = true);
+  void addSignal(String signalName, unsigned int *value, bool prefixSlaveID = true);
+  void addSignal(String signalName, long *value, bool prefixSlaveID = true);
+  void addSignal(String signalName, unsigned long *value, bool prefixSlaveID = true);
+  void addSignal(String signalName, float *value, bool prefixSlaveID = true);
+  void addSignal(String signalName, double *value, bool prefixSlaveID = true);
+
+#ifdef __AVR__
+  void addSignal(PGM_P const *signalNameTable, int signalNameIndex, bool *value, bool prefixSlaveID = true);
+  void addSignal(PGM_P const *signalNameTable, int signalNameIndex, byte *value, bool prefixSlaveID = true);
+  void addSignal(PGM_P const *signalNameTable, int signalNameIndex, short *value, bool prefixSlaveID = true);
+  void addSignal(PGM_P const *signalNameTable, int signalNameIndex, unsigned short *value, bool prefixSlaveID = true);
+  void addSignal(PGM_P const *signalNameTable, int signalNameIndex, int *value, bool prefixSlaveID = true);
+  void addSignal(PGM_P const *signalNameTable, int signalNameIndex, unsigned int *value, bool prefixSlaveID = true);
+  void addSignal(PGM_P const *signalNameTable, int signalNameIndex, long *value, bool prefixSlaveID = true);
+  void addSignal(PGM_P const *signalNameTable, int signalNameIndex, unsigned long *value, bool prefixSlaveID = true);
+  void addSignal(PGM_P const *signalNameTable, int signalNameIndex, float *value, bool prefixSlaveID = true);
+  void addSignal(PGM_P const *signalNameTable, int signalNameIndex, double *value, bool prefixSlaveID = true);
+#endif
+
   void deleteSignals();
 
   // ----- Devices -----
