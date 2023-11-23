@@ -121,7 +121,7 @@ New public function: `attachUpdate(void (*updateCallback)());`
 
 Initial release.
 
-[4.0.1]: https://github.com/sebaJoSt/BlaeckSerial/compare/4.0.0...4.1.0
+[4.1.0]: https://github.com/sebaJoSt/BlaeckSerial/compare/4.0.0...4.1.0
 [4.0.0]: https://github.com/sebaJoSt/BlaeckSerial/compare/3.0.3...4.0.0
 [3.0.3]: https://github.com/sebaJoSt/BlaeckSerial/compare/3.0.2...3.0.3
 [3.0.2]: https://github.com/sebaJoSt/BlaeckSerial/compare/3.0.1...3.0.2
