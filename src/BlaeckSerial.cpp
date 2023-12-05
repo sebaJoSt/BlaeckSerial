@@ -57,9 +57,6 @@ void BlaeckSerial::addSignal(String signalName, bool *value, bool prefixSlaveID)
   }
   Signals[_signalIndex].DataType = Blaeck_bool;
   Signals[_signalIndex].Address = value;
-#ifdef __AVR__
-  Signals[_signalIndex].UseFlashSignalName = false;
-#endif
   _signalIndex++;
 }
 
@@ -72,9 +69,6 @@ void BlaeckSerial::addSignal(String signalName, byte *value, bool prefixSlaveID)
   }
   Signals[_signalIndex].DataType = Blaeck_byte;
   Signals[_signalIndex].Address = value;
-#ifdef __AVR__
-  Signals[_signalIndex].UseFlashSignalName = false;
-#endif
   _signalIndex++;
 }
 
@@ -87,9 +81,6 @@ void BlaeckSerial::addSignal(String signalName, short *value, bool prefixSlaveID
   }
   Signals[_signalIndex].DataType = Blaeck_short;
   Signals[_signalIndex].Address = value;
-#ifdef __AVR__
-  Signals[_signalIndex].UseFlashSignalName = false;
-#endif
   _signalIndex++;
 }
 
@@ -102,9 +93,6 @@ void BlaeckSerial::addSignal(String signalName, unsigned short *value, bool pref
   }
   Signals[_signalIndex].DataType = Blaeck_ushort;
   Signals[_signalIndex].Address = value;
-#ifdef __AVR__
-  Signals[_signalIndex].UseFlashSignalName = false;
-#endif
   _signalIndex++;
 }
 
@@ -117,11 +105,9 @@ void BlaeckSerial::addSignal(String signalName, int *value, bool prefixSlaveID)
   }
   Signals[_signalIndex].DataType = Blaeck_int;
   Signals[_signalIndex].Address = value;
-#ifdef __AVR__
-  Signals[_signalIndex].UseFlashSignalName = false;
-#endif
   _signalIndex++;
 }
+
 void BlaeckSerial::addSignal(String signalName, unsigned int *value, bool prefixSlaveID)
 {
   Signals[_signalIndex].SignalName = signalName;
@@ -131,9 +117,6 @@ void BlaeckSerial::addSignal(String signalName, unsigned int *value, bool prefix
   }
   Signals[_signalIndex].DataType = Blaeck_uint;
   Signals[_signalIndex].Address = value;
-#ifdef __AVR__
-  Signals[_signalIndex].UseFlashSignalName = false;
-#endif
   _signalIndex++;
 }
 
@@ -146,9 +129,6 @@ void BlaeckSerial::addSignal(String signalName, long *value, bool prefixSlaveID)
   }
   Signals[_signalIndex].DataType = Blaeck_long;
   Signals[_signalIndex].Address = value;
-#ifdef __AVR__
-  Signals[_signalIndex].UseFlashSignalName = false;
-#endif
   _signalIndex++;
 }
 
@@ -161,9 +141,6 @@ void BlaeckSerial::addSignal(String signalName, unsigned long *value, bool prefi
   }
   Signals[_signalIndex].DataType = Blaeck_ulong;
   Signals[_signalIndex].Address = value;
-#ifdef __AVR__
-  Signals[_signalIndex].UseFlashSignalName = false;
-#endif
   _signalIndex++;
 }
 
@@ -176,9 +153,6 @@ void BlaeckSerial::addSignal(String signalName, float *value, bool prefixSlaveID
   }
   Signals[_signalIndex].DataType = Blaeck_float;
   Signals[_signalIndex].Address = value;
-#ifdef __AVR__
-  Signals[_signalIndex].UseFlashSignalName = false;
-#endif
   _signalIndex++;
 }
 
@@ -193,7 +167,6 @@ void BlaeckSerial::addSignal(String signalName, double *value, bool prefixSlaveI
   /*On the Uno and other ATMEGA based boards, the double implementation occupies 4 bytes
   and is exactly the same as the float, with no gain in precision.*/
   Signals[_signalIndex].DataType = Blaeck_float;
-  Signals[_signalIndex].UseFlashSignalName = false;
 #else
   Signals[_signalIndex].DataType = Blaeck_double;
 #endif
@@ -205,118 +178,6 @@ void BlaeckSerial::deleteSignals()
 {
   _signalIndex = 0;
 }
-
-#ifdef __AVR__
-void BlaeckSerial::addSignal(PGM_P const *signalNameTable, int signalNameIndex, bool *value, bool prefixSlaveID)
-{
-  Signals[_signalIndex].SignalNameTable = signalNameTable;
-  Signals[_signalIndex].SignalNameIndex = signalNameIndex;
-  Signals[_signalIndex].UseFlashSignalName = true;
-  Signals[_signalIndex].PrefixSlaveID = prefixSlaveID;
-  Signals[_signalIndex].DataType = Blaeck_bool;
-  Signals[_signalIndex].Address = value;
-  _signalIndex++;
-}
-
-void BlaeckSerial::addSignal(PGM_P const *signalNameTable, int signalNameIndex, byte *value, bool prefixSlaveID)
-{
-  Signals[_signalIndex].SignalNameTable = signalNameTable;
-  Signals[_signalIndex].SignalNameIndex = signalNameIndex;
-  Signals[_signalIndex].UseFlashSignalName = true;
-  Signals[_signalIndex].PrefixSlaveID = prefixSlaveID;
-  Signals[_signalIndex].DataType = Blaeck_byte;
-  Signals[_signalIndex].Address = value;
-  _signalIndex++;
-}
-
-void BlaeckSerial::addSignal(PGM_P const *signalNameTable, int signalNameIndex, short *value, bool prefixSlaveID)
-{
-  Signals[_signalIndex].SignalNameTable = signalNameTable;
-  Signals[_signalIndex].SignalNameIndex = signalNameIndex;
-  Signals[_signalIndex].UseFlashSignalName = true;
-  Signals[_signalIndex].PrefixSlaveID = prefixSlaveID;
-  Signals[_signalIndex].DataType = Blaeck_short;
-  Signals[_signalIndex].Address = value;
-  _signalIndex++;
-}
-
-void BlaeckSerial::addSignal(PGM_P const *signalNameTable, int signalNameIndex, unsigned short *value, bool prefixSlaveID)
-{
-  Signals[_signalIndex].SignalNameTable = signalNameTable;
-  Signals[_signalIndex].SignalNameIndex = signalNameIndex;
-  Signals[_signalIndex].UseFlashSignalName = true;
-  Signals[_signalIndex].PrefixSlaveID = prefixSlaveID;
-  Signals[_signalIndex].DataType = Blaeck_ushort;
-  Signals[_signalIndex].Address = value;
-  _signalIndex++;
-}
-
-void BlaeckSerial::addSignal(PGM_P const *signalNameTable, int signalNameIndex, int *value, bool prefixSlaveID)
-{
-  Signals[_signalIndex].SignalNameTable = signalNameTable;
-  Signals[_signalIndex].SignalNameIndex = signalNameIndex;
-  Signals[_signalIndex].UseFlashSignalName = true;
-  Signals[_signalIndex].PrefixSlaveID = prefixSlaveID;
-  Signals[_signalIndex].DataType = Blaeck_int;
-  Signals[_signalIndex].Address = value;
-  _signalIndex++;
-}
-
-void BlaeckSerial::addSignal(PGM_P const *signalNameTable, int signalNameIndex, unsigned int *value, bool prefixSlaveID)
-{
-  Signals[_signalIndex].SignalNameTable = signalNameTable;
-  Signals[_signalIndex].SignalNameIndex = signalNameIndex;
-  Signals[_signalIndex].UseFlashSignalName = true;
-  Signals[_signalIndex].PrefixSlaveID = prefixSlaveID;
-  Signals[_signalIndex].DataType = Blaeck_uint;
-  Signals[_signalIndex].Address = value;
-  _signalIndex++;
-}
-
-void BlaeckSerial::addSignal(PGM_P const *signalNameTable, int signalNameIndex, long *value, bool prefixSlaveID)
-{
-  Signals[_signalIndex].SignalNameTable = signalNameTable;
-  Signals[_signalIndex].SignalNameIndex = signalNameIndex;
-  Signals[_signalIndex].UseFlashSignalName = true;
-  Signals[_signalIndex].PrefixSlaveID = prefixSlaveID;
-  Signals[_signalIndex].DataType = Blaeck_long;
-  Signals[_signalIndex].Address = value;
-  _signalIndex++;
-}
-
-void BlaeckSerial::addSignal(PGM_P const *signalNameTable, int signalNameIndex, unsigned long *value, bool prefixSlaveID)
-{
-  Signals[_signalIndex].SignalNameTable = signalNameTable;
-  Signals[_signalIndex].SignalNameIndex = signalNameIndex;
-  Signals[_signalIndex].UseFlashSignalName = true;
-  Signals[_signalIndex].PrefixSlaveID = prefixSlaveID;
-  Signals[_signalIndex].DataType = Blaeck_ulong;
-  Signals[_signalIndex].Address = value;
-  _signalIndex++;
-}
-
-void BlaeckSerial::addSignal(PGM_P const *signalNameTable, int signalNameIndex, float *value, bool prefixSlaveID)
-{
-  Signals[_signalIndex].SignalNameTable = signalNameTable;
-  Signals[_signalIndex].SignalNameIndex = signalNameIndex;
-  Signals[_signalIndex].UseFlashSignalName = true;
-  Signals[_signalIndex].PrefixSlaveID = prefixSlaveID;
-  Signals[_signalIndex].DataType = Blaeck_float;
-  Signals[_signalIndex].Address = value;
-  _signalIndex++;
-}
-
-void BlaeckSerial::addSignal(PGM_P const *signalNameTable, int signalNameIndex, double *value, bool prefixSlaveID)
-{
-  Signals[_signalIndex].SignalNameTable = signalNameTable;
-  Signals[_signalIndex].SignalNameIndex = signalNameIndex;
-  Signals[_signalIndex].UseFlashSignalName = true;
-  Signals[_signalIndex].PrefixSlaveID = prefixSlaveID;
-  Signals[_signalIndex].DataType = Blaeck_float;
-  Signals[_signalIndex].Address = value;
-  _signalIndex++;
-}
-#endif
 
 void BlaeckSerial::read()
 {
@@ -360,6 +221,7 @@ void BlaeckSerial::read()
       _readCallback(COMMAND, PARAMETER, STRING_01);
   }
 }
+
 void BlaeckSerial::attachRead(void (*readCallback)(char *command, int *parameter, char *string01))
 {
   _readCallback = readCallback;
@@ -410,6 +272,7 @@ bool BlaeckSerial::recvWithStartEndMarkers()
 
   return newData;
 }
+
 void BlaeckSerial::parseData()
 {
   // split the data into its parts
@@ -590,6 +453,7 @@ void BlaeckSerial::timedWriteData()
 {
   this->timedWriteData(185273099);
 }
+
 void BlaeckSerial::timedWriteData(unsigned long msg_id)
 {
 
@@ -611,6 +475,7 @@ void BlaeckSerial::writeDevices()
 {
   this->writeDevices(1);
 }
+
 void BlaeckSerial::writeDevices(unsigned long msg_id)
 {
   if (_masterSlaveConfig == Single || _masterSlaveConfig == Slave)
@@ -842,6 +707,7 @@ void BlaeckSerial::writeLocalData(unsigned long msg_id, bool send_eol)
     StreamRef->flush();
   }
 }
+
 void BlaeckSerial::writeSlaveData(bool send_eol)
 {
 
@@ -983,29 +849,9 @@ void BlaeckSerial::writeLocalSymbols(unsigned long msg_id, bool send_eol)
     StreamRef->write(_slaveID);
 
     Signal signal = Signals[i];
-#ifdef __AVR__
-    if (signal.UseFlashSignalName)
-    {
-      if (signal.PrefixSlaveID)
-      {
-        StreamRef->print(_slaveSymbolPrefix);
-      }
-      PGM_P progMemString = (PGM_P)pgm_read_ptr(&signal.SignalNameTable[signal.SignalNameIndex]);
-      char buffer[50];
-      // Copy from flash into RAM
-      strcpy_P(buffer, progMemString);
-      StreamRef->print(buffer);
-      StreamRef->print('\0');
-    }
-    else
-    {
-      StreamRef->print(signal.SignalName);
-      StreamRef->print('\0');
-    }
-#else
+
     StreamRef->print(signal.SignalName);
     StreamRef->print('\0');
-#endif
 
     switch (signal.DataType)
     {
@@ -1257,31 +1103,10 @@ void BlaeckSerial::wireSlaveTransmitSingleSymbol()
 {
   Signal signal = Signals[_wireSignalIndex];
 
-#ifdef __AVR__
-  if (signal.UseFlashSignalName)
-  {
-    if (signal.PrefixSlaveID)
-    {
-      Wire.write(_slaveSymbolPrefix.c_str());
-    }
-    PGM_P progMemString = (PGM_P)pgm_read_ptr(&signal.SignalNameTable[signal.SignalNameIndex]);
-    char buffer[27];
-    // Copy from flash into RAM
-    strcpy_P(buffer, progMemString);
-    Wire.write(buffer);
-  }
-  else
-  {
-    char little_s_string[32] = "";
-    signal.SignalName.toCharArray(little_s_string, 32);
-    Wire.write(little_s_string);
-  }
-#else
   char little_s_string[32] = "";
   signal.SignalName.toCharArray(little_s_string, 32);
+  
   Wire.write(little_s_string);
-#endif
-
   Wire.write('\0');
 
   switch (signal.DataType)
@@ -1347,6 +1172,7 @@ void BlaeckSerial::wireSlaveTransmitSingleSymbol()
     Wire.write(0x0A);
   }
 }
+
 void BlaeckSerial::wireSlaveTransmitSingleDataPoint()
 {
   _crcWire.restart();
@@ -1477,6 +1303,7 @@ void BlaeckSerial::wireSlaveReceive()
       _updateCallback();
   };
 }
+
 void BlaeckSerial::wireSlaveTransmitToMaster()
 {
   if (_wireMode == 0)

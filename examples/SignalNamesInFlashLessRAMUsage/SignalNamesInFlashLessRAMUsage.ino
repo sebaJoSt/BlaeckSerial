@@ -2,10 +2,10 @@
   SignalNamesInFlashLessRAMUsage.ino
 
   This example sketch is similar to Basic.ino but stores the
-  Signal names in flash memory to save RAM.
+  Signal names in flash memory using the F() Macro thereby saving RAM.
 
-  Storage of signal names in flash memory is currently only implemented in AVR architecture (ATMega328p,..).
-  Newer microcontrollers, like the ESP32, should have sufficient RAM.
+  This is useful for the AVR architecture (ATMega328p,..).
+  Other microcontrollers, like the ESP32, handle RAM differently.
 
   Usage:
     Upload the sketch to your Arduino.
@@ -38,16 +38,6 @@ BlaeckSerial BlaeckSerial;
 float randomSmallNumber;
 long randomBigNumber;
 
-// Signal Names
-/* Define the signal names here in flash memory.
-   Maximum length of each signal name is 50 chars */
-const char signalName0[] PROGMEM = "Small Number";
-const char signalName1[] PROGMEM = "Big Number";
-
-PGM_P const SignalNameTable[] PROGMEM = {
-    signalName0,
-    signalName1};
-
 void setup()
 {
   // Initialize Serial port
@@ -63,9 +53,9 @@ void setup()
   BlaeckSerial.DeviceHWVersion = "Arduino Mega 2560 Rev3";
   BlaeckSerial.DeviceFWVersion = ExampleVersion;
 
-  // Add signals to BlaeckSerial
-  BlaeckSerial.addSignal(SignalNameTable, 0, &randomSmallNumber);
-  BlaeckSerial.addSignal(SignalNameTable, 1, &randomBigNumber);
+  // Add signals to BlaeckSerial using the F() Macro
+  BlaeckSerial.addSignal(F("Small Number"), &randomSmallNumber);
+  BlaeckSerial.addSignal(F("Big Number"), &randomBigNumber);
 
   /*Uncomment this function for initial settings
     first parameter: timedActivated

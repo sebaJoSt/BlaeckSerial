@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [4.2.0] - 2023-12-05
+
+### Removed
+- Removed `BlaeckSerial::addSignal(PGM_P const *signalNameTable, int signalNameIndex, ..);` because it is easier and has the same effect to use the `F()` Macro
+
+### Changed
+- Example `SignalNamesInFlashLessRAMUsage.ino` now uses the `F()` Macro to store the signal names
+
+
 ## [4.1.0] - 2023-11-20
 
 ### Added
@@ -121,6 +130,7 @@ New public function: `attachUpdate(void (*updateCallback)());`
 
 Initial release.
 
+[4.2.0]: https://github.com/sebaJoSt/BlaeckSerial/compare/4.1.0...4.2.0
 [4.1.0]: https://github.com/sebaJoSt/BlaeckSerial/compare/4.0.0...4.1.0
 [4.0.0]: https://github.com/sebaJoSt/BlaeckSerial/compare/3.0.3...4.0.0
 [3.0.3]: https://github.com/sebaJoSt/BlaeckSerial/compare/3.0.2...3.0.3

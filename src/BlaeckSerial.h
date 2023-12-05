@@ -48,12 +48,6 @@ struct Signal
   String SignalName;
   dataType DataType;
   void *Address;
-#ifdef __AVR__
-  bool UseFlashSignalName;
-  PGM_P const *SignalNameTable;
-  int SignalNameIndex;
-  bool PrefixSlaveID;
-#endif
 };
 
 class BlaeckSerial
@@ -78,7 +72,7 @@ public:
   String DeviceFWVersion = "n/a";
 
   const String LIBRARY_NAME = "BlaeckSerial";
-  const String LIBRARY_VERSION = "4.1.0";
+  const String LIBRARY_VERSION = "4.2.0";
 
   // ----- Signals -----
   // add or delete signals
@@ -92,19 +86,6 @@ public:
   void addSignal(String signalName, unsigned long *value, bool prefixSlaveID = true);
   void addSignal(String signalName, float *value, bool prefixSlaveID = true);
   void addSignal(String signalName, double *value, bool prefixSlaveID = true);
-
-#ifdef __AVR__
-  void addSignal(PGM_P const *signalNameTable, int signalNameIndex, bool *value, bool prefixSlaveID = true);
-  void addSignal(PGM_P const *signalNameTable, int signalNameIndex, byte *value, bool prefixSlaveID = true);
-  void addSignal(PGM_P const *signalNameTable, int signalNameIndex, short *value, bool prefixSlaveID = true);
-  void addSignal(PGM_P const *signalNameTable, int signalNameIndex, unsigned short *value, bool prefixSlaveID = true);
-  void addSignal(PGM_P const *signalNameTable, int signalNameIndex, int *value, bool prefixSlaveID = true);
-  void addSignal(PGM_P const *signalNameTable, int signalNameIndex, unsigned int *value, bool prefixSlaveID = true);
-  void addSignal(PGM_P const *signalNameTable, int signalNameIndex, long *value, bool prefixSlaveID = true);
-  void addSignal(PGM_P const *signalNameTable, int signalNameIndex, unsigned long *value, bool prefixSlaveID = true);
-  void addSignal(PGM_P const *signalNameTable, int signalNameIndex, float *value, bool prefixSlaveID = true);
-  void addSignal(PGM_P const *signalNameTable, int signalNameIndex, double *value, bool prefixSlaveID = true);
-#endif
 
   void deleteSignals();
 
