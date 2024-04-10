@@ -77,9 +77,9 @@ Here's a full list of serial commands handled by this library:
 | `<BLAECK.ACTIVATE,first,second,third,fourth byte>`| Activates writing the binary data in user-set interval [ms]<br />Min: 0ms  Max: 4294967295ms<br /> e.g. `<BLAECK.ACTIVATE,96,234>` The data is written every 60 seconds (60 000ms)<br />first Byte: 0b01100000 = 96 DEC<br />second Byte: 0b11101010 = 234 DEC|
 | `<BLAECK.DEACTIVATE> `       | Deactivates writing in intervals.                                                |
 
-## The Device List, Symbol List and Data Codec
+## Messages
 
-The Device List, Symbol List and Data is in the following format:
+The messages are in the following format:
 ````
 |Header|--       Message        --||-- EOT  --|
 <BLAECK:<MSGKEY>:<MSGID>:<ELEMENTS>/BLAECK>\r\n
@@ -91,6 +91,7 @@ Symbol List | B0 | **`<MasterSlaveConfig><SlaveID><SymbolName><DTYPE>`** | **Up 
 Data | B1 | **`<SymbolID><DATA>`**`<StatusByte><CRC32>` | **Up to n data items.** Response to request for data `<BLAECK.WRITE_DATA>`
 ~~Devices~~ | ~~B2~~ | ~~`<MasterSlaveConfig><SlaveID><DeviceName><DeviceHWVersion><DeviceFWVersion><LibraryVersion>`~~ | Deprecated (Used in BlaeckSerial version 3.0.3 or older)
 Devices | B3 | **`<MasterSlaveConfig><SlaveID><DeviceName><DeviceHWVersion><DeviceFWVersion><LibraryVersion><LibraryName>`** | **Up to n device items.** Response to request for device information `<BLAECK.GET_DEVICES>`
+Restarted | C0 | **`<MasterSlaveConfig><SlaveID><DeviceName><DeviceHWVersion><DeviceFWVersion><LibraryVersion><LibraryName>`** | **Only first device.** Send with function `writeRestarted()`
   
 
  Element|Type    |  DESCRIPTION:

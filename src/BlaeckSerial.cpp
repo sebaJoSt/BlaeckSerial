@@ -471,6 +471,43 @@ void BlaeckSerial::timedWriteData(unsigned long msg_id)
   }
 }
 
+void BlaeckSerial::writeRestarted()
+{
+  this->writeRestarted(1);
+}
+
+void BlaeckSerial::writeRestarted(unsigned long msg_id)
+{
+  if (!_writeRestartedAlreadyDone)
+  {
+    _writeRestartedAlreadyDone = true;
+    StreamRef->write("<BLAECK:");
+    byte msg_key = 0xC0;
+    StreamRef->write(msg_key);
+    StreamRef->write(":");
+    ulngCvt.val = msg_id;
+    StreamRef->write(ulngCvt.bval, 4);
+    StreamRef->write(":");
+
+    StreamRef->write(_masterSlaveConfig);
+    StreamRef->write(_slaveID);
+    StreamRef->print(DeviceName);
+    StreamRef->print('\0');
+    StreamRef->print(DeviceHWVersion);
+    StreamRef->print('\0');
+    StreamRef->print(DeviceFWVersion);
+    StreamRef->print('\0');
+    StreamRef->print(LIBRARY_VERSION);
+    StreamRef->print('\0');
+    StreamRef->print(LIBRARY_NAME);
+    StreamRef->print('\0');
+
+    StreamRef->write("/BLAECK>");
+    StreamRef->write("\r\n");
+    StreamRef->flush();
+  }
+}
+
 void BlaeckSerial::writeDevices()
 {
   this->writeDevices(1);
@@ -1105,7 +1142,7 @@ void BlaeckSerial::wireSlaveTransmitSingleSymbol()
 
   char little_s_string[32] = "";
   signal.SignalName.toCharArray(little_s_string, 32);
-  
+
   Wire.write(little_s_string);
   Wire.write('\0');
 

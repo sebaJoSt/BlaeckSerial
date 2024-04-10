@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [4.3.0] - 2024-04-10
+
+### Added
+- Added `BlaeckSerial::writeRestarted();` to send a message when the BlaeckSerial device is restarted. The message is sent only once during runtime.
+- Usage of `BlaeckSerial::writeRestarted();` shown in example `Basic.ino`
+
+
 ## [4.2.0] - 2023-12-05
 
 ### Removed

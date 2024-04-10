@@ -72,7 +72,7 @@ public:
   String DeviceFWVersion = "n/a";
 
   const String LIBRARY_NAME = "BlaeckSerial";
-  const String LIBRARY_VERSION = "4.2.0";
+  const String LIBRARY_VERSION = "4.3.0";
 
   // ----- Signals -----
   // add or delete signals
@@ -88,6 +88,13 @@ public:
   void addSignal(String signalName, double *value, bool prefixSlaveID = true);
 
   void deleteSignals();
+  
+  // -----Write Restarted -----
+  /**
+           @brief Call this function early in code to write a restart message. The message is sent only once during runtime.
+    */
+  void writeRestarted();
+  void writeRestarted(unsigned long messageID);
 
   // ----- Devices -----
   void writeDevices();
@@ -180,6 +187,8 @@ private:
   Stream *StreamRef;
   Signal *Signals;
   int _signalIndex = 0;
+
+  bool _writeRestartedAlreadyDone = false;
 
   bool _timedActivated = false;
   bool _timedFirstTime = true;
