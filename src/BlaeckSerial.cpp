@@ -1083,6 +1083,7 @@ void BlaeckSerial::tick()
 void BlaeckSerial::tick(unsigned long msg_id)
 {
   this->read();
+  this->writeRestarted(msg_id);
   this->timedWriteData(msg_id);
 }
 

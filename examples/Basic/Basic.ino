@@ -53,10 +53,6 @@ void setup()
   BlaeckSerial.addSignal("Small Number", &randomSmallNumber);
   BlaeckSerial.addSignal("Big Number", &randomBigNumber);
 
-  /*Uncomment this function to write the restart message
-  to the PC*/
-  // BlaeckSerial.writeRestarted();
-
   /*Uncomment this function for initial settings
     first parameter: timedActivated
     second parameter: timedInterval_ms */
