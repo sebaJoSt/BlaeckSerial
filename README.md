@@ -91,7 +91,7 @@ Symbol List | B0 | **`<MasterSlaveConfig><SlaveID><SymbolName><DTYPE>`** | **Up 
 Data | B1 | **`<SymbolID><DATA>`**`<StatusByte><CRC32>` | **Up to n data items.** Response to request for data `<BLAECK.WRITE_DATA>`
 ~~Devices~~ | ~~B2~~ | ~~`<MasterSlaveConfig><SlaveID><DeviceName><DeviceHWVersion><DeviceFWVersion><LibraryVersion>`~~ | Deprecated (Used in BlaeckSerial version 3.0.3 or older)
 Devices | B3 | **`<MasterSlaveConfig><SlaveID><DeviceName><DeviceHWVersion><DeviceFWVersion><LibraryVersion><LibraryName>`** | **Up to n device items.** Response to request for device information `<BLAECK.GET_DEVICES>`
-Restarted | C0 | **`<MasterSlaveConfig><SlaveID><DeviceName><DeviceHWVersion><DeviceFWVersion><LibraryVersion><LibraryName>`** | Only first device. Send with function `writeRestarted()`
+Restarted | C0 | **`<MasterSlaveConfig><SlaveID><DeviceName><DeviceHWVersion><DeviceFWVersion><LibraryVersion><LibraryName>`** | Only first device. Send with the functions `writeRestarted()` and `tick()` first time after device restarted. 
   
 
  Element|Type    |  DESCRIPTION:
@@ -104,11 +104,11 @@ Restarted | C0 | **`<MasterSlaveConfig><SlaveID><DeviceName><DeviceHWVersion><De
  `DTYPE` | byte | DataType  0=bool, 1=byte, 2=short, 3=ushort, 4=int, 5=uint, 6=long, 7=ulong, 8=float
   `MasterSlaveConfig`     | byte | 0=Single device, 1=Master, 2=Slave
    `SlaveID`              | byte |             Slave Address
-   `DeviceName`           | String0 |          set with public variable DeviceName
-   `DeviceHWVersion`      | String0 |          set with public variable DeviceHWVersion
-   `DeviceFWVersion`      | String0 |          set with public variable DeviceFWVersion
-   `LibraryVersion`       | String0 |          set with public const LIBRARY_VERSION
-   `LibraryName`          | String0 |          set with public const LIBRARY_NAME
+   `DeviceName`           | String0 |          set with public variable `DeviceName`
+   `DeviceHWVersion`      | String0 |          set with public variable `DeviceHWVersion`
+   `DeviceFWVersion`      | String0 |          set with public variable `DeviceFWVersion`
+   `LibraryVersion`       | String0 |          set with public const `LIBRARY_VERSION`
+   `LibraryName`          | String0 |          set with public const `LIBRARY_NAME 
    `StatusByte`           | byte |             1 byte; 0: Normal Transmission or 1: I2C CRC error
    `CRC32` (StatusByte=0) | byte |             4 bytes; CRC order: 32; CRC Polynom (hex): 4C11DB7; Initial value (hex): FFFFFFFF; Final XOR value (hex): FFFFFFFF; reverse data bytes: true; reverse CRC result before Final XOR: true; (http://zorc.breitbandkatze.de/crc.html) 
    `CRC32` (StatusByte=1) | byte |             4 bytes; First Byte: 0; Second and Third Byte: SymbolID; Fourth Byte: SlaveID
