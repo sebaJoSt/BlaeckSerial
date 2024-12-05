@@ -7,7 +7,7 @@
   You can find more documentation about the test circuit, setup, etc. in
   the example BasicMaster.ino
 
-  Copyright (c) by Sebastian Strobl,
+  Author: Sebastian Strobl,
   More information on: https://github.com/sebaJoSt/BlaeckSerial
 */
 

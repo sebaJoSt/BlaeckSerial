@@ -5,7 +5,7 @@
   from multiple Arduino boards in a master/slave configuration to your PC.
   Upload this sketch to the master Arduino.
 
-  Copyright (c) by Sebastian Strobl,
+  Author: Sebastian Strobl,
   More information on: https://github.com/sebaJoSt/BlaeckSerial
 
   I2C interface:

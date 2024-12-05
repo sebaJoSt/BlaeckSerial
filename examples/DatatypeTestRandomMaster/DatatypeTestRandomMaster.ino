@@ -3,7 +3,7 @@
 
   This is a sample sketch to test all the supported datatypes.
 
-  Copyright (c) by Sebastian Strobl,
+  Author: Sebastian Strobl,
   More information on: https://github.com/sebaJoSt/BlaeckSerial
 
 */

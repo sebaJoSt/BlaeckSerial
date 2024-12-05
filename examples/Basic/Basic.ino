@@ -4,7 +4,7 @@
   This is a sample sketch to show how to use the BlaeckSerial library to transmit data
   from the Arduino board to your PC every minute (or the user-set interval).
 
-  Copyright (c) by Sebastian Strobl,
+  Author: Sebastian Strobl,
   More information on: https://github.com/sebaJoSt/BlaeckSerial
 
   Setup:

@@ -5,7 +5,7 @@
   The sensor uses I2C to communicate, 2 pins are required to interface.
   This example requires Adafruit SHT31 Libray to be installed.
 
-  Copyright (c) by Sebastian Strobl,
+  Author: Sebastian Strobl,
   More information on: https://github.com/sebaJoSt/BlaeckSerial
 
   Setup:

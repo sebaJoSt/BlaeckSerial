@@ -6,7 +6,7 @@
   the command <SwitchLED> which turns the on-board LED on
   or off.
 
-  Copyright (c) by Sebastian Strobl,
+  Author: Sebastian Strobl,
   More information on: https://github.com/sebaJoSt/BlaeckSerial
 
   The command syntax for implementing your own commands:
