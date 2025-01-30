@@ -1099,31 +1099,31 @@ void BlaeckSerial::wireSlaveTransmitSingleDevice()
   if (_wireDeviceIndex == 0)
   {
     DeviceName.toCharArray(little_s_string, 32);
-    Wire.write(little_s_string);
+    Wire.print(little_s_string);
     Wire.write('\0');
   }
   else if (_wireDeviceIndex == 1)
   {
     DeviceHWVersion.toCharArray(little_s_string, 32);
-    Wire.write(little_s_string);
+    Wire.print(little_s_string);
     Wire.write('\0');
   }
   else if (_wireDeviceIndex == 2)
   {
     DeviceFWVersion.toCharArray(little_s_string, 32);
-    Wire.write(little_s_string);
+    Wire.print(little_s_string);
     Wire.write('\0');
   }
   else if (_wireDeviceIndex == 3)
   {
     LIBRARY_VERSION.toCharArray(little_s_string, 32);
-    Wire.write(little_s_string);
+    Wire.print(little_s_string);
     Wire.write('\0');
   }
   else if (_wireDeviceIndex == 4)
   {
     LIBRARY_NAME.toCharArray(little_s_string, 32);
-    Wire.write(little_s_string);
+    Wire.print(little_s_string);
     Wire.write('\0');
   }
 
@@ -1144,7 +1144,7 @@ void BlaeckSerial::wireSlaveTransmitSingleSymbol()
   char little_s_string[32] = "";
   signal.SignalName.toCharArray(little_s_string, 32);
 
-  Wire.write(little_s_string);
+  Wire.print(little_s_string);
   Wire.write('\0');
 
   switch (signal.DataType)
