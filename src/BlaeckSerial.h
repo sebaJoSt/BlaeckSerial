@@ -17,17 +17,10 @@
 #ifndef BLAECKSERIAL_H
 #define BLAECKSERIAL_H
 
-#include <Wire.h>
 #include <Arduino.h>
 #include <CRC32.h>
 #include <CRC16.h>
 
-typedef enum MasterSlaveConfig
-{
-  Single,
-  Master,
-  Slave
-} masterSlaveConfig;
 
 typedef enum DataType
 {
@@ -61,9 +54,6 @@ public:
 
   // ----- Initialize -----
   void begin(Stream *Ref, unsigned int Size);
-  void beginMaster(Stream *Ref, unsigned int Size, uint32_t WireClockFrequency);
-  void beginSlave(Stream *Ref, unsigned int Size, byte SlaveID);
-
   /**
            @brief Set these variables in your Arduino sketch
     */
@@ -72,20 +62,20 @@ public:
   String DeviceFWVersion = "n/a";
 
   const String LIBRARY_NAME = "BlaeckSerial";
-  const String LIBRARY_VERSION = "4.3.0";
+  const String LIBRARY_VERSION = "4.4.0";
 
   // ----- Signals -----
   // add or delete signals
-  void addSignal(String signalName, bool *value, bool prefixSlaveID = true);
-  void addSignal(String signalName, byte *value, bool prefixSlaveID = true);
-  void addSignal(String signalName, short *value, bool prefixSlaveID = true);
-  void addSignal(String signalName, unsigned short *value, bool prefixSlaveID = true);
-  void addSignal(String signalName, int *value, bool prefixSlaveID = true);
-  void addSignal(String signalName, unsigned int *value, bool prefixSlaveID = true);
-  void addSignal(String signalName, long *value, bool prefixSlaveID = true);
-  void addSignal(String signalName, unsigned long *value, bool prefixSlaveID = true);
-  void addSignal(String signalName, float *value, bool prefixSlaveID = true);
-  void addSignal(String signalName, double *value, bool prefixSlaveID = true);
+  void addSignal(String signalName, bool *value);
+  void addSignal(String signalName, byte *value);
+  void addSignal(String signalName, short *value);
+  void addSignal(String signalName, unsigned short *value);
+  void addSignal(String signalName, int *value);
+  void addSignal(String signalName, unsigned int *value);
+  void addSignal(String signalName, long *value);
+  void addSignal(String signalName, unsigned long *value);
+  void addSignal(String signalName, float *value);
+  void addSignal(String signalName, double *value);
 
   void deleteSignals();
   
@@ -162,28 +152,7 @@ public:
   void tick(unsigned long messageID);
 
 private:
-  void writeLocalData(unsigned long MessageID, bool send_eol);
-  void writeSlaveData(bool send_eol);
-
-  void writeLocalSymbols(unsigned long MessageID, bool send_eol);
-  void writeSlaveSymbols(bool send_eol);
-
-  void writeLocalDevices(unsigned long MessageID, bool send_eol);
-  void writeSlaveDevices(bool send_eol);
-
-  void scanI2CSlaves(char addressStart, char addressEnd);
-
-  void wireSlaveTransmitToMaster();
-  void wireSlaveReceive();
-
-  void wireSlaveTransmitSingleSymbol();
-  void wireSlaveTransmitSingleDataPoint();
-  void wireSlaveTransmitSingleDevice();
-  void wireSlaveTransmitStatusByte();
-
-  bool slaveFound(const unsigned int index);
-  void storeSlave(const unsigned int index, const boolean value);
-
+ 
   Stream *StreamRef;
   Signal *Signals;
   int _signalIndex = 0;
@@ -196,15 +165,6 @@ private:
   unsigned long _timedSetPoint_ms = 0;
   unsigned long _timedInterval_ms = 1000;
 
-  masterSlaveConfig _masterSlaveConfig = Single;
-  byte _slaveID;
-  unsigned char _slaveFound[128 / 8]; // 128 bit storage
-  String _slaveSymbolPrefix;
-
-  byte _wireMode = 0;
-  int _wireSignalIndex = 0;
-  int _wireDeviceIndex = 0;
-
   static const int MAXIMUM_CHAR_COUNT = 64;
   char receivedChars[MAXIMUM_CHAR_COUNT];
   char COMMAND[MAXIMUM_CHAR_COUNT] = {0};
@@ -214,22 +174,6 @@ private:
   char STRING_01[16];
 
   CRC32 _crc;
-  CRC16 _crcWire;
-  CRC16 _crcWireCalc;
-
-  static BlaeckSerial *_pSingletonInstance;
-
-  static void OnReceiveHandler()
-  {
-    if (_pSingletonInstance)
-      _pSingletonInstance->wireSlaveTransmitToMaster();
-  }
-
-  static void OnSendHandler(int numBytes)
-  {
-    if (_pSingletonInstance)
-      _pSingletonInstance->wireSlaveReceive();
-  }
 
   void (*_readCallback)(char *command, int *parameter, char *string01);
   bool recvWithStartEndMarkers();
