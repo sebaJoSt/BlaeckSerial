@@ -48,6 +48,7 @@ struct Signal
   String SignalName;
   dataType DataType;
   void *Address;
+  bool Updated = false;
 };
 
 class BlaeckSerial
@@ -72,10 +73,10 @@ public:
   String DeviceFWVersion = "n/a";
 
   const String LIBRARY_NAME = "BlaeckSerial";
-  const String LIBRARY_VERSION = "4.3.1";
+  const String LIBRARY_VERSION = "5.0.0";
 
   // ----- Signals -----
-  // add or delete signals
+  // Add a Signal
   void addSignal(String signalName, bool *value, bool prefixSlaveID = true);
   void addSignal(String signalName, byte *value, bool prefixSlaveID = true);
   void addSignal(String signalName, short *value, bool prefixSlaveID = true);
@@ -87,12 +88,46 @@ public:
   void addSignal(String signalName, float *value, bool prefixSlaveID = true);
   void addSignal(String signalName, double *value, bool prefixSlaveID = true);
 
+  // Delete all Signals
   void deleteSignals();
-  
+
+  int SignalCount;
+
+  // Update value and mark Signal as updated - by index
+  void update(int signalIndex, bool value);
+  void update(int signalIndex, byte value);
+  void update(int signalIndex, short value);
+  void update(int signalIndex, unsigned short value);
+  void update(int signalIndex, int value);
+  void update(int signalIndex, unsigned int value);
+  void update(int signalIndex, long value);
+  void update(int signalIndex, unsigned long value);
+  void update(int signalIndex, float value);
+  void update(int signalIndex, double value);
+
+  // Update value and mark Signal as updated - by name
+  void update(String signalName, bool value);
+  void update(String signalName, byte value);
+  void update(String signalName, short value);
+  void update(String signalName, unsigned short value);
+  void update(String signalName, int value);
+  void update(String signalName, unsigned int value);
+  void update(String signalName, long value);
+  void update(String signalName, unsigned long value);
+  void update(String signalName, float value);
+  void update(String signalName, double value);
+
+  // ----- Mark Signals as Updated -----
+  // Use these mark functions for cases where you don't want to change the value
+  void markSignalUpdated(int signalIndex);
+  void markSignalUpdated(String signalName);
+  void markAllSignalsUpdated();
+  void clearAllUpdateFlags();
+
+  // Check if any Signals are marked as updated
+  bool hasUpdatedSignals();
+
   // -----Write Restarted -----
-  /**
-           @brief Call this function early in code to write a restart message. The message is sent only once during runtime.
-    */
   void writeRestarted();
   void writeRestarted(unsigned long messageID);
 
@@ -105,19 +140,70 @@ public:
   void writeSymbols(unsigned long messageID);
 
   // ----- Data -----
-  void writeData();
-  void writeData(unsigned long messageID);
+  // Update value and write directly - by name
+  void write(String signalName, bool value);
+  void write(String signalName, byte value);
+  void write(String signalName, short value);
+  void write(String signalName, unsigned short value);
+  void write(String signalName, int value);
+  void write(String signalName, unsigned int value);
+  void write(String signalName, long value);
+  void write(String signalName, unsigned long value);
+  void write(String signalName, float value);
+  void write(String signalName, double value);
+
+  void write(String signalName, bool value, unsigned long messageID);
+  void write(String signalName, byte value, unsigned long messageID);
+  void write(String signalName, short value, unsigned long messageID);
+  void write(String signalName, unsigned short value, unsigned long messageID);
+  void write(String signalName, int value, unsigned long messageID);
+  void write(String signalName, unsigned int value, unsigned long messageID);
+  void write(String signalName, long value, unsigned long messageID);
+  void write(String signalName, unsigned long value, unsigned long messageID);
+  void write(String signalName, float value, unsigned long messageID);
+  void write(String signalName, double value, unsigned long messageID);
+
+  // Update value and write directly - by index
+  void write(int signalIndex, bool value);
+  void write(int signalIndex, byte value);
+  void write(int signalIndex, short value);
+  void write(int signalIndex, unsigned short value);
+  void write(int signalIndex, int value);
+  void write(int signalIndex, unsigned int value);
+  void write(int signalIndex, long value);
+  void write(int signalIndex, unsigned long value);
+  void write(int signalIndex, float value);
+  void write(int signalIndex, double value);
+
+  void write(int signalIndex, bool value, unsigned long messageID);
+  void write(int signalIndex, byte value, unsigned long messageID);
+  void write(int signalIndex, short value, unsigned long messageID);
+  void write(int signalIndex, unsigned short value, unsigned long messageID);
+  void write(int signalIndex, int value, unsigned long messageID);
+  void write(int signalIndex, unsigned int value, unsigned long messageID);
+  void write(int signalIndex, long value, unsigned long messageID);
+  void write(int signalIndex, unsigned long value, unsigned long messageID);
+  void write(int signalIndex, float value, unsigned long messageID);
+  void write(int signalIndex, double value, unsigned long messageID);
+
+  void writeAllData();
+  void writeAllData(unsigned long messageID);
+
+  void writeUpdatedData();
+  void writeUpdatedData(unsigned long messageID);
 
   // ----- Timed Data -----
-  /**
-           @brief Call this function every some milliseconds for writing timed data; default messageId = 185273099
-    */
-  void timedWriteData();
-  /**
-           @brief Call this function every some milliseconds for writing timed data
-           @param messageId --> A unique message ID which echoes back to transmitter to indicate a response to a message.
-    */
-  void timedWriteData(unsigned long messageID);
+  void timedWriteAllData();
+  void timedWriteAllData(unsigned long msg_id);
+  void timedWriteUpdatedData();
+  void timedWriteUpdatedData(unsigned long msg_id);
+
+  // ----- Read + Timed Data -----
+  void tick();
+  void tick(unsigned long messageID);
+  void tickUpdated();
+  void tickUpdated(unsigned long messageID);
+
   /**
            @brief Call this function for timed data settings
     */
@@ -148,22 +234,15 @@ public:
     */
   void attachRead(void (*readCallback)(char *command, int *parameter, char *string_01));
 
-  // ----- All-in-one -----
-  /**
-          @brief Call this function every some milliseconds for reading serial input, execution of the command
-           and writing timed data; default messageId = 185273099
-    */
-  void tick();
-  /**
-          @brief Call this function every some milliseconds for reading serial input, execution of the command
-           and writing timed data with messageID;
-          @param messageId --> A unique message ID which echoes back to transmitter to indicate a response to a message.
-    */
-  void tick(unsigned long messageID);
-
 private:
-  void writeLocalData(unsigned long MessageID, bool send_eol);
-  void writeSlaveData(bool send_eol);
+  int findSignalIndex(String signalName);
+
+  void timedWriteData(unsigned long messageID, int signalIndex_start, int signalIndex_end, bool onlyUpdated);
+  void tick(unsigned long messageID, bool onlyUpdated);
+
+  void writeData(unsigned long messageID, int signalIndex_start, int signalIndex_end, bool onlyUpdated);
+  void writeLocalData(unsigned long MessageID, int signalIndex_start, int signalIndex_end, bool send_eol, bool onlyUpdated);
+  void writeSlaveData(bool send_eol, bool onlyUpdated);
 
   void writeLocalSymbols(unsigned long MessageID, bool send_eol);
   void writeSlaveSymbols(bool send_eol);
@@ -177,7 +256,7 @@ private:
   void wireSlaveReceive();
 
   void wireSlaveTransmitSingleSymbol();
-  void wireSlaveTransmitSingleDataPoint();
+  void wireSlaveTransmitSingleDataPoint(bool onlyUpdated);
   void wireSlaveTransmitSingleDevice();
   void wireSlaveTransmitStatusByte();
 
