@@ -51,6 +51,13 @@ struct Signal
   bool Updated = false;
 };
 
+enum BlaeckTimestampMode
+{
+  BLAECK_NO_TIMESTAMP = 0,
+  BLAECK_MICROS = 1,
+  BLAECK_UNIXTIME = 2
+};
+
 class BlaeckSerial
 {
 public:
@@ -65,9 +72,7 @@ public:
   void beginMaster(Stream *Ref, unsigned int Size, uint32_t WireClockFrequency);
   void beginSlave(Stream *Ref, unsigned int Size, byte SlaveID);
 
-  /**
-           @brief Set these variables in your Arduino sketch
-    */
+  // Set these variables in your Arduino sketch
   String DeviceName = "Unknown";
   String DeviceHWVersion = "n/a";
   String DeviceFWVersion = "n/a";
@@ -91,43 +96,10 @@ public:
   // Delete all Signals
   void deleteSignals();
 
+  // Signal Count
   int SignalCount;
 
-  // Update value and mark Signal as updated - by index
-  void update(int signalIndex, bool value);
-  void update(int signalIndex, byte value);
-  void update(int signalIndex, short value);
-  void update(int signalIndex, unsigned short value);
-  void update(int signalIndex, int value);
-  void update(int signalIndex, unsigned int value);
-  void update(int signalIndex, long value);
-  void update(int signalIndex, unsigned long value);
-  void update(int signalIndex, float value);
-  void update(int signalIndex, double value);
-
-  // Update value and mark Signal as updated - by name
-  void update(String signalName, bool value);
-  void update(String signalName, byte value);
-  void update(String signalName, short value);
-  void update(String signalName, unsigned short value);
-  void update(String signalName, int value);
-  void update(String signalName, unsigned int value);
-  void update(String signalName, long value);
-  void update(String signalName, unsigned long value);
-  void update(String signalName, float value);
-  void update(String signalName, double value);
-
-  // ----- Mark Signals as Updated -----
-  // Use these mark functions for cases where you don't want to change the value
-  void markSignalUpdated(int signalIndex);
-  void markSignalUpdated(String signalName);
-  void markAllSignalsUpdated();
-  void clearAllUpdateFlags();
-
-  // Check if any Signals are marked as updated
-  bool hasUpdatedSignals();
-
-  // -----Write Restarted -----
+  // ----- Device Restarted -----
   void writeRestarted();
   void writeRestarted(unsigned long messageID);
 
@@ -139,7 +111,7 @@ public:
   void writeSymbols();
   void writeSymbols(unsigned long messageID);
 
-  // ----- Data -----
+  // ----- Data Write -----
   // Update value and write directly - by name
   void write(String signalName, bool value);
   void write(String signalName, byte value);
@@ -186,53 +158,77 @@ public:
   void write(int signalIndex, float value, unsigned long messageID);
   void write(int signalIndex, double value, unsigned long messageID);
 
+  // ----- Data Update -----
+  // Update value and mark Signal as updated - by index
+  void update(int signalIndex, bool value);
+  void update(int signalIndex, byte value);
+  void update(int signalIndex, short value);
+  void update(int signalIndex, unsigned short value);
+  void update(int signalIndex, int value);
+  void update(int signalIndex, unsigned int value);
+  void update(int signalIndex, long value);
+  void update(int signalIndex, unsigned long value);
+  void update(int signalIndex, float value);
+  void update(int signalIndex, double value);
+
+  // Update value and mark Signal as updated - by name
+  void update(String signalName, bool value);
+  void update(String signalName, byte value);
+  void update(String signalName, short value);
+  void update(String signalName, unsigned short value);
+  void update(String signalName, int value);
+  void update(String signalName, unsigned int value);
+  void update(String signalName, long value);
+  void update(String signalName, unsigned long value);
+  void update(String signalName, float value);
+  void update(String signalName, double value);
+
+  // ----- Mark Signals as Updated -----
+  // Use these mark functions for cases where you don't want to change the value
+  void markSignalUpdated(int signalIndex);
+  void markSignalUpdated(String signalName);
+  void markAllSignalsUpdated();
+  void clearAllUpdateFlags();
+  // Check if any Signals are marked as updated
+  bool hasUpdatedSignals();
+
+  // ----- Data Write All -----
   void writeAllData();
   void writeAllData(unsigned long messageID);
-
-  void writeUpdatedData();
-  void writeUpdatedData(unsigned long messageID);
-
-  // ----- Timed Data -----
   void timedWriteAllData();
   void timedWriteAllData(unsigned long msg_id);
+
+  // ----- Data Write Updated -----
+  void writeUpdatedData();
+  void writeUpdatedData(unsigned long messageID);
   void timedWriteUpdatedData();
   void timedWriteUpdatedData(unsigned long msg_id);
 
-  // ----- Read + Timed Data -----
+  // ----- Tick -----
   void tick();
   void tick(unsigned long messageID);
   void tickUpdated();
   void tickUpdated(unsigned long messageID);
 
-  /**
-           @brief Call this function for timed data settings
-    */
+  // ----- Timed Data configuruation -----
   void setTimedData(bool timedActivated, unsigned long timedInterval_ms);
 
-  // ----- Update before data write Callback function  -----
-  /**
-          @brief Attach a function that will be called just before transmitting data.
-          In single device or master mode the function is called just before sending data over serial,
-          In slave mode the function is called just before sending data over i2c to master. Because the attached function is inside a ISR (interrupt service routine) it should as short and fast as possible.
-
-          About ISRs: ISRs are special kinds of functions that have some unique limitations most other functions do not have. An ISR cannot have any parameters, and they shouldn’t return anything. Generally, an ISR
-          should be as short and fast as possible. If your sketch uses multiple ISRs, only one can run at a time, other interrupts will be executed after the current one finishes in an order that depends on the priority they have.
-          millis() relies on interrupts to count, so it will never increment inside an ISR. Since delay() requires interrupts to work, it will not work if called inside an ISR. micros() works initially but will start behaving
-          erratically after 1-2 ms. delayMicroseconds() does not use any counter, so it will work as normal. Typically global variables are used to pass data between an ISR and the main program. To make sure variables shared between
-          an ISR and the main program are updated correctly, declare them as volatile.
-            For more information on interrupts, see Nick Gammon’s notes (http://gammon.com.au/interrupts).
-    */
-  void attachUpdate(void (*updateCallback)());
-
   // ----- Read  -----
-  /**
-           @brief Call this function every some milliseconds for reading serial input and execution of the command
-    */
   void read();
-  /**
-          @brief Attach a function that will be called when a valid message was received;
-    */
-  void attachRead(void (*readCallback)(char *command, int *parameter, char *string_01));
+
+  // ----- Command callback  -----
+  void setCommandCallback(void (*callback)(char *command, int *parameter, char *string_01));
+
+  // ----- Before data write callback  -----
+  // In single device or master mode the function is called just before sending data over serial,
+  // In slave mode the function is called just before sending data over i2c to master. Because the attached function is inside a ISR (interrupt service routine) it should as short and fast as possible.
+  void setBeforeWriteCallback(void (*callback)());
+
+  // Timestamp configuration methods
+  void setTimestampMode(BlaeckTimestampMode mode);
+  void setTimestampCallback(unsigned long (*callback)());
+  BlaeckTimestampMode getTimestampMode() const { return _timestampMode; }
+  bool hasValidTimestampCallback() const;
 
 private:
   int findSignalIndex(String signalName);
@@ -310,11 +306,14 @@ private:
       _pSingletonInstance->wireSlaveReceive();
   }
 
-  void (*_readCallback)(char *command, int *parameter, char *string01);
+  void (*_commandCallback)(char *command, int *parameter, char *string01) = nullptr;
   bool recvWithStartEndMarkers();
   void parseData();
 
-  void (*_updateCallback)();
+  void (*_beforeWriteCallback)() = nullptr;
+
+  BlaeckTimestampMode _timestampMode = BLAECK_MICROS;
+  unsigned long (*_timestampCallback)() = micros;
 
   union
   {

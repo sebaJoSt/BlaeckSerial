@@ -459,19 +459,19 @@ void BlaeckSerial::read()
       this->setTimedData(false, _timedInterval_ms);
     }
 
-    if (_readCallback != NULL)
-      _readCallback(COMMAND, PARAMETER, STRING_01);
+    if (_commandCallback != NULL)
+      _commandCallback(COMMAND, PARAMETER, STRING_01);
   }
 }
 
-void BlaeckSerial::attachRead(void (*readCallback)(char *command, int *parameter, char *string01))
+void BlaeckSerial::setCommandCallback(void (*callback)(char *command, int *parameter, char *string_01))
 {
-  _readCallback = readCallback;
+  _commandCallback = callback;
 }
 
-void BlaeckSerial::attachUpdate(void (*updateCallback)())
+void BlaeckSerial::setBeforeWriteCallback(void (*callback)())
 {
-  _updateCallback = updateCallback;
+  _beforeWriteCallback = callback;
 }
 
 bool BlaeckSerial::recvWithStartEndMarkers()
@@ -970,21 +970,21 @@ void BlaeckSerial::writeData(unsigned long msg_id, int signalIndex_start, int si
 {
   if (_masterSlaveConfig == Single)
   {
-    if (_updateCallback != NULL)
-      _updateCallback();
+    if (_beforeWriteCallback != NULL)
+      _beforeWriteCallback();
     this->writeLocalData(msg_id, 0, _signalIndex - 1, true, onlyUpdated);
   }
   else if (_masterSlaveConfig == Slave)
   {
-    // updateCallback is called in BlaeckSerial::wireSlaveReceive()
+    // _beforeWriteCallback is called in BlaeckSerial::wireSlaveReceive()
     this->writeLocalData(msg_id, 0, _signalIndex - 1, true, onlyUpdated);
   }
   else if (_masterSlaveConfig == Master)
   {
     scanI2CSlaves(0, 127);
 
-    if (_updateCallback != NULL)
-      _updateCallback();
+    if (_beforeWriteCallback != NULL)
+      _beforeWriteCallback();
     this->writeLocalData(msg_id, 0, _signalIndex - 1, false, onlyUpdated);
     this->writeSlaveData(true, onlyUpdated);
   }
@@ -1204,16 +1204,47 @@ void BlaeckSerial::writeLocalData(unsigned long msg_id, int signalIndex_start, i
   _crc.restart();
 
   StreamRef->write("<BLAECK:");
-  byte msg_key = 0xB1;
+
+  // Message Key
+  byte msg_key = 0xD1;
   StreamRef->write(msg_key);
+  _crc.add(msg_key);
+
   StreamRef->write(":");
+  _crc.add(':');
+
+  // Message Id
   ulngCvt.val = msg_id;
   StreamRef->write(ulngCvt.bval, 4);
-  StreamRef->write(":");
-
-  _crc.add(msg_key);
-  _crc.add(':');
   _crc.add(ulngCvt.bval, 4);
+
+  StreamRef->write(":");
+  _crc.add(':');
+
+  // ulngCvt.val = micros();
+  // StreamRef->write(ulngCvt.bval, 4);
+  // _crc.add(ulngCvt.bval, 4);
+
+  // Timestamp
+  byte timestamp_mode = (byte)_timestampMode;
+  StreamRef->write(timestamp_mode);
+  _crc.add(timestamp_mode);
+
+  // Add timestamp data if mode is not NO_TIMESTAMP
+  if (_timestampMode != BLAECK_NO_TIMESTAMP && hasValidTimestampCallback())
+  {
+    // StreamRef->write(":");
+    // _crc.add(':');
+
+    unsigned long timestamp = 0;
+    timestamp = _timestampCallback();
+
+    ulngCvt.val = timestamp;
+    StreamRef->write(ulngCvt.bval, 4);
+    _crc.add(ulngCvt.bval, 4);
+  }
+
+  StreamRef->write(":");
   _crc.add(':');
 
   for (int i = signalIndex_start; i <= signalIndex_end; i++)
@@ -1987,8 +2018,8 @@ void BlaeckSerial::wireSlaveReceive()
 
   if (_masterSlaveConfig == Slave && (_wireMode == 1 || _wireMode == 4))
   {
-    if (_updateCallback != NULL)
-      _updateCallback();
+    if (_beforeWriteCallback != NULL)
+      _beforeWriteCallback();
   };
 }
 
@@ -2066,4 +2097,38 @@ bool BlaeckSerial::hasUpdatedSignals()
     }
   }
   return false;
+}
+
+void BlaeckSerial::setTimestampMode(BlaeckTimestampMode mode)
+{
+  _timestampMode = mode;
+
+  // Set default callbacks for built-in modes
+  switch (mode)
+  {
+  case BLAECK_MICROS:
+    _timestampCallback = micros;
+    break;
+  case BLAECK_UNIXTIME:
+    // User must provide RTC callback - don't override if already set
+    if (_timestampCallback == micros)
+    {
+      _timestampCallback = nullptr;
+    }
+    break;
+  case BLAECK_NO_TIMESTAMP:
+  default:
+    _timestampCallback = nullptr;
+    break;
+  }
+}
+
+void BlaeckSerial::setTimestampCallback(unsigned long (*callback)())
+{
+  _timestampCallback = callback;
+}
+
+bool BlaeckSerial::hasValidTimestampCallback() const
+{
+  return (_timestampMode != BLAECK_NO_TIMESTAMP && _timestampCallback != nullptr);
 }
