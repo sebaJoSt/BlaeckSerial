@@ -47,10 +47,10 @@ void setup()
   BlaeckSerial.setTimestampMode(BLAECK_UNIXTIME);
   BlaeckSerial.setTimestampCallback(GetRTCUnixTime);
 
-  // micros() are transmitted with the data, new default mode of BlaeckSerial 5+
+  // micros() are transmitted with the data
   // BlaeckSerial.setTimestampMode(BLAECK_MICROS);
 
-  // No time information transmitted with the data, BlaeckSerial 4 and older use only this mode per default
+  // default mode, no time information transmitted with the data
   // BlaeckSerial.setTimestampMode(BLAECK_NO_TIMESTAMP);
 }
 

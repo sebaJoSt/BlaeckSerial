@@ -264,6 +264,7 @@ private:
   int _signalIndex = 0;
 
   bool _writeRestartedAlreadyDone = false;
+  bool _sendRestartFlag = true;
 
   bool _timedActivated = false;
   bool _timedFirstTime = true;
@@ -312,8 +313,8 @@ private:
 
   void (*_beforeWriteCallback)() = nullptr;
 
-  BlaeckTimestampMode _timestampMode = BLAECK_MICROS;
-  unsigned long (*_timestampCallback)() = micros;
+  BlaeckTimestampMode _timestampMode = BLAECK_NO_TIMESTAMP;
+  unsigned long (*_timestampCallback)() = nullptr;
 
   union
   {
