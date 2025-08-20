@@ -1221,11 +1221,16 @@ void BlaeckSerial::writeLocalData(unsigned long msg_id, int signalIndex_start, i
   StreamRef->write(":");
   _crc.add(':');
 
-  // ulngCvt.val = micros();
-  // StreamRef->write(ulngCvt.bval, 4);
-  // _crc.add(ulngCvt.bval, 4);
+  // Restart flag
+  byte restart_flag = _sendRestartFlag ? 1 : 0;
+  StreamRef->write(restart_flag);
+  _crc.add(restart_flag);
+  _sendRestartFlag = false; // Clear the flag after first transmission
 
-  // Timestamp
+   StreamRef->write(":");
+  _crc.add(':');
+
+  // Timestamp mode
   byte timestamp_mode = (byte)_timestampMode;
   StreamRef->write(timestamp_mode);
   _crc.add(timestamp_mode);
