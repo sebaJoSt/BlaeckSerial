@@ -1,5 +1,5 @@
 /*
-  TimeStampMode.ino
+  TimeStampModes.ino
 
   This is a sample sketch to show the different timestamp modes of the BlaeckSerial library. This example uses the
   included RTC library of the Arduino UNO R4 board but it can be easily adapted to other real-time clock libraries.
