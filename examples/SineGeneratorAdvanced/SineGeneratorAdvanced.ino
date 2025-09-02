@@ -82,7 +82,7 @@ void setup()
   BlaeckSerial.DeviceHWVersion = "Arduino Mega 2560 Rev3";
   BlaeckSerial.DeviceFWVersion = FW_VERSION;
 
-  BlaeckSerial.attachRead(startCommand);
+  BlaeckSerial.setCommandCallback(startCommand);
   BlaeckSerial.setTimedData(loggingActivated, loggingInterval);
 
   // Signals for Logging with BlaeckSerial

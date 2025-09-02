@@ -135,6 +135,17 @@ public:
   void write(String signalName, float value, unsigned long messageID);
   void write(String signalName, double value, unsigned long messageID);
 
+  void write(String signalName, bool value, unsigned long messageID, unsigned long timestamp);
+  void write(String signalName, byte value, unsigned long messageID, unsigned long timestamp);
+  void write(String signalName, short value, unsigned long messageID, unsigned long timestamp);
+  void write(String signalName, unsigned short value, unsigned long messageID, unsigned long timestamp);
+  void write(String signalName, int value, unsigned long messageID, unsigned long timestamp);
+  void write(String signalName, unsigned int value, unsigned long messageID, unsigned long timestamp);
+  void write(String signalName, long value, unsigned long messageID, unsigned long timestamp);
+  void write(String signalName, unsigned long value, unsigned long messageID, unsigned long timestamp);
+  void write(String signalName, float value, unsigned long messageID, unsigned long timestamp);
+  void write(String signalName, double value, unsigned long messageID, unsigned long timestamp);
+
   // Update value and write directly - by index
   void write(int signalIndex, bool value);
   void write(int signalIndex, byte value);
@@ -158,19 +169,18 @@ public:
   void write(int signalIndex, float value, unsigned long messageID);
   void write(int signalIndex, double value, unsigned long messageID);
 
-  // ----- Data Update -----
-  // Update value and mark Signal as updated - by index
-  void update(int signalIndex, bool value);
-  void update(int signalIndex, byte value);
-  void update(int signalIndex, short value);
-  void update(int signalIndex, unsigned short value);
-  void update(int signalIndex, int value);
-  void update(int signalIndex, unsigned int value);
-  void update(int signalIndex, long value);
-  void update(int signalIndex, unsigned long value);
-  void update(int signalIndex, float value);
-  void update(int signalIndex, double value);
+  void write(int signalIndex, bool value, unsigned long messageID, unsigned long timestamp);
+  void write(int signalIndex, byte value, unsigned long messageID, unsigned long timestamp);
+  void write(int signalIndex, short value, unsigned long messageID, unsigned long timestamp);
+  void write(int signalIndex, unsigned short value, unsigned long messageID, unsigned long timestamp);
+  void write(int signalIndex, int value, unsigned long messageID, unsigned long timestamp);
+  void write(int signalIndex, unsigned int value, unsigned long messageID, unsigned long timestamp);
+  void write(int signalIndex, long value, unsigned long messageID, unsigned long timestamp);
+  void write(int signalIndex, unsigned long value, unsigned long messageID, unsigned long timestamp);
+  void write(int signalIndex, float value, unsigned long messageID, unsigned long timestamp);
+  void write(int signalIndex, double value, unsigned long messageID, unsigned long timestamp);
 
+  // ----- Data Update -----
   // Update value and mark Signal as updated - by name
   void update(String signalName, bool value);
   void update(String signalName, byte value);
@@ -182,6 +192,18 @@ public:
   void update(String signalName, unsigned long value);
   void update(String signalName, float value);
   void update(String signalName, double value);
+
+  // Update value and mark Signal as updated - by index
+  void update(int signalIndex, bool value);
+  void update(int signalIndex, byte value);
+  void update(int signalIndex, short value);
+  void update(int signalIndex, unsigned short value);
+  void update(int signalIndex, int value);
+  void update(int signalIndex, unsigned int value);
+  void update(int signalIndex, long value);
+  void update(int signalIndex, unsigned long value);
+  void update(int signalIndex, float value);
+  void update(int signalIndex, double value);
 
   // ----- Mark Signals as Updated -----
   // Use these mark functions for cases where you don't want to change the value
@@ -195,20 +217,26 @@ public:
   // ----- Data Write All -----
   void writeAllData();
   void writeAllData(unsigned long messageID);
+  void writeAllData(unsigned long messageID, unsigned long timestamp);
   void timedWriteAllData();
   void timedWriteAllData(unsigned long msg_id);
+  void timedWriteAllData(unsigned long messageID, unsigned long timestamp);
 
   // ----- Data Write Updated -----
   void writeUpdatedData();
   void writeUpdatedData(unsigned long messageID);
+  void writeUpdatedData(unsigned long messageID, unsigned long timestamp);
   void timedWriteUpdatedData();
   void timedWriteUpdatedData(unsigned long msg_id);
+  void timedWriteUpdatedData(unsigned long messageID, unsigned long timestamp);
 
   // ----- Tick -----
   void tick();
   void tick(unsigned long messageID);
+  void tick(unsigned long messageID, unsigned long timestamp);
   void tickUpdated();
   void tickUpdated(unsigned long messageID);
+  void tickUpdated(unsigned long messageID, unsigned long timestamp);
 
   // ----- Timed Data configuruation -----
   void setTimedData(bool timedActivated, unsigned long timedInterval_ms);
@@ -231,13 +259,14 @@ public:
   bool hasValidTimestampCallback() const;
 
 private:
+  unsigned long getTimeStamp();
   int findSignalIndex(String signalName);
 
-  void timedWriteData(unsigned long messageID, int signalIndex_start, int signalIndex_end, bool onlyUpdated);
-  void tick(unsigned long messageID, bool onlyUpdated);
+  void timedWriteData(unsigned long messageID, int signalIndex_start, int signalIndex_end, bool onlyUpdated, unsigned long timestamp);
+  void tick(unsigned long messageID, bool onlyUpdated, unsigned long timestamp);
 
-  void writeData(unsigned long messageID, int signalIndex_start, int signalIndex_end, bool onlyUpdated);
-  void writeLocalData(unsigned long MessageID, int signalIndex_start, int signalIndex_end, bool send_eol, bool onlyUpdated);
+  void writeData(unsigned long messageID, int signalIndex_start, int signalIndex_end, bool onlyUpdated, unsigned long timestamp);
+  void writeLocalData(unsigned long MessageID, int signalIndex_start, int signalIndex_end, bool send_eol, bool onlyUpdated, unsigned long timestamp);
   void writeSlaveData(bool send_eol, bool onlyUpdated);
 
   void writeLocalSymbols(unsigned long MessageID, bool send_eol);
@@ -258,6 +287,8 @@ private:
 
   bool slaveFound(const unsigned int index);
   void storeSlave(const unsigned int index, const boolean value);
+
+  static void validatePlatformSizes();
 
   Stream *StreamRef;
   Signal *Signals;
@@ -330,7 +361,7 @@ private:
 
   union
   {
-    short val;
+    unsigned short val;
     byte bval[2];
   } ushortCvt;
 

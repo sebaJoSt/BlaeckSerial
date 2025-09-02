@@ -64,8 +64,8 @@ void setup()
   // Setup BlaeckSerial
   BlaeckSerial.begin(&Serial, 0);
 
-  // Setup read callback function by passing a function
-  BlaeckSerial.attachRead(startCommand);
+  // Setup command callback function by passing a function
+  BlaeckSerial.setCommandCallback(startCommand);
 }
 
 void loop()

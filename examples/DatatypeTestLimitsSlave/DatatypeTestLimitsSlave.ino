@@ -19,21 +19,31 @@ bool boolTest[2] = {false, true};
 byte byteTest[2] = {0, 255};
 short shortTest[2] = {-32768, 32767};
 unsigned short ushortTest[2] = {0, 65535};
-int intTest[2] = {-32768, 32767};
-unsigned int uintTest[2] = {0, 65535};
 long longTest[2] = {-2147483648, 2147483647};
 unsigned long ulongTest[2] = {0, 4294967295};
 float floatTest[2] = {-3.4028235E+38, 3.4028235E+38};
+float floatNaN = 0.0 / 0.0;
+float floatInfinity = 1.0 / 0.0;
+float floatNegativeInfinity = -1.0 / 0.0;
+double doubleNaN = 0.0 / 0.0;
+double doubleInfinity = 1.0 / 0.0;
+double doubleNegativeInfinity = -1.0 / 0.0;
+#ifdef __AVR__
+int intTest[2] = {-32768, 32767};
+unsigned int uintTest[2] = {0, 65535};
 double doubleTest[2] = {-3.4028235E+38, 3.4028235E+38};
-/*On the Uno and other ATMEGA based boards, the double implementation occupies 4 bytes
-  and is exactly the same as the float, with no gain in precision.*/
+#else
+int intTest[2] = {-2147483648, 2147483647};
+unsigned int uintTest[2] = {0, 4294967295};
+double doubleTest[2] = {-1.79769313486231570E+308, 1.79769313486231570E+308};
+#endif
 
 void setup()
 {
   // Initialize Serial port
   Serial.begin(9600);
   // Initialize BlaeckSerial Slave with ID 1
-  BlaeckSerial.beginSlave(&Serial, 20, 1);
+  BlaeckSerial.beginSlave(&Serial, 26, 1);
 
   // Add signals to BlaeckSerial
   BlaeckSerial.addSignal("Bool_false", &boolTest[0]);
@@ -54,8 +64,14 @@ void setup()
   BlaeckSerial.addSignal("ULong_max", &ulongTest[1]);
   BlaeckSerial.addSignal("Float_min", &floatTest[0]);
   BlaeckSerial.addSignal("Float_max", &floatTest[1]);
+  BlaeckSerial.addSignal("Float_NaN", &floatNaN);
+  BlaeckSerial.addSignal("Float_Inf", &floatInfinity);
+  BlaeckSerial.addSignal("Float_NegInf", &floatNegativeInfinity);
   BlaeckSerial.addSignal("Double_min", &doubleTest[0]);
   BlaeckSerial.addSignal("Double_max", &doubleTest[1]);
+  BlaeckSerial.addSignal("Double_NaN", &doubleNaN);
+  BlaeckSerial.addSignal("Double_Inf", &doubleInfinity);
+  BlaeckSerial.addSignal("Double_NegInf", &doubleNegativeInfinity);
 }
 
 void loop()
