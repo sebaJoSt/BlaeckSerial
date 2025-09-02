@@ -90,7 +90,7 @@ Restarted | C0 | **`<MasterSlaveConfig><SlaveID><DeviceName><DeviceHWVersion><De
  `DATA`  | (varying)| Message Data, varying data types and length depending on message
  `SymbolID` | uint | Symbol ID number
  `SymbolName` |String0 | Symbol Name - Null Terminated String
- `DTYPE` | byte | DataType  0=bool, 1=byte, 2=short, 3=ushort, 4=int, 5=uint, 6=long, 7=ulong, 8=float
+ `DTYPE` | byte | DataType  0=bool, 1=byte, 2=short, 3=ushort, 4=int, 5=uint, 6=long, 7=ulong, 8=float, 9=double
   `MasterSlaveConfig`     | byte | 0=Single device, 1=Master, 2=Slave
    `SlaveID`              | byte |             Slave Address
    `DeviceName`           | String0 |          set with public variable `DeviceName`
@@ -159,19 +159,27 @@ Byte:  0  1  2  3  4  5  6  7  8  9  10 11 12 13 14 15 16 17 18 19 20 21 22 23 2
 27   | `StatusByte`: 0 -> Normal Transmission
 28-31| `CRC32`: 4 Bytes; Hex: 20 3D D9 FE (Calculated from 19 bytes: Byte 8-26)
 
-## Datatypes
+## Data Types
 
-`DTYPE` | Datatype | Bytes
--- |----|---------------------------------------------
-0| bool | 1
-1|byte | 1
-2|short| 2
-3|unsigned short| 2
-4|int| 2
-5|unsigned int | 2
-6|long | 4
-7|unsigned long | 4
-8|float | 4
-9|double | 8
+BlaeckSerial automatically handles platform differences in data type sizes:
 
-On the Uno and other ATMEGA based boards, the double implementation occupies 4 byte and is exactly the same as the float, with no gain in precision. Therefore if you add a double signal with `addSignal("My Double Signal", &doubleVariable)` the symbol list will return the `DTYPE` 8 (float).
+**AVR Platforms (Arduino Uno, Nano, Mega, etc.):**
+- `int` and `unsigned int` are 2 bytes
+- `double` has no precision advantage over `float` (both 4 bytes)
+
+**32-bit Platforms (ESP32, ESP8266, Arduino Due, etc.):**
+- `int` and `unsigned int` are 4 bytes and get automatically mapped to `long`/`unsigned long` protocol types
+- `double` provides true 8-byte double precision
+
+| User Type | AVR Platform | 32-bit Platform |
+|-----------|--------------|-----------------|
+| `bool` | `DTYPE 0` (1 byte) | `DTYPE 0` (1 byte) |
+| `byte` | `DTYPE 1` (1 byte) | `DTYPE 1` (1 byte) |
+| `short` | `DTYPE 2` (2 bytes) | `DTYPE 2` (2 bytes) |
+| `unsigned short` | `DTYPE 3` (2 bytes) | `DTYPE 3` (2 bytes) |
+| `int` | `DTYPE 4` (2 bytes) | **`DTYPE 6`** (4 bytes) |
+| `unsigned int` | `DTYPE 5` (2 bytes) | **`DTYPE 7`** (4 bytes) |
+| `long` | `DTYPE 6` (4 bytes) | `DTYPE 6` (4 bytes) |
+| `unsigned long` | `DTYPE 7` (4 bytes) | `DTYPE 7` (4 bytes) |
+| `float` | `DTYPE 8` (4 bytes) | `DTYPE 8` (4 bytes) |
+| `double` | **`DTYPE 8`** (4 bytes) | `DTYPE 9` (8 bytes) |
