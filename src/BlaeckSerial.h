@@ -55,7 +55,7 @@ enum BlaeckTimestampMode
 {
   BLAECK_NO_TIMESTAMP = 0,
   BLAECK_MICROS = 1,
-  BLAECK_UNIXTIME = 2
+  BLAECK_RTC = 2
 };
 
 class BlaeckSerial
