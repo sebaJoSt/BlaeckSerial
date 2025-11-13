@@ -1863,12 +1863,7 @@ void BlaeckSerial::tickUpdated()
 
 void BlaeckSerial::tickUpdated(unsigned long msg_id)
 {
-  this->tickUpdated(msg_id, getTimeStamp());
-}
-
-void BlaeckSerial::tickUpdated(unsigned long msg_id, unsigned long timestamp)
-{
-  this->tick(msg_id, true, timestamp);
+  this->tick(msg_id, true);
 }
 
 void BlaeckSerial::tick()
@@ -1878,19 +1873,14 @@ void BlaeckSerial::tick()
 
 void BlaeckSerial::tick(unsigned long msg_id)
 {
-  this->tick(msg_id, getTimeStamp());
+  this->tick(msg_id, false);
 }
 
-void BlaeckSerial::tick(unsigned long msg_id, unsigned long timestamp)
-{
-  this->tick(msg_id, false, timestamp);
-}
-
-void BlaeckSerial::tick(unsigned long msg_id, bool onlyUpdated, unsigned long timestamp)
+void BlaeckSerial::tick(unsigned long msg_id, bool onlyUpdated)
 {
   this->read();
   this->writeRestarted(msg_id);
-  this->timedWriteData(msg_id, 0, _signalIndex - 1, onlyUpdated, timestamp);
+  this->timedWriteData(msg_id, 0, _signalIndex - 1, onlyUpdated, getTimeStamp());
 }
 
 void BlaeckSerial::wireSlaveTransmitStatusByte()

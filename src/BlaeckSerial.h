@@ -78,7 +78,7 @@ public:
   String DeviceFWVersion = "n/a";
 
   const String LIBRARY_NAME = "BlaeckSerial";
-  const String LIBRARY_VERSION = "5.0.0";
+  const String LIBRARY_VERSION = "5.0.1";
 
   // ----- Signals -----
   // Add a Signal
@@ -233,10 +233,8 @@ public:
   // ----- Tick -----
   void tick();
   void tick(unsigned long messageID);
-  void tick(unsigned long messageID, unsigned long timestamp);
   void tickUpdated();
   void tickUpdated(unsigned long messageID);
-  void tickUpdated(unsigned long messageID, unsigned long timestamp);
 
   // ----- Timed Data configuruation -----
   void setTimedData(bool timedActivated, unsigned long timedInterval_ms);
@@ -263,7 +261,7 @@ private:
   int findSignalIndex(String signalName);
 
   void timedWriteData(unsigned long messageID, int signalIndex_start, int signalIndex_end, bool onlyUpdated, unsigned long timestamp);
-  void tick(unsigned long messageID, bool onlyUpdated, unsigned long timestamp);
+  void tick(unsigned long messageID, bool onlyUpdated);
 
   void writeData(unsigned long messageID, int signalIndex_start, int signalIndex_end, bool onlyUpdated, unsigned long timestamp);
   void writeLocalData(unsigned long MessageID, int signalIndex_start, int signalIndex_end, bool send_eol, bool onlyUpdated, unsigned long timestamp);
