@@ -98,7 +98,7 @@ Restarted | C0 | **`<MasterSlaveConfig><SlaveID><DeviceName><DeviceHWVersion><De
    `DeviceHWVersion`      | String0 |          set with public variable `DeviceHWVersion`
    `DeviceFWVersion`      | String0 |          set with public variable `DeviceFWVersion`
    `LibraryVersion`       | String0 |          set with public const `LIBRARY_VERSION`
-   `LibraryName`          | String0 |          set with public const `LIBRARY_NAME 
+   `LibraryName`          | String0 |          set with public const `LIBRARY_NAME` 
    `StatusByte`           | byte |             1 byte; 0: Normal Transmission or 1: I2C CRC error
    `CRC32` (StatusByte=0) | byte |             4 bytes; CRC order: 32; CRC Polynom (hex): 4C11DB7; Initial value (hex): FFFFFFFF; Final XOR value (hex): FFFFFFFF; reverse data bytes: true; reverse CRC result before Final XOR: true; (http://zorc.breitbandkatze.de/crc.html) 
    `CRC32` (StatusByte=1) | byte |             4 bytes; First Byte: 0; Second and Third Byte: SymbolID; Fourth Byte: SlaveID
