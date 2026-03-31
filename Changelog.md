@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [5.0.2] - 2026-03-31
+
+### Fixed
+- Fixed timer burst issue: when the main loop is delayed beyond the timed interval, `timedWriteData` no longer fires multiple times in rapid succession to catch up. It now skips missed intervals and resumes at the next boundary.
+
+
 ## [5.0.1] - 2025-11-13
 
 ### Removed
@@ -181,6 +187,7 @@ New public function: `attachUpdate(void (*updateCallback)());`
 
 Initial release.
 
+[5.0.2]: https://github.com/sebaJoSt/BlaeckSerial/compare/5.0.1...5.0.2
 [5.0.1]: https://github.com/sebaJoSt/BlaeckSerial/compare/5.0.0...5.0.1
 [5.0.0]: https://github.com/sebaJoSt/BlaeckSerial/compare/4.3.1...5.0.0
 [4.3.1]: https://github.com/sebaJoSt/BlaeckSerial/compare/4.3.0...4.3.1

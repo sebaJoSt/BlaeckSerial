@@ -78,7 +78,7 @@ public:
   String DeviceFWVersion = "n/a";
 
   const String LIBRARY_NAME = "BlaeckSerial";
-  const String LIBRARY_VERSION = "5.0.1";
+  const String LIBRARY_VERSION = "5.0.2";
 
   // ----- Signals -----
   // Add a Signal
