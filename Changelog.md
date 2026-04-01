@@ -2,7 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
-## [5.0.2] - 2026-03-31
+## [6.0.0] - 2026-04-01
+
+### Changed
+- **Breaking change:** Data message format updated from `D1` (0xD1) to `D2` (0xD2)
+- **Breaking change:** Timestamps are now 8 bytes (uint64) instead of 4 bytes (uint32)
+  - `BLAECK_MICROS` mode: tracks `micros()` overflow internally, produces monotonic uint64 (no more ~71 minute wrap)
+  - `BLAECK_RTC` mode: epoch seconds from callback are converted to microseconds (uint64)
+- **Breaking change:** Timestamp parameter type changed from `unsigned long` to `unsigned long long` in all public write methods
 
 ### Fixed
 - Fixed timer burst issue: when the main loop is delayed beyond the timed interval, `timedWriteData` no longer fires multiple times in rapid succession to catch up. It now skips missed intervals and resumes at the next boundary.
@@ -187,7 +194,7 @@ New public function: `attachUpdate(void (*updateCallback)());`
 
 Initial release.
 
-[5.0.2]: https://github.com/sebaJoSt/BlaeckSerial/compare/5.0.1...5.0.2
+[6.0.0]: https://github.com/sebaJoSt/BlaeckSerial/compare/5.0.1...6.0.0
 [5.0.1]: https://github.com/sebaJoSt/BlaeckSerial/compare/5.0.0...5.0.1
 [5.0.0]: https://github.com/sebaJoSt/BlaeckSerial/compare/4.3.1...5.0.0
 [4.3.1]: https://github.com/sebaJoSt/BlaeckSerial/compare/4.3.0...4.3.1

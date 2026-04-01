@@ -771,7 +771,7 @@ void BlaeckSerial::write(String signalName, double value, unsigned long messageI
   this->write(signalName, value, messageID, getTimeStamp());
 }
 
-void BlaeckSerial::write(String signalName, bool value, unsigned long messageID, unsigned long timestamp)
+void BlaeckSerial::write(String signalName, bool value, unsigned long messageID, unsigned long long timestamp)
 {
   int index = findSignalIndex(signalName);
   if (index >= 0)
@@ -779,7 +779,7 @@ void BlaeckSerial::write(String signalName, bool value, unsigned long messageID,
     this->write(index, value, messageID, timestamp);
   }
 }
-void BlaeckSerial::write(String signalName, byte value, unsigned long messageID, unsigned long timestamp)
+void BlaeckSerial::write(String signalName, byte value, unsigned long messageID, unsigned long long timestamp)
 {
   int index = findSignalIndex(signalName);
   if (index >= 0)
@@ -787,7 +787,7 @@ void BlaeckSerial::write(String signalName, byte value, unsigned long messageID,
     this->write(index, value, messageID, timestamp);
   }
 }
-void BlaeckSerial::write(String signalName, short value, unsigned long messageID, unsigned long timestamp)
+void BlaeckSerial::write(String signalName, short value, unsigned long messageID, unsigned long long timestamp)
 {
   int index = findSignalIndex(signalName);
   if (index >= 0)
@@ -795,7 +795,7 @@ void BlaeckSerial::write(String signalName, short value, unsigned long messageID
     this->write(index, value, messageID, timestamp);
   }
 }
-void BlaeckSerial::write(String signalName, unsigned short value, unsigned long messageID, unsigned long timestamp)
+void BlaeckSerial::write(String signalName, unsigned short value, unsigned long messageID, unsigned long long timestamp)
 {
   int index = findSignalIndex(signalName);
   if (index >= 0)
@@ -803,7 +803,7 @@ void BlaeckSerial::write(String signalName, unsigned short value, unsigned long 
     this->write(index, value, messageID, timestamp);
   }
 }
-void BlaeckSerial::write(String signalName, int value, unsigned long messageID, unsigned long timestamp)
+void BlaeckSerial::write(String signalName, int value, unsigned long messageID, unsigned long long timestamp)
 {
   int index = findSignalIndex(signalName);
   if (index >= 0)
@@ -811,7 +811,7 @@ void BlaeckSerial::write(String signalName, int value, unsigned long messageID, 
     this->write(index, value, messageID, timestamp);
   }
 }
-void BlaeckSerial::write(String signalName, unsigned int value, unsigned long messageID, unsigned long timestamp)
+void BlaeckSerial::write(String signalName, unsigned int value, unsigned long messageID, unsigned long long timestamp)
 {
   int index = findSignalIndex(signalName);
   if (index >= 0)
@@ -819,7 +819,7 @@ void BlaeckSerial::write(String signalName, unsigned int value, unsigned long me
     this->write(index, value, messageID, timestamp);
   }
 }
-void BlaeckSerial::write(String signalName, long value, unsigned long messageID, unsigned long timestamp)
+void BlaeckSerial::write(String signalName, long value, unsigned long messageID, unsigned long long timestamp)
 {
   int index = findSignalIndex(signalName);
   if (index >= 0)
@@ -827,7 +827,7 @@ void BlaeckSerial::write(String signalName, long value, unsigned long messageID,
     this->write(index, value, messageID, timestamp);
   }
 }
-void BlaeckSerial::write(String signalName, unsigned long value, unsigned long messageID, unsigned long timestamp)
+void BlaeckSerial::write(String signalName, unsigned long value, unsigned long messageID, unsigned long long timestamp)
 {
   int index = findSignalIndex(signalName);
   if (index >= 0)
@@ -835,7 +835,7 @@ void BlaeckSerial::write(String signalName, unsigned long value, unsigned long m
     this->write(index, value, messageID, timestamp);
   }
 }
-void BlaeckSerial::write(String signalName, float value, unsigned long messageID, unsigned long timestamp)
+void BlaeckSerial::write(String signalName, float value, unsigned long messageID, unsigned long long timestamp)
 {
   int index = findSignalIndex(signalName);
   if (index >= 0)
@@ -843,7 +843,7 @@ void BlaeckSerial::write(String signalName, float value, unsigned long messageID
     this->write(index, value, messageID, timestamp);
   }
 }
-void BlaeckSerial::write(String signalName, double value, unsigned long messageID, unsigned long timestamp)
+void BlaeckSerial::write(String signalName, double value, unsigned long messageID, unsigned long long timestamp)
 {
   int index = findSignalIndex(signalName);
   if (index >= 0)
@@ -943,7 +943,7 @@ void BlaeckSerial::write(int signalIndex, double value, unsigned long messageID)
   this->write(signalIndex, value, messageID, getTimeStamp());
 }
 
-void BlaeckSerial::write(int signalIndex, bool value, unsigned long messageID, unsigned long timestamp)
+void BlaeckSerial::write(int signalIndex, bool value, unsigned long messageID, unsigned long long timestamp)
 {
   if (signalIndex >= 0 && signalIndex < _signalIndex)
   {
@@ -954,7 +954,7 @@ void BlaeckSerial::write(int signalIndex, bool value, unsigned long messageID, u
     }
   }
 }
-void BlaeckSerial::write(int signalIndex, byte value, unsigned long messageID, unsigned long timestamp)
+void BlaeckSerial::write(int signalIndex, byte value, unsigned long messageID, unsigned long long timestamp)
 {
   if (signalIndex >= 0 && signalIndex < _signalIndex)
   {
@@ -965,7 +965,7 @@ void BlaeckSerial::write(int signalIndex, byte value, unsigned long messageID, u
     }
   }
 }
-void BlaeckSerial::write(int signalIndex, short value, unsigned long messageID, unsigned long timestamp)
+void BlaeckSerial::write(int signalIndex, short value, unsigned long messageID, unsigned long long timestamp)
 {
   if (signalIndex >= 0 && signalIndex < _signalIndex)
   {
@@ -976,7 +976,7 @@ void BlaeckSerial::write(int signalIndex, short value, unsigned long messageID, 
     }
   }
 }
-void BlaeckSerial::write(int signalIndex, unsigned short value, unsigned long messageID, unsigned long timestamp)
+void BlaeckSerial::write(int signalIndex, unsigned short value, unsigned long messageID, unsigned long long timestamp)
 {
   if (signalIndex >= 0 && signalIndex < _signalIndex)
   {
@@ -987,7 +987,7 @@ void BlaeckSerial::write(int signalIndex, unsigned short value, unsigned long me
     }
   }
 }
-void BlaeckSerial::write(int signalIndex, int value, unsigned long messageID, unsigned long timestamp)
+void BlaeckSerial::write(int signalIndex, int value, unsigned long messageID, unsigned long long timestamp)
 {
   if (signalIndex >= 0 && signalIndex < _signalIndex)
   {
@@ -1008,7 +1008,7 @@ void BlaeckSerial::write(int signalIndex, int value, unsigned long messageID, un
 #endif
   }
 }
-void BlaeckSerial::write(int signalIndex, unsigned int value, unsigned long messageID, unsigned long timestamp)
+void BlaeckSerial::write(int signalIndex, unsigned int value, unsigned long messageID, unsigned long long timestamp)
 {
   if (signalIndex >= 0 && signalIndex < _signalIndex)
   {
@@ -1029,7 +1029,7 @@ void BlaeckSerial::write(int signalIndex, unsigned int value, unsigned long mess
 #endif
   }
 }
-void BlaeckSerial::write(int signalIndex, long value, unsigned long messageID, unsigned long timestamp)
+void BlaeckSerial::write(int signalIndex, long value, unsigned long messageID, unsigned long long timestamp)
 {
   if (signalIndex >= 0 && signalIndex < _signalIndex)
   {
@@ -1040,7 +1040,7 @@ void BlaeckSerial::write(int signalIndex, long value, unsigned long messageID, u
     }
   }
 }
-void BlaeckSerial::write(int signalIndex, unsigned long value, unsigned long messageID, unsigned long timestamp)
+void BlaeckSerial::write(int signalIndex, unsigned long value, unsigned long messageID, unsigned long long timestamp)
 {
   if (signalIndex >= 0 && signalIndex < _signalIndex)
   {
@@ -1051,7 +1051,7 @@ void BlaeckSerial::write(int signalIndex, unsigned long value, unsigned long mes
     }
   }
 }
-void BlaeckSerial::write(int signalIndex, float value, unsigned long messageID, unsigned long timestamp)
+void BlaeckSerial::write(int signalIndex, float value, unsigned long messageID, unsigned long long timestamp)
 {
   if (signalIndex >= 0 && signalIndex < _signalIndex)
   {
@@ -1062,7 +1062,7 @@ void BlaeckSerial::write(int signalIndex, float value, unsigned long messageID, 
     }
   }
 }
-void BlaeckSerial::write(int signalIndex, double value, unsigned long messageID, unsigned long timestamp)
+void BlaeckSerial::write(int signalIndex, double value, unsigned long messageID, unsigned long long timestamp)
 {
   if (signalIndex >= 0 && signalIndex < _signalIndex)
   {
@@ -1092,7 +1092,7 @@ void BlaeckSerial::writeAllData(unsigned long msg_id)
   this->writeAllData(msg_id, getTimeStamp());
 }
 
-void BlaeckSerial::writeAllData(unsigned long msg_id, unsigned long timestamp)
+void BlaeckSerial::writeAllData(unsigned long msg_id, unsigned long long timestamp)
 {
 
   this->writeData(msg_id, 0, _signalIndex - 1, false, timestamp);
@@ -1108,12 +1108,12 @@ void BlaeckSerial::writeUpdatedData(unsigned long msg_id)
   this->writeUpdatedData(msg_id, getTimeStamp());
 }
 
-void BlaeckSerial::writeUpdatedData(unsigned long messageID, unsigned long timestamp)
+void BlaeckSerial::writeUpdatedData(unsigned long messageID, unsigned long long timestamp)
 {
   this->writeData(messageID, 0, _signalIndex - 1, true, timestamp);
 }
 
-void BlaeckSerial::writeData(unsigned long msg_id, int signalIndex_start, int signalIndex_end, bool onlyUpdated, unsigned long timestamp)
+void BlaeckSerial::writeData(unsigned long msg_id, int signalIndex_start, int signalIndex_end, bool onlyUpdated, unsigned long long timestamp)
 {
   if (_masterSlaveConfig == Single)
   {
@@ -1147,7 +1147,7 @@ void BlaeckSerial::timedWriteAllData(unsigned long msg_id)
   this->timedWriteAllData(msg_id, getTimeStamp());
 }
 
-void BlaeckSerial::timedWriteAllData(unsigned long msg_id, unsigned long timestamp)
+void BlaeckSerial::timedWriteAllData(unsigned long msg_id, unsigned long long timestamp)
 {
   this->timedWriteData(msg_id, 0, _signalIndex - 1, false, timestamp);
 }
@@ -1162,12 +1162,12 @@ void BlaeckSerial::timedWriteUpdatedData(unsigned long msg_id)
   this->timedWriteUpdatedData(185273099, getTimeStamp());
 }
 
-void BlaeckSerial::timedWriteUpdatedData(unsigned long msg_id, unsigned long timestamp)
+void BlaeckSerial::timedWriteUpdatedData(unsigned long msg_id, unsigned long long timestamp)
 {
   this->timedWriteData(msg_id, 0, _signalIndex - 1, true, timestamp);
 }
 
-void BlaeckSerial::timedWriteData(unsigned long msg_id, int signalIndex_start, int signalIndex_end, bool onlyUpdated, unsigned long timestamp)
+void BlaeckSerial::timedWriteData(unsigned long msg_id, int signalIndex_start, int signalIndex_end, bool onlyUpdated, unsigned long long timestamp)
 {
 
   if (_timedFirstTime == true)
@@ -1342,7 +1342,7 @@ void BlaeckSerial::writeSlaveDevices(bool send_eol)
   }
 }
 
-void BlaeckSerial::writeLocalData(unsigned long msg_id, int signalIndex_start, int signalIndex_end, bool send_eol, bool onlyUpdated, unsigned long timestamp)
+void BlaeckSerial::writeLocalData(unsigned long msg_id, int signalIndex_start, int signalIndex_end, bool send_eol, bool onlyUpdated, unsigned long long timestamp)
 {
   if (onlyUpdated && !hasUpdatedSignals())
     return; // No updated signals
@@ -1365,7 +1365,7 @@ void BlaeckSerial::writeLocalData(unsigned long msg_id, int signalIndex_start, i
   StreamRef->write("<BLAECK:");
 
   // Message Key
-  byte msg_key = 0xD1;
+  byte msg_key = 0xD2;
   StreamRef->write(msg_key);
   _crc.add(msg_key);
 
@@ -1397,9 +1397,9 @@ void BlaeckSerial::writeLocalData(unsigned long msg_id, int signalIndex_start, i
   // Add timestamp data if mode is not NO_TIMESTAMP
   if (_timestampMode != BLAECK_NO_TIMESTAMP && hasValidTimestampCallback())
   {
-    ulngCvt.val = timestamp;
-    StreamRef->write(ulngCvt.bval, 4);
-    _crc.add(ulngCvt.bval, 4);
+    ullCvt.val = timestamp;
+    StreamRef->write(ullCvt.bval, 8);
+    _crc.add(ullCvt.bval, 8);
   }
 
   StreamRef->write(":");
@@ -2261,6 +2261,10 @@ void BlaeckSerial::setTimestampMode(BlaeckTimestampMode mode)
 {
   _timestampMode = mode;
 
+  // Reset overflow tracking
+  _prevMicros = 0;
+  _overflowCount = 0;
+
   // Set default callbacks for built-in modes
   switch (mode)
   {
@@ -2291,14 +2295,29 @@ bool BlaeckSerial::hasValidTimestampCallback() const
   return (_timestampMode != BLAECK_NO_TIMESTAMP && _timestampCallback != nullptr);
 }
 
-unsigned long BlaeckSerial::getTimeStamp()
+unsigned long long BlaeckSerial::getTimeStamp()
 {
-  unsigned long timestamp = 0;
+  unsigned long long timestamp = 0;
 
-  // Add timestamp data if mode is not NO_TIMESTAMP
   if (_timestampMode != BLAECK_NO_TIMESTAMP && hasValidTimestampCallback())
   {
-    timestamp = _timestampCallback();
+    unsigned long raw = _timestampCallback();
+
+    if (_timestampMode == BLAECK_MICROS)
+    {
+      // Track micros() overflow: uint32 wraps every ~71 minutes
+      if (raw < _prevMicros)
+      {
+        _overflowCount++;
+      }
+      _prevMicros = raw;
+      timestamp = (_overflowCount * 4294967296ULL) + raw;
+    }
+    else if (_timestampMode == BLAECK_RTC)
+    {
+      // RTC callback returns epoch seconds; convert to microseconds for D2
+      timestamp = (unsigned long long)raw * 1000000ULL;
+    }
   }
 
   return timestamp;
