@@ -2272,7 +2272,7 @@ void BlaeckSerial::setTimestampMode(BlaeckTimestampMode mode)
     _timestampCallback = micros;
     break;
   case BLAECK_UNIX:
-    // User must provide RTC callback - don't override if already set
+    // User must provide Unix time callback - don't override if already set
     if (_timestampCallback == micros)
     {
       _timestampCallback = nullptr;
