@@ -253,7 +253,7 @@ public:
 
   // Timestamp configuration methods
   void setTimestampMode(BlaeckTimestampMode mode);
-  void setTimestampCallback(unsigned long (*callback)());
+  void setTimestampCallback(unsigned long long (*callback)());
   BlaeckTimestampMode getTimestampMode() const { return _timestampMode; }
   bool hasValidTimestampCallback() const;
 
@@ -341,6 +341,11 @@ private:
       _pSingletonInstance->wireSlaveReceive();
   }
 
+  static unsigned long long _microsWrapper()
+  {
+    return (unsigned long long)micros();
+  }
+
   void (*_commandCallback)(char *command, int *parameter, char *string01) = nullptr;
   bool recvWithStartEndMarkers();
   void parseData();
@@ -348,7 +353,7 @@ private:
   void (*_beforeWriteCallback)() = nullptr;
 
   BlaeckTimestampMode _timestampMode = BLAECK_NO_TIMESTAMP;
-  unsigned long (*_timestampCallback)() = nullptr;
+  unsigned long long (*_timestampCallback)() = nullptr;
 
   union
   {

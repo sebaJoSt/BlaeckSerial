@@ -45,7 +45,7 @@ void setup()
 
   // Unix timestamp from RTC transmitted with the data
   BlaeckSerial.setTimestampMode(BLAECK_UNIX);
-  BlaeckSerial.setTimestampCallback(GetRTCUnixTime);
+  BlaeckSerial.setTimestampCallback(GetRTCUnixTimeMicros);
 
   // micros() are transmitted with the data
   // BlaeckSerial.setTimestampMode(BLAECK_MICROS);
@@ -68,11 +68,11 @@ void UpdateSineNumbers()
   sine = sin(millis() * 0.00005);
 }
 
-unsigned long GetRTCUnixTime()
+unsigned long long GetRTCUnixTimeMicros()
 {
   RTCTime currentTime;
-  // Get current time from RTC
+  // Get current time from RTC (seconds precision)
   RTC.getTime(currentTime);
 
-  return currentTime.getUnixTime();
+  return (unsigned long long)currentTime.getUnixTime() * 1000000ULL;
 }

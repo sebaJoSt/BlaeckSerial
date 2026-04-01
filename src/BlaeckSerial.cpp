@@ -2269,11 +2269,11 @@ void BlaeckSerial::setTimestampMode(BlaeckTimestampMode mode)
   switch (mode)
   {
   case BLAECK_MICROS:
-    _timestampCallback = micros;
+    _timestampCallback = _microsWrapper;
     break;
   case BLAECK_UNIX:
     // User must provide Unix time callback - don't override if already set
-    if (_timestampCallback == micros)
+    if (_timestampCallback == _microsWrapper)
     {
       _timestampCallback = nullptr;
     }
@@ -2285,7 +2285,7 @@ void BlaeckSerial::setTimestampMode(BlaeckTimestampMode mode)
   }
 }
 
-void BlaeckSerial::setTimestampCallback(unsigned long (*callback)())
+void BlaeckSerial::setTimestampCallback(unsigned long long (*callback)())
 {
   _timestampCallback = callback;
 }
@@ -2301,11 +2301,10 @@ unsigned long long BlaeckSerial::getTimeStamp()
 
   if (_timestampMode != BLAECK_NO_TIMESTAMP && hasValidTimestampCallback())
   {
-    unsigned long raw = _timestampCallback();
-
     if (_timestampMode == BLAECK_MICROS)
     {
       // Track micros() overflow: uint32 wraps every ~71 minutes
+      unsigned long raw = (unsigned long)_timestampCallback();
       if (raw < _prevMicros)
       {
         _overflowCount++;
@@ -2315,8 +2314,8 @@ unsigned long long BlaeckSerial::getTimeStamp()
     }
     else if (_timestampMode == BLAECK_UNIX)
     {
-      // RTC callback returns epoch seconds; convert to microseconds for D2
-      timestamp = (unsigned long long)raw * 1000000ULL;
+      // Callback returns microseconds since Unix epoch directly
+      timestamp = _timestampCallback();
     }
   }
 

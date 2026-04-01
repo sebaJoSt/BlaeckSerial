@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
   - `BLAECK_RTC` mode: epoch seconds from callback are converted to microseconds (uint64)
 - **Breaking change:** Timestamp parameter type changed from `unsigned long` to `unsigned long long` in all public write methods
 - Renamed `BLAECK_RTC` to `BLAECK_UNIX` (`BLAECK_RTC` kept as deprecated alias)
+- **Breaking change:** Timestamp callback signature changed from `unsigned long (*)()` to `unsigned long long (*)()`. For `BLAECK_UNIX` mode, the callback must now return microseconds since epoch instead of seconds.
 
 ### Fixed
 - Fixed timer burst issue: when the main loop is delayed beyond the timed interval, `timedWriteData` no longer fires multiple times in rapid succession to catch up. It now skips missed intervals and resumes at the next boundary.
