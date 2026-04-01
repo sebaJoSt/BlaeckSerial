@@ -197,5 +197,5 @@ BlaeckSerial automatically handles platform differences in data type sizes:
 |------------|------|-------------|
 | 0 | `BLAECK_NO_TIMESTAMP` | No timestamp data included |
 | 1 | `BLAECK_MICROS` | Microsecond timestamps using `micros()` |
-| 2 | `BLAECK_RTC` | Unix epoch timestamps from RTC (requires callback) |
+| 2 | `BLAECK_UNIX` | Unix epoch timestamps (requires callback). `BLAECK_RTC` kept as deprecated alias. |
 

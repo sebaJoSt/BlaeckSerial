@@ -44,7 +44,7 @@ void setup()
   BlaeckSerial.addSignal(F("Sine_1"), &sine);
 
   // Unix timestamp from RTC transmitted with the data
-  BlaeckSerial.setTimestampMode(BLAECK_RTC);
+  BlaeckSerial.setTimestampMode(BLAECK_UNIX);
   BlaeckSerial.setTimestampCallback(GetRTCUnixTime);
 
   // micros() are transmitted with the data

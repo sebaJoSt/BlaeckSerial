@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
   - `BLAECK_MICROS` mode: tracks `micros()` overflow internally, produces monotonic uint64 (no more ~71 minute wrap)
   - `BLAECK_RTC` mode: epoch seconds from callback are converted to microseconds (uint64)
 - **Breaking change:** Timestamp parameter type changed from `unsigned long` to `unsigned long long` in all public write methods
+- Renamed `BLAECK_RTC` to `BLAECK_UNIX` (`BLAECK_RTC` kept as deprecated alias)
 
 ### Fixed
 - Fixed timer burst issue: when the main loop is delayed beyond the timed interval, `timedWriteData` no longer fires multiple times in rapid succession to catch up. It now skips missed intervals and resumes at the next boundary.
@@ -28,7 +29,7 @@ This is a major rewrite, not all changes are listed here.
 - Added timestamp support with three modes:
   - `BLAECK_NO_TIMESTAMP` (0): No timestamp data included
   - `BLAECK_MICROS` (1): Microsecond timestamps using `micros()`
-  - `BLAECK_RTC` (2): Unix epoch timestamps from RTC (requires callback)
+  - `BLAECK_UNIX` (2): Unix epoch timestamps (requires callback)
   - `setTimestampMode(BlaeckTimestampMode mode)`
 - Added RestartFlag in data messages to indicate device restart status
 - Added new functions:

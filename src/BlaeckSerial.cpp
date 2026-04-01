@@ -2271,7 +2271,7 @@ void BlaeckSerial::setTimestampMode(BlaeckTimestampMode mode)
   case BLAECK_MICROS:
     _timestampCallback = micros;
     break;
-  case BLAECK_RTC:
+  case BLAECK_UNIX:
     // User must provide RTC callback - don't override if already set
     if (_timestampCallback == micros)
     {
@@ -2313,7 +2313,7 @@ unsigned long long BlaeckSerial::getTimeStamp()
       _prevMicros = raw;
       timestamp = (_overflowCount * 4294967296ULL) + raw;
     }
-    else if (_timestampMode == BLAECK_RTC)
+    else if (_timestampMode == BLAECK_UNIX)
     {
       // RTC callback returns epoch seconds; convert to microseconds for D2
       timestamp = (unsigned long long)raw * 1000000ULL;
