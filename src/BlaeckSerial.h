@@ -45,7 +45,7 @@ typedef enum DataType
 
 struct Signal
 {
-  char SignalName[48] = {0};
+  String SignalName;
   dataType DataType;
   void *Address;
   bool Updated = false;
@@ -260,7 +260,6 @@ public:
 private:
   unsigned long long getTimeStamp();
   int findSignalIndex(String signalName);
-  void setSignalName(int signalIndex, String signalName, bool prefixSlaveID);
   uint16_t _computeSchemaHash();
 
   void timedWriteData(unsigned long messageID, int signalIndex_start, int signalIndex_end, bool onlyUpdated, unsigned long long timestamp);
@@ -314,6 +313,7 @@ private:
   masterSlaveConfig _masterSlaveConfig = Single;
   byte _slaveID;
   unsigned char _slaveFound[128 / 8]; // 128 bit storage
+  String _slaveSymbolPrefix;
 
   byte _wireMode = 0;
   int _wireSignalIndex = 0;
