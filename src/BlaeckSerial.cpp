@@ -1698,9 +1698,13 @@ void BlaeckSerial::writeLocalData(unsigned long msg_id, int signalIndex_start, i
 
   if (send_eol)
   {
-    // StatusByte 0: Normal transmission
-    // StatusByte + CRC First Byte + CRC Second Byte + CRC Third Byte + CRC Fourth Byte
-    StreamRef->write((byte)0);
+    // D2 tail: StatusByte + StatusPayload(4) + CRC32(4)
+    byte statusByte = 0;
+    byte statusPayload[4] = {0, 0, 0, 0};
+    StreamRef->write(statusByte);
+    StreamRef->write(statusPayload, 4);
+    _crc.add(statusByte);
+    _crc.add(statusPayload, 4);
 
     uint32_t crc_value = _crc.calc();
     StreamRef->write((byte *)&crc_value, 4);
@@ -1869,25 +1873,26 @@ void BlaeckSerial::writeSlaveData(bool send_eol, bool onlyUpdated, bool *skipSla
 
   if (send_eol)
   {
+    // D2 tail: StatusByte + StatusPayload(4) + CRC32(4)
+    byte statusByte = 0;
+    byte statusPayload[4] = {0, 0, 0, 0};
     if (skippedSlaveCount > 0)
     {
-      // StatusByte 1: One or more slaves skipped/unavailable
+      // StatusByte 1: One or more slaves skipped/unavailable.
       // StatusPayload: [SkippedSlaveCount][FirstSkippedSlaveID][FirstSkipReason][Reserved]
-      StreamRef->write(1);
-      StreamRef->write(skippedSlaveCount);
-      StreamRef->write(firstSkippedSlaveID);
-      StreamRef->write(firstSkipReason);
-      StreamRef->write((byte)0x00);
+      statusByte = 1;
+      statusPayload[0] = skippedSlaveCount;
+      statusPayload[1] = firstSkippedSlaveID;
+      statusPayload[2] = firstSkipReason;
+      statusPayload[3] = 0x00;
     }
-    else
-    {
-      // StatusByte 0: Normal transmission
-      // StatusPayload (StatusByte=0): CRC32 (4 bytes)
-      StreamRef->write((byte)0);
+    StreamRef->write(statusByte);
+    StreamRef->write(statusPayload, 4);
+    _crc.add(statusByte);
+    _crc.add(statusPayload, 4);
 
-      uint32_t crc_value = _crc.calc();
-      StreamRef->write((byte *)&crc_value, 4);
-    }
+    uint32_t crc_value = _crc.calc();
+    StreamRef->write((byte *)&crc_value, 4);
 
     StreamRef->write("/BLAECK>");
     StreamRef->write("\r\n");

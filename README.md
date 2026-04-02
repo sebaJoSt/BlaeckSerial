@@ -88,7 +88,7 @@ Type| MSGKEY | Elements| Description
 Symbol List | B0 | **`<MasterSlaveConfig><SlaveID><SymbolName><DTYPE>`** | **Up to n symbols.** Response to request for available symbols `<BLAECK.WRITE_SYMBOLS>`
 ~~Data~~ | ~~B1~~ | ~~**`<SymbolID><DATA>`**`<StatusByte><CRC32>`~~ | Deprecated (Used in BlaeckSerial version 4.3.1 or older)
 ~~Data~~ | ~~D1~~ | ~~`<RestartFlag>:<TimestampMode><Timestamp(4)>:`**`<SymbolID><DATA>`**`<StatusByte><CRC32>`~~ | Deprecated (Used in BlaeckSerial version 5.x)
-Data | D2 | `<RestartFlag>:<SchemaHash>:<TimestampMode><Timestamp(8)>:`**`<SymbolID><DATA>`**`<StatusByte><StatusPayload>` | **Up to n data items.** Response to request for data `<BLAECK.WRITE_DATA>`
+Data | D2 | `<RestartFlag>:<SchemaHash>:<TimestampMode><Timestamp(8)>:`**`<SymbolID><DATA>`**`<StatusByte><StatusPayload><CRC32>` | **Up to n data items.** Response to request for data `<BLAECK.WRITE_DATA>`
 ~~Devices~~ | ~~B2~~ | ~~`<MasterSlaveConfig><SlaveID><DeviceName><DeviceHWVersion><DeviceFWVersion><LibraryVersion>`~~ | Deprecated (Used in BlaeckSerial version 3.0.3 or older)
 Devices | B3 | **`<MasterSlaveConfig><SlaveID><DeviceName><DeviceHWVersion><DeviceFWVersion><LibraryVersion><LibraryName>`** | **Up to n device items.** Response to request for device information `<BLAECK.GET_DEVICES>`
 Restarted | C0 | **`<MasterSlaveConfig><SlaveID><DeviceName><DeviceHWVersion><DeviceFWVersion><LibraryVersion><LibraryName>`** | Only first device. Send with the functions `writeRestarted()` and `tick()` first time after device restarted. 
@@ -110,8 +110,9 @@ Restarted | C0 | **`<MasterSlaveConfig><SlaveID><DeviceName><DeviceHWVersion><De
    `LibraryVersion`       | String0 |          set with public const `LIBRARY_VERSION`
    `LibraryName`          | String0 |          set with public const `LIBRARY_NAME` 
    `StatusByte`           | byte |             1 byte; 0: Normal Transmission, 1: One or more I2C slaves were skipped/unavailable in this frame
-   `StatusPayload` (StatusByte=0) | byte |             4 bytes; CRC32. CRC order: 32; CRC Polynom (hex): 4C11DB7; Initial value (hex): FFFFFFFF; Final XOR value (hex): FFFFFFFF; reverse data bytes: true; reverse CRC result before Final XOR: true; (http://zorc.breitbandkatze.de/crc.html) 
+   `StatusPayload` (StatusByte=0) | byte |             4 bytes; Reserved (`0x00 0x00 0x00 0x00`)
    `StatusPayload` (StatusByte=1) | byte |             4 bytes; Byte0=SkippedSlaveCount, Byte1=FirstSkippedSlaveID (0xFF unknown), Byte2=FirstSkipReason (0x01 preflight no response, 0x02 runtime timeout/short/malformed/CRC mismatch), Byte3=reserved (0x00)
+   `CRC32`                | byte |             4 bytes; CRC order: 32; CRC Polynom (hex): 4C11DB7; Initial value (hex): FFFFFFFF; Final XOR value (hex): FFFFFFFF; reverse data bytes: true; reverse CRC result before Final XOR: true; (http://zorc.breitbandkatze.de/crc.html)
    `RestartFlag`          | byte | Restart Flag, 1 if device restarted since last transmission, 0 otherwise; 1 byte transmitted
    `SchemaHash`           | uint16 | CRC16-CCITT (init=0x0000, poly=0x1021) of signal name bytes + datatype code byte for each signal in order; 2 bytes transmitted (little-endian). Used by hubs and clients to detect signal layout changes at runtime.
    `TimestampMode`        | byte | Timestamp Mode, 0=No timestamp, 1=Microseconds, 2=Unix time; 1 byte transmitted  
@@ -175,7 +176,8 @@ Byte:  0  1  2  3  4  5  6  7  8  9  10 11 12 13 14 15 16 17 18 19 20 21 22 23 2
 28-29| `SymbolID`: Hex: 01 00 -> Decimal: 1
 30-33| `DATA`: Long  -> 4 Bytes; Hex: D8 E6 32 7C -> Long: 2083710680
 34   | `StatusByte`: 0 -> Normal Transmission
-35-38| `StatusPayload`: 4 Bytes (`CRC32` when `StatusByte=0`)
+35-38| `StatusPayload`: 4 Bytes (all `0x00` when `StatusByte=0`)
+39-42| `CRC32`: 4 Bytes (calculated from bytes 8-38)
 
 ## Data Types
 
@@ -209,4 +211,5 @@ BlaeckSerial automatically handles platform differences in data type sizes:
 | 0 | `BLAECK_NO_TIMESTAMP` | No timestamp data included |
 | 1 | `BLAECK_MICROS` | Microsecond timestamps using `micros()` |
 | 2 | `BLAECK_UNIX` | Unix epoch timestamps (requires callback). `BLAECK_RTC` kept as deprecated alias. |
+
 
