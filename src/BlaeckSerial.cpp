@@ -1291,7 +1291,7 @@ void BlaeckSerial::timedWriteUpdatedData()
 
 void BlaeckSerial::timedWriteUpdatedData(unsigned long msg_id)
 {
-  this->timedWriteUpdatedData(185273099, getTimeStamp());
+  this->timedWriteUpdatedData(msg_id, getTimeStamp());
 }
 
 void BlaeckSerial::timedWriteUpdatedData(unsigned long msg_id, unsigned long long timestamp)
