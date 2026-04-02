@@ -1690,7 +1690,9 @@ void BlaeckSerial::writeSlaveData(bool send_eol, bool onlyUpdated)
       if (transmissionIsSuccess == 0)
       {
         bool eolist_found = false;
-        for (int slaveSignal = 0; slaveSignal < 1000; slaveSignal++)
+        const unsigned long timeout_ms = 50;
+        unsigned long start_ms = millis();
+        while ((millis() - start_ms) < timeout_ms && !eolist_found)
         {
           // request 32 bytes from slave device
           byte receivedBytes = Wire.requestFrom(slaveindex, 32);
@@ -1699,20 +1701,26 @@ void BlaeckSerial::writeSlaveData(bool send_eol, bool onlyUpdated)
             continue;
 
           // slave may send less than requested
-          for (int symbolchar = 0; symbolchar <= 31; symbolchar++)
+          while (Wire.available() > 0 && !eolist_found)
           {
             // first receive number of bytes to expect
-            char bytecount = Wire.read();
-            char c;
+            uint8_t bytecount = (uint8_t)Wire.read();
 
             if (bytecount > 0 && bytecount < 127)
             {
+              // Need full payload: [2 bytes index] + [N-2 data bytes] + [2 bytes crc]
+              if (Wire.available() < bytecount + 2)
+              {
+                // Incomplete chunk, skip and request next chunk to avoid partial parsing.
+                break;
+              }
+
               _crcWireCalc.restart();
               _crcWireCalc.add(bytecount);
 
               // First 2 bytes are always the signal index from slave
-              uint8_t indexLow = Wire.read();
-              uint8_t indexHigh = Wire.read();
+              uint8_t indexLow = (uint8_t)Wire.read();
+              uint8_t indexHigh = (uint8_t)Wire.read();
               uint16_t slaveSignalIndex = ((uint16_t)indexHigh << 8) | ((uint16_t)indexLow);
 
               _crcWireCalc.add(indexLow);
@@ -1730,15 +1738,15 @@ void BlaeckSerial::writeSlaveData(bool send_eol, bool onlyUpdated)
               for (int i = 0; i < remainingDataBytes; i++)
               {
                 // then read the data bytes
-                c = Wire.read();
+                byte c = (byte)Wire.read();
                 StreamRef->write(c);
                 _crc.add(c);
                 _crcWireCalc.add(c);
               }
 
               // After reading all data, read the CRC bytes
-              uint8_t crcWireTransmittedByte0 = Wire.read();
-              uint8_t crcWireTransmittedByte1 = Wire.read();
+              uint8_t crcWireTransmittedByte0 = (uint8_t)Wire.read();
+              uint8_t crcWireTransmittedByte1 = (uint8_t)Wire.read();
 
               uint16_t crcWireTransmitted = ((uint16_t)crcWireTransmittedByte1 << 8) | ((uint16_t)crcWireTransmittedByte0);
               uint16_t crcWireCalculated = _crcWireCalc.calc();
