@@ -260,6 +260,7 @@ public:
 private:
   unsigned long long getTimeStamp();
   int findSignalIndex(String signalName);
+  void setSignalName(int signalIndex, String signalName, bool prefixSlaveID);
   uint16_t _computeSchemaHash();
 
   void timedWriteData(unsigned long messageID, int signalIndex_start, int signalIndex_end, bool onlyUpdated, unsigned long long timestamp);
