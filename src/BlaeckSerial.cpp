@@ -1433,22 +1433,23 @@ void BlaeckSerial::writeSlaveDevices(bool send_eol)
         StreamRef->write(slaveindex); // Slave ID
 
         bool eolist_found = false;
-
-        for (int i = 0; i < 1000; i++)
+        const unsigned long timeout_ms = 50;
+        unsigned long start_ms = millis();
+        while ((millis() - start_ms) < timeout_ms && !eolist_found)
         {
           // request 32 bytes from slave device
-          Wire.requestFrom(slaveindex, 32);
+          byte receivedBytes = Wire.requestFrom(slaveindex, 32);
+          if (receivedBytes < 1)
+            continue;
 
           bool eosignal_found = false;
 
-          int charsToRead = 32;
-
-          for (int symbolchar = 0; symbolchar <= charsToRead - 1; symbolchar++)
+          for (int symbolchar = 0; symbolchar < receivedBytes && Wire.available(); symbolchar++)
           {
             // Slave may send less than requested
             // DeviceInfo + \0
             //  receive a byte as character
-            char c = Wire.read();
+            char c = (char)Wire.read();
             //'\r'
             if (c == char(0x0D))
             {
@@ -1905,8 +1906,9 @@ void BlaeckSerial::writeSlaveSymbols(bool send_eol)
       {
 
         bool eolist_found = false;
-
-        for (int i = 0; i < 1000; i++)
+        const unsigned long timeout_ms = 50;
+        unsigned long start_ms = millis();
+        while ((millis() - start_ms) < timeout_ms && !eolist_found)
         {
           // request 32 bytes from slave device
           byte receivedBytes = Wire.requestFrom(slaveindex, 32);
@@ -1915,14 +1917,12 @@ void BlaeckSerial::writeSlaveSymbols(bool send_eol)
 
           bool eosignal_found = false;
 
-          int charsToRead = 32;
-
-          for (int symbolchar = 0; symbolchar <= charsToRead - 1; symbolchar++)
+          for (int symbolchar = 0; symbolchar < receivedBytes && Wire.available(); symbolchar++)
           {
             // Slave may send less than requested
             // SignalName + \0 + DataType
             //  receive a byte as character
-            char c = Wire.read();
+            char c = (char)Wire.read();
 
             //'\0'
             if (c != char(0x00) && symbolchar == 0)
