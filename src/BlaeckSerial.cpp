@@ -1211,18 +1211,22 @@ void BlaeckSerial::writeData(unsigned long msg_id, int signalIndex_start, int si
   }
   else if (_masterSlaveConfig == Master)
   {
+    bool skipSlaves[128] = {false};
+    byte skippedSlaveCount = 0;
+    byte firstSkippedSlaveID = 0xFF;
+    byte firstSkipReason = 0x00;
+
     refreshI2CSlavesIfNeeded();
-    if (!canWriteMasterDataFrame())
-      return;
+    prepareMasterSlaveSkipMap(skipSlaves, skippedSlaveCount, firstSkippedSlaveID, firstSkipReason);
 
     if (_beforeWriteCallback != NULL)
       _beforeWriteCallback();
     this->writeLocalData(msg_id, 0, _signalIndex - 1, false, onlyUpdated, timestamp);
-    this->writeSlaveData(true, onlyUpdated);
+    this->writeSlaveData(true, onlyUpdated, skipSlaves, skippedSlaveCount, firstSkippedSlaveID, firstSkipReason);
   }
 }
 
-bool BlaeckSerial::canWriteMasterDataFrame()
+void BlaeckSerial::prepareMasterSlaveSkipMap(bool *skipSlaves, byte &skippedSlaveCount, byte &firstSkippedSlaveID, byte &firstSkipReason)
 {
   for (int slaveindex = 0; slaveindex <= 127; slaveindex++)
   {
@@ -1239,7 +1243,19 @@ bool BlaeckSerial::canWriteMasterDataFrame()
         break;
     }
     if (transmissionIsSuccess != 0)
-      return false;
+    {
+      if (!skipSlaves[slaveindex])
+      {
+        skipSlaves[slaveindex] = true;
+        skippedSlaveCount++;
+        if (firstSkippedSlaveID == 0xFF)
+        {
+          firstSkippedSlaveID = (byte)slaveindex;
+          firstSkipReason = 0x01; // Preflight no response
+        }
+      }
+      continue;
+    }
 
     const unsigned long timeout_ms = 20;
     unsigned long start_ms = millis();
@@ -1262,11 +1278,17 @@ bool BlaeckSerial::canWriteMasterDataFrame()
       }
     }
 
-    if (!statusOk)
-      return false;
+    if (!statusOk && !skipSlaves[slaveindex])
+    {
+      skipSlaves[slaveindex] = true;
+      skippedSlaveCount++;
+      if (firstSkippedSlaveID == 0xFF)
+      {
+        firstSkippedSlaveID = (byte)slaveindex;
+        firstSkipReason = 0x01; // Preflight no response
+      }
+    }
   }
-
-  return true;
 }
 
 void BlaeckSerial::timedWriteAllData()
@@ -1666,18 +1688,16 @@ void BlaeckSerial::writeLocalData(unsigned long msg_id, int signalIndex_start, i
   }
 }
 
-void BlaeckSerial::writeSlaveData(bool send_eol, bool onlyUpdated)
+void BlaeckSerial::writeSlaveData(bool send_eol, bool onlyUpdated, bool *skipSlaves, byte &skippedSlaveCount, byte &firstSkippedSlaveID, byte &firstSkipReason)
 {
-  int signalCount = 0;
-  bool slaveCRCErrorOccured = false;
-  int slaveIDWithCRCError;
-  int slaveSignalKeyWithCRCError;
-
   for (int slaveindex = 0; slaveindex <= 127; slaveindex++)
   {
     // Cycle through slaves
     if (slaveFound(slaveindex))
     {
+      if (skipSlaves[slaveindex])
+        continue;
+
       byte transmissionIsSuccess = false;
 
       for (byte retries = 0; retries < 40; retries++)
@@ -1701,6 +1721,7 @@ void BlaeckSerial::writeSlaveData(bool send_eol, bool onlyUpdated)
       if (transmissionIsSuccess == 0)
       {
         bool eolist_found = false;
+        bool slaveFailed = false;
         const unsigned long timeout_ms = 50;
         unsigned long start_ms = millis();
         while ((millis() - start_ms) < timeout_ms && !eolist_found)
@@ -1723,6 +1744,7 @@ void BlaeckSerial::writeSlaveData(bool send_eol, bool onlyUpdated)
               if (Wire.available() < bytecount + 2)
               {
                 // Incomplete chunk, skip and request next chunk to avoid partial parsing.
+                slaveFailed = true;
                 break;
               }
 
@@ -1737,22 +1759,22 @@ void BlaeckSerial::writeSlaveData(bool send_eol, bool onlyUpdated)
               _crcWireCalc.add(indexLow);
               _crcWireCalc.add(indexHigh);
 
-              StreamRef->write(lowByte(_signalIndex + slaveSignalIndex));
-              StreamRef->write(highByte(_signalIndex + slaveSignalIndex));
-
               intCvt.val = _signalIndex + slaveSignalIndex;
-              _crc.add(intCvt.bval, 2);
-
               // Read the remaining data bytes (bytecount - 2 since we already read the index)
               int remainingDataBytes = bytecount - 2;
+              if (remainingDataBytes > 8)
+              {
+                slaveFailed = true;
+                break;
+              }
+
+              byte dataBuffer[8];
 
               for (int i = 0; i < remainingDataBytes; i++)
               {
                 // then read the data bytes
-                byte c = (byte)Wire.read();
-                StreamRef->write(c);
-                _crc.add(c);
-                _crcWireCalc.add(c);
+                dataBuffer[i] = (byte)Wire.read();
+                _crcWireCalc.add(dataBuffer[i]);
               }
 
               // After reading all data, read the CRC bytes
@@ -1762,16 +1784,21 @@ void BlaeckSerial::writeSlaveData(bool send_eol, bool onlyUpdated)
               uint16_t crcWireTransmitted = ((uint16_t)crcWireTransmittedByte1 << 8) | ((uint16_t)crcWireTransmittedByte0);
               uint16_t crcWireCalculated = _crcWireCalc.calc();
 
-              if (crcWireTransmitted != crcWireCalculated && slaveCRCErrorOccured == false)
+              if (crcWireTransmitted != crcWireCalculated)
               {
-                // only first CRCError is sent
-                slaveCRCErrorOccured = true;
-                slaveIDWithCRCError = slaveindex;
-                slaveSignalKeyWithCRCError = _signalIndex + slaveSignalIndex;
+                slaveFailed = true;
                 break;
               }
 
-              signalCount += 1;
+              // Write only after full slave chunk validation.
+              StreamRef->write(lowByte(_signalIndex + slaveSignalIndex));
+              StreamRef->write(highByte(_signalIndex + slaveSignalIndex));
+              _crc.add(intCvt.bval, 2);
+              for (int i = 0; i < remainingDataBytes; i++)
+              {
+                StreamRef->write(dataBuffer[i]);
+                _crc.add(dataBuffer[i]);
+              }
             }
             else
             {
@@ -1781,9 +1808,37 @@ void BlaeckSerial::writeSlaveData(bool send_eol, bool onlyUpdated)
                 break;
               }
             }
+            if (slaveFailed)
+              break;
           }
           if (eolist_found)
             break;
+          if (slaveFailed)
+            break;
+        }
+
+        if (!eolist_found)
+          slaveFailed = true;
+
+        if (slaveFailed && !skipSlaves[slaveindex])
+        {
+          skipSlaves[slaveindex] = true;
+          skippedSlaveCount++;
+          if (firstSkippedSlaveID == 0xFF)
+          {
+            firstSkippedSlaveID = (byte)slaveindex;
+            firstSkipReason = 0x02; // Runtime timeout/short read/malformed/CRC mismatch
+          }
+        }
+      }
+      else if (!skipSlaves[slaveindex])
+      {
+        skipSlaves[slaveindex] = true;
+        skippedSlaveCount++;
+        if (firstSkippedSlaveID == 0xFF)
+        {
+          firstSkippedSlaveID = (byte)slaveindex;
+          firstSkipReason = 0x01; // No response
         }
       }
     }
@@ -1791,20 +1846,20 @@ void BlaeckSerial::writeSlaveData(bool send_eol, bool onlyUpdated)
 
   if (send_eol)
   {
-    if (slaveCRCErrorOccured)
+    if (skippedSlaveCount > 0)
     {
-      // StatusByte 1: CRC Error at I2C transmission from Slave to Master
-      // StatusByte + 0 + SignalKey First Byte + SignalKey Second Byte + SlaveID
+      // StatusByte 1: One or more slaves skipped/unavailable
+      // StatusPayload: [SkippedSlaveCount][FirstSkippedSlaveID][FirstSkipReason][Reserved]
       StreamRef->write(1);
-      StreamRef->write((byte)0);
-      intCvt.val = slaveSignalKeyWithCRCError;
-      StreamRef->write(intCvt.bval, 2);
-      StreamRef->write(slaveIDWithCRCError);
+      StreamRef->write(skippedSlaveCount);
+      StreamRef->write(firstSkippedSlaveID);
+      StreamRef->write(firstSkipReason);
+      StreamRef->write((byte)0x00);
     }
     else
     {
-      // StatusByte 0: Normal transmission, no wire CRC errors occured
-      // StatusByte + CRC First Byte + CRC Second Byte + CRC Third Byte + CRC Fourth Byte
+      // StatusByte 0: Normal transmission
+      // StatusPayload (StatusByte=0): CRC32 (4 bytes)
       StreamRef->write((byte)0);
 
       uint32_t crc_value = _crc.calc();

@@ -266,9 +266,9 @@ private:
   void tick(unsigned long messageID, bool onlyUpdated);
 
   void writeData(unsigned long messageID, int signalIndex_start, int signalIndex_end, bool onlyUpdated, unsigned long long timestamp);
-  bool canWriteMasterDataFrame();
+  void prepareMasterSlaveSkipMap(bool *skipSlaves, byte &skippedSlaveCount, byte &firstSkippedSlaveID, byte &firstSkipReason);
   void writeLocalData(unsigned long MessageID, int signalIndex_start, int signalIndex_end, bool send_eol, bool onlyUpdated, unsigned long long timestamp);
-  void writeSlaveData(bool send_eol, bool onlyUpdated);
+  void writeSlaveData(bool send_eol, bool onlyUpdated, bool *skipSlaves, byte &skippedSlaveCount, byte &firstSkippedSlaveID, byte &firstSkipReason);
 
   void writeLocalSymbols(unsigned long MessageID, bool send_eol);
   void writeSlaveSymbols(bool send_eol);
