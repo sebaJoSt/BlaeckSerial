@@ -79,7 +79,7 @@ Type| MSGKEY | Elements| Description
 Symbol List | B0 | **`<MasterSlaveConfig><SlaveID><SymbolName><DTYPE>`** | **Up to n symbols.** Response to request for available symbols `<BLAECK.WRITE_SYMBOLS>`
 ~~Data~~ | ~~B1~~ | ~~**`<SymbolID><DATA>`**`<StatusByte><CRC32>`~~ | Deprecated (Used in BlaeckSerial version 4.3.1 or older)
 ~~Data~~ | ~~D1~~ | ~~`<RestartFlag>:<TimestampMode><Timestamp(4)>:`**`<SymbolID><DATA>`**`<StatusByte><CRC32>`~~ | Deprecated (Used in BlaeckSerial version 5.x)
-Data | D2 | `<RestartFlag>:<TimestampMode><Timestamp(8)>:`**`<SymbolID><DATA>`**`<StatusByte><CRC32>` | **Up to n data items.** Response to request for data `<BLAECK.WRITE_DATA>`
+Data | D2 | `<RestartFlag>:<SchemaHash>:<TimestampMode><Timestamp(8)>:`**`<SymbolID><DATA>`**`<StatusByte><CRC32>` | **Up to n data items.** Response to request for data `<BLAECK.WRITE_DATA>`
 ~~Devices~~ | ~~B2~~ | ~~`<MasterSlaveConfig><SlaveID><DeviceName><DeviceHWVersion><DeviceFWVersion><LibraryVersion>`~~ | Deprecated (Used in BlaeckSerial version 3.0.3 or older)
 Devices | B3 | **`<MasterSlaveConfig><SlaveID><DeviceName><DeviceHWVersion><DeviceFWVersion><LibraryVersion><LibraryName>`** | **Up to n device items.** Response to request for device information `<BLAECK.GET_DEVICES>`
 Restarted | C0 | **`<MasterSlaveConfig><SlaveID><DeviceName><DeviceHWVersion><DeviceFWVersion><LibraryVersion><LibraryName>`** | Only first device. Send with the functions `writeRestarted()` and `tick()` first time after device restarted. 
@@ -104,6 +104,7 @@ Restarted | C0 | **`<MasterSlaveConfig><SlaveID><DeviceName><DeviceHWVersion><De
    `CRC32` (StatusByte=0) | byte |             4 bytes; CRC order: 32; CRC Polynom (hex): 4C11DB7; Initial value (hex): FFFFFFFF; Final XOR value (hex): FFFFFFFF; reverse data bytes: true; reverse CRC result before Final XOR: true; (http://zorc.breitbandkatze.de/crc.html) 
    `CRC32` (StatusByte=1) | byte |             4 bytes; First Byte: 0; Second and Third Byte: SymbolID; Fourth Byte: SlaveID
    `RestartFlag`          | byte | Restart Flag, 1 if device restarted since last transmission, 0 otherwise; 1 byte transmitted
+   `SchemaHash`           | uint16 | CRC16-CCITT (init=0x0000, poly=0x1021) of signal name bytes + datatype code byte for each signal in order; 2 bytes transmitted (little-endian). Used by hubs and clients to detect signal layout changes at runtime.
    `TimestampMode`        | byte | Timestamp Mode, 0=No timestamp, 1=Microseconds, 2=Unix time; 1 byte transmitted  
    `Timestamp`            | uint64 | Timestamp value (only present if TimestampMode > 0); 8 bytes transmitted. Mode 1: microseconds with overflow tracking. Mode 2: Unix epoch microseconds.
          
@@ -148,9 +149,9 @@ Byte:  27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 56 47 48 49 50 5
  Example from `Basic.ino`:
  `<BLAECK.WRITE_DATA, 255, 255, 255, 255>`:
  ````
-ASCII: <  B  L  A  E  C  K  :  °  :  °  °  °  °  :  °  :  °  :  °  °  °  °  °  °  °  °  °  °  °  °  °  °  °  °  °  /  B  L  A  E  C  K  >  \r \n
-HEX:   3C 42 4C 41 45 43 4B 3A D2 3A FF FF FF FF 3A 00 3A 00 3A 00 00 B8 1E FD 40 01 00 D8 E6 32 7C 00 81 EC 79 9B 2F 42 4C 41 45 43 4B 3E 0D 0A
-Byte:  0  1  2  3  4  5  6  7  8  9  10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45
+ASCII: <  B  L  A  E  C  K  :  °  :  °  °  °  °  :  °  :  °  °  :  °  :  °  °  °  °  °  °  °  °  °  °  °  °  °  °  °  °  °  /  B  L  A  E  C  K  >  \r \n
+HEX:   3C 42 4C 41 45 43 4B 3A D2 3A FF FF FF FF 3A 00 3A C8 29 3A 00 3A 00 00 B8 1E FD 40 01 00 D8 E6 32 7C 00 XX XX XX XX 2F 42 4C 41 45 43 4B 3E 0D 0A
+Byte:  0  1  2  3  4  5  6  7  8  9  10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48
 ````
  
  Byte | DESCRIPTION:
@@ -158,13 +159,14 @@ Byte:  0  1  2  3  4  5  6  7  8  9  10 11 12 13 14 15 16 17 18 19 20 21 22 23 2
 8   | `MSGKEY`: D2 -> Data
 10-13| `MSGID`: Hex: FF FF FF FF -> Decimal: 4294967295
 15  | `RestartFlag`: Hex: 00 -> Device has not restarted
-17  | `TimestampMode`: Hex: 00 -> No timestamp
-19-20| `SymbolID`: Hex: 00 00 -> Decimal: 0
-21-24| `DATA`: Float -> 4 Bytes; Hex: B8 1E FD 40 -> Float: 7.91
-25-26| `SymbolID`: Hex: 01 00 -> Decimal: 1
-27-30| `DATA`: Long  -> 4 Bytes; Hex: D8 E6 32 7C -> Long: 2083710680
-31   | `StatusByte`: 0 -> Normal Transmission
-32-35| `CRC32`: 4 Bytes; Hex: 20 3D D9 FE (Calculated from 19 bytes: Byte 8-26)
+17-18| `SchemaHash`: Hex: C8 29 -> CRC16-CCITT of signal names + datatype codes (little-endian)
+20  | `TimestampMode`: Hex: 00 -> No timestamp
+22-23| `SymbolID`: Hex: 00 00 -> Decimal: 0
+24-27| `DATA`: Float -> 4 Bytes; Hex: B8 1E FD 40 -> Float: 7.91
+28-29| `SymbolID`: Hex: 01 00 -> Decimal: 1
+30-33| `DATA`: Long  -> 4 Bytes; Hex: D8 E6 32 7C -> Long: 2083710680
+34   | `StatusByte`: 0 -> Normal Transmission
+35-38| `CRC32`: 4 Bytes (Calculated from bytes 8-34)
 
 ## Data Types
 

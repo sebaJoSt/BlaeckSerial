@@ -61,9 +61,8 @@ void BlaeckSerial::addSignal(String signalName, bool *value, bool prefixSlaveID)
   Signals[_signalIndex].Address = value;
   _signalIndex++;
   SignalCount = _signalIndex;
-}
-
-void BlaeckSerial::addSignal(String signalName, byte *value, bool prefixSlaveID)
+  _schemaHash = _computeSchemaHash();
+}, bool prefixSlaveID)
 {
   Signals[_signalIndex].SignalName = signalName;
   if (_masterSlaveConfig == Slave && prefixSlaveID)
@@ -74,9 +73,8 @@ void BlaeckSerial::addSignal(String signalName, byte *value, bool prefixSlaveID)
   Signals[_signalIndex].Address = value;
   _signalIndex++;
   SignalCount = _signalIndex;
-}
-
-void BlaeckSerial::addSignal(String signalName, short *value, bool prefixSlaveID)
+  _schemaHash = _computeSchemaHash();
+}, bool prefixSlaveID)
 {
   Signals[_signalIndex].SignalName = signalName;
   if (_masterSlaveConfig == Slave && prefixSlaveID)
@@ -87,9 +85,8 @@ void BlaeckSerial::addSignal(String signalName, short *value, bool prefixSlaveID
   Signals[_signalIndex].Address = value;
   _signalIndex++;
   SignalCount = _signalIndex;
-}
-
-void BlaeckSerial::addSignal(String signalName, unsigned short *value, bool prefixSlaveID)
+  _schemaHash = _computeSchemaHash();
+}, bool prefixSlaveID)
 {
   Signals[_signalIndex].SignalName = signalName;
   if (_masterSlaveConfig == Slave && prefixSlaveID)
@@ -100,9 +97,8 @@ void BlaeckSerial::addSignal(String signalName, unsigned short *value, bool pref
   Signals[_signalIndex].Address = value;
   _signalIndex++;
   SignalCount = _signalIndex;
-}
-
-void BlaeckSerial::addSignal(String signalName, int *value, bool prefixSlaveID)
+  _schemaHash = _computeSchemaHash();
+}, bool prefixSlaveID)
 {
   Signals[_signalIndex].SignalName = signalName;
   if (_masterSlaveConfig == Slave && prefixSlaveID)
@@ -117,6 +113,7 @@ void BlaeckSerial::addSignal(String signalName, int *value, bool prefixSlaveID)
   Signals[_signalIndex].Address = value;
   _signalIndex++;
   SignalCount = _signalIndex;
+  _schemaHash = _computeSchemaHash();
 }
 
 void BlaeckSerial::addSignal(String signalName, unsigned int *value, bool prefixSlaveID)
@@ -134,6 +131,7 @@ void BlaeckSerial::addSignal(String signalName, unsigned int *value, bool prefix
   Signals[_signalIndex].Address = value;
   _signalIndex++;
   SignalCount = _signalIndex;
+  _schemaHash = _computeSchemaHash();
 }
 
 void BlaeckSerial::addSignal(String signalName, long *value, bool prefixSlaveID)
@@ -147,9 +145,8 @@ void BlaeckSerial::addSignal(String signalName, long *value, bool prefixSlaveID)
   Signals[_signalIndex].Address = value;
   _signalIndex++;
   SignalCount = _signalIndex;
-}
-
-void BlaeckSerial::addSignal(String signalName, unsigned long *value, bool prefixSlaveID)
+  _schemaHash = _computeSchemaHash();
+}, bool prefixSlaveID)
 {
   Signals[_signalIndex].SignalName = signalName;
   if (_masterSlaveConfig == Slave && prefixSlaveID)
@@ -160,9 +157,8 @@ void BlaeckSerial::addSignal(String signalName, unsigned long *value, bool prefi
   Signals[_signalIndex].Address = value;
   _signalIndex++;
   SignalCount = _signalIndex;
-}
-
-void BlaeckSerial::addSignal(String signalName, float *value, bool prefixSlaveID)
+  _schemaHash = _computeSchemaHash();
+}, bool prefixSlaveID)
 {
   Signals[_signalIndex].SignalName = signalName;
   if (_masterSlaveConfig == Slave && prefixSlaveID)
@@ -173,9 +169,8 @@ void BlaeckSerial::addSignal(String signalName, float *value, bool prefixSlaveID
   Signals[_signalIndex].Address = value;
   _signalIndex++;
   SignalCount = _signalIndex;
-}
-
-void BlaeckSerial::addSignal(String signalName, double *value, bool prefixSlaveID)
+  _schemaHash = _computeSchemaHash();
+}, bool prefixSlaveID)
 {
   Signals[_signalIndex].SignalName = signalName;
   if (_masterSlaveConfig == Slave && prefixSlaveID)
@@ -192,12 +187,47 @@ void BlaeckSerial::addSignal(String signalName, double *value, bool prefixSlaveI
   Signals[_signalIndex].Address = value;
   _signalIndex++;
   SignalCount = _signalIndex;
+  _schemaHash = _computeSchemaHash();
 }
 
 void BlaeckSerial::deleteSignals()
 {
   _signalIndex = 0;
   SignalCount = _signalIndex;
+  _schemaHash = 0;
+}
+
+uint16_t BlaeckSerial::_computeSchemaHash()
+{
+  // CRC16-CCITT (init=0x0000, poly=0x1021) over signal names + datatype codes.
+  // Must match Python: binascii.crc_hqx(data, 0) & 0xFFFF
+  uint16_t crc = 0x0000;
+  for (int j = 0; j < _signalIndex; j++)
+  {
+    const char *name = Signals[j].SignalName.c_str();
+    while (*name)
+    {
+      byte b = (byte)*name++;
+      crc ^= ((uint16_t)b << 8);
+      for (byte k = 0; k < 8; k++)
+      {
+        if (crc & 0x8000)
+          crc = (crc << 1) ^ 0x1021;
+        else
+          crc <<= 1;
+      }
+    }
+    byte code = (byte)Signals[j].DataType;
+    crc ^= ((uint16_t)code << 8);
+    for (byte k = 0; k < 8; k++)
+    {
+      if (crc & 0x8000)
+        crc = (crc << 1) ^ 0x1021;
+      else
+        crc <<= 1;
+    }
+  }
+  return crc & 0xFFFF;
 }
 
 void BlaeckSerial::update(int signalIndex, bool value)
@@ -1385,6 +1415,17 @@ void BlaeckSerial::writeLocalData(unsigned long msg_id, int signalIndex_start, i
   StreamRef->write(restart_flag);
   _crc.add(restart_flag);
   _sendRestartFlag = false; // Clear the flag after first transmission
+
+  StreamRef->write(":");
+  _crc.add(':');
+
+  // Schema hash (2 bytes, CRC16-CCITT, little-endian)
+  byte hash_lo = (byte)(_schemaHash & 0xFF);
+  byte hash_hi = (byte)((_schemaHash >> 8) & 0xFF);
+  StreamRef->write(hash_lo);
+  StreamRef->write(hash_hi);
+  _crc.add(hash_lo);
+  _crc.add(hash_hi);
 
   StreamRef->write(":");
   _crc.add(':');

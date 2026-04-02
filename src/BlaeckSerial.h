@@ -260,6 +260,7 @@ public:
 private:
   unsigned long long getTimeStamp();
   int findSignalIndex(String signalName);
+  uint16_t _computeSchemaHash();
 
   void timedWriteData(unsigned long messageID, int signalIndex_start, int signalIndex_end, bool onlyUpdated, unsigned long long timestamp);
   void tick(unsigned long messageID, bool onlyUpdated);
@@ -326,6 +327,7 @@ private:
   CRC32 _crc;
   CRC16 _crcWire;
   CRC16 _crcWireCalc;
+  uint16_t _schemaHash = 0;
 
   static BlaeckSerial *_pSingletonInstance;
 
