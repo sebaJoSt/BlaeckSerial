@@ -33,6 +33,8 @@ void BlaeckSerial::begin(Stream *Ref, unsigned int size)
   _signalIndex = 0;
   SignalCount = 0;
   _schemaHash = 0;
+  _signalOverflowOccurred = false;
+  _signalOverflowCount = 0;
   // Assign the static singleton used in the static handlers.
   BlaeckSerial::_pSingletonInstance = this;
 }
@@ -66,7 +68,11 @@ void BlaeckSerial::beginSlave(Stream *Ref, unsigned int size, byte slaveID)
 void BlaeckSerial::addSignal(String signalName, bool *value, bool prefixSlaveID)
 {
   if (_signalIndex >= _signalCapacity)
+  {
+    _signalOverflowOccurred = true;
+    _signalOverflowCount++;
     return;
+  }
   setSignalName(_signalIndex, signalName, prefixSlaveID);
   Signals[_signalIndex].DataType = Blaeck_bool;
   Signals[_signalIndex].Address = value;
@@ -78,7 +84,11 @@ void BlaeckSerial::addSignal(String signalName, bool *value, bool prefixSlaveID)
 void BlaeckSerial::addSignal(String signalName, byte *value, bool prefixSlaveID)
 {
   if (_signalIndex >= _signalCapacity)
+  {
+    _signalOverflowOccurred = true;
+    _signalOverflowCount++;
     return;
+  }
   setSignalName(_signalIndex, signalName, prefixSlaveID);
   Signals[_signalIndex].DataType = Blaeck_byte;
   Signals[_signalIndex].Address = value;
@@ -90,7 +100,11 @@ void BlaeckSerial::addSignal(String signalName, byte *value, bool prefixSlaveID)
 void BlaeckSerial::addSignal(String signalName, short *value, bool prefixSlaveID)
 {
   if (_signalIndex >= _signalCapacity)
+  {
+    _signalOverflowOccurred = true;
+    _signalOverflowCount++;
     return;
+  }
   setSignalName(_signalIndex, signalName, prefixSlaveID);
   Signals[_signalIndex].DataType = Blaeck_short;
   Signals[_signalIndex].Address = value;
@@ -102,7 +116,11 @@ void BlaeckSerial::addSignal(String signalName, short *value, bool prefixSlaveID
 void BlaeckSerial::addSignal(String signalName, unsigned short *value, bool prefixSlaveID)
 {
   if (_signalIndex >= _signalCapacity)
+  {
+    _signalOverflowOccurred = true;
+    _signalOverflowCount++;
     return;
+  }
   setSignalName(_signalIndex, signalName, prefixSlaveID);
   Signals[_signalIndex].DataType = Blaeck_ushort;
   Signals[_signalIndex].Address = value;
@@ -114,7 +132,11 @@ void BlaeckSerial::addSignal(String signalName, unsigned short *value, bool pref
 void BlaeckSerial::addSignal(String signalName, int *value, bool prefixSlaveID)
 {
   if (_signalIndex >= _signalCapacity)
+  {
+    _signalOverflowOccurred = true;
+    _signalOverflowCount++;
     return;
+  }
   setSignalName(_signalIndex, signalName, prefixSlaveID);
 #ifdef __AVR__
   Signals[_signalIndex].DataType = Blaeck_int; // 2 bytes
@@ -130,7 +152,11 @@ void BlaeckSerial::addSignal(String signalName, int *value, bool prefixSlaveID)
 void BlaeckSerial::addSignal(String signalName, unsigned int *value, bool prefixSlaveID)
 {
   if (_signalIndex >= _signalCapacity)
+  {
+    _signalOverflowOccurred = true;
+    _signalOverflowCount++;
     return;
+  }
   setSignalName(_signalIndex, signalName, prefixSlaveID);
 #ifdef __AVR__
   Signals[_signalIndex].DataType = Blaeck_uint; // 2 bytes
@@ -146,7 +172,11 @@ void BlaeckSerial::addSignal(String signalName, unsigned int *value, bool prefix
 void BlaeckSerial::addSignal(String signalName, long *value, bool prefixSlaveID)
 {
   if (_signalIndex >= _signalCapacity)
+  {
+    _signalOverflowOccurred = true;
+    _signalOverflowCount++;
     return;
+  }
   setSignalName(_signalIndex, signalName, prefixSlaveID);
   Signals[_signalIndex].DataType = Blaeck_long;
   Signals[_signalIndex].Address = value;
@@ -158,7 +188,11 @@ void BlaeckSerial::addSignal(String signalName, long *value, bool prefixSlaveID)
 void BlaeckSerial::addSignal(String signalName, unsigned long *value, bool prefixSlaveID)
 {
   if (_signalIndex >= _signalCapacity)
+  {
+    _signalOverflowOccurred = true;
+    _signalOverflowCount++;
     return;
+  }
   setSignalName(_signalIndex, signalName, prefixSlaveID);
   Signals[_signalIndex].DataType = Blaeck_ulong;
   Signals[_signalIndex].Address = value;
@@ -170,7 +204,11 @@ void BlaeckSerial::addSignal(String signalName, unsigned long *value, bool prefi
 void BlaeckSerial::addSignal(String signalName, float *value, bool prefixSlaveID)
 {
   if (_signalIndex >= _signalCapacity)
+  {
+    _signalOverflowOccurred = true;
+    _signalOverflowCount++;
     return;
+  }
   setSignalName(_signalIndex, signalName, prefixSlaveID);
   Signals[_signalIndex].DataType = Blaeck_float;
   Signals[_signalIndex].Address = value;
@@ -182,7 +220,11 @@ void BlaeckSerial::addSignal(String signalName, float *value, bool prefixSlaveID
 void BlaeckSerial::addSignal(String signalName, double *value, bool prefixSlaveID)
 {
   if (_signalIndex >= _signalCapacity)
+  {
+    _signalOverflowOccurred = true;
+    _signalOverflowCount++;
     return;
+  }
   setSignalName(_signalIndex, signalName, prefixSlaveID);
 #ifdef __AVR__
   /*On the Uno and other ATMEGA based boards, the double implementation occupies 4 bytes
@@ -202,6 +244,8 @@ void BlaeckSerial::deleteSignals()
   _signalIndex = 0;
   SignalCount = _signalIndex;
   _schemaHash = 0;
+  _signalOverflowOccurred = false;
+  _signalOverflowCount = 0;
 }
 
 uint16_t BlaeckSerial::_computeSchemaHash()

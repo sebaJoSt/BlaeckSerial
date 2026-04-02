@@ -42,6 +42,15 @@ void setup()
  BlaeckSerial.addSignal("Test Signal 2", &anotherGlobalVariable);
 ```
 
+If more signals are added than the configured capacity in `begin(...)`, extra signals are ignored.
+You can detect this in your sketch:
+```CPP
+if (BlaeckSerial.hasSignalOverflow()) {
+  Serial.print("Ignored signals: ");
+  Serial.println(BlaeckSerial.getSignalOverflowCount());
+}
+```
+
 ### Update your variables and don't forget to `tick()`!
 ```CPP
 void loop()

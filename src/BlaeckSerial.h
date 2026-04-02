@@ -96,6 +96,8 @@ public:
 
   // Delete all Signals
   void deleteSignals();
+  bool hasSignalOverflow() const { return _signalOverflowOccurred; }
+  uint16_t getSignalOverflowCount() const { return _signalOverflowCount; }
 
   // Signal Count
   int SignalCount;
@@ -297,6 +299,8 @@ private:
   Signal *Signals = nullptr;
   int _signalIndex = 0;
   unsigned int _signalCapacity = 0;
+  bool _signalOverflowOccurred = false;
+  uint16_t _signalOverflowCount = 0;
 
   bool _writeRestartedAlreadyDone = false;
   bool _sendRestartFlag = true;
