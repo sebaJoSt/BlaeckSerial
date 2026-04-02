@@ -266,6 +266,7 @@ private:
   void tick(unsigned long messageID, bool onlyUpdated);
 
   void writeData(unsigned long messageID, int signalIndex_start, int signalIndex_end, bool onlyUpdated, unsigned long long timestamp);
+  bool canWriteMasterDataFrame();
   void writeLocalData(unsigned long MessageID, int signalIndex_start, int signalIndex_end, bool send_eol, bool onlyUpdated, unsigned long long timestamp);
   void writeSlaveData(bool send_eol, bool onlyUpdated);
 
@@ -291,8 +292,9 @@ private:
   static void validatePlatformSizes();
 
   Stream *StreamRef;
-  Signal *Signals;
+  Signal *Signals = nullptr;
   int _signalIndex = 0;
+  unsigned int _signalCapacity = 0;
 
   bool _writeRestartedAlreadyDone = false;
   bool _sendRestartFlag = true;

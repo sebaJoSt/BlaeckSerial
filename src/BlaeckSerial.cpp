@@ -16,13 +16,23 @@ BlaeckSerial::BlaeckSerial()
 
 BlaeckSerial::~BlaeckSerial()
 {
-  delete Signals;
+  delete[] Signals;
+  Signals = nullptr;
 }
 
 void BlaeckSerial::begin(Stream *Ref, unsigned int size)
 {
   StreamRef = (Stream *)Ref;
+  _signalCapacity = size;
+  if (Signals != nullptr)
+  {
+    delete[] Signals;
+    Signals = nullptr;
+  }
   Signals = new Signal[size];
+  _signalIndex = 0;
+  SignalCount = 0;
+  _schemaHash = 0;
   // Assign the static singleton used in the static handlers.
   BlaeckSerial::_pSingletonInstance = this;
 }
@@ -52,6 +62,8 @@ void BlaeckSerial::beginSlave(Stream *Ref, unsigned int size, byte slaveID)
 
 void BlaeckSerial::addSignal(String signalName, bool *value, bool prefixSlaveID)
 {
+  if (_signalIndex >= _signalCapacity)
+    return;
   Signals[_signalIndex].SignalName = signalName;
   if (_masterSlaveConfig == Slave && prefixSlaveID)
   {
@@ -62,8 +74,12 @@ void BlaeckSerial::addSignal(String signalName, bool *value, bool prefixSlaveID)
   _signalIndex++;
   SignalCount = _signalIndex;
   _schemaHash = _computeSchemaHash();
-}, bool prefixSlaveID)
+}
+
+void BlaeckSerial::addSignal(String signalName, byte *value, bool prefixSlaveID)
 {
+  if (_signalIndex >= _signalCapacity)
+    return;
   Signals[_signalIndex].SignalName = signalName;
   if (_masterSlaveConfig == Slave && prefixSlaveID)
   {
@@ -74,8 +90,12 @@ void BlaeckSerial::addSignal(String signalName, bool *value, bool prefixSlaveID)
   _signalIndex++;
   SignalCount = _signalIndex;
   _schemaHash = _computeSchemaHash();
-}, bool prefixSlaveID)
+}
+
+void BlaeckSerial::addSignal(String signalName, short *value, bool prefixSlaveID)
 {
+  if (_signalIndex >= _signalCapacity)
+    return;
   Signals[_signalIndex].SignalName = signalName;
   if (_masterSlaveConfig == Slave && prefixSlaveID)
   {
@@ -86,8 +106,12 @@ void BlaeckSerial::addSignal(String signalName, bool *value, bool prefixSlaveID)
   _signalIndex++;
   SignalCount = _signalIndex;
   _schemaHash = _computeSchemaHash();
-}, bool prefixSlaveID)
+}
+
+void BlaeckSerial::addSignal(String signalName, unsigned short *value, bool prefixSlaveID)
 {
+  if (_signalIndex >= _signalCapacity)
+    return;
   Signals[_signalIndex].SignalName = signalName;
   if (_masterSlaveConfig == Slave && prefixSlaveID)
   {
@@ -98,8 +122,12 @@ void BlaeckSerial::addSignal(String signalName, bool *value, bool prefixSlaveID)
   _signalIndex++;
   SignalCount = _signalIndex;
   _schemaHash = _computeSchemaHash();
-}, bool prefixSlaveID)
+}
+
+void BlaeckSerial::addSignal(String signalName, int *value, bool prefixSlaveID)
 {
+  if (_signalIndex >= _signalCapacity)
+    return;
   Signals[_signalIndex].SignalName = signalName;
   if (_masterSlaveConfig == Slave && prefixSlaveID)
   {
@@ -118,6 +146,8 @@ void BlaeckSerial::addSignal(String signalName, bool *value, bool prefixSlaveID)
 
 void BlaeckSerial::addSignal(String signalName, unsigned int *value, bool prefixSlaveID)
 {
+  if (_signalIndex >= _signalCapacity)
+    return;
   Signals[_signalIndex].SignalName = signalName;
   if (_masterSlaveConfig == Slave && prefixSlaveID)
   {
@@ -136,6 +166,8 @@ void BlaeckSerial::addSignal(String signalName, unsigned int *value, bool prefix
 
 void BlaeckSerial::addSignal(String signalName, long *value, bool prefixSlaveID)
 {
+  if (_signalIndex >= _signalCapacity)
+    return;
   Signals[_signalIndex].SignalName = signalName;
   if (_masterSlaveConfig == Slave && prefixSlaveID)
   {
@@ -146,8 +178,12 @@ void BlaeckSerial::addSignal(String signalName, long *value, bool prefixSlaveID)
   _signalIndex++;
   SignalCount = _signalIndex;
   _schemaHash = _computeSchemaHash();
-}, bool prefixSlaveID)
+}
+
+void BlaeckSerial::addSignal(String signalName, unsigned long *value, bool prefixSlaveID)
 {
+  if (_signalIndex >= _signalCapacity)
+    return;
   Signals[_signalIndex].SignalName = signalName;
   if (_masterSlaveConfig == Slave && prefixSlaveID)
   {
@@ -158,8 +194,12 @@ void BlaeckSerial::addSignal(String signalName, long *value, bool prefixSlaveID)
   _signalIndex++;
   SignalCount = _signalIndex;
   _schemaHash = _computeSchemaHash();
-}, bool prefixSlaveID)
+}
+
+void BlaeckSerial::addSignal(String signalName, float *value, bool prefixSlaveID)
 {
+  if (_signalIndex >= _signalCapacity)
+    return;
   Signals[_signalIndex].SignalName = signalName;
   if (_masterSlaveConfig == Slave && prefixSlaveID)
   {
@@ -170,8 +210,12 @@ void BlaeckSerial::addSignal(String signalName, long *value, bool prefixSlaveID)
   _signalIndex++;
   SignalCount = _signalIndex;
   _schemaHash = _computeSchemaHash();
-}, bool prefixSlaveID)
+}
+
+void BlaeckSerial::addSignal(String signalName, double *value, bool prefixSlaveID)
 {
+  if (_signalIndex >= _signalCapacity)
+    return;
   Signals[_signalIndex].SignalName = signalName;
   if (_masterSlaveConfig == Slave && prefixSlaveID)
   {
@@ -575,10 +619,19 @@ void BlaeckSerial::parseData()
 {
   // split the data into its parts
   char tempChars[sizeof(receivedChars)];
-  strcpy(tempChars, receivedChars);
+  strncpy(tempChars, receivedChars, sizeof(tempChars) - 1);
+  tempChars[sizeof(tempChars) - 1] = '\0';
   char *strtokIndx;
   strtokIndx = strtok(tempChars, ",");
-  strcpy(COMMAND, strtokIndx);
+  if (strtokIndx != NULL)
+  {
+    strncpy(COMMAND, strtokIndx, sizeof(COMMAND) - 1);
+    COMMAND[sizeof(COMMAND) - 1] = '\0';
+  }
+  else
+  {
+    COMMAND[0] = '\0';
+  }
 
   strtokIndx = strtok(NULL, ",");
   if (strtokIndx != NULL)
@@ -1159,12 +1212,61 @@ void BlaeckSerial::writeData(unsigned long msg_id, int signalIndex_start, int si
   else if (_masterSlaveConfig == Master)
   {
     scanI2CSlaves(0, 127);
+    if (!canWriteMasterDataFrame())
+      return;
 
     if (_beforeWriteCallback != NULL)
       _beforeWriteCallback();
     this->writeLocalData(msg_id, 0, _signalIndex - 1, false, onlyUpdated, timestamp);
     this->writeSlaveData(true, onlyUpdated);
   }
+}
+
+bool BlaeckSerial::canWriteMasterDataFrame()
+{
+  for (int slaveindex = 0; slaveindex <= 127; slaveindex++)
+  {
+    if (!slaveFound(slaveindex))
+      continue;
+
+    byte transmissionIsSuccess = false;
+    for (byte retries = 0; retries < 4; retries++)
+    {
+      Wire.beginTransmission(slaveindex);
+      Wire.write(2);
+      transmissionIsSuccess = Wire.endTransmission();
+      if (transmissionIsSuccess == 0)
+        break;
+    }
+    if (transmissionIsSuccess != 0)
+      return false;
+
+    const unsigned long timeout_ms = 20;
+    unsigned long start_ms = millis();
+    bool statusOk = false;
+
+    while ((millis() - start_ms) < timeout_ms && !statusOk)
+    {
+      byte receivedBytes = Wire.requestFrom(slaveindex, 1);
+      if (receivedBytes < 1)
+        continue;
+
+      for (int i = 0; i < receivedBytes && Wire.available(); i++)
+      {
+        int c = Wire.read();
+        if (c == 0xAA)
+        {
+          statusOk = true;
+          break;
+        }
+      }
+    }
+
+    if (!statusOk)
+      return false;
+  }
+
+  return true;
 }
 
 void BlaeckSerial::timedWriteAllData()
