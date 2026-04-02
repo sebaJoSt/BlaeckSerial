@@ -1992,11 +1992,15 @@ void BlaeckSerial::scanI2CSlaves(char addressStart, char addressEnd)
     {
       storeSlave(slaveindex, false);
 
-      Wire.requestFrom(slaveindex, 1);
+      byte receivedBytes = Wire.requestFrom(slaveindex, 1);
+      if (receivedBytes < 1 || !Wire.available())
+      {
+        continue;
+      }
 
       // Expecting response 0xAA from slave -> Slave found
       // Receive a byte as character
-      char c = Wire.read();
+      char c = (char)Wire.read();
 
       if (c == char(0xAA))
       {
@@ -2321,7 +2325,14 @@ void BlaeckSerial::wireSlaveTransmitSingleDataPoint(bool onlyUpdated)
 
 void BlaeckSerial::wireSlaveReceive()
 {
-  _wireMode = Wire.read();
+  if (Wire.available())
+  {
+    _wireMode = (byte)Wire.read();
+  }
+  else
+  {
+    _wireMode = 0;
+  }
   _wireSignalIndex = 0;
   _wireDeviceIndex = 0;
 
