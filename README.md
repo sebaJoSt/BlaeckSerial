@@ -88,7 +88,7 @@ Type| MSGKEY | Elements| Description
 Symbol List | B0 | **`<MasterSlaveConfig><SlaveID><SymbolName><DTYPE>`** | **Up to n symbols.** Response to request for available symbols `<BLAECK.WRITE_SYMBOLS>`
 ~~Data~~ | ~~B1~~ | ~~**`<SymbolID><DATA>`**`<StatusByte><CRC32>`~~ | Deprecated (Used in BlaeckSerial version 4.3.1 or older)
 ~~Data~~ | ~~D1~~ | ~~`<RestartFlag>:<TimestampMode><Timestamp(4)>:`**`<SymbolID><DATA>`**`<StatusByte><CRC32>`~~ | Deprecated (Used in BlaeckSerial version 5.x)
-Data | D2 | `<RestartFlag>:<SchemaHash>:<TimestampMode><Timestamp(8)>:`**`<SymbolID><DATA>`**`<StatusByte><StatusPayload(4)>` | **Up to n data items.** Response to request for data `<BLAECK.WRITE_DATA>`
+Data | D2 | `<RestartFlag>:<SchemaHash>:<TimestampMode><Timestamp(8)>:`**`<SymbolID><DATA>`**`<StatusByte><StatusPayload>` | **Up to n data items.** Response to request for data `<BLAECK.WRITE_DATA>`
 ~~Devices~~ | ~~B2~~ | ~~`<MasterSlaveConfig><SlaveID><DeviceName><DeviceHWVersion><DeviceFWVersion><LibraryVersion>`~~ | Deprecated (Used in BlaeckSerial version 3.0.3 or older)
 Devices | B3 | **`<MasterSlaveConfig><SlaveID><DeviceName><DeviceHWVersion><DeviceFWVersion><LibraryVersion><LibraryName>`** | **Up to n device items.** Response to request for device information `<BLAECK.GET_DEVICES>`
 Restarted | C0 | **`<MasterSlaveConfig><SlaveID><DeviceName><DeviceHWVersion><DeviceFWVersion><LibraryVersion><LibraryName>`** | Only first device. Send with the functions `writeRestarted()` and `tick()` first time after device restarted. 
