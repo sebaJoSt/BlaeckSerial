@@ -1510,7 +1510,7 @@ void BlaeckSerial::writeSlaveDevices(bool send_eol)
 
 void BlaeckSerial::writeLocalData(unsigned long msg_id, int signalIndex_start, int signalIndex_end, bool send_eol, bool onlyUpdated, unsigned long long timestamp)
 {
-  if (onlyUpdated && !hasUpdatedSignals())
+  if (onlyUpdated && !hasUpdatedSignals() && send_eol)
     return; // No updated signals
 
   // Bounds checking
@@ -1518,7 +1518,7 @@ void BlaeckSerial::writeLocalData(unsigned long msg_id, int signalIndex_start, i
     signalIndex_start = 0;
   if (signalIndex_end >= _signalIndex)
     signalIndex_end = _signalIndex - 1;
-  if (signalIndex_start > signalIndex_end)
+  if (signalIndex_start > signalIndex_end && send_eol)
     return; // No valid range
 
   _crc.setPolynome(0x04C11DB7);
