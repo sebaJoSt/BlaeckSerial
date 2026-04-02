@@ -276,6 +276,7 @@ private:
   void writeLocalDevices(unsigned long MessageID, bool send_eol);
   void writeSlaveDevices(bool send_eol);
 
+  void refreshI2CSlavesIfNeeded();
   void scanI2CSlaves(char addressStart, char addressEnd);
 
   void wireSlaveTransmitToMaster();
@@ -317,6 +318,10 @@ private:
   byte _wireMode = 0;
   int _wireSignalIndex = 0;
   int _wireDeviceIndex = 0;
+
+  bool _i2cScanInitialized = false;
+  unsigned long _lastI2CScanMs = 0;
+  static const unsigned long I2C_SCAN_INTERVAL_MS = 250;
 
   static const int MAXIMUM_CHAR_COUNT = 64;
   char receivedChars[MAXIMUM_CHAR_COUNT];

@@ -765,7 +765,7 @@ void BlaeckSerial::writeSymbols(unsigned long msg_id)
   }
   else if (_masterSlaveConfig == Master)
   {
-    scanI2CSlaves(0, 127);
+    refreshI2CSlavesIfNeeded();
 
     this->writeLocalSymbols(msg_id, false);
     this->writeSlaveSymbols(true);
@@ -1211,7 +1211,7 @@ void BlaeckSerial::writeData(unsigned long msg_id, int signalIndex_start, int si
   }
   else if (_masterSlaveConfig == Master)
   {
-    scanI2CSlaves(0, 127);
+    refreshI2CSlavesIfNeeded();
     if (!canWriteMasterDataFrame())
       return;
 
@@ -1368,10 +1368,21 @@ void BlaeckSerial::writeDevices(unsigned long msg_id)
   }
   else if (_masterSlaveConfig == Master)
   {
-    scanI2CSlaves(0, 127);
+    refreshI2CSlavesIfNeeded();
 
     this->writeLocalDevices(msg_id, false);
     this->writeSlaveDevices(true);
+  }
+}
+
+void BlaeckSerial::refreshI2CSlavesIfNeeded()
+{
+  unsigned long now = millis();
+  if (!_i2cScanInitialized || (now - _lastI2CScanMs) >= I2C_SCAN_INTERVAL_MS)
+  {
+    scanI2CSlaves(0, 127);
+    _lastI2CScanMs = now;
+    _i2cScanInitialized = true;
   }
 }
 
