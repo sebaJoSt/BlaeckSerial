@@ -1569,7 +1569,45 @@ void BlaeckSerial::_bufAllocate()
   int b0b3_est = 60 + (int)_signalCapacity * 30;
   if (b0b3_est > _frameBufSize)
     _frameBufSize = b0b3_est;
-  _frameBuf = new byte[_frameBufSize];
+  _frameBuf = new (std::nothrow) byte[_frameBufSize];
+  if (_frameBuf == nullptr)
+  {
+    _frameBufSize = 0;
+  }
+  _bufOverflow = false;
+  _bufOverflowWarned = false;
+}
+
+bool BlaeckSerial::_bufEnsure(size_t addLen)
+{
+  if (_frameBuf == nullptr)
+  {
+    return false;
+  }
+
+  size_t needed = (size_t)_framePos + addLen;
+  if (needed <= (size_t)_frameBufSize)
+  {
+    return true;
+  }
+
+  size_t newSize = (size_t)_frameBufSize;
+  while (newSize < needed)
+  {
+    newSize = (newSize < 128) ? 128 : (newSize * 2);
+  }
+
+  byte *newBuf = new (std::nothrow) byte[newSize];
+  if (newBuf == nullptr)
+  {
+    return false;
+  }
+
+  memcpy(newBuf, _frameBuf, _framePos);
+  delete[] _frameBuf;
+  _frameBuf = newBuf;
+  _frameBufSize = (int)newSize;
+  return true;
 }
 
 void BlaeckSerial::_bufFree()

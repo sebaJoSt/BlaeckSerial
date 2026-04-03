@@ -21,6 +21,7 @@
 #include <Arduino.h>
 #include <CRC32.h>
 #include <CRC16.h>
+#include <new>
 
 // Buffered writes: assemble entire frames in RAM before a single
 // StreamRef->write(buf, len) call.  Prevents byte-dropping on boards
@@ -412,26 +413,49 @@ private:
   byte *_frameBuf = nullptr;
   int _framePos = 0;
   int _frameBufSize = 0;
+  bool _bufOverflow = false;
+  bool _bufOverflowWarned = false;
 
   void _bufAllocate();
+  bool _bufEnsure(size_t addLen);
   void _bufFree();
-  void _bufReset() { _framePos = 0; }
-  void _bufByte(byte b) { _frameBuf[_framePos++] = b; }
+  void _bufReset()
+  {
+    _framePos = 0;
+    _bufOverflow = false;
+  }
+  void _bufByte(byte b)
+  {
+    if (_bufEnsure(1))
+      _frameBuf[_framePos++] = b;
+    else
+      _bufOverflow = true;
+  }
   void _bufBytes(const byte *data, size_t len)
   {
-    memcpy(_frameBuf + _framePos, data, len);
-    _framePos += len;
+    if (_bufEnsure(len))
+    {
+      memcpy(_frameBuf + _framePos, data, len);
+      _framePos += len;
+    }
+    else
+      _bufOverflow = true;
   }
   void _bufStr(const char *s)
   {
     size_t n = strlen(s);
-    memcpy(_frameBuf + _framePos, s, n);
-    _framePos += n;
+    if (_bufEnsure(n))
+    {
+      memcpy(_frameBuf + _framePos, s, n);
+      _framePos += n;
+    }
+    else
+      _bufOverflow = true;
   }
   void _bufStr0(const char *s)
   {
     _bufStr(s);
-    _frameBuf[_framePos++] = 0;
+    _bufByte(0);
   }
   void _bufStr0(const String &s)
   {
@@ -440,6 +464,15 @@ private:
   }
   void _bufSend()
   {
+    if (_bufOverflow)
+    {
+      if (!_bufOverflowWarned && StreamRef != nullptr)
+      {
+        StreamRef->println("Buffered frame exceeds available memory; frame dropped.");
+        _bufOverflowWarned = true;
+      }
+      return;
+    }
     StreamRef->write(_frameBuf, _framePos);
     StreamRef->flush();
   }

@@ -34,6 +34,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 - Fixed timer burst issue: when the main loop is delayed beyond the timed interval, `timedWriteData` no longer fires multiple times in rapid succession to catch up. It now skips missed intervals and resumes at the next boundary.
+- Fixed buffered write overflow risk by adding bounds-safe dynamic growth for frame buffers (with graceful frame-drop warning if memory expansion fails), preventing heap corruption with long metadata/signal names.
 
 
 ## [5.0.1] - 2025-11-13
