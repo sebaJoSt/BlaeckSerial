@@ -1585,6 +1585,11 @@ bool BlaeckSerial::_bufEnsure(size_t addLen)
     return false;
   }
 
+  if (addLen > (SIZE_MAX - (size_t)_framePos))
+  {
+    return false;
+  }
+
   size_t needed = (size_t)_framePos + addLen;
   if (needed <= (size_t)_frameBufSize)
   {
