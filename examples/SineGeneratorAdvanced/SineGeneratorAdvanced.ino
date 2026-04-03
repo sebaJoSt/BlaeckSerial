@@ -8,7 +8,7 @@
   - EEPROMEx Library
 
   Features:
-  - EEPROM stores state
+  - EEPROM stores state (firmware version marker, signal activation mask, master/slave mode, slave ID)
   - Signals can be (de-)activated with <SIGNAL_ACTIVATE>
   - Print status with <STATUS>
   - Master/Slave mode can be configured with <MASTER_SLAVE_MODE>
@@ -26,16 +26,10 @@ const char FW_VERSION[6] = "1.000";
 struct EEPROMaddress
 { // use int for all addresses
   int firmware_version;
-  int loggingActivated;
-  int loggingInterval;
   int signalActivated;
   int masterSlaveMode;
   int slaveID;
 } eepromaddress;
-
-//---LOGGING
-bool loggingActivated;
-unsigned long loggingInterval = 1000; //[ms]
 
 //---INSTANCES
 BlaeckSerial BlaeckSerial;
@@ -83,7 +77,6 @@ void setup()
   BlaeckSerial.DeviceFWVersion = FW_VERSION;
 
   BlaeckSerial.setCommandCallback(startCommand);
-  BlaeckSerial.setTimedData(loggingActivated, loggingInterval);
 
   // Signals for Logging with BlaeckSerial
   // BlaeckSerial.addSignal..

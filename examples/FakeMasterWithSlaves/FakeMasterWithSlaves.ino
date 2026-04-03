@@ -15,8 +15,10 @@
     hub.add_serial("COM3", 115200)
 
   Auto-cycle (no commands needed):
-    Slave 8  fails for 10 s every 30 s (StatusByte=1)
-    Slave 42 fails for 10 s every 45 s (offset, sometimes overlaps)
+    Each slave has a 5 % chance per second of failing independently.
+    Once failed, it stays down for 3–10 s before auto-recovering.
+    This produces realistic patterns: single failures, overlapping
+    failures, staggered recoveries, and occasional simultaneous events.
     Auto-cycle stops per-slave when a manual command is sent.
 
   Custom commands (send via blaecktcpy or Serial Monitor):
@@ -51,12 +53,14 @@ bool slave42Failed = false;
 bool autoCycle8 = true;   // auto-cycle active until manual override
 bool autoCycle42 = true;
 
-// Auto-cycle: slave 8 fails for 10 s every 30 s, slave 42 fails for
-// 10 s every 45 s (offset so they sometimes overlap).
-static const unsigned long CYCLE8_PERIOD  = 30000;
-static const unsigned long CYCLE8_FAIL_AT = 20000; // fails at 20 s, recovers at 30 s
-static const unsigned long CYCLE42_PERIOD  = 45000;
-static const unsigned long CYCLE42_FAIL_AT = 35000;
+// Random independent failures: 5 % chance/sec of failing,
+// once failed stays down for 3–10 s before auto-recovering.
+static const float FAIL_PROB_PER_SEC = 0.05;
+static const unsigned long MIN_DOWN_MS = 3000;
+static const unsigned long MAX_DOWN_MS = 10000;
+unsigned long slave8RecoverAt = 0;
+unsigned long slave42RecoverAt = 0;
+unsigned long lastCycleCheck = 0;
 
 // ── Timed data ──────────────────────────────────────────────────────
 bool timedActive = false;
@@ -445,6 +449,7 @@ void handleCommand(const char *cmd)
 void setup()
 {
   Serial.begin(115200);
+  randomSeed(analogRead(A0));
   computeSchemaHash();
 }
 
@@ -458,16 +463,42 @@ void loop()
   humidity = 55.0 + 10.0 * sin(t * 0.15);
   pressure = 1013.25 + 5.0 * sin(t * 0.1);
 
-  // Auto-cycle slave failures (disabled per-slave by manual commands)
+  // Auto-cycle slave failures (independent random per slave)
+  unsigned long now = millis();
+
+  // Roll the dice once per second; check recovery every loop
+  bool rollDice = (now - lastCycleCheck >= 1000);
+  if (rollDice) lastCycleCheck = now;
+
   if (autoCycle8)
   {
-    unsigned long phase8 = millis() % CYCLE8_PERIOD;
-    slave8Failed = (phase8 >= CYCLE8_FAIL_AT);
+    if (!slave8Failed)
+    {
+      if (rollDice && random(100) < (long)(FAIL_PROB_PER_SEC * 100))
+      {
+        slave8Failed = true;
+        slave8RecoverAt = now + random(MIN_DOWN_MS, MAX_DOWN_MS);
+      }
+    }
+    else if (now >= slave8RecoverAt)
+    {
+      slave8Failed = false;
+    }
   }
   if (autoCycle42)
   {
-    unsigned long phase42 = millis() % CYCLE42_PERIOD;
-    slave42Failed = (phase42 >= CYCLE42_FAIL_AT);
+    if (!slave42Failed)
+    {
+      if (rollDice && random(100) < (long)(FAIL_PROB_PER_SEC * 100))
+      {
+        slave42Failed = true;
+        slave42RecoverAt = now + random(MIN_DOWN_MS, MAX_DOWN_MS);
+      }
+    }
+    else if (now >= slave42RecoverAt)
+    {
+      slave42Failed = false;
+    }
   }
 
   // Read serial commands

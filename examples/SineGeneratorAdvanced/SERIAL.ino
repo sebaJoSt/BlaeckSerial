@@ -49,14 +49,6 @@ void PrintInfo(bool IsStartUp)
     Serial.println(slaveID);
   }
 
-  //--LOGGING INFO
-  sinfo(), Serial.print(F("BlaeckSerial currently "));
-  if (loggingActivated == false)
-    Serial.print(F("NOT "));
-  Serial.println(F("activated."));
-  sinfo(), Serial.print(F("BlaeckSerial interval [ms]: "));
-  Serial.println(loggingInterval);
-
   //--ACTIVATED SIGNALS INFO
   sinfo(), Serial.print(F("Activated signals ("));
   byte active_count = 0;

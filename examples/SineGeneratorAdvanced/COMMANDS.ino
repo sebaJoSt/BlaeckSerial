@@ -202,17 +202,13 @@ void startCommand(char *command, int *parameter, char *string01)
   //--------------------
   if (strcmp(command, "BLAECK.ACTIVATE?") == 0)
   {
-    shelp(), Serial.println(F("<BLAECK.ACTIVATE, intervalInSeconds>"));
+    shelp(), Serial.println(F("<BLAECK.ACTIVATE,first,second,third,fourth byte>"));
     shelp(), Serial.println(F("Activates Logging in Blaeck format"));
-    shelp(), Serial.println(F("e.g. <BLAECK.ACTIVATE, 10> logs every 10 seconds"));
-    shelp(), Serial.println(F("Interval: 0 to 32767[s]"));
+    shelp(), Serial.println(F("e.g. <BLAECK.ACTIVATE,96,234> logs every 60000 ms"));
+    shelp(), Serial.println(F("Interval: 0 to 4294967295 ms (little-endian 4-byte value)"));
   }
   if (strcmp(command, "BLAECK.ACTIVATE") == 0)
   {
-    loggingActivated = true;
-    loggingInterval = ((unsigned long)parameter[3] << 24) | ((unsigned long)parameter[2] << 16) | ((unsigned long)parameter[1] << 8) | ((unsigned long)parameter[0]);
-    EEPROM.update(eepromaddress.loggingActivated, true);
-    EEPROM.updateLong(eepromaddress.loggingInterval, loggingInterval);
     // Processed in BlaeckSerial library
   }
 
@@ -223,8 +219,6 @@ void startCommand(char *command, int *parameter, char *string01)
   }
   if (strcmp(command, "BLAECK.DEACTIVATE") == 0)
   {
-    loggingActivated = false;
-    EEPROM.update(eepromaddress.loggingActivated, false);
     // Processed in BlaeckSerial library
   }
 

@@ -38,10 +38,9 @@ void setup()
     BlaeckSerial.addSignal(signalName + i, &sine);
   }
 
-  /*Uncomment this function for initial settings
-    first parameter: timedActivated
-    second parameter: timedInterval_ms */
-  // BlaeckSerial.setTimedData(true, 60000);
+  /*Uncomment for fixed interval lock (ms)
+    - ignores ACTIVATE/DEACTIVATE while locked */
+  // BlaeckSerial.setIntervalMs(60000);
 }
 
 void loop()

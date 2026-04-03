@@ -75,6 +75,24 @@ Here's a full list of serial commands handled by this library:
 | `<BLAECK.ACTIVATE,first,second,third,fourth byte>`| Activates writing the binary data in user-set interval [ms]<br />Min: 0ms  Max: 4294967295ms<br /> e.g. `<BLAECK.ACTIVATE,96,234>` The data is written every 60 seconds (60 000ms)<br />first Byte: 0b01100000 = 96 DEC<br />second Byte: 0b11101010 = 234 DEC|
 | `<BLAECK.DEACTIVATE> `       | Deactivates writing in intervals.                                                |
 
+### Interval lock mode
+
+By default, timed data is client-controlled (`BLAECK.ACTIVATE` / `BLAECK.DEACTIVATE`).
+You can lock interval behavior from sketch code:
+
+```CPP
+// Fixed interval lock: always send every 500 ms, ignore ACTIVATE/DEACTIVATE
+BlaeckSerial.setIntervalMs(500);
+
+// Off lock: disable timed data and ignore ACTIVATE
+BlaeckSerial.setIntervalMs(BLAECK_INTERVAL_OFF);
+
+// Back to client control (default behavior)
+BlaeckSerial.setIntervalMs(BLAECK_INTERVAL_CLIENT);
+```
+
+`setTimedData(...)` has been removed. Use `setIntervalMs(...)` instead.
+
 ## Messages
 
 The messages are in the following format:
