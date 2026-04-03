@@ -22,6 +22,7 @@
 #include <CRC32.h>
 #include <CRC16.h>
 #include <new>
+#include <limits.h>
 
 // Buffered writes: assemble entire frames in RAM before a single
 // StreamRef->write(buf, len) call.  Prevents byte-dropping on boards

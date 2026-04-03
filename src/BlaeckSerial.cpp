@@ -1594,7 +1594,23 @@ bool BlaeckSerial::_bufEnsure(size_t addLen)
   size_t newSize = (size_t)_frameBufSize;
   while (newSize < needed)
   {
-    newSize = (newSize < 128) ? 128 : (newSize * 2);
+    if (newSize < 128)
+    {
+      newSize = 128;
+    }
+    else
+    {
+      if (newSize > (SIZE_MAX / 2))
+      {
+        return false;
+      }
+      newSize *= 2;
+    }
+  }
+
+  if (newSize > (size_t)INT_MAX)
+  {
+    return false;
   }
 
   byte *newBuf = new (std::nothrow) byte[newSize];
