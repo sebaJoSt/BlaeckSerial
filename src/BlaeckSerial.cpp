@@ -790,8 +790,11 @@ void BlaeckSerial::writeSymbols(unsigned long msg_id)
   {
     refreshI2CSlavesIfNeeded();
 
+    // Recompute schema hash from local + slave signals
+    _schemaHashAccum = 0x0000;
     this->writeLocalSymbols(msg_id, false);
     this->writeSlaveSymbols(true);
+    _schemaHash = _schemaHashAccum & 0xFFFF;
   }
 }
 
@@ -1917,62 +1920,53 @@ void BlaeckSerial::writeLocalSymbols(unsigned long msg_id, bool send_eol)
 
     Signal signal = Signals[i];
 
+    // Feed signal name into schema hash accumulator
+    const char *namePtr = signal.SignalName.c_str();
+    while (*namePtr)
+      _schemaHashFeedByte((byte)*namePtr++);
+
     StreamRef->print(signal.SignalName);
     StreamRef->print('\0');
 
+    byte dtCode;
     switch (signal.DataType)
     {
     case (Blaeck_bool):
-    {
-      StreamRef->write((byte)0x0);
+      dtCode = 0x0;
       break;
-    }
     case (Blaeck_byte):
-    {
-      StreamRef->write(0x1);
+      dtCode = 0x1;
       break;
-    }
     case (Blaeck_short):
-    {
-      StreamRef->write(0x2);
+      dtCode = 0x2;
       break;
-    }
     case (Blaeck_ushort):
-    {
-      StreamRef->write(0x3);
+      dtCode = 0x3;
       break;
-    }
     case (Blaeck_int):
-    {
-      StreamRef->write(0x4);
+      dtCode = 0x4;
       break;
-    }
     case (Blaeck_uint):
-    {
-      StreamRef->write(0x5);
+      dtCode = 0x5;
       break;
-    }
     case (Blaeck_long):
-    {
-      StreamRef->write(0x6);
+      dtCode = 0x6;
       break;
-    }
     case (Blaeck_ulong):
-    {
-      StreamRef->write(0x7);
+      dtCode = 0x7;
       break;
-    }
     case (Blaeck_float):
-    {
-      StreamRef->write(0x8);
+      dtCode = 0x8;
       break;
-    }
     case (Blaeck_double):
-    {
-      StreamRef->write(0x9);
+      dtCode = 0x9;
+      break;
+    default:
+      dtCode = 0x8;
       break;
     }
-    }
+    StreamRef->write(dtCode);
+    _schemaHashFeedByte(dtCode);
   }
   if (send_eol)
   {
@@ -2008,6 +2002,7 @@ void BlaeckSerial::writeSlaveSymbols(bool send_eol)
       {
 
         bool eolist_found = false;
+        bool afterNull = false; // true = next non-control byte is datatype
         const unsigned long timeout_ms = 50;
         unsigned long start_ms = millis();
         while ((millis() - start_ms) < timeout_ms && !eolist_found)
@@ -2041,6 +2036,7 @@ void BlaeckSerial::writeSlaveSymbols(bool send_eol)
             if (c == char(0x0D))
             {
               eosignal_found = true;
+              afterNull = false;
               signalCount += 1;
             }
 
@@ -2049,7 +2045,24 @@ void BlaeckSerial::writeSlaveSymbols(bool send_eol)
               eolist_found = true;
 
             if (eosignal_found != true && eolist_found != true)
+            {
               StreamRef->print(c);
+
+              // Feed into schema hash accumulator
+              if (c == char(0x00))
+              {
+                afterNull = true; // next byte is datatype
+              }
+              else if (afterNull)
+              {
+                _schemaHashFeedByte((byte)c); // datatype code
+                afterNull = false;
+              }
+              else
+              {
+                _schemaHashFeedByte((byte)c); // name character
+              }
+            }
           }
           if (eolist_found)
             break;
@@ -2067,9 +2080,14 @@ void BlaeckSerial::writeSlaveSymbols(bool send_eol)
 
 void BlaeckSerial::scanI2CSlaves(char addressStart, char addressEnd)
 {
-  // Cycle through slaves
+  // Cycle through slaves (add-only: once found, a slave stays registered
+  // until reboot.  Temporary I2C failures are reported via StatusByte=1
+  // in data frames, not as schema changes.)
   for (int slaveindex = addressStart; slaveindex <= addressEnd; slaveindex++)
   {
+    if (slaveFound(slaveindex))
+      continue; // already registered, skip
+
     byte transmissionIsSuccess = false;
 
     for (byte retries = 0; retries < 4; retries++)
@@ -2084,8 +2102,6 @@ void BlaeckSerial::scanI2CSlaves(char addressStart, char addressEnd)
 
     if (transmissionIsSuccess == 0)
     {
-      storeSlave(slaveindex, false);
-
       byte receivedBytes = Wire.requestFrom(slaveindex, 1);
       if (receivedBytes < 1 || !Wire.available())
       {
@@ -2099,10 +2115,6 @@ void BlaeckSerial::scanI2CSlaves(char addressStart, char addressEnd)
       if (c == char(0xAA))
       {
         storeSlave(slaveindex, true);
-      }
-      else
-      {
-        storeSlave(slaveindex, false);
       }
     }
   }

@@ -264,6 +264,17 @@ private:
   int findSignalIndex(String signalName);
   void setSignalName(int signalIndex, String signalName, bool prefixSlaveID);
   uint16_t _computeSchemaHash();
+  inline void _schemaHashFeedByte(byte b)
+  {
+    _schemaHashAccum ^= ((uint16_t)b << 8);
+    for (byte k = 0; k < 8; k++)
+    {
+      if (_schemaHashAccum & 0x8000)
+        _schemaHashAccum = (_schemaHashAccum << 1) ^ 0x1021;
+      else
+        _schemaHashAccum <<= 1;
+    }
+  }
 
   void timedWriteData(unsigned long messageID, int signalIndex_start, int signalIndex_end, bool onlyUpdated, unsigned long long timestamp);
   void tick(unsigned long messageID, bool onlyUpdated);
@@ -340,6 +351,7 @@ private:
   CRC16 _crcWire;
   CRC16 _crcWireCalc;
   uint16_t _schemaHash = 0;
+  uint16_t _schemaHashAccum = 0;
 
   static BlaeckSerial *_pSingletonInstance;
 
