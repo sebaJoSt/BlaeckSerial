@@ -460,7 +460,7 @@ private:
   void _bufStr0(const String &s)
   {
     _bufStr(s.c_str());
-    _frameBuf[_framePos++] = 0;
+    _bufByte(0);
   }
   void _bufSend()
   {
