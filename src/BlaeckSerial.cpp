@@ -1510,7 +1510,8 @@ void BlaeckSerial::prepareMasterSlaveSkipMap(bool *skipSlaves, byte &skippedSlav
 
 void BlaeckSerial::timedWriteAllData()
 {
-  this->timedWriteAllData(185273099);
+  unsigned long id = (_fixedInterval_ms >= 0) ? 185273100 : 185273099;
+  this->timedWriteAllData(id);
 }
 
 void BlaeckSerial::timedWriteAllData(unsigned long msg_id)
@@ -1525,7 +1526,8 @@ void BlaeckSerial::timedWriteAllData(unsigned long msg_id, unsigned long long ti
 
 void BlaeckSerial::timedWriteUpdatedData()
 {
-  this->timedWriteUpdatedData(185273099);
+  unsigned long id = (_fixedInterval_ms >= 0) ? 185273100 : 185273099;
+  this->timedWriteUpdatedData(id);
 }
 
 void BlaeckSerial::timedWriteUpdatedData(unsigned long msg_id)
@@ -2618,7 +2620,8 @@ void BlaeckSerial::scanI2CSlaves(char addressStart, char addressEnd)
 
 void BlaeckSerial::tickUpdated()
 {
-  this->tickUpdated(185273099);
+  unsigned long id = (_fixedInterval_ms >= 0) ? 185273100 : 185273099;
+  this->tickUpdated(id);
 }
 
 void BlaeckSerial::tickUpdated(unsigned long msg_id)
@@ -2628,7 +2631,8 @@ void BlaeckSerial::tickUpdated(unsigned long msg_id)
 
 void BlaeckSerial::tick()
 {
-  this->tick(185273099);
+  unsigned long id = (_fixedInterval_ms >= 0) ? 185273100 : 185273099;
+  this->tick(id);
 }
 
 void BlaeckSerial::tick(unsigned long msg_id)
