@@ -14,6 +14,11 @@
   Upload to any Arduino and connect via Serial or blaecktcpy:
     hub.add_serial("COM3", 115200)
 
+  Auto-cycle (no commands needed):
+    Slave 8  fails for 10 s every 30 s (StatusByte=1)
+    Slave 42 fails for 10 s every 45 s (offset, sometimes overlaps)
+    Auto-cycle stops per-slave when a manual command is sent.
+
   Custom commands (send via blaecktcpy or Serial Monitor):
     <BLAECK.FAIL_SLAVE,8>     — simulate slave 8 I2C failure
     <BLAECK.RESTORE_SLAVE,8>  — bring slave 8 back online
@@ -43,6 +48,15 @@ float pressure = 1013.25;
 // ── Slave failure simulation ────────────────────────────────────────
 bool slave8Failed = false;
 bool slave42Failed = false;
+bool autoCycle8 = true;   // auto-cycle active until manual override
+bool autoCycle42 = true;
+
+// Auto-cycle: slave 8 fails for 10 s every 30 s, slave 42 fails for
+// 10 s every 45 s (offset so they sometimes overlap).
+static const unsigned long CYCLE8_PERIOD  = 30000;
+static const unsigned long CYCLE8_FAIL_AT = 20000; // fails at 20 s, recovers at 30 s
+static const unsigned long CYCLE42_PERIOD  = 45000;
+static const unsigned long CYCLE42_FAIL_AT = 35000;
 
 // ── Timed data ──────────────────────────────────────────────────────
 bool timedActive = false;
@@ -416,18 +430,14 @@ void handleCommand(const char *cmd)
   else if (strcmp(c, "BLAECK.FAIL_SLAVE") == 0)
   {
     int sid = parseSlaveId(params);
-    if (sid == 8)
-      slave8Failed = true;
-    else if (sid == 42)
-      slave42Failed = true;
+    if (sid == 8)  { slave8Failed = true;  autoCycle8 = false; }
+    if (sid == 42) { slave42Failed = true;  autoCycle42 = false; }
   }
   else if (strcmp(c, "BLAECK.RESTORE_SLAVE") == 0)
   {
     int sid = parseSlaveId(params);
-    if (sid == 8)
-      slave8Failed = false;
-    else if (sid == 42)
-      slave42Failed = false;
+    if (sid == 8)  { slave8Failed = false;  autoCycle8 = false; }
+    if (sid == 42) { slave42Failed = false;  autoCycle42 = false; }
   }
 }
 
@@ -447,6 +457,18 @@ void loop()
   temperature = 22.0 + 3.0 * sin(t * 0.3);
   humidity = 55.0 + 10.0 * sin(t * 0.15);
   pressure = 1013.25 + 5.0 * sin(t * 0.1);
+
+  // Auto-cycle slave failures (disabled per-slave by manual commands)
+  if (autoCycle8)
+  {
+    unsigned long phase8 = millis() % CYCLE8_PERIOD;
+    slave8Failed = (phase8 >= CYCLE8_FAIL_AT);
+  }
+  if (autoCycle42)
+  {
+    unsigned long phase42 = millis() % CYCLE42_PERIOD;
+    slave42Failed = (phase42 >= CYCLE42_FAIL_AT);
+  }
 
   // Read serial commands
   while (Serial.available() > 0)
