@@ -670,7 +670,7 @@ void BlaeckSerial::onAnyCommand(BlaeckAnyCommandHandler handler)
   _anyCommandHandler = handler;
 }
 
-void BlaeckSerial::clearCommandHandlers()
+void BlaeckSerial::clearAllCommandHandlers()
 {
   for (byte i = 0; i < MAX_COMMAND_HANDLERS; i++)
   {

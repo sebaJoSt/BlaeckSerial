@@ -89,7 +89,7 @@ enum BlaeckIntervalMode
   BLAECK_INTERVAL_OFF = -2
 };
 
-typedef bool (*BlaeckCommandHandler)(const char *command, const char *const *params, byte paramCount);
+typedef void (*BlaeckCommandHandler)(const char *command, const char *const *params, byte paramCount);
 typedef void (*BlaeckAnyCommandHandler)(const char *command, const char *const *params, byte paramCount);
 
 class BlaeckSerial
@@ -289,7 +289,7 @@ public:
   void setCommandCallback(void (*callback)(char *command, int *parameter, char *string_01));
   bool onCommand(const char *command, BlaeckCommandHandler handler);
   void onAnyCommand(BlaeckAnyCommandHandler handler);
-  void clearCommandHandlers();
+  void clearAllCommandHandlers();
   void setCommandHandlerCapacity(byte capacity);
 
   // ----- Before data write callback  -----

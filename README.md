@@ -105,12 +105,11 @@ Command parser defaults are architecture-aware:
 - Non-AVR: 96 command chars, 12 registered handlers, 40 command-name chars, 10 params
 
 ```CPP
-bool onSwitchLED(const char *command, const char *const *params, byte paramCount)
+void onSwitchLED(const char *command, const char *const *params, byte paramCount)
 {
-  if (paramCount < 1) return false;
+  if (paramCount < 1) return;
   int state = atoi(params[0]);
   digitalWrite(LED_BUILTIN, state == 1 ? HIGH : LOW);
-  return true;
 }
 
 void onAny(const char *command, const char *const *params, byte paramCount)

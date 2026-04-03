@@ -24,9 +24,9 @@ All notable changes to this project will be documented in this file.
   - When locked to fixed/off mode, incoming `BLAECK.ACTIVATE`/`BLAECK.DEACTIVATE` commands are ignored.
   - Removed public `setTimedData(...)`; use `setIntervalMs(...)` for timed-data configuration.
 - Added command registration API:
-  - `onCommand(const char* command, bool (*handler)(const char*, const char* const*, byte))`
+  - `onCommand(const char* command, void (*handler)(const char*, const char* const*, byte))`
   - `onAnyCommand(void (*handler)(const char*, const char* const*, byte))`
-  - `clearCommandHandlers()` and `setCommandHandlerCapacity(byte)`
+  - `clearAllCommandHandlers()` and `setCommandHandlerCapacity(byte)`
 - Added architecture-based command parser defaults:
   - AVR: smaller defaults for command length/handler table/command name length
   - non-AVR: larger defaults (96 chars, 12 handlers, 40 command-name chars)
