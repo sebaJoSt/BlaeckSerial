@@ -22,6 +22,28 @@
 #include <CRC32.h>
 #include <CRC16.h>
 
+// Buffered writes: assemble entire frames in RAM before a single
+// StreamRef->write(buf, len) call.  Prevents byte-dropping on boards
+// whose UART-to-USB bridge can't keep up with many small writes
+// (e.g. Arduino Uno R4 WiFi / ESP32-S3 bridge).
+// Default: OFF on AVR (saves SRAM), ON everywhere else.
+#if defined(__AVR__)
+#define BLAECK_BUFFERED_WRITES_DEFAULT false
+#else
+#define BLAECK_BUFFERED_WRITES_DEFAULT true
+#endif
+
+#if defined(__AVR__)
+#define BLAECK_COMMAND_MAX_CHARS_DEFAULT 48
+#define BLAECK_COMMAND_MAX_HANDLERS_DEFAULT 4
+#define BLAECK_COMMAND_MAX_NAME_CHARS_DEFAULT 24
+#else
+#define BLAECK_COMMAND_MAX_CHARS_DEFAULT 96
+#define BLAECK_COMMAND_MAX_HANDLERS_DEFAULT 12
+#define BLAECK_COMMAND_MAX_NAME_CHARS_DEFAULT 40
+#endif
+#define BLAECK_COMMAND_MAX_PARAMS_DEFAULT 10
+
 typedef enum MasterSlaveConfig
 {
   Single,
@@ -64,6 +86,9 @@ enum BlaeckIntervalMode
   BLAECK_INTERVAL_CLIENT = -1,
   BLAECK_INTERVAL_OFF = -2
 };
+
+typedef bool (*BlaeckCommandHandler)(const char *command, const char *const *params, byte paramCount);
+typedef void (*BlaeckAnyCommandHandler)(const char *command, const char *const *params, byte paramCount);
 
 class BlaeckSerial
 {
@@ -258,7 +283,12 @@ public:
   void read();
 
   // ----- Command callback  -----
+  // Deprecated: use onCommand(...) / onAnyCommand(...)
   void setCommandCallback(void (*callback)(char *command, int *parameter, char *string_01));
+  bool onCommand(const char *command, BlaeckCommandHandler handler);
+  void onAnyCommand(BlaeckAnyCommandHandler handler);
+  void clearCommandHandlers();
+  void setCommandHandlerCapacity(byte capacity);
 
   // ----- Before data write callback  -----
   // In single device or master mode the function is called just before sending data over serial,
@@ -271,11 +301,18 @@ public:
   BlaeckTimestampMode getTimestampMode() const { return _timestampMode; }
   bool hasValidTimestampCallback() const;
 
+  // Buffered writes: assemble entire frame in RAM before sending.
+  // Enabled by default on non-AVR boards (see BLAECK_BUFFERED_WRITES_DEFAULT).
+  void setBufferedWrites(bool enabled);
+  bool isBufferedWrites() const { return _bufferedWrites; }
+
 private:
   unsigned long long getTimeStamp();
   int findSignalIndex(String signalName);
   void setSignalName(int signalIndex, String signalName, bool prefixSlaveID);
   void _setTimedDataState(bool timedActivated, unsigned long timedInterval_ms);
+  void _parseCommandTokens(const char *raw);
+  void _dispatchRegisteredHandlers();
   uint16_t _computeSchemaHash();
   inline void _schemaHashFeedByte(byte b)
   {
@@ -353,7 +390,10 @@ private:
   unsigned long _lastI2CScanMs = 0;
   static const unsigned long I2C_SCAN_INTERVAL_MS = 250;
 
-  static const int MAXIMUM_CHAR_COUNT = 64;
+  static const int MAXIMUM_CHAR_COUNT = BLAECK_COMMAND_MAX_CHARS_DEFAULT;
+  static const byte MAX_COMMAND_HANDLERS = BLAECK_COMMAND_MAX_HANDLERS_DEFAULT;
+  static const byte MAX_COMMAND_PARAM_COUNT = BLAECK_COMMAND_MAX_PARAMS_DEFAULT;
+  static const byte MAX_COMMAND_NAME_COUNT = BLAECK_COMMAND_MAX_NAME_CHARS_DEFAULT;
   char receivedChars[MAXIMUM_CHAR_COUNT];
   char COMMAND[MAXIMUM_CHAR_COUNT] = {0};
   int PARAMETER[10];
@@ -366,6 +406,50 @@ private:
   CRC16 _crcWireCalc;
   uint16_t _schemaHash = 0;
   uint16_t _schemaHashAccum = 0;
+
+  // ── Buffered writes ───────────────────────────────────────────────
+  bool _bufferedWrites = BLAECK_BUFFERED_WRITES_DEFAULT;
+  byte *_frameBuf = nullptr;
+  int _framePos = 0;
+  int _frameBufSize = 0;
+
+  void _bufAllocate();
+  void _bufFree();
+  void _bufReset() { _framePos = 0; }
+  void _bufByte(byte b) { _frameBuf[_framePos++] = b; }
+  void _bufBytes(const byte *data, size_t len)
+  {
+    memcpy(_frameBuf + _framePos, data, len);
+    _framePos += len;
+  }
+  void _bufStr(const char *s)
+  {
+    size_t n = strlen(s);
+    memcpy(_frameBuf + _framePos, s, n);
+    _framePos += n;
+  }
+  void _bufStr0(const char *s)
+  {
+    _bufStr(s);
+    _frameBuf[_framePos++] = 0;
+  }
+  void _bufStr0(const String &s)
+  {
+    _bufStr(s.c_str());
+    _frameBuf[_framePos++] = 0;
+  }
+  void _bufSend()
+  {
+    StreamRef->write(_frameBuf, _framePos);
+    StreamRef->flush();
+  }
+  void _bufHeader(byte msgKey, unsigned long msgId);
+  void _bufFooter()
+  {
+    _bufStr("/BLAECK>\r\n");
+  }
+  void _bufDevice(byte msc, byte sid, const String &name,
+                  const String &hw, const String &fw);
 
   static BlaeckSerial *_pSingletonInstance;
 
@@ -387,6 +471,20 @@ private:
   }
 
   void (*_commandCallback)(char *command, int *parameter, char *string01) = nullptr;
+  bool _commandCallbackDeprecationWarned = false;
+  byte _commandHandlerCapacity = MAX_COMMAND_HANDLERS;
+  struct CommandHandlerEntry
+  {
+    char command[MAX_COMMAND_NAME_COUNT];
+    BlaeckCommandHandler handler = nullptr;
+    bool inUse = false;
+  };
+  CommandHandlerEntry _commandHandlers[MAX_COMMAND_HANDLERS];
+  BlaeckAnyCommandHandler _anyCommandHandler = nullptr;
+  char _parsedTokenBuffer[MAXIMUM_CHAR_COUNT] = {0};
+  char _parsedCommand[MAX_COMMAND_NAME_COUNT] = {0};
+  const char *_parsedParamPtrs[MAX_COMMAND_PARAM_COUNT] = {0};
+  byte _parsedParamCount = 0;
   bool recvWithStartEndMarkers();
   void parseData();
 

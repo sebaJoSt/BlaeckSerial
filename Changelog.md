@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [6.0.0] - 2026-04-01
 
+### Added
+- Buffered frame writes: all protocol frames (B0, B3, C0, D2) can be assembled
+  in RAM before a single `Serial.write()` call.  Prevents byte-dropping on
+  boards with UART-to-USB bridges (e.g. Arduino Uno R4 WiFi).
+  - Enabled by default on non-AVR boards, disabled on AVR to save SRAM.
+  - Runtime control: `setBufferedWrites(bool)` / `isBufferedWrites()`.
+
 ### Changed
 - **Breaking change:** Data message format updated from `D1` (0xD1) to `D2` (0xD2)
 - **Breaking change:** Timestamps are now 8 bytes (uint64) instead of 4 bytes (uint32)
@@ -16,6 +23,14 @@ All notable changes to this project will be documented in this file.
 - Added interval lock API aligned with blaecktcpy/BlaeckTCP: `setIntervalMs(...)` with `BLAECK_INTERVAL_CLIENT`, `BLAECK_INTERVAL_OFF`, or fixed millisecond values.
   - When locked to fixed/off mode, incoming `BLAECK.ACTIVATE`/`BLAECK.DEACTIVATE` commands are ignored.
   - Removed public `setTimedData(...)`; use `setIntervalMs(...)` for timed-data configuration.
+- Added command registration API:
+  - `onCommand(const char* command, bool (*handler)(const char*, const char* const*, byte))`
+  - `onAnyCommand(void (*handler)(const char*, const char* const*, byte))`
+  - `clearCommandHandlers()` and `setCommandHandlerCapacity(byte)`
+- Added architecture-based command parser defaults:
+  - AVR: smaller defaults for command length/handler table/command name length
+  - non-AVR: larger defaults (96 chars, 12 handlers, 40 command-name chars)
+- Deprecated `setCommandCallback(...)` in favor of `onCommand(...)` / `onAnyCommand(...)` (legacy callback remains supported with runtime warning).
 
 ### Fixed
 - Fixed timer burst issue: when the main loop is delayed beyond the timed interval, `timedWriteData` no longer fires multiple times in rapid succession to catch up. It now skips missed intervals and resumes at the next boundary.

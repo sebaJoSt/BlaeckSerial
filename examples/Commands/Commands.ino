@@ -12,21 +12,20 @@
   The command syntax for implementing your own commands:
 
     Command:         <COMMAND,PARAMETER01,PARAMETER02,...,PARAMETER10>
-    StringCommand:   <COMMAND, STRING01  ,PARAMETER02,...,PARAMETER10>
-                     <-           --  max. 64 chars ---             ->
-                     <-         --  max. 10 Parameters ---          ->
+                     <-  full payload size is architecture-dependent ->
+                     AVR: up to 48 chars, non-AVR: up to 96 chars
+                     <-         --  max. 10 parameters ---          ->
 
-    COMMAND:         String
-    PARAMETER01..10  Int 16 Bit
-    STRING01:        max. 15 chars
+    COMMAND:         String token (handler key used in onCommand)
+    PARAMETER01..10  String tokens (convert with atoi/atol/atof as needed)
     Start Marker*:    <
     End Marker*:      >
     Separation*:      ,
 
-      * Not allowed in COMMAND, PARAMETER & STRING01
+      * Not allowed in COMMAND or parameter tokens
 
-    Empty PARAMETER are not allowed,
-    e.g. don't do: <COMMAND,,PARAMETER02>   <- PARAMETER02 will be stored in PARAMETER01
+    Empty parameters are not allowed,
+    e.g. don't do: <COMMAND,,PARAMETER02>   <- PARAMETER02 shifts into PARAMETER01
                do: <COMMAND,PARAMETER01,PARAMETER02>
 
   The circuit:
@@ -52,6 +51,9 @@ BlaeckSerial BlaeckSerial;
 
 // Sets the pin number:
 const int ledPin = LED_BUILTIN;
+bool onSwitchLED(const char *command, const char *const *params, byte paramCount);
+bool onSomeCommand(const char *command, const char *const *params, byte paramCount);
+bool onPrint(const char *command, const char *const *params, byte paramCount);
 
 void setup()
 {
@@ -64,14 +66,16 @@ void setup()
   // Setup BlaeckSerial
   BlaeckSerial.begin(&Serial, 0);
 
-  // Setup command callback function by passing a function
-  BlaeckSerial.setCommandCallback(startCommand);
+  // Register command handlers (new style)
+  BlaeckSerial.onCommand("SwitchLED", onSwitchLED);
+  BlaeckSerial.onCommand("SomeCommand", onSomeCommand);
+  BlaeckSerial.onCommand("Print", onPrint);
 }
 
 void loop()
 {
-  /* Keeps watching for serial input and fires the callback function
-     startCommand when a input with the correct syntax is detected.
+  /* Keeps watching for serial input and dispatches registered handlers
+     when input with the correct syntax is detected.
      Instead of BlaeckSerial.read you can use BlaeckSerial.tick
      if you want to add signals and write them in a user-set interval
      (see Basic example).
@@ -79,53 +83,63 @@ void loop()
   BlaeckSerial.read();
 }
 
-// Implement the function, don't forget the arguments
-void startCommand(char *command, int *parameter, char *string01)
+bool onSwitchLED(const char *command, const char *const *params, byte paramCount)
 {
-  /* Compares the user input to the string "SwitchLED"
-     strcmp takes the two strings to be compared as parameters
-     and returns 0 if the strings are equal*/
-  if (strcmp(command, "SwitchLED") == 0)
+  (void)command;
+  if (paramCount < 1)
   {
-    // parameter[0] is the first parameter after the command: PARAMETER01
-    if (parameter[0] == 1)
-    {
-      // Turns on the LED
-      digitalWrite(ledPin, HIGH);
-      Serial.println("LED is ON.");
-    }
-    if (parameter[0] == 0)
-    {
-      // Turns off the LED
-      digitalWrite(ledPin, LOW);
-      Serial.println("LED is OFF.");
-    }
+    return false;
   }
+  int state = atoi(params[0]);
+  if (state == 1)
+  {
+    digitalWrite(ledPin, HIGH);
+    Serial.println("LED is ON.");
+    return true;
+  }
+  if (state == 0)
+  {
+    digitalWrite(ledPin, LOW);
+    Serial.println("LED is OFF.");
+    return true;
+  }
+  return false;
+}
 
-  /* Here you can add more commands:*/
-  if (strcmp(command, "SomeCommand") == 0)
-  {
-    // Do something
-  }
+bool onSomeCommand(const char *command, const char *const *params, byte paramCount)
+{
+  (void)command;
+  (void)params;
+  (void)paramCount;
+  // Do something
+  return true;
+}
 
-  /* Exemplary command using the string parameter STRING01:
-     Example: <Print,Bye Bye,1>
-  */
-  if (strcmp(command, "Print") == 0)
+/* Exemplary command using string parameters:
+   Example: <Print,Bye Bye,1>
+*/
+bool onPrint(const char *command, const char *const *params, byte paramCount)
+{
+  (void)command;
+  if (paramCount < 2)
   {
-    if (parameter[1] == 0)
-    {
-      Serial.println(string01);
-    }
-    if (parameter[1] == 1)
-    {
-      // Print
-      Serial.print(string01);
-      Serial.println(" Miss American Pie");
-      Serial.println("Drove my Chevy to the levee but the levee was dry");
-      Serial.println("And them good ole boys were drinking whiskey and rye");
-      Serial.println("Singin' this'll be the day that I die");
-      Serial.println("This'll be the day that I die");
-    }
+    return false;
   }
+  int mode = atoi(params[1]);
+  if (mode == 0)
+  {
+    Serial.println(params[0]);
+    return true;
+  }
+  if (mode == 1)
+  {
+    Serial.print(params[0]);
+    Serial.println(" Miss American Pie");
+    Serial.println("Drove my Chevy to the levee but the levee was dry");
+    Serial.println("And them good ole boys were drinking whiskey and rye");
+    Serial.println("Singin' this'll be the day that I die");
+    Serial.println("This'll be the day that I die");
+    return true;
+  }
+  return false;
 }

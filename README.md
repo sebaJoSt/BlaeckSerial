@@ -5,7 +5,7 @@
 
 
 BlaeckSerial is a simple Arduino library to send binary (sensor) data via Serial port to your PC. The data can be sent periodically or requested on demand with [serial commands](#blaeckserial-commands). It supports Master/Slave configuration to include data from additional slave boards connected to the master Arduino over I2C.  
-Also included is a message parser which reads input in the syntax of `<HelloWorld, 12, 47>`. The parsed command `HelloWorld` and its parameters are available in your own sketch by attaching a callback function.
+Also included is a message parser which reads input in the syntax of `<HelloWorld, 12, 47>`. You can register exact command handlers (`onCommand`) and a catch-all handler (`onAnyCommand`) in your sketch.
 
 ## Getting Started
 
@@ -92,6 +92,59 @@ BlaeckSerial.setIntervalMs(BLAECK_INTERVAL_CLIENT);
 ```
 
 `setTimedData(...)` has been removed. Use `setIntervalMs(...)` instead.
+
+### Command handler API
+
+Available callbacks:
+- `onCommand(...)` and `onAnyCommand(...)` for parsed incoming commands
+- `setCommandCallback(...)` (deprecated, still supported with runtime warning)
+- `setBeforeWriteCallback(...)` before data is written
+
+Command parser defaults are architecture-aware:
+- AVR (`__AVR__`): 48 command chars, 4 registered handlers, 24 command-name chars, 10 params
+- Non-AVR: 96 command chars, 12 registered handlers, 40 command-name chars, 10 params
+
+```CPP
+bool onSwitchLED(const char *command, const char *const *params, byte paramCount)
+{
+  if (paramCount < 1) return false;
+  int state = atoi(params[0]);
+  digitalWrite(LED_BUILTIN, state == 1 ? HIGH : LOW);
+  return true;
+}
+
+void onAny(const char *command, const char *const *params, byte paramCount)
+{
+  // Optional catch-all hook
+}
+
+void setup()
+{
+  // ...
+  BlaeckSerial.onCommand("SwitchLED", onSwitchLED);
+  BlaeckSerial.onAnyCommand(onAny);
+}
+```
+
+### Buffered writes
+
+On boards with UART-to-USB bridges (e.g. **Arduino Uno R4 WiFi**), rapid
+individual `Serial.write()` calls can cause bytes to be dropped.  BlaeckSerial
+can assemble entire frames in RAM and send them with a single write.
+
+| Board family | Default |
+| ------------ | ------- |
+| AVR (Uno, Mega, Nano) | OFF (saves SRAM) |
+| Everything else (R4 WiFi, ESP32, ARM, …) | **ON** |
+
+Override at runtime:
+
+```CPP
+BlaeckSerial.setBufferedWrites(true);   // force ON
+BlaeckSerial.setBufferedWrites(false);  // force OFF
+
+Serial.println(BlaeckSerial.isBufferedWrites() ? "ON" : "OFF");
+```
 
 ## Messages
 

@@ -18,6 +18,7 @@ BlaeckSerial::~BlaeckSerial()
 {
   delete[] Signals;
   Signals = nullptr;
+  _bufFree();
 }
 
 void BlaeckSerial::begin(Stream *Ref, unsigned int size)
@@ -37,6 +38,9 @@ void BlaeckSerial::begin(Stream *Ref, unsigned int size)
   _signalOverflowCount = 0;
   // Assign the static singleton used in the static handlers.
   BlaeckSerial::_pSingletonInstance = this;
+
+  if (_bufferedWrites)
+    _bufAllocate();
 }
 void BlaeckSerial::beginMaster(Stream *Ref, unsigned int size, uint32_t WireClockFrequency)
 {
@@ -589,18 +593,105 @@ void BlaeckSerial::read()
     }
 
     if (_commandCallback != NULL)
+    {
+      if (!_commandCallbackDeprecationWarned && StreamRef != nullptr)
+      {
+        StreamRef->println("WARNING: setCommandCallback(...) is deprecated; use onCommand(...) / onAnyCommand(...)");
+        _commandCallbackDeprecationWarned = true;
+      }
       _commandCallback(COMMAND, PARAMETER, STRING_01);
+    }
+    _dispatchRegisteredHandlers();
   }
 }
 
 void BlaeckSerial::setCommandCallback(void (*callback)(char *command, int *parameter, char *string_01))
 {
   _commandCallback = callback;
+  if (_commandCallback != NULL && !_commandCallbackDeprecationWarned && StreamRef != nullptr)
+  {
+    StreamRef->println("WARNING: setCommandCallback(...) is deprecated; use onCommand(...) / onAnyCommand(...)");
+    _commandCallbackDeprecationWarned = true;
+  }
 }
 
 void BlaeckSerial::setBeforeWriteCallback(void (*callback)())
 {
   _beforeWriteCallback = callback;
+}
+
+bool BlaeckSerial::onCommand(const char *command, BlaeckCommandHandler handler)
+{
+  if (command == nullptr || handler == nullptr || command[0] == '\0')
+  {
+    return false;
+  }
+  if (strlen(command) >= MAX_COMMAND_NAME_COUNT)
+  {
+    if (StreamRef != nullptr)
+    {
+      StreamRef->print("Command name too long for handler table: ");
+      StreamRef->println(command);
+    }
+    return false;
+  }
+
+  for (byte i = 0; i < _commandHandlerCapacity; i++)
+  {
+    if (_commandHandlers[i].inUse && strcmp(_commandHandlers[i].command, command) == 0)
+    {
+      _commandHandlers[i].handler = handler;
+      return true;
+    }
+  }
+
+  for (byte i = 0; i < _commandHandlerCapacity; i++)
+  {
+    if (!_commandHandlers[i].inUse)
+    {
+      strncpy(_commandHandlers[i].command, command, MAX_COMMAND_NAME_COUNT - 1);
+      _commandHandlers[i].command[MAX_COMMAND_NAME_COUNT - 1] = '\0';
+      _commandHandlers[i].handler = handler;
+      _commandHandlers[i].inUse = true;
+      return true;
+    }
+  }
+
+  if (StreamRef != nullptr)
+  {
+    StreamRef->print("Command handler table full for: ");
+    StreamRef->println(command);
+  }
+  return false;
+}
+
+void BlaeckSerial::onAnyCommand(BlaeckAnyCommandHandler handler)
+{
+  _anyCommandHandler = handler;
+}
+
+void BlaeckSerial::clearCommandHandlers()
+{
+  for (byte i = 0; i < MAX_COMMAND_HANDLERS; i++)
+  {
+    _commandHandlers[i].inUse = false;
+    _commandHandlers[i].handler = nullptr;
+    _commandHandlers[i].command[0] = '\0';
+  }
+  _anyCommandHandler = nullptr;
+}
+
+void BlaeckSerial::setCommandHandlerCapacity(byte capacity)
+{
+  if (capacity == 0)
+  {
+    capacity = 1;
+  }
+  if (capacity > MAX_COMMAND_HANDLERS)
+  {
+    capacity = MAX_COMMAND_HANDLERS;
+  }
+  _commandHandlerCapacity = capacity;
 }
 
 bool BlaeckSerial::recvWithStartEndMarkers()
@@ -767,6 +858,77 @@ void BlaeckSerial::parseData()
   else
   {
     PARAMETER[9] = 0;
+  }
+}
+
+void BlaeckSerial::_parseCommandTokens(const char *raw)
+{
+  _parsedCommand[0] = '\0';
+  _parsedParamCount = 0;
+  for (byte i = 0; i < MAX_COMMAND_PARAM_COUNT; i++)
+  {
+    _parsedParamPtrs[i] = nullptr;
+  }
+
+  if (raw == nullptr || raw[0] == '\0')
+  {
+    return;
+  }
+
+  strncpy(_parsedTokenBuffer, raw, sizeof(_parsedTokenBuffer) - 1);
+  _parsedTokenBuffer[sizeof(_parsedTokenBuffer) - 1] = '\0';
+
+  char *token = strtok(_parsedTokenBuffer, ",");
+  if (token == nullptr)
+  {
+    return;
+  }
+
+  while (*token == ' ')
+    token++;
+  strncpy(_parsedCommand, token, MAX_COMMAND_NAME_COUNT - 1);
+  _parsedCommand[MAX_COMMAND_NAME_COUNT - 1] = '\0';
+
+  while (_parsedParamCount < MAX_COMMAND_PARAM_COUNT)
+  {
+    token = strtok(NULL, ",");
+    if (token == nullptr)
+      break;
+    while (*token == ' ')
+      token++;
+    _parsedParamPtrs[_parsedParamCount] = token;
+    _parsedParamCount++;
+  }
+}
+
+void BlaeckSerial::_dispatchRegisteredHandlers()
+{
+  _parseCommandTokens(receivedChars);
+  if (_parsedCommand[0] == '\0')
+  {
+    return;
+  }
+
+  for (byte i = 0; i < _commandHandlerCapacity; i++)
+  {
+    if (_commandHandlers[i].inUse &&
+        _commandHandlers[i].handler != nullptr &&
+        strcmp(_commandHandlers[i].command, _parsedCommand) == 0)
+    {
+      _commandHandlers[i].handler(
+          _parsedCommand,
+          (const char *const *)_parsedParamPtrs,
+          _parsedParamCount);
+      break;
+    }
+  }
+
+  if (_anyCommandHandler != nullptr)
+  {
+    _anyCommandHandler(
+        _parsedCommand,
+        (const char *const *)_parsedParamPtrs,
+        _parsedParamCount);
   }
 }
 
@@ -1395,6 +1557,62 @@ void BlaeckSerial::timedWriteData(unsigned long msg_id, int signalIndex_start, i
   }
 }
 
+// ── Buffered writes ────────────────────────────────────────────────
+
+void BlaeckSerial::_bufAllocate()
+{
+  _bufFree();
+  // Max frame size: D2 is largest.
+  // Header(22) + per-signal(10) + timestamp(9) + tail(9) + footer(10) + margin
+  _frameBufSize = 60 + (int)_signalCapacity * 10;
+  // B0/B3 can also be large with long names; ensure minimum
+  int b0b3_est = 60 + (int)_signalCapacity * 30;
+  if (b0b3_est > _frameBufSize)
+    _frameBufSize = b0b3_est;
+  _frameBuf = new byte[_frameBufSize];
+}
+
+void BlaeckSerial::_bufFree()
+{
+  delete[] _frameBuf;
+  _frameBuf = nullptr;
+  _frameBufSize = 0;
+  _framePos = 0;
+}
+
+void BlaeckSerial::setBufferedWrites(bool enabled)
+{
+  _bufferedWrites = enabled;
+  if (enabled && _frameBuf == nullptr && _signalCapacity > 0)
+    _bufAllocate();
+  else if (!enabled)
+    _bufFree();
+}
+
+void BlaeckSerial::_bufHeader(byte msgKey, unsigned long msgId)
+{
+  _bufStr("<BLAECK:");
+  _bufByte(msgKey);
+  _bufByte(':');
+  ulngCvt.val = msgId;
+  _bufBytes(ulngCvt.bval, 4);
+  _bufByte(':');
+}
+
+void BlaeckSerial::_bufDevice(byte msc, byte sid, const String &name,
+                              const String &hw, const String &fw)
+{
+  _bufByte(msc);
+  _bufByte(sid);
+  _bufStr0(name);
+  _bufStr0(hw);
+  _bufStr0(fw);
+  _bufStr0(LIBRARY_VERSION);
+  _bufStr0(LIBRARY_NAME);
+}
+
+// ── Frame write functions ─────────────────────────────────────────
+
 void BlaeckSerial::writeRestarted()
 {
   this->writeRestarted(1);
@@ -1405,30 +1623,42 @@ void BlaeckSerial::writeRestarted(unsigned long msg_id)
   if (!_writeRestartedAlreadyDone)
   {
     _writeRestartedAlreadyDone = true;
-    StreamRef->write("<BLAECK:");
-    byte msg_key = 0xC0;
-    StreamRef->write(msg_key);
-    StreamRef->write(":");
-    ulngCvt.val = msg_id;
-    StreamRef->write(ulngCvt.bval, 4);
-    StreamRef->write(":");
 
-    StreamRef->write(_masterSlaveConfig);
-    StreamRef->write(_slaveID);
-    StreamRef->print(DeviceName);
-    StreamRef->print('\0');
-    StreamRef->print(DeviceHWVersion);
-    StreamRef->print('\0');
-    StreamRef->print(DeviceFWVersion);
-    StreamRef->print('\0');
-    StreamRef->print(LIBRARY_VERSION);
-    StreamRef->print('\0');
-    StreamRef->print(LIBRARY_NAME);
-    StreamRef->print('\0');
+    if (_bufferedWrites && _frameBuf)
+    {
+      _bufReset();
+      _bufHeader(0xC0, msg_id);
+      _bufDevice(_masterSlaveConfig, _slaveID, DeviceName, DeviceHWVersion, DeviceFWVersion);
+      _bufFooter();
+      _bufSend();
+    }
+    else
+    {
+      StreamRef->write("<BLAECK:");
+      byte msg_key = 0xC0;
+      StreamRef->write(msg_key);
+      StreamRef->write(":");
+      ulngCvt.val = msg_id;
+      StreamRef->write(ulngCvt.bval, 4);
+      StreamRef->write(":");
 
-    StreamRef->write("/BLAECK>");
-    StreamRef->write("\r\n");
-    StreamRef->flush();
+      StreamRef->write(_masterSlaveConfig);
+      StreamRef->write(_slaveID);
+      StreamRef->print(DeviceName);
+      StreamRef->print('\0');
+      StreamRef->print(DeviceHWVersion);
+      StreamRef->print('\0');
+      StreamRef->print(DeviceFWVersion);
+      StreamRef->print('\0');
+      StreamRef->print(LIBRARY_VERSION);
+      StreamRef->print('\0');
+      StreamRef->print(LIBRARY_NAME);
+      StreamRef->print('\0');
+
+      StreamRef->write("/BLAECK>");
+      StreamRef->write("\r\n");
+      StreamRef->flush();
+    }
   }
 }
 
@@ -1465,31 +1695,45 @@ void BlaeckSerial::refreshI2CSlavesIfNeeded()
 
 void BlaeckSerial::writeLocalDevices(unsigned long msg_id, bool send_eol)
 {
-  StreamRef->write("<BLAECK:");
-  byte msg_key = 0xB3;
-  StreamRef->write(msg_key);
-  StreamRef->write(":");
-  ulngCvt.val = msg_id;
-  StreamRef->write(ulngCvt.bval, 4);
-  StreamRef->write(":");
-  StreamRef->write(_masterSlaveConfig);
-  StreamRef->write(_slaveID);
-  StreamRef->print(DeviceName);
-  StreamRef->print('\0');
-  StreamRef->print(DeviceHWVersion);
-  StreamRef->print('\0');
-  StreamRef->print(DeviceFWVersion);
-  StreamRef->print('\0');
-  StreamRef->print(LIBRARY_VERSION);
-  StreamRef->print('\0');
-  StreamRef->print(LIBRARY_NAME);
-  StreamRef->print('\0');
-
-  if (send_eol)
+  if (_bufferedWrites && _frameBuf)
   {
-    StreamRef->write("/BLAECK>");
-    StreamRef->write("\r\n");
-    StreamRef->flush();
+    _bufReset();
+    _bufHeader(0xB3, msg_id);
+    _bufDevice(_masterSlaveConfig, _slaveID, DeviceName, DeviceHWVersion, DeviceFWVersion);
+    if (send_eol)
+    {
+      _bufFooter();
+      _bufSend();
+    }
+  }
+  else
+  {
+    StreamRef->write("<BLAECK:");
+    byte msg_key = 0xB3;
+    StreamRef->write(msg_key);
+    StreamRef->write(":");
+    ulngCvt.val = msg_id;
+    StreamRef->write(ulngCvt.bval, 4);
+    StreamRef->write(":");
+    StreamRef->write(_masterSlaveConfig);
+    StreamRef->write(_slaveID);
+    StreamRef->print(DeviceName);
+    StreamRef->print('\0');
+    StreamRef->print(DeviceHWVersion);
+    StreamRef->print('\0');
+    StreamRef->print(DeviceFWVersion);
+    StreamRef->print('\0');
+    StreamRef->print(LIBRARY_VERSION);
+    StreamRef->print('\0');
+    StreamRef->print(LIBRARY_NAME);
+    StreamRef->print('\0');
+
+    if (send_eol)
+    {
+      StreamRef->write("/BLAECK>");
+      StreamRef->write("\r\n");
+      StreamRef->flush();
+    }
   }
 }
 
@@ -1517,8 +1761,16 @@ void BlaeckSerial::writeSlaveDevices(bool send_eol)
 
       if (transmissionIsSuccess == 0)
       {
-        StreamRef->write(2);          // Slave config
-        StreamRef->write(slaveindex); // Slave ID
+        if (_bufferedWrites && _frameBuf)
+        {
+          _bufByte(2);          // Slave config
+          _bufByte(slaveindex); // Slave ID
+        }
+        else
+        {
+          StreamRef->write(2);          // Slave config
+          StreamRef->write(slaveindex); // Slave ID
+        }
 
         bool eolist_found = false;
         const unsigned long timeout_ms = 50;
@@ -1547,7 +1799,12 @@ void BlaeckSerial::writeSlaveDevices(bool send_eol)
             if (c == char(0x0A))
               eolist_found = true;
             if (eosignal_found != true && eolist_found != true)
-              StreamRef->print(c);
+            {
+              if (_bufferedWrites && _frameBuf)
+                _bufByte((byte)c);
+              else
+                StreamRef->print(c);
+            }
           }
           if (eolist_found)
             break;
@@ -1557,9 +1814,17 @@ void BlaeckSerial::writeSlaveDevices(bool send_eol)
   }
   if (send_eol)
   {
-    StreamRef->write("/BLAECK>");
-    StreamRef->write("\r\n");
-    StreamRef->flush();
+    if (_bufferedWrites && _frameBuf)
+    {
+      _bufFooter();
+      _bufSend();
+    }
+    else
+    {
+      StreamRef->write("/BLAECK>");
+      StreamRef->write("\r\n");
+      StreamRef->flush();
+    }
   }
 }
 
@@ -1576,174 +1841,242 @@ void BlaeckSerial::writeLocalData(unsigned long msg_id, int signalIndex_start, i
   if (signalIndex_start > signalIndex_end && send_eol)
     return; // No valid range
 
-  _crc.setPolynome(0x04C11DB7);
-  _crc.setInitial(0xFFFFFFFF);
-  _crc.setXorOut(0xFFFFFFFF);
-  _crc.setReverseIn(true);
-  _crc.setReverseOut(true);
-  _crc.restart();
-
-  StreamRef->write("<BLAECK:");
-
-  // Message Key
-  byte msg_key = 0xD2;
-  StreamRef->write(msg_key);
-  _crc.add(msg_key);
-
-  StreamRef->write(":");
-  _crc.add(':');
-
-  // Message Id
-  ulngCvt.val = msg_id;
-  StreamRef->write(ulngCvt.bval, 4);
-  _crc.add(ulngCvt.bval, 4);
-
-  StreamRef->write(":");
-  _crc.add(':');
-
-  // Restart flag
-  byte restart_flag = _sendRestartFlag ? 1 : 0;
-  StreamRef->write(restart_flag);
-  _crc.add(restart_flag);
-  _sendRestartFlag = false; // Clear the flag after first transmission
-
-  StreamRef->write(":");
-  _crc.add(':');
-
-  // Schema hash (2 bytes, CRC16-CCITT, little-endian)
-  byte hash_lo = (byte)(_schemaHash & 0xFF);
-  byte hash_hi = (byte)((_schemaHash >> 8) & 0xFF);
-  StreamRef->write(hash_lo);
-  StreamRef->write(hash_hi);
-  _crc.add(hash_lo);
-  _crc.add(hash_hi);
-
-  StreamRef->write(":");
-  _crc.add(':');
-
-  // Timestamp mode
-  byte timestamp_mode = (byte)_timestampMode;
-  StreamRef->write(timestamp_mode);
-  _crc.add(timestamp_mode);
-
-  // Add timestamp data if mode is not NO_TIMESTAMP
-  if (_timestampMode != BLAECK_NO_TIMESTAMP && hasValidTimestampCallback())
+  if (_bufferedWrites && _frameBuf)
   {
-    ullCvt.val = timestamp;
-    StreamRef->write(ullCvt.bval, 8);
-    _crc.add(ullCvt.bval, 8);
+    _bufReset();
+    _bufStr("<BLAECK:");
+    int crcStart = _framePos;
+
+    _bufByte(0xD2); _bufByte(':');
+
+    ulngCvt.val = msg_id;
+    _bufBytes(ulngCvt.bval, 4); _bufByte(':');
+
+    _bufByte(_sendRestartFlag ? 1 : 0);
+    _sendRestartFlag = false;
+    _bufByte(':');
+
+    _bufByte((byte)(_schemaHash & 0xFF));
+    _bufByte((byte)((_schemaHash >> 8) & 0xFF));
+    _bufByte(':');
+
+    _bufByte((byte)_timestampMode);
+    if (_timestampMode != BLAECK_NO_TIMESTAMP && hasValidTimestampCallback())
+    {
+      ullCvt.val = timestamp;
+      _bufBytes(ullCvt.bval, 8);
+    }
+    _bufByte(':');
+
+    for (int i = signalIndex_start; i <= signalIndex_end; i++)
+    {
+      if (onlyUpdated && !Signals[i].Updated)
+        continue;
+
+      intCvt.val = i;
+      _bufBytes(intCvt.bval, 2);
+
+      Signal signal = Signals[i];
+      switch (signal.DataType)
+      {
+      case (Blaeck_bool):   boolCvt.val  = *((bool *)signal.Address);           _bufBytes(boolCvt.bval, 1);  break;
+      case (Blaeck_byte):   _bufByte(*((byte *)signal.Address));                                              break;
+      case (Blaeck_short):  shortCvt.val = *((short *)signal.Address);          _bufBytes(shortCvt.bval, 2); break;
+      case (Blaeck_ushort): ushortCvt.val = *((unsigned short *)signal.Address); _bufBytes(ushortCvt.bval, 2); break;
+      case (Blaeck_int):    intCvt.val   = *((int *)signal.Address);            _bufBytes(intCvt.bval, 2);   break;
+      case (Blaeck_uint):   uintCvt.val  = *((unsigned int *)signal.Address);   _bufBytes(uintCvt.bval, 2);  break;
+      case (Blaeck_long):   lngCvt.val   = *((long *)signal.Address);           _bufBytes(lngCvt.bval, 4);   break;
+      case (Blaeck_ulong):  ulngCvt.val  = *((unsigned long *)signal.Address);  _bufBytes(ulngCvt.bval, 4);  break;
+      case (Blaeck_float):  fltCvt.val   = *((float *)signal.Address);          _bufBytes(fltCvt.bval, 4);   break;
+      case (Blaeck_double): dblCvt.val   = *((double *)signal.Address);         _bufBytes(dblCvt.bval, 8);   break;
+      }
+
+      if (onlyUpdated)
+        Signals[i].Updated = false;
+    }
+
+    if (send_eol)
+    {
+      byte statusByte = 0;
+      byte statusPayload[4] = {0, 0, 0, 0};
+      _bufByte(statusByte);
+      _bufBytes(statusPayload, 4);
+
+      // CRC32 over content (crcStart..framePos-1)
+      _crc.setPolynome(0x04C11DB7);
+      _crc.setInitial(0xFFFFFFFF);
+      _crc.setXorOut(0xFFFFFFFF);
+      _crc.setReverseIn(true);
+      _crc.setReverseOut(true);
+      _crc.restart();
+      _crc.add(_frameBuf + crcStart, _framePos - crcStart);
+      uint32_t crc_value = _crc.calc();
+      _bufBytes((byte *)&crc_value, 4);
+
+      _bufFooter();
+      _bufSend();
+    }
   }
-
-  StreamRef->write(":");
-  _crc.add(':');
-
-  for (int i = signalIndex_start; i <= signalIndex_end; i++)
+  else
   {
-    // Skip if onlyUpdated is true and signal is not updated
-    if (onlyUpdated && !Signals[i].Updated)
-      continue;
+    _crc.setPolynome(0x04C11DB7);
+    _crc.setInitial(0xFFFFFFFF);
+    _crc.setXorOut(0xFFFFFFFF);
+    _crc.setReverseIn(true);
+    _crc.setReverseOut(true);
+    _crc.restart();
 
-    intCvt.val = i;
-    StreamRef->write(intCvt.bval, 2);
-    _crc.add(intCvt.bval, 2);
+    StreamRef->write("<BLAECK:");
 
-    Signal signal = Signals[i];
-    switch (signal.DataType)
+    byte msg_key = 0xD2;
+    StreamRef->write(msg_key);
+    _crc.add(msg_key);
+
+    StreamRef->write(":");
+    _crc.add(':');
+
+    ulngCvt.val = msg_id;
+    StreamRef->write(ulngCvt.bval, 4);
+    _crc.add(ulngCvt.bval, 4);
+
+    StreamRef->write(":");
+    _crc.add(':');
+
+    byte restart_flag = _sendRestartFlag ? 1 : 0;
+    StreamRef->write(restart_flag);
+    _crc.add(restart_flag);
+    _sendRestartFlag = false;
+
+    StreamRef->write(":");
+    _crc.add(':');
+
+    byte hash_lo = (byte)(_schemaHash & 0xFF);
+    byte hash_hi = (byte)((_schemaHash >> 8) & 0xFF);
+    StreamRef->write(hash_lo);
+    StreamRef->write(hash_hi);
+    _crc.add(hash_lo);
+    _crc.add(hash_hi);
+
+    StreamRef->write(":");
+    _crc.add(':');
+
+    byte timestamp_mode = (byte)_timestampMode;
+    StreamRef->write(timestamp_mode);
+    _crc.add(timestamp_mode);
+
+    if (_timestampMode != BLAECK_NO_TIMESTAMP && hasValidTimestampCallback())
     {
-    case (Blaeck_bool):
-    {
-      boolCvt.val = *((bool *)signal.Address);
-      StreamRef->write(boolCvt.bval, 1);
-      _crc.add(boolCvt.bval, 1);
+      ullCvt.val = timestamp;
+      StreamRef->write(ullCvt.bval, 8);
+      _crc.add(ullCvt.bval, 8);
     }
-    break;
-    case (Blaeck_byte):
+
+    StreamRef->write(":");
+    _crc.add(':');
+
+    for (int i = signalIndex_start; i <= signalIndex_end; i++)
     {
-      StreamRef->write(*((byte *)signal.Address));
-      _crc.add(*((byte *)signal.Address));
-    }
-    break;
-    case (Blaeck_short):
-    {
-      shortCvt.val = *((short *)signal.Address);
-      StreamRef->write(shortCvt.bval, 2);
-      _crc.add(shortCvt.bval, 2);
-    }
-    break;
-    case (Blaeck_ushort):
-    {
-      ushortCvt.val = *((unsigned short *)signal.Address);
-      StreamRef->write(ushortCvt.bval, 2);
-      _crc.add(ushortCvt.bval, 2);
-    }
-    break;
-    case (Blaeck_int):
-    {
-      intCvt.val = *((int *)signal.Address);
+      if (onlyUpdated && !Signals[i].Updated)
+        continue;
+
+      intCvt.val = i;
       StreamRef->write(intCvt.bval, 2);
       _crc.add(intCvt.bval, 2);
-    }
-    break;
-    case (Blaeck_uint):
-    {
-      uintCvt.val = *((unsigned int *)signal.Address);
-      StreamRef->write(uintCvt.bval, 2);
-      _crc.add(uintCvt.bval, 2);
-    }
-    break;
-    case (Blaeck_long):
-    {
-      lngCvt.val = *((long *)signal.Address);
-      StreamRef->write(lngCvt.bval, 4);
-      _crc.add(lngCvt.bval, 4);
-    }
-    break;
-    case (Blaeck_ulong):
-    {
-      ulngCvt.val = *((unsigned long *)signal.Address);
-      StreamRef->write(ulngCvt.bval, 4);
-      _crc.add(ulngCvt.bval, 4);
-    }
-    break;
-    case (Blaeck_float):
-    {
-      fltCvt.val = *((float *)signal.Address);
-      StreamRef->write(fltCvt.bval, 4);
-      _crc.add(fltCvt.bval, 4);
-    }
-    break;
-    case (Blaeck_double):
-    {
-      dblCvt.val = *((double *)signal.Address);
-      StreamRef->write(dblCvt.bval, 8);
-      _crc.add(dblCvt.bval, 8);
-    }
-    break;
+
+      Signal signal = Signals[i];
+      switch (signal.DataType)
+      {
+      case (Blaeck_bool):
+      {
+        boolCvt.val = *((bool *)signal.Address);
+        StreamRef->write(boolCvt.bval, 1);
+        _crc.add(boolCvt.bval, 1);
+      }
+      break;
+      case (Blaeck_byte):
+      {
+        StreamRef->write(*((byte *)signal.Address));
+        _crc.add(*((byte *)signal.Address));
+      }
+      break;
+      case (Blaeck_short):
+      {
+        shortCvt.val = *((short *)signal.Address);
+        StreamRef->write(shortCvt.bval, 2);
+        _crc.add(shortCvt.bval, 2);
+      }
+      break;
+      case (Blaeck_ushort):
+      {
+        ushortCvt.val = *((unsigned short *)signal.Address);
+        StreamRef->write(ushortCvt.bval, 2);
+        _crc.add(ushortCvt.bval, 2);
+      }
+      break;
+      case (Blaeck_int):
+      {
+        intCvt.val = *((int *)signal.Address);
+        StreamRef->write(intCvt.bval, 2);
+        _crc.add(intCvt.bval, 2);
+      }
+      break;
+      case (Blaeck_uint):
+      {
+        uintCvt.val = *((unsigned int *)signal.Address);
+        StreamRef->write(uintCvt.bval, 2);
+        _crc.add(uintCvt.bval, 2);
+      }
+      break;
+      case (Blaeck_long):
+      {
+        lngCvt.val = *((long *)signal.Address);
+        StreamRef->write(lngCvt.bval, 4);
+        _crc.add(lngCvt.bval, 4);
+      }
+      break;
+      case (Blaeck_ulong):
+      {
+        ulngCvt.val = *((unsigned long *)signal.Address);
+        StreamRef->write(ulngCvt.bval, 4);
+        _crc.add(ulngCvt.bval, 4);
+      }
+      break;
+      case (Blaeck_float):
+      {
+        fltCvt.val = *((float *)signal.Address);
+        StreamRef->write(fltCvt.bval, 4);
+        _crc.add(fltCvt.bval, 4);
+      }
+      break;
+      case (Blaeck_double):
+      {
+        dblCvt.val = *((double *)signal.Address);
+        StreamRef->write(dblCvt.bval, 8);
+        _crc.add(dblCvt.bval, 8);
+      }
+      break;
+      }
+
+      if (onlyUpdated)
+        Signals[i].Updated = false;
     }
 
-    // Clear the updated flag after transmission if we're only sending updated signals (onlyUpdated)
-    if (onlyUpdated)
+    if (send_eol)
     {
-      Signals[i].Updated = false;
+      byte statusByte = 0;
+      byte statusPayload[4] = {0, 0, 0, 0};
+      StreamRef->write(statusByte);
+      StreamRef->write(statusPayload, 4);
+      _crc.add(statusByte);
+      _crc.add(statusPayload, 4);
+
+      uint32_t crc_value = _crc.calc();
+      StreamRef->write((byte *)&crc_value, 4);
+
+      StreamRef->write("/BLAECK>");
+      StreamRef->write("\r\n");
+      StreamRef->flush();
     }
-  }
-
-  if (send_eol)
-  {
-    // D2 tail: StatusByte + StatusPayload(4) + CRC32(4)
-    byte statusByte = 0;
-    byte statusPayload[4] = {0, 0, 0, 0};
-    StreamRef->write(statusByte);
-    StreamRef->write(statusPayload, 4);
-    _crc.add(statusByte);
-    _crc.add(statusPayload, 4);
-
-    uint32_t crc_value = _crc.calc();
-    StreamRef->write((byte *)&crc_value, 4);
-
-    StreamRef->write("/BLAECK>");
-    StreamRef->write("\r\n");
-    StreamRef->flush();
   }
 }
 
@@ -1850,13 +2183,21 @@ void BlaeckSerial::writeSlaveData(bool send_eol, bool onlyUpdated, bool *skipSla
               }
 
               // Write only after full slave chunk validation.
-              StreamRef->write(lowByte(_signalIndex + slaveSignalIndex));
-              StreamRef->write(highByte(_signalIndex + slaveSignalIndex));
-              _crc.add(intCvt.bval, 2);
-              for (int i = 0; i < remainingDataBytes; i++)
+              if (_bufferedWrites && _frameBuf)
               {
-                StreamRef->write(dataBuffer[i]);
-                _crc.add(dataBuffer[i]);
+                _bufBytes(intCvt.bval, 2);
+                _bufBytes(dataBuffer, remainingDataBytes);
+              }
+              else
+              {
+                StreamRef->write(lowByte(_signalIndex + slaveSignalIndex));
+                StreamRef->write(highByte(_signalIndex + slaveSignalIndex));
+                _crc.add(intCvt.bval, 2);
+                for (int i = 0; i < remainingDataBytes; i++)
+                {
+                  StreamRef->write(dataBuffer[i]);
+                  _crc.add(dataBuffer[i]);
+                }
               }
             }
             else
@@ -1918,90 +2259,135 @@ void BlaeckSerial::writeSlaveData(bool send_eol, bool onlyUpdated, bool *skipSla
       statusPayload[2] = firstSkipReason;
       statusPayload[3] = 0x00;
     }
-    StreamRef->write(statusByte);
-    StreamRef->write(statusPayload, 4);
-    _crc.add(statusByte);
-    _crc.add(statusPayload, 4);
 
-    uint32_t crc_value = _crc.calc();
-    StreamRef->write((byte *)&crc_value, 4);
+    if (_bufferedWrites && _frameBuf)
+    {
+      _bufByte(statusByte);
+      _bufBytes(statusPayload, 4);
 
-    StreamRef->write("/BLAECK>");
-    StreamRef->write("\r\n");
-    StreamRef->flush();
+      // CRC32 over content: buffer[8..framePos-1] (after "<BLAECK:")
+      _crc.setPolynome(0x04C11DB7);
+      _crc.setInitial(0xFFFFFFFF);
+      _crc.setXorOut(0xFFFFFFFF);
+      _crc.setReverseIn(true);
+      _crc.setReverseOut(true);
+      _crc.restart();
+      _crc.add(_frameBuf + 8, _framePos - 8);
+      uint32_t crc_value = _crc.calc();
+      _bufBytes((byte *)&crc_value, 4);
+
+      _bufFooter();
+      _bufSend();
+    }
+    else
+    {
+      StreamRef->write(statusByte);
+      StreamRef->write(statusPayload, 4);
+      _crc.add(statusByte);
+      _crc.add(statusPayload, 4);
+
+      uint32_t crc_value = _crc.calc();
+      StreamRef->write((byte *)&crc_value, 4);
+
+      StreamRef->write("/BLAECK>");
+      StreamRef->write("\r\n");
+      StreamRef->flush();
+    }
   }
 }
 
 void BlaeckSerial::writeLocalSymbols(unsigned long msg_id, bool send_eol)
 {
-  StreamRef->write("<BLAECK:");
-  byte msg_key = 0xB0;
-  StreamRef->write(msg_key);
-  StreamRef->write(":");
-  ulngCvt.val = msg_id;
-  StreamRef->write(ulngCvt.bval, 4);
-  StreamRef->write(":");
-
-  for (int i = 0; i < _signalIndex; i++)
+  if (_bufferedWrites && _frameBuf)
   {
-    StreamRef->write(_masterSlaveConfig);
-    StreamRef->write(_slaveID);
+    _bufReset();
+    _bufHeader(0xB0, msg_id);
 
-    Signal signal = Signals[i];
-
-    // Feed signal name into schema hash accumulator
-    const char *namePtr = signal.SignalName.c_str();
-    while (*namePtr)
-      _schemaHashFeedByte((byte)*namePtr++);
-
-    StreamRef->print(signal.SignalName);
-    StreamRef->print('\0');
-
-    byte dtCode;
-    switch (signal.DataType)
+    for (int i = 0; i < _signalIndex; i++)
     {
-    case (Blaeck_bool):
-      dtCode = 0x0;
-      break;
-    case (Blaeck_byte):
-      dtCode = 0x1;
-      break;
-    case (Blaeck_short):
-      dtCode = 0x2;
-      break;
-    case (Blaeck_ushort):
-      dtCode = 0x3;
-      break;
-    case (Blaeck_int):
-      dtCode = 0x4;
-      break;
-    case (Blaeck_uint):
-      dtCode = 0x5;
-      break;
-    case (Blaeck_long):
-      dtCode = 0x6;
-      break;
-    case (Blaeck_ulong):
-      dtCode = 0x7;
-      break;
-    case (Blaeck_float):
-      dtCode = 0x8;
-      break;
-    case (Blaeck_double):
-      dtCode = 0x9;
-      break;
-    default:
-      dtCode = 0x8;
-      break;
+      _bufByte(_masterSlaveConfig);
+      _bufByte(_slaveID);
+
+      Signal signal = Signals[i];
+
+      const char *namePtr = signal.SignalName.c_str();
+      while (*namePtr)
+        _schemaHashFeedByte((byte)*namePtr++);
+
+      _bufStr0(signal.SignalName);
+
+      byte dtCode;
+      switch (signal.DataType)
+      {
+      case (Blaeck_bool):   dtCode = 0x0; break;
+      case (Blaeck_byte):   dtCode = 0x1; break;
+      case (Blaeck_short):  dtCode = 0x2; break;
+      case (Blaeck_ushort): dtCode = 0x3; break;
+      case (Blaeck_int):    dtCode = 0x4; break;
+      case (Blaeck_uint):   dtCode = 0x5; break;
+      case (Blaeck_long):   dtCode = 0x6; break;
+      case (Blaeck_ulong):  dtCode = 0x7; break;
+      case (Blaeck_float):  dtCode = 0x8; break;
+      case (Blaeck_double): dtCode = 0x9; break;
+      default:              dtCode = 0x8; break;
+      }
+      _bufByte(dtCode);
+      _schemaHashFeedByte(dtCode);
     }
-    StreamRef->write(dtCode);
-    _schemaHashFeedByte(dtCode);
+    if (send_eol)
+    {
+      _bufFooter();
+      _bufSend();
+    }
   }
-  if (send_eol)
+  else
   {
-    StreamRef->write("/BLAECK>");
-    StreamRef->write("\r\n");
-    StreamRef->flush();
+    StreamRef->write("<BLAECK:");
+    byte msg_key = 0xB0;
+    StreamRef->write(msg_key);
+    StreamRef->write(":");
+    ulngCvt.val = msg_id;
+    StreamRef->write(ulngCvt.bval, 4);
+    StreamRef->write(":");
+
+    for (int i = 0; i < _signalIndex; i++)
+    {
+      StreamRef->write(_masterSlaveConfig);
+      StreamRef->write(_slaveID);
+
+      Signal signal = Signals[i];
+
+      const char *namePtr = signal.SignalName.c_str();
+      while (*namePtr)
+        _schemaHashFeedByte((byte)*namePtr++);
+
+      StreamRef->print(signal.SignalName);
+      StreamRef->print('\0');
+
+      byte dtCode;
+      switch (signal.DataType)
+      {
+      case (Blaeck_bool):   dtCode = 0x0; break;
+      case (Blaeck_byte):   dtCode = 0x1; break;
+      case (Blaeck_short):  dtCode = 0x2; break;
+      case (Blaeck_ushort): dtCode = 0x3; break;
+      case (Blaeck_int):    dtCode = 0x4; break;
+      case (Blaeck_uint):   dtCode = 0x5; break;
+      case (Blaeck_long):   dtCode = 0x6; break;
+      case (Blaeck_ulong):  dtCode = 0x7; break;
+      case (Blaeck_float):  dtCode = 0x8; break;
+      case (Blaeck_double): dtCode = 0x9; break;
+      default:              dtCode = 0x8; break;
+      }
+      StreamRef->write(dtCode);
+      _schemaHashFeedByte(dtCode);
+    }
+    if (send_eol)
+    {
+      StreamRef->write("/BLAECK>");
+      StreamRef->write("\r\n");
+      StreamRef->flush();
+    }
   }
 }
 
@@ -2053,8 +2439,16 @@ void BlaeckSerial::writeSlaveSymbols(bool send_eol)
             //'\0'
             if (c != char(0x00) && symbolchar == 0)
             {
-              StreamRef->write(2);          // Slave config
-              StreamRef->write(slaveindex); // Slave ID
+              if (_bufferedWrites && _frameBuf)
+              {
+                _bufByte(2);          // Slave config
+                _bufByte(slaveindex); // Slave ID
+              }
+              else
+              {
+                StreamRef->write(2);          // Slave config
+                StreamRef->write(slaveindex); // Slave ID
+              }
             }
             if (c == char(0x00) && symbolchar == 0)
             {
@@ -2075,7 +2469,10 @@ void BlaeckSerial::writeSlaveSymbols(bool send_eol)
 
             if (eosignal_found != true && eolist_found != true)
             {
-              StreamRef->print(c);
+              if (_bufferedWrites && _frameBuf)
+                _bufByte((byte)c);
+              else
+                StreamRef->print(c);
 
               // Feed into schema hash accumulator
               if (c == char(0x00))
@@ -2101,9 +2498,17 @@ void BlaeckSerial::writeSlaveSymbols(bool send_eol)
   }
   if (send_eol)
   {
-    StreamRef->write("/BLAECK>");
-    StreamRef->write("\r\n");
-    StreamRef->flush();
+    if (_bufferedWrites && _frameBuf)
+    {
+      _bufFooter();
+      _bufSend();
+    }
+    else
+    {
+      StreamRef->write("/BLAECK>");
+      StreamRef->write("\r\n");
+      StreamRef->flush();
+    }
   }
 }
 
