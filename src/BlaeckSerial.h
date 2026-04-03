@@ -424,6 +424,7 @@ private:
   {
     _framePos = 0;
     _bufOverflow = false;
+    _bufOverflowWarned = false;
   }
   void _bufByte(byte b)
   {
