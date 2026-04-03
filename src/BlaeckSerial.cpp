@@ -1549,8 +1549,11 @@ void BlaeckSerial::timedWriteData(unsigned long msg_id, int signalIndex_start, i
   {
     if (_timedFirstTime == false)
     {
-      while (_timedSetPoint_ms <= _timedElapsedTime_ms)
-        _timedSetPoint_ms += _timedInterval_ms;
+      if (_timedInterval_ms > 0)
+      {
+        while (_timedSetPoint_ms <= _timedElapsedTime_ms)
+          _timedSetPoint_ms += _timedInterval_ms;
+      }
     }
     _timedFirstTime = false;
     this->writeData(msg_id, signalIndex_start, signalIndex_end, onlyUpdated, timestamp);
