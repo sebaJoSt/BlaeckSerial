@@ -35,7 +35,7 @@ void BlaeckSerial::begin(Stream *Ref, unsigned int size, Stream *DebugRef)
     delete[] Signals;
     Signals = nullptr;
   }
-  Signals = new Signal[size];
+  Signals = new (std::nothrow) Signal[size];
   _signalIndex = 0;
   SignalCount = 0;
   _schemaHash = 0;
@@ -1387,14 +1387,15 @@ void BlaeckSerial::write(int signalIndex, double value, unsigned long messageID,
     if (Signals[signalIndex].DataType == Blaeck_float)
     {
       *((float *)Signals[signalIndex].Address) = (float)value;
+      this->writeLocalData(messageID, signalIndex, signalIndex, true, false, timestamp);
     }
 #else
     if (Signals[signalIndex].DataType == Blaeck_double)
     {
       *((double *)Signals[signalIndex].Address) = value;
+      this->writeLocalData(messageID, signalIndex, signalIndex, true, false, timestamp);
     }
 #endif
-    this->writeLocalData(messageID, signalIndex, signalIndex, true, false, timestamp);
   }
 }
 
@@ -1431,6 +1432,9 @@ void BlaeckSerial::writeUpdatedData(unsigned long messageID, unsigned long long 
 
 void BlaeckSerial::writeData(unsigned long msg_id, int signalIndex_start, int signalIndex_end, bool onlyUpdated, unsigned long long timestamp)
 {
+  if (_signalIndex == 0 && _masterSlaveConfig != Master)
+    return;
+
   if (_masterSlaveConfig == Single)
   {
     if (_beforeWriteCallback != NULL)
