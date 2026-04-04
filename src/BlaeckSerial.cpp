@@ -23,7 +23,12 @@ BlaeckSerial::~BlaeckSerial()
 
 void BlaeckSerial::begin(Stream *Ref, unsigned int size)
 {
+  begin(Ref, size, nullptr);
+}
+void BlaeckSerial::begin(Stream *Ref, unsigned int size, Stream *DebugRef)
+{
   StreamRef = (Stream *)Ref;
+  _debugStream = DebugRef;
   _signalCapacity = size;
   if (Signals != nullptr)
   {
@@ -44,13 +49,21 @@ void BlaeckSerial::begin(Stream *Ref, unsigned int size)
 }
 void BlaeckSerial::beginMaster(Stream *Ref, unsigned int size, uint32_t WireClockFrequency)
 {
+  beginMaster(Ref, size, WireClockFrequency, nullptr);
+}
+void BlaeckSerial::beginMaster(Stream *Ref, unsigned int size, uint32_t WireClockFrequency, Stream *DebugRef)
+{
   _masterSlaveConfig = Master;
   Wire.setClock(WireClockFrequency);
   Wire.begin();
 
-  begin(Ref, size);
+  begin(Ref, size, DebugRef);
 }
 void BlaeckSerial::beginSlave(Stream *Ref, unsigned int size, byte slaveID)
+{
+  beginSlave(Ref, size, slaveID, nullptr);
+}
+void BlaeckSerial::beginSlave(Stream *Ref, unsigned int size, byte slaveID, Stream *DebugRef)
 {
   _masterSlaveConfig = Slave;
   _slaveID = slaveID;
@@ -66,7 +79,7 @@ void BlaeckSerial::beginSlave(Stream *Ref, unsigned int size, byte slaveID)
   Wire.onRequest(OnRequestHandler);
   Wire.begin(_slaveID);
 
-  begin(Ref, size);
+  begin(Ref, size, DebugRef);
 }
 
 void BlaeckSerial::addSignal(String signalName, bool *value, bool prefixSlaveID)
@@ -554,9 +567,12 @@ void BlaeckSerial::read()
   if (recvWithStartEndMarkers() == true)
   {
     parseData();
-    StreamRef->print("<");
-    StreamRef->print(receivedChars);
-    StreamRef->println(">");
+    if (_debugStream != nullptr)
+    {
+      _debugStream->print("<");
+      _debugStream->print(receivedChars);
+      _debugStream->println(">");
+    }
 
     if (strcmp(COMMAND, "BLAECK.WRITE_SYMBOLS") == 0)
     {
@@ -594,9 +610,9 @@ void BlaeckSerial::read()
 
     if (_commandCallback != NULL)
     {
-      if (!_commandCallbackDeprecationWarned && StreamRef != nullptr)
+      if (!_commandCallbackDeprecationWarned && _debugStream != nullptr)
       {
-        StreamRef->println("WARNING: setCommandCallback(...) is deprecated; use onCommand(...) / onAnyCommand(...)");
+        _debugStream->println("WARNING: setCommandCallback(...) is deprecated; use onCommand(...) / onAnyCommand(...)");
         _commandCallbackDeprecationWarned = true;
       }
       _commandCallback(COMMAND, PARAMETER, STRING_01);
@@ -608,9 +624,9 @@ void BlaeckSerial::read()
 void BlaeckSerial::setCommandCallback(void (*callback)(char *command, int *parameter, char *string_01))
 {
   _commandCallback = callback;
-  if (_commandCallback != NULL && !_commandCallbackDeprecationWarned && StreamRef != nullptr)
+  if (_commandCallback != NULL && !_commandCallbackDeprecationWarned && _debugStream != nullptr)
   {
-    StreamRef->println("WARNING: setCommandCallback(...) is deprecated; use onCommand(...) / onAnyCommand(...)");
+    _debugStream->println("WARNING: setCommandCallback(...) is deprecated; use onCommand(...) / onAnyCommand(...)");
     _commandCallbackDeprecationWarned = true;
   }
 }
@@ -628,10 +644,10 @@ bool BlaeckSerial::onCommand(const char *command, BlaeckCommandHandler handler)
   }
   if (strlen(command) >= MAX_COMMAND_NAME_COUNT)
   {
-    if (StreamRef != nullptr)
+    if (_debugStream != nullptr)
     {
-      StreamRef->print("Command name too long for handler table: ");
-      StreamRef->println(command);
+      _debugStream->print("Command name too long for handler table: ");
+      _debugStream->println(command);
     }
     return false;
   }
@@ -657,10 +673,10 @@ bool BlaeckSerial::onCommand(const char *command, BlaeckCommandHandler handler)
     }
   }
 
-  if (StreamRef != nullptr)
+  if (_debugStream != nullptr)
   {
-    StreamRef->print("Command handler table full for: ");
-    StreamRef->println(command);
+    _debugStream->print("Command handler table full for: ");
+    _debugStream->println(command);
   }
   return false;
 }
@@ -960,10 +976,10 @@ void BlaeckSerial::setIntervalMs(long interval_ms)
   {
     _fixedInterval_ms = BLAECK_INTERVAL_CLIENT;
   }
-  else if (StreamRef != nullptr)
+  else if (_debugStream != nullptr)
   {
-    StreamRef->print("Invalid interval mode: ");
-    StreamRef->println(interval_ms);
+    _debugStream->print("Invalid interval mode: ");
+    _debugStream->println(interval_ms);
   }
 }
 
@@ -1419,16 +1435,16 @@ void BlaeckSerial::writeData(unsigned long msg_id, int signalIndex_start, int si
   {
     if (_beforeWriteCallback != NULL)
       _beforeWriteCallback();
-    this->writeLocalData(msg_id, 0, _signalIndex - 1, true, onlyUpdated, timestamp);
+    this->writeLocalData(msg_id, signalIndex_start, signalIndex_end, true, onlyUpdated, timestamp);
   }
   else if (_masterSlaveConfig == Slave)
   {
     // _beforeWriteCallback is called in BlaeckSerial::wireSlaveReceive()
-    this->writeLocalData(msg_id, 0, _signalIndex - 1, true, onlyUpdated, timestamp);
+    this->writeLocalData(msg_id, signalIndex_start, signalIndex_end, true, onlyUpdated, timestamp);
   }
   else if (_masterSlaveConfig == Master)
   {
-    bool skipSlaves[128] = {false};
+    uint8_t skipSlaves[16] = {}; // 128-bit bitfield, same as _slaveFound
     byte skippedSlaveCount = 0;
     byte firstSkippedSlaveID = 0xFF;
     byte firstSkipReason = 0x00;
@@ -1438,12 +1454,12 @@ void BlaeckSerial::writeData(unsigned long msg_id, int signalIndex_start, int si
 
     if (_beforeWriteCallback != NULL)
       _beforeWriteCallback();
-    this->writeLocalData(msg_id, 0, _signalIndex - 1, false, onlyUpdated, timestamp);
+    this->writeLocalData(msg_id, signalIndex_start, signalIndex_end, false, onlyUpdated, timestamp);
     this->writeSlaveData(true, onlyUpdated, skipSlaves, skippedSlaveCount, firstSkippedSlaveID, firstSkipReason);
   }
 }
 
-void BlaeckSerial::prepareMasterSlaveSkipMap(bool *skipSlaves, byte &skippedSlaveCount, byte &firstSkippedSlaveID, byte &firstSkipReason)
+void BlaeckSerial::prepareMasterSlaveSkipMap(uint8_t *skipSlaves, byte &skippedSlaveCount, byte &firstSkippedSlaveID, byte &firstSkipReason)
 {
   for (int slaveindex = 0; slaveindex <= 127; slaveindex++)
   {
@@ -1461,9 +1477,9 @@ void BlaeckSerial::prepareMasterSlaveSkipMap(bool *skipSlaves, byte &skippedSlav
     }
     if (transmissionIsSuccess != 0)
     {
-      if (!skipSlaves[slaveindex])
+      if (!bitRead(skipSlaves[slaveindex / 8], slaveindex % 8))
       {
-        skipSlaves[slaveindex] = true;
+        bitSet(skipSlaves[slaveindex / 8], slaveindex % 8);
         skippedSlaveCount++;
         if (firstSkippedSlaveID == 0xFF)
         {
@@ -1495,9 +1511,9 @@ void BlaeckSerial::prepareMasterSlaveSkipMap(bool *skipSlaves, byte &skippedSlav
       }
     }
 
-    if (!statusOk && !skipSlaves[slaveindex])
+    if (!statusOk && !bitRead(skipSlaves[slaveindex / 8], slaveindex % 8))
     {
-      skipSlaves[slaveindex] = true;
+      bitSet(skipSlaves[slaveindex / 8], slaveindex % 8);
       skippedSlaveCount++;
       if (firstSkippedSlaveID == 0xFF)
       {
@@ -2144,14 +2160,14 @@ void BlaeckSerial::writeLocalData(unsigned long msg_id, int signalIndex_start, i
   }
 }
 
-void BlaeckSerial::writeSlaveData(bool send_eol, bool onlyUpdated, bool *skipSlaves, byte &skippedSlaveCount, byte &firstSkippedSlaveID, byte &firstSkipReason)
+void BlaeckSerial::writeSlaveData(bool send_eol, bool onlyUpdated, uint8_t *skipSlaves, byte &skippedSlaveCount, byte &firstSkippedSlaveID, byte &firstSkipReason)
 {
   for (int slaveindex = 0; slaveindex <= 127; slaveindex++)
   {
     // Cycle through slaves
     if (slaveFound(slaveindex))
     {
-      if (skipSlaves[slaveindex])
+      if (bitRead(skipSlaves[slaveindex / 8], slaveindex % 8))
         continue;
 
       byte transmissionIsSuccess = false;
@@ -2284,9 +2300,9 @@ void BlaeckSerial::writeSlaveData(bool send_eol, bool onlyUpdated, bool *skipSla
         if (!eolist_found)
           slaveFailed = true;
 
-        if (slaveFailed && !skipSlaves[slaveindex])
+        if (slaveFailed && !bitRead(skipSlaves[slaveindex / 8], slaveindex % 8))
         {
-          skipSlaves[slaveindex] = true;
+          bitSet(skipSlaves[slaveindex / 8], slaveindex % 8);
           skippedSlaveCount++;
           if (firstSkippedSlaveID == 0xFF)
           {
@@ -2295,9 +2311,9 @@ void BlaeckSerial::writeSlaveData(bool send_eol, bool onlyUpdated, bool *skipSla
           }
         }
       }
-      else if (!skipSlaves[slaveindex])
+      else if (!bitRead(skipSlaves[slaveindex / 8], slaveindex % 8))
       {
-        skipSlaves[slaveindex] = true;
+        bitSet(skipSlaves[slaveindex / 8], slaveindex % 8);
         skippedSlaveCount++;
         if (firstSkippedSlaveID == 0xFF)
         {
@@ -2781,6 +2797,13 @@ void BlaeckSerial::wireSlaveTransmitSingleDataPoint(bool onlyUpdated)
   if (!onlyUpdated || (onlyUpdated && Signals[_wireSignalIndex].Updated))
   {
     dataEmitted = true;
+
+    // Precompute index bytes (shared by all data types)
+    byte indexBytes[2] = {
+      (byte)(_wireSignalIndex & 0xFF),
+      (byte)((_wireSignalIndex >> 8) & 0xFF)
+    };
+
     switch (signal.DataType)
     {
     case (Blaeck_bool):
@@ -2788,9 +2811,8 @@ void BlaeckSerial::wireSlaveTransmitSingleDataPoint(bool onlyUpdated)
       // Send: [index_size + data_size][index_bytes][data_bytes]
       Wire.write(3); // 2 bytes index + 1 byte data
       _crcWire.add(3);
-      intCvt.val = _wireSignalIndex;
-      Wire.write(intCvt.bval, 2);
-      _crcWire.add(intCvt.bval, 2);
+      Wire.write(indexBytes, 2);
+      _crcWire.add(indexBytes, 2);
       boolCvt.val = *((bool *)signal.Address);
       Wire.write(boolCvt.bval, 1);
       _crcWire.add(boolCvt.bval, 1);
@@ -2800,9 +2822,8 @@ void BlaeckSerial::wireSlaveTransmitSingleDataPoint(bool onlyUpdated)
     {
       Wire.write(3);
       _crcWire.add(3);
-      intCvt.val = _wireSignalIndex;
-      Wire.write(intCvt.bval, 2);
-      _crcWire.add(intCvt.bval, 2);
+      Wire.write(indexBytes, 2);
+      _crcWire.add(indexBytes, 2);
       Wire.write(*((byte *)signal.Address));
       _crcWire.add(*((byte *)signal.Address));
     }
@@ -2811,9 +2832,8 @@ void BlaeckSerial::wireSlaveTransmitSingleDataPoint(bool onlyUpdated)
     {
       Wire.write(4);
       _crcWire.add(4);
-      intCvt.val = _wireSignalIndex;
-      Wire.write(intCvt.bval, 2);
-      _crcWire.add(intCvt.bval, 2);
+      Wire.write(indexBytes, 2);
+      _crcWire.add(indexBytes, 2);
       shortCvt.val = *((short *)signal.Address);
       Wire.write(shortCvt.bval, 2);
       _crcWire.add(shortCvt.bval, 2);
@@ -2823,9 +2843,8 @@ void BlaeckSerial::wireSlaveTransmitSingleDataPoint(bool onlyUpdated)
     {
       Wire.write(4);
       _crcWire.add(4);
-      intCvt.val = _wireSignalIndex;
-      Wire.write(intCvt.bval, 2);
-      _crcWire.add(intCvt.bval, 2);
+      Wire.write(indexBytes, 2);
+      _crcWire.add(indexBytes, 2);
       ushortCvt.val = *((unsigned short *)signal.Address);
       Wire.write(ushortCvt.bval, 2);
       _crcWire.add(ushortCvt.bval, 2);
@@ -2835,9 +2854,8 @@ void BlaeckSerial::wireSlaveTransmitSingleDataPoint(bool onlyUpdated)
     {
       Wire.write(4);
       _crcWire.add(4);
-      intCvt.val = _wireSignalIndex;
-      Wire.write(intCvt.bval, 2);
-      _crcWire.add(intCvt.bval, 2);
+      Wire.write(indexBytes, 2);
+      _crcWire.add(indexBytes, 2);
       intCvt.val = *((int *)signal.Address);
       Wire.write(intCvt.bval, 2);
       _crcWire.add(intCvt.bval, 2);
@@ -2847,9 +2865,8 @@ void BlaeckSerial::wireSlaveTransmitSingleDataPoint(bool onlyUpdated)
     {
       Wire.write(4);
       _crcWire.add(4);
-      intCvt.val = _wireSignalIndex;
-      Wire.write(intCvt.bval, 2);
-      _crcWire.add(intCvt.bval, 2);
+      Wire.write(indexBytes, 2);
+      _crcWire.add(indexBytes, 2);
       uintCvt.val = *((unsigned int *)signal.Address);
       Wire.write(uintCvt.bval, 2);
       _crcWire.add(uintCvt.bval, 2);
@@ -2859,9 +2876,8 @@ void BlaeckSerial::wireSlaveTransmitSingleDataPoint(bool onlyUpdated)
     {
       Wire.write(6);
       _crcWire.add(6);
-      intCvt.val = _wireSignalIndex;
-      Wire.write(intCvt.bval, 2);
-      _crcWire.add(intCvt.bval, 2);
+      Wire.write(indexBytes, 2);
+      _crcWire.add(indexBytes, 2);
       lngCvt.val = *((long *)signal.Address);
       Wire.write(lngCvt.bval, 4);
       _crcWire.add(lngCvt.bval, 4);
@@ -2871,9 +2887,8 @@ void BlaeckSerial::wireSlaveTransmitSingleDataPoint(bool onlyUpdated)
     {
       Wire.write(6);
       _crcWire.add(6);
-      intCvt.val = _wireSignalIndex;
-      Wire.write(intCvt.bval, 2);
-      _crcWire.add(intCvt.bval, 2);
+      Wire.write(indexBytes, 2);
+      _crcWire.add(indexBytes, 2);
       ulngCvt.val = *((unsigned long *)signal.Address);
       Wire.write(ulngCvt.bval, 4);
       _crcWire.add(ulngCvt.bval, 4);
@@ -2883,9 +2898,8 @@ void BlaeckSerial::wireSlaveTransmitSingleDataPoint(bool onlyUpdated)
     {
       Wire.write(6);
       _crcWire.add(6);
-      intCvt.val = _wireSignalIndex;
-      Wire.write(intCvt.bval, 2);
-      _crcWire.add(intCvt.bval, 2);
+      Wire.write(indexBytes, 2);
+      _crcWire.add(indexBytes, 2);
       fltCvt.val = *((float *)signal.Address);
       Wire.write(fltCvt.bval, 4);
       _crcWire.add(fltCvt.bval, 4);
@@ -2895,9 +2909,8 @@ void BlaeckSerial::wireSlaveTransmitSingleDataPoint(bool onlyUpdated)
     {
       Wire.write(10);
       _crcWire.add(10);
-      intCvt.val = _wireSignalIndex;
-      Wire.write(intCvt.bval, 2);
-      _crcWire.add(intCvt.bval, 2);
+      Wire.write(indexBytes, 2);
+      _crcWire.add(indexBytes, 2);
       dblCvt.val = *((double *)signal.Address);
       Wire.write(dblCvt.bval, 8);
       _crcWire.add(dblCvt.bval, 8);

@@ -103,8 +103,11 @@ public:
 
   // ----- Initialize -----
   void begin(Stream *Ref, unsigned int Size);
+  void begin(Stream *Ref, unsigned int Size, Stream *DebugRef);
   void beginMaster(Stream *Ref, unsigned int Size, uint32_t WireClockFrequency);
+  void beginMaster(Stream *Ref, unsigned int Size, uint32_t WireClockFrequency, Stream *DebugRef);
   void beginSlave(Stream *Ref, unsigned int Size, byte SlaveID);
+  void beginSlave(Stream *Ref, unsigned int Size, byte SlaveID, Stream *DebugRef);
 
   // Set these variables in your Arduino sketch
   String DeviceName = "Unknown";
@@ -293,8 +296,9 @@ public:
   void setCommandHandlerCapacity(byte capacity);
 
   // ----- Before data write callback  -----
-  // In single device or master mode the function is called just before sending data over serial,
-  // In slave mode the function is called just before sending data over i2c to master. Because the attached function is inside a ISR (interrupt service routine) it should as short and fast as possible.
+  // Called just before signal data is sent.
+  //   Single/Master mode: runs in normal loop context (safe to use Serial, delay, etc.)
+  //   Slave mode: runs inside the I2C receive ISR — keep it short, no Serial/delay!
   void setBeforeWriteCallback(void (*callback)());
 
   // Timestamp configuration methods
@@ -332,9 +336,9 @@ private:
   void tick(unsigned long messageID, bool onlyUpdated);
 
   void writeData(unsigned long messageID, int signalIndex_start, int signalIndex_end, bool onlyUpdated, unsigned long long timestamp);
-  void prepareMasterSlaveSkipMap(bool *skipSlaves, byte &skippedSlaveCount, byte &firstSkippedSlaveID, byte &firstSkipReason);
+  void prepareMasterSlaveSkipMap(uint8_t *skipSlaves, byte &skippedSlaveCount, byte &firstSkippedSlaveID, byte &firstSkipReason);
   void writeLocalData(unsigned long MessageID, int signalIndex_start, int signalIndex_end, bool send_eol, bool onlyUpdated, unsigned long long timestamp);
-  void writeSlaveData(bool send_eol, bool onlyUpdated, bool *skipSlaves, byte &skippedSlaveCount, byte &firstSkippedSlaveID, byte &firstSkipReason);
+  void writeSlaveData(bool send_eol, bool onlyUpdated, uint8_t *skipSlaves, byte &skippedSlaveCount, byte &firstSkippedSlaveID, byte &firstSkipReason);
 
   void writeLocalSymbols(unsigned long MessageID, bool send_eol);
   void writeSlaveSymbols(bool send_eol);
@@ -359,6 +363,7 @@ private:
   static void validatePlatformSizes();
 
   Stream *StreamRef;
+  Stream *_debugStream = nullptr;
   Signal *Signals = nullptr;
   int _signalIndex = 0;
   unsigned int _signalCapacity = 0;
@@ -380,7 +385,7 @@ private:
   long _fixedInterval_ms = BLAECK_INTERVAL_CLIENT;
 
   masterSlaveConfig _masterSlaveConfig = Single;
-  byte _slaveID;
+  byte _slaveID = 0;
   unsigned char _slaveFound[128 / 8] = {}; // 128 bit storage
   String _slaveSymbolPrefix;
 
@@ -468,9 +473,9 @@ private:
   {
     if (_bufOverflow)
     {
-      if (!_bufOverflowWarned && StreamRef != nullptr)
+      if (!_bufOverflowWarned && _debugStream != nullptr)
       {
-        StreamRef->println("Buffered frame exceeds available memory; frame dropped.");
+        _debugStream->println("Buffered frame exceeds available memory; frame dropped.");
         _bufOverflowWarned = true;
       }
       return;

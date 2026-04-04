@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## [6.0.1] - 2026-04-04
+
+### Fixed
+- CRC desync in updated-only slave mode: CRC bytes were written even when
+  the data block was skipped, causing potential protocol desync on the master.
+- Uninitialized `_slaveID` in Single/Master mode could produce wrong device
+  metadata in `writeDevices`/`writeSymbols`.
+- `writeData` now forwards its requested signal range to `writeLocalData`
+  in all three modes instead of hardcoding the full range.
+
+### Changed
+- Debug/diagnostic output separated from protocol stream.  `begin`,
+  `beginMaster`, and `beginSlave` accept an optional `Stream *DebugRef`
+  parameter (overload).  When omitted, diagnostics are silently suppressed
+  so the data channel stays clean.
+- Corrected I2C handler names: `OnSendHandler` → `OnReceiveHandler`,
+  `OnReceiveHandler` → `OnRequestHandler` (wiring unchanged, names only).
+- `skipSlaves` array reduced from 128-byte `bool[]` to 16-byte bitfield,
+  saving 112 bytes of stack per `tick()` call on AVR.
+- Dedicated `indexBytes` buffer in `wireSlaveTransmitSingleDataPoint`
+  replaces fragile `intCvt` reuse for signal index vs. value.
+- `scanI2CSlaves` parameter type changed from `char` to `uint8_t`.
+- `_slaveFound` array zero-initialized at declaration.
+
 ## [6.0.0] - 2026-04-01
 
 ### Added
