@@ -343,7 +343,7 @@ private:
   void writeSlaveDevices(bool send_eol);
 
   void refreshI2CSlavesIfNeeded();
-  void scanI2CSlaves(char addressStart, char addressEnd);
+  void scanI2CSlaves(uint8_t addressStart, uint8_t addressEnd);
 
   void wireSlaveTransmitToMaster();
   void wireSlaveReceive();
@@ -381,7 +381,7 @@ private:
 
   masterSlaveConfig _masterSlaveConfig = Single;
   byte _slaveID;
-  unsigned char _slaveFound[128 / 8]; // 128 bit storage
+  unsigned char _slaveFound[128 / 8] = {}; // 128 bit storage
   String _slaveSymbolPrefix;
 
   byte _wireMode = 0;
@@ -488,13 +488,13 @@ private:
 
   static BlaeckSerial *_pSingletonInstance;
 
-  static void OnReceiveHandler()
+  static void OnRequestHandler()
   {
     if (_pSingletonInstance)
       _pSingletonInstance->wireSlaveTransmitToMaster();
   }
 
-  static void OnSendHandler(int numBytes)
+  static void OnReceiveHandler(int numBytes)
   {
     if (_pSingletonInstance)
       _pSingletonInstance->wireSlaveReceive();

@@ -62,8 +62,8 @@ void BlaeckSerial::beginSlave(Stream *Ref, unsigned int size, byte slaveID)
   _slaveSymbolPrefix += _slaveID;
   _slaveSymbolPrefix += "_";
 
-  Wire.onReceive(OnSendHandler);
-  Wire.onRequest(OnReceiveHandler);
+  Wire.onReceive(OnReceiveHandler);
+  Wire.onRequest(OnRequestHandler);
   Wire.begin(_slaveID);
 
   begin(Ref, size);
@@ -2576,7 +2576,7 @@ void BlaeckSerial::writeSlaveSymbols(bool send_eol)
   }
 }
 
-void BlaeckSerial::scanI2CSlaves(char addressStart, char addressEnd)
+void BlaeckSerial::scanI2CSlaves(uint8_t addressStart, uint8_t addressEnd)
 {
   // Cycle through slaves (add-only: once found, a slave stays registered
   // until reboot.  Temporary I2C failures are reported via StatusByte=1
@@ -2774,11 +2774,13 @@ void BlaeckSerial::wireSlaveTransmitSingleSymbol()
 void BlaeckSerial::wireSlaveTransmitSingleDataPoint(bool onlyUpdated)
 {
   _crcWire.restart();
+  bool dataEmitted = false;
 
   Signal signal = Signals[_wireSignalIndex];
 
   if (!onlyUpdated || (onlyUpdated && Signals[_wireSignalIndex].Updated))
   {
+    dataEmitted = true;
     switch (signal.DataType)
     {
     case (Blaeck_bool):
@@ -2916,7 +2918,7 @@ void BlaeckSerial::wireSlaveTransmitSingleDataPoint(bool onlyUpdated)
   {
     Wire.write(0);
   }
-  else
+  else if (dataEmitted)
   {
     uint16_t crc_value = _crcWire.calc();
     Wire.write((byte *)&crc_value, 2);
