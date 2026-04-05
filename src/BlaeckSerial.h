@@ -17,6 +17,12 @@
 #ifndef BLAECKSERIAL_H
 #define BLAECKSERIAL_H
 
+#define BLAECKSERIAL_VERSION "6.0.0"
+#define BLAECKSERIAL_VERSION_MAJOR 6
+#define BLAECKSERIAL_VERSION_MINOR 0
+#define BLAECKSERIAL_VERSION_PATCH 0
+#define BLAECKSERIAL_NAME "BlaeckSerial"
+
 #include <Wire.h>
 #include <Arduino.h>
 #include <CRC32.h>
@@ -24,27 +30,57 @@
 #include <new>
 #include <limits.h>
 
+// Allow user overrides via a config file in the sketch folder.
+// Create BlaeckSerialConfig.h in your sketch to override defaults, e.g.:
+//   #define BLAECK_COMMAND_MAX_CHARS_DEFAULT 128
+// PlatformIO users can also use build_flags = -DBLAECK_COMMAND_MAX_CHARS_DEFAULT=128
+#if defined __has_include
+  #if __has_include(<BlaeckSerialConfig.h>)
+    #include <BlaeckSerialConfig.h>
+  #endif
+#endif
+
 // Buffered writes: assemble entire frames in RAM before a single
 // StreamRef->write(buf, len) call.  Prevents byte-dropping on boards
 // whose UART-to-USB bridge can't keep up with many small writes
 // (e.g. Arduino Uno R4 WiFi / ESP32-S3 bridge).
 // Default: OFF on AVR (saves SRAM), ON everywhere else.
-#if defined(__AVR__)
-#define BLAECK_BUFFERED_WRITES_DEFAULT false
-#else
-#define BLAECK_BUFFERED_WRITES_DEFAULT true
+// Can also be changed at runtime with setBufferedWrites().
+#ifndef BLAECK_BUFFERED_WRITES_DEFAULT
+  #if defined(__AVR__)
+    #define BLAECK_BUFFERED_WRITES_DEFAULT false
+  #else
+    #define BLAECK_BUFFERED_WRITES_DEFAULT true
+  #endif
 #endif
 
-#if defined(__AVR__)
-#define BLAECK_COMMAND_MAX_CHARS_DEFAULT 48
-#define BLAECK_COMMAND_MAX_HANDLERS_DEFAULT 4
-#define BLAECK_COMMAND_MAX_NAME_CHARS_DEFAULT 24
-#else
-#define BLAECK_COMMAND_MAX_CHARS_DEFAULT 96
-#define BLAECK_COMMAND_MAX_HANDLERS_DEFAULT 12
-#define BLAECK_COMMAND_MAX_NAME_CHARS_DEFAULT 40
+#ifndef BLAECK_COMMAND_MAX_CHARS_DEFAULT
+  #if defined(__AVR__)
+    #define BLAECK_COMMAND_MAX_CHARS_DEFAULT 48
+  #else
+    #define BLAECK_COMMAND_MAX_CHARS_DEFAULT 96
+  #endif
 #endif
-#define BLAECK_COMMAND_MAX_PARAMS_DEFAULT 10
+
+#ifndef BLAECK_COMMAND_MAX_HANDLERS_DEFAULT
+  #if defined(__AVR__)
+    #define BLAECK_COMMAND_MAX_HANDLERS_DEFAULT 4
+  #else
+    #define BLAECK_COMMAND_MAX_HANDLERS_DEFAULT 12
+  #endif
+#endif
+
+#ifndef BLAECK_COMMAND_MAX_NAME_CHARS_DEFAULT
+  #if defined(__AVR__)
+    #define BLAECK_COMMAND_MAX_NAME_CHARS_DEFAULT 24
+  #else
+    #define BLAECK_COMMAND_MAX_NAME_CHARS_DEFAULT 40
+  #endif
+#endif
+
+#ifndef BLAECK_COMMAND_MAX_PARAMS_DEFAULT
+  #define BLAECK_COMMAND_MAX_PARAMS_DEFAULT 10
+#endif
 
 typedef enum MasterSlaveConfig
 {
@@ -113,9 +149,6 @@ public:
   String DeviceName = "Unknown";
   String DeviceHWVersion = "n/a";
   String DeviceFWVersion = "n/a";
-
-  const String LIBRARY_NAME = "BlaeckSerial";
-  const String LIBRARY_VERSION = "6.0.0";
 
   // ----- Signals -----
   // Add a Signal
@@ -293,7 +326,6 @@ public:
   bool onCommand(const char *command, BlaeckCommandHandler handler);
   void onAnyCommand(BlaeckAnyCommandHandler handler);
   void clearAllCommandHandlers();
-  void setCommandHandlerCapacity(byte capacity);
 
   // ----- Before data write callback  -----
   // Called just before signal data is sent.
@@ -308,7 +340,9 @@ public:
   bool hasValidTimestampCallback() const;
 
   // Buffered writes: assemble entire frame in RAM before sending.
-  // Enabled by default on non-AVR boards (see BLAECK_BUFFERED_WRITES_DEFAULT).
+  // Default: OFF on AVR (saves SRAM), ON everywhere else.
+  // Override at compile time with BLAECK_BUFFERED_WRITES_DEFAULT,
+  // or at runtime with setBufferedWrites().
   void setBufferedWrites(bool enabled);
   bool isBufferedWrites() const { return _bufferedWrites; }
 
@@ -512,7 +546,6 @@ private:
 
   void (*_commandCallback)(char *command, int *parameter, char *string01) = nullptr;
   bool _commandCallbackDeprecationWarned = false;
-  byte _commandHandlerCapacity = MAX_COMMAND_HANDLERS;
   struct CommandHandlerEntry
   {
     char command[MAX_COMMAND_NAME_COUNT];

@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 ## [6.0.1] - 2026-04-04
 
+### Added
+- Compile-time configuration via `BlaeckSerialConfig.h` in the sketch folder
+  (uses `__has_include`). All command parser defaults and buffered writes can
+  now be overridden without modifying library source. PlatformIO users can
+  also use `-D` compiler flags.
+- Preprocessor version macros: `BLAECKSERIAL_VERSION`, `BLAECKSERIAL_VERSION_MAJOR`,
+  `BLAECKSERIAL_VERSION_MINOR`, `BLAECKSERIAL_VERSION_PATCH`, `BLAECKSERIAL_NAME`.
+
+### Changed
+- `LIBRARY_NAME` and `LIBRARY_VERSION` public String members replaced by
+  `BLAECKSERIAL_NAME` and `BLAECKSERIAL_VERSION` preprocessor macros.
+
+### Removed
+- `setCommandHandlerCapacity(byte)` — the command handler array is always
+  allocated at the compile-time maximum; the runtime soft-cap provided no
+  memory benefit.
+
 ### Fixed
 - CRC desync in updated-only slave mode: CRC bytes were written even when
   the data block was skipped, causing potential protocol desync on the master.
@@ -50,7 +67,7 @@ All notable changes to this project will be documented in this file.
 - Added command registration API:
   - `onCommand(const char* command, void (*handler)(const char*, const char* const*, byte))`
   - `onAnyCommand(void (*handler)(const char*, const char* const*, byte))`
-  - `clearAllCommandHandlers()` and `setCommandHandlerCapacity(byte)`
+  - `clearAllCommandHandlers()`
 - Added architecture-based command parser defaults:
   - AVR: smaller defaults for command length/handler table/command name length
   - non-AVR: larger defaults (96 chars, 12 handlers, 40 command-name chars)

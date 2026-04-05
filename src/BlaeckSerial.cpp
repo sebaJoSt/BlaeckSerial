@@ -652,7 +652,7 @@ bool BlaeckSerial::onCommand(const char *command, BlaeckCommandHandler handler)
     return false;
   }
 
-  for (byte i = 0; i < _commandHandlerCapacity; i++)
+  for (byte i = 0; i < MAX_COMMAND_HANDLERS; i++)
   {
     if (_commandHandlers[i].inUse && strcmp(_commandHandlers[i].command, command) == 0)
     {
@@ -661,7 +661,7 @@ bool BlaeckSerial::onCommand(const char *command, BlaeckCommandHandler handler)
     }
   }
 
-  for (byte i = 0; i < _commandHandlerCapacity; i++)
+  for (byte i = 0; i < MAX_COMMAND_HANDLERS; i++)
   {
     if (!_commandHandlers[i].inUse)
     {
@@ -695,19 +695,6 @@ void BlaeckSerial::clearAllCommandHandlers()
     _commandHandlers[i].command[0] = '\0';
   }
   _anyCommandHandler = nullptr;
-}
-
-void BlaeckSerial::setCommandHandlerCapacity(byte capacity)
-{
-  if (capacity == 0)
-  {
-    capacity = 1;
-  }
-  if (capacity > MAX_COMMAND_HANDLERS)
-  {
-    capacity = MAX_COMMAND_HANDLERS;
-  }
-  _commandHandlerCapacity = capacity;
 }
 
 bool BlaeckSerial::recvWithStartEndMarkers()
@@ -925,7 +912,7 @@ void BlaeckSerial::_dispatchRegisteredHandlers()
     return;
   }
 
-  for (byte i = 0; i < _commandHandlerCapacity; i++)
+  for (byte i = 0; i < MAX_COMMAND_HANDLERS; i++)
   {
     if (_commandHandlers[i].inUse &&
         _commandHandlers[i].handler != nullptr &&
@@ -1691,8 +1678,8 @@ void BlaeckSerial::_bufDevice(byte msc, byte sid, const String &name,
   _bufStr0(name);
   _bufStr0(hw);
   _bufStr0(fw);
-  _bufStr0(LIBRARY_VERSION);
-  _bufStr0(LIBRARY_NAME);
+  _bufStr0(BLAECKSERIAL_VERSION);
+  _bufStr0(BLAECKSERIAL_NAME);
 }
 
 // ── Frame write functions ─────────────────────────────────────────
@@ -1734,9 +1721,9 @@ void BlaeckSerial::writeRestarted(unsigned long msg_id)
       StreamRef->print('\0');
       StreamRef->print(DeviceFWVersion);
       StreamRef->print('\0');
-      StreamRef->print(LIBRARY_VERSION);
+      StreamRef->print(BLAECKSERIAL_VERSION);
       StreamRef->print('\0');
-      StreamRef->print(LIBRARY_NAME);
+      StreamRef->print(BLAECKSERIAL_NAME);
       StreamRef->print('\0');
 
       StreamRef->write("/BLAECK>");
@@ -1807,9 +1794,9 @@ void BlaeckSerial::writeLocalDevices(unsigned long msg_id, bool send_eol)
     StreamRef->print('\0');
     StreamRef->print(DeviceFWVersion);
     StreamRef->print('\0');
-    StreamRef->print(LIBRARY_VERSION);
+    StreamRef->print(BLAECKSERIAL_VERSION);
     StreamRef->print('\0');
-    StreamRef->print(LIBRARY_NAME);
+    StreamRef->print(BLAECKSERIAL_NAME);
     StreamRef->print('\0');
 
     if (send_eol)
@@ -2696,13 +2683,15 @@ void BlaeckSerial::wireSlaveTransmitSingleDevice()
   }
   else if (_wireDeviceIndex == 3)
   {
-    LIBRARY_VERSION.toCharArray(little_s_string, 32);
+    strncpy(little_s_string, BLAECKSERIAL_VERSION, 31);
+    little_s_string[31] = '\0';
     Wire.print(little_s_string);
     Wire.write('\0');
   }
   else if (_wireDeviceIndex == 4)
   {
-    LIBRARY_NAME.toCharArray(little_s_string, 32);
+    strncpy(little_s_string, BLAECKSERIAL_NAME, 31);
+    little_s_string[31] = '\0';
     Wire.print(little_s_string);
     Wire.write('\0');
   }
