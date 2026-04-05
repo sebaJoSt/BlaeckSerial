@@ -1,0 +1,73 @@
+name: Compile Examples
+
+on:
+  push:
+    paths:
+      - ".github/workflows/compile-examples.yml"
+      - "examples/**"
+      - "src/**"
+  pull_request:
+    paths:
+      - ".github/workflows/compile-examples.yml"
+      - "examples/**"
+      - "src/**"
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: ${{ matrix.board.fqbn }}
+    runs-on: ubuntu-latest
+
+    env:
+      SKETCHES_REPORTS_PATH: sketches-reports
+
+    strategy:
+      fail-fast: false
+
+      matrix:
+        board:
+          - fqbn: arduino:avr:nano
+            platforms: |
+              - name: arduino:avr
+            artifact-name-suffix: arduino-avr-nano
+          - fqbn: arduino:avr:mega
+            platforms: |
+              - name: arduino:avr
+            artifact-name-suffix: arduino-avr-mega
+          - fqbn: arduino:esp32:nano_nora
+            platforms: |
+              - name: arduino:esp32
+            artifact-name-suffix: arduino-esp32-nano_nora
+          - fqbn: arduino:samd:mkrzero
+            platforms: |
+              - name: arduino:samd
+            artifact-name-suffix: arduino-samd-mkrzero
+          - fqbn: arduino:renesas_uno:unor4wifi
+            platforms: |
+              - name: arduino:renesas_uno
+            artifact-name-suffix: arduino-renesas_uno-unor4wifi
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Compile examples
+        uses: arduino/compile-sketches@v1
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          fqbn: ${{ matrix.board.fqbn }}
+          platforms: ${{ matrix.board.platforms }}
+          libraries: |
+            - source-path: ./
+            - name: CRC
+          sketch-paths: |
+            - examples
+          enable-deltas-report: true
+          sketches-report-path: ${{ env.SKETCHES_REPORTS_PATH }}
+
+      - name: Save sketches report as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          if-no-files-found: error
+          path: ${{ env.SKETCHES_REPORTS_PATH }}
+          name: sketches-report-${{ matrix.board.artifact-name-suffix }}
