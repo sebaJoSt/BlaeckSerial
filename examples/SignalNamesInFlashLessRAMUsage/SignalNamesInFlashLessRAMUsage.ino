@@ -23,7 +23,7 @@
 
 
   created by Sebastian Strobl
-  More information on: https://github.com/sebaJoSt/BlaeckTCP
+  More information on: https://github.com/sebaJoSt/BlaeckSerial
  */
 
 #include "Arduino.h"

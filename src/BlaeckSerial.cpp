@@ -1923,8 +1923,8 @@ void BlaeckSerial::writeLocalData(unsigned long msg_id, int signalIndex_start, i
     ulngCvt.val = msg_id;
     _bufBytes(ulngCvt.bval, 4); _bufByte(':');
 
-    _bufByte(_sendRestartFlag ? 1 : 0);
-    _sendRestartFlag = false;
+    bool restartFlagSnapshot = _sendRestartFlag;
+    _bufByte(restartFlagSnapshot ? 1 : 0);
     _bufByte(':');
 
     _bufByte((byte)(_schemaHash & 0xFF));
@@ -1986,6 +1986,8 @@ void BlaeckSerial::writeLocalData(unsigned long msg_id, int signalIndex_start, i
 
       _bufFooter();
       _bufSend();
+      if (!_bufOverflow)
+        _sendRestartFlag = false;
     }
   }
   else
@@ -2349,6 +2351,8 @@ void BlaeckSerial::writeSlaveData(bool send_eol, bool onlyUpdated, uint8_t *skip
 
       _bufFooter();
       _bufSend();
+      if (!_bufOverflow)
+        _sendRestartFlag = false;
     }
     else
     {

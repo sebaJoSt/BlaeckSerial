@@ -2,47 +2,6 @@
 
 All notable changes to this project will be documented in this file.
 
-## [6.0.1] - 2026-04-04
-
-### Added
-- Compile-time configuration via `BlaeckSerialConfig.h` in the sketch folder
-  (uses `__has_include`). All command parser defaults and buffered writes can
-  now be overridden without modifying library source. PlatformIO users can
-  also use `-D` compiler flags.
-- Preprocessor version macros: `BLAECKSERIAL_VERSION`, `BLAECKSERIAL_VERSION_MAJOR`,
-  `BLAECKSERIAL_VERSION_MINOR`, `BLAECKSERIAL_VERSION_PATCH`, `BLAECKSERIAL_NAME`.
-
-### Changed
-- `LIBRARY_NAME` and `LIBRARY_VERSION` public String members replaced by
-  `BLAECKSERIAL_NAME` and `BLAECKSERIAL_VERSION` preprocessor macros.
-
-### Removed
-- `setCommandHandlerCapacity(byte)` — the command handler array is always
-  allocated at the compile-time maximum; the runtime soft-cap provided no
-  memory benefit.
-
-### Fixed
-- CRC desync in updated-only slave mode: CRC bytes were written even when
-  the data block was skipped, causing potential protocol desync on the master.
-- Uninitialized `_slaveID` in Single/Master mode could produce wrong device
-  metadata in `writeDevices`/`writeSymbols`.
-- `writeData` now forwards its requested signal range to `writeLocalData`
-  in all three modes instead of hardcoding the full range.
-
-### Changed
-- Debug/diagnostic output separated from protocol stream.  `begin`,
-  `beginMaster`, and `beginSlave` accept an optional `Stream *DebugRef`
-  parameter (overload).  When omitted, diagnostics are silently suppressed
-  so the data channel stays clean.
-- Corrected I2C handler names: `OnSendHandler` → `OnReceiveHandler`,
-  `OnReceiveHandler` → `OnRequestHandler` (wiring unchanged, names only).
-- `skipSlaves` array reduced from 128-byte `bool[]` to 16-byte bitfield,
-  saving 112 bytes of stack per `tick()` call on AVR.
-- Dedicated `indexBytes` buffer in `wireSlaveTransmitSingleDataPoint`
-  replaces fragile `intCvt` reuse for signal index vs. value.
-- `scanI2CSlaves` parameter type changed from `char` to `uint8_t`.
-- `_slaveFound` array zero-initialized at declaration.
-
 ## [6.0.0] - 2026-04-01
 
 ### Added
@@ -51,6 +10,12 @@ All notable changes to this project will be documented in this file.
   boards with UART-to-USB bridges (e.g. Arduino Uno R4 WiFi).
   - Enabled by default on non-AVR boards, disabled on AVR to save SRAM.
   - Runtime control: `setBufferedWrites(bool)` / `isBufferedWrites()`.
+- Compile-time configuration via `BlaeckSerialConfig.h` in the sketch folder
+  (uses `__has_include`). All command parser defaults and buffered writes can
+  now be overridden without modifying library source. PlatformIO users can
+  also use `-D` compiler flags.
+- Preprocessor version macros: `BLAECKSERIAL_VERSION`, `BLAECKSERIAL_VERSION_MAJOR`,
+  `BLAECKSERIAL_VERSION_MINOR`, `BLAECKSERIAL_VERSION_PATCH`, `BLAECKSERIAL_NAME`.
 
 ### Changed
 - **Breaking change:** Data message format updated from `D1` (0xD1) to `D2` (0xD2)
@@ -72,10 +37,35 @@ All notable changes to this project will be documented in this file.
   - AVR: smaller defaults for command length/handler table/command name length
   - non-AVR: larger defaults (96 chars, 12 handlers, 40 command-name chars)
 - Deprecated `setCommandCallback(...)` in favor of `onCommand(...)` / `onAnyCommand(...)` (legacy callback remains supported with runtime warning).
+- `LIBRARY_NAME` and `LIBRARY_VERSION` public String members replaced by
+  `BLAECKSERIAL_NAME` and `BLAECKSERIAL_VERSION` preprocessor macros.
+- Debug/diagnostic output separated from protocol stream.  `begin`,
+  `beginMaster`, and `beginSlave` accept an optional `Stream *DebugRef`
+  parameter (overload).  When omitted, diagnostics are silently suppressed
+  so the data channel stays clean.
+- Corrected I2C handler names: `OnSendHandler` → `OnReceiveHandler`,
+  `OnReceiveHandler` → `OnRequestHandler` (wiring unchanged, names only).
+- `skipSlaves` array reduced from 128-byte `bool[]` to 16-byte bitfield,
+  saving 112 bytes of stack per `tick()` call on AVR.
+- Dedicated `indexBytes` buffer in `wireSlaveTransmitSingleDataPoint`
+  replaces fragile `intCvt` reuse for signal index vs. value.
+- `scanI2CSlaves` parameter type changed from `char` to `uint8_t`.
+- `_slaveFound` array zero-initialized at declaration.
+
+### Removed
+- `setCommandHandlerCapacity(byte)` — the command handler array is always
+  allocated at the compile-time maximum; the runtime soft-cap provided no
+  memory benefit.
 
 ### Fixed
 - Fixed timer burst issue: when the main loop is delayed beyond the timed interval, `timedWriteData` no longer fires multiple times in rapid succession to catch up. It now skips missed intervals and resumes at the next boundary.
 - Fixed buffered write overflow risk by adding bounds-safe dynamic growth for frame buffers (with graceful frame-drop warning if memory expansion fails), preventing heap corruption with long metadata/signal names.
+- CRC desync in updated-only slave mode: CRC bytes were written even when
+  the data block was skipped, causing potential protocol desync on the master.
+- Uninitialized `_slaveID` in Single/Master mode could produce wrong device
+  metadata in `writeDevices`/`writeSymbols`.
+- `writeData` now forwards its requested signal range to `writeLocalData`
+  in all three modes instead of hardcoding the full range.
 
 
 ## [5.0.1] - 2025-11-13

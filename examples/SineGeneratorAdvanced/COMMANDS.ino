@@ -1,6 +1,6 @@
 // Command:         <COMMAND,PARAMETER_01,PARAMETER_02,...,PARAMETER_10>
 // StringCommand:   <COMMAND, STRING_01  ,PARAMETER_02,...,PARAMETER_10>
-//                  <---------max. 64 chars---------------------------->
+//                  <- AVR: up to 48 chars, non-AVR: up to 96 chars  ->
 // COMMAND:             String, Upper case w/o spaces, e.g. MIPIWRITE
 // PARAMETER:           Int 16 Bit, max 10 parameters
 // STRING_01:           max. 15 chars
