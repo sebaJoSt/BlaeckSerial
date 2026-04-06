@@ -194,9 +194,8 @@ Restarted | C0 | **`<MasterSlaveConfig><SlaveID><DeviceName><DeviceHWVersion><De
    `DeviceFWVersion`      | String0 |          set with public variable `DeviceFWVersion`
    `LibraryVersion`       | String0 |          set with preprocessor macro `BLAECKSERIAL_VERSION`
    `LibraryName`          | String0 |          set with preprocessor macro `BLAECKSERIAL_NAME` 
-   `StatusByte`           | byte |             1 byte; 0: Normal Transmission, 1: One or more I2C slaves were skipped/unavailable in this frame
-   `StatusPayload` (StatusByte=0) | byte |             4 bytes; Reserved (`0x00 0x00 0x00 0x00`)
-   `StatusPayload` (StatusByte=1) | byte |             4 bytes; Byte0=SkippedSlaveCount, Byte1=FirstSkippedSlaveID (0xFF unknown), Byte2=FirstSkipReason (0x01 preflight no response, 0x02 runtime timeout/short/malformed/CRC mismatch), Byte3=reserved (0x00)
+   `StatusByte`           | byte |             Status code (see [Status codes](#status-codes) below)
+   `StatusPayload`        | byte |             4 bytes, interpretation depends on `StatusByte` (see [Status codes](#status-codes) below)
    `CRC32`                | byte |             4 bytes; CRC order: 32; CRC Polynom (hex): 4C11DB7; Initial value (hex): FFFFFFFF; Final XOR value (hex): FFFFFFFF; reverse data bytes: true; reverse CRC result before Final XOR: true; (http://zorc.breitbandkatze.de/crc.html)
    `RestartFlag`          | byte | Restart Flag, 1 if device restarted since last transmission, 0 otherwise; 1 byte transmitted
    `SchemaHash`           | uint16 | CRC16-CCITT (init=0x0000, poly=0x1021) of signal name bytes + datatype code byte for each signal in order; 2 bytes transmitted (little-endian). Used by hubs and clients to detect signal layout changes at runtime.
@@ -211,6 +210,13 @@ Restarted | C0 | **`<MasterSlaveConfig><SlaveID><DeviceName><DeviceHWVersion><De
  <BLAECK.WRITE_SYMBOLS, firstByteMSGID, secondByteMSGID, thirdByteMSGID, fourthByteMSGID>
  <BLAECK.WRITE_DATA, firstByteMSGID, secondByteMSGID, thirdByteMSGID, fourthByteMSGID>
  ````
+
+ ### Status codes
+
+| StatusByte | Name | StatusPayload (4 bytes) |
+|------------|------|-------------------------|
+| `0x00` | Normal | Reserved (`0x00 0x00 0x00 0x00`) |
+| `0x01` | I2C slave skip | Byte 0: skipped slave count. Byte 1: first skipped slave ID (`0xFF` = unknown). Byte 2: skip reason (`0x01` = preflight no response, `0x02` = runtime timeout/short/malformed/CRC mismatch). Byte 3: reserved (`0x00`). |
  
  ## Decoding Examples
  
