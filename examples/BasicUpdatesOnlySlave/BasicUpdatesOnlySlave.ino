@@ -4,8 +4,14 @@
   This is a sample sketch to show how to use the BlaeckSerial library to transmit data
   from multiple Arduino boards in a master/slave configuration to your PC.
   Upload this sketch to the slave Arduino.
+
+  The slave does not send data on its own. The master polls each slave
+  via I2C to read signal values, then forwards everything over Serial to the PC.
+  No tick() call is needed on the slave — communication is handled by
+  I2C callbacks registered in beginSlave().
+
   You can find more documentation about the test circuit, setup, etc. in
-  the example BasicMaster.ino
+  the example BasicUpdatesOnlyMaster.ino
 
   Author: Sebastian Strobl,
   More information on: https://github.com/sebaJoSt/BlaeckSerial
@@ -57,8 +63,8 @@ void loop()
 void UpdateRandomBigNumber()
 {
   /*
-    On the slave the I2C interrupt could happen between one byte of a multi-byte signal being changed and the next, thus sending corrupted data to the master.
-    To prevent that, you would need to disable interrupts, change the multi-byte signal's value, and then enable interrupts again
+    Disable interrupts while updating multi-byte signal values to prevent
+    the I2C ISR from reading a partially-updated value (torn read).
   */
   noInterrupts();
   // Random big number from 1000 to 2000

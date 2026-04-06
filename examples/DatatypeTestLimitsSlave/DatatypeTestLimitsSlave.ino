@@ -2,6 +2,13 @@
   DatatypeTestLimitsSlave.ino
 
   This is a sample sketch to test all the supported datatypes.
+  Signal values are constant, so no noInterrupts()/interrupts()
+  protection is needed (values are set once before I2C starts).
+
+  The slave does not send data on its own. The master polls each slave
+  via I2C to read signal values, then forwards everything over Serial to the PC.
+  No tick() call is needed on the slave — communication is handled by
+  I2C callbacks registered in beginSlave().
 
   Author: Sebastian Strobl,
   More information on: https://github.com/sebaJoSt/BlaeckSerial

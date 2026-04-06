@@ -3,6 +3,11 @@
 
   This is a sample sketch to test all the supported datatypes.
 
+  The slave does not send data on its own. The master polls each slave
+  via I2C to read signal values, then forwards everything over Serial to the PC.
+  No tick() call is needed on the slave — communication is handled by
+  I2C callbacks registered in beginSlave().
+
   Author: Sebastian Strobl,
   More information on: https://github.com/sebaJoSt/BlaeckSerial
 
@@ -102,8 +107,8 @@ void UpdateRandomNumbers()
 void UpdateSignals()
 {
   /*
-    On the slave the I2C interrupt could happen between one byte of a multi-byte signal being changed and the next, thus sending corrupted data to the master.
-    To prevent that, you would need to disable interrupts, change the multi-byte signal's value, and then enable interrupts again
+    Disable interrupts while updating multi-byte signal values to prevent
+    the I2C ISR from reading a partially-updated value (torn read).
   */
   noInterrupts();
   boolRandom = boolGeneratedRandom;
