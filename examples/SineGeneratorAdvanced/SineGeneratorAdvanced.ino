@@ -14,7 +14,8 @@
   - Master/Slave mode can be configured with <MASTER_SLAVE_MODE>
 */
 
-#include <BlaeckSerial.h>
+#include "Arduino.h"
+#include "BlaeckSerial.h"
 #include <EEPROMex.h>
 
 //---FIRMWARE
