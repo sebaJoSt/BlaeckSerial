@@ -65,8 +65,6 @@ void loop()
 {
   UpdateRandomNumbers();
   UpdateSignals();
-
-  BlaeckSerial.tick();
 }
 
 void UpdateRandomNumbers()

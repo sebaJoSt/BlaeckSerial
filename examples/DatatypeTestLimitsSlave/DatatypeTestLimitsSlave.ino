@@ -76,7 +76,5 @@ void setup()
 
 void loop()
 {
-  BlaeckSerial.tick();
-
   Serial.println("This is text sent from the slave sketch. This text is not transmitted to master via I2C.");
 }
