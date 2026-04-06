@@ -91,8 +91,9 @@ void loop()
 {
   UpdateRandomNumbers();
 
-  /*Keeps watching for serial input (Serial.read) and
-    transmits the data at the user-set interval (Serial.write)*/
+  /*Keeps watching for serial input (Serial.read), polls slave
+    signals via I2C and transmits all data at the user-set
+    interval (Serial.write)*/
   BlaeckSerial.tick();
 }
 

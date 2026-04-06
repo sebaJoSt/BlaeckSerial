@@ -26,7 +26,7 @@
 
   Upload the sketches:
   * Upload this sketch to the master arduino.
-  * Upload the sketch BasicSlave.ino to the slave arduinos.
+  * Upload the sketch BasicUpdatesOnlySlave.ino to the slave arduinos.
 
   Usage:
   After uploading all the sketches, the master board must be connected to your computer via USB.
@@ -88,8 +88,9 @@ void loop()
   UpdateRandomSmallNumber();
   UpdateRandomSmallNumber2();
 
-  /*Keeps watching for serial input (Serial.read) and
-    transmits the updated data at the user-set interval (Serial.write)*/
+  /*Keeps watching for serial input (Serial.read), polls slave
+    signals via I2C and transmits updated data at the user-set
+    interval (Serial.write)*/
   BlaeckSerial.tickUpdated();
 }
 

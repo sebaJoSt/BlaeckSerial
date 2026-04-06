@@ -2,6 +2,8 @@
   DatatypeTestRandomMaster.ino
 
   This is a sample sketch to test all the supported datatypes.
+  Upload this sketch to the master Arduino and
+  DatatypeTestRandomSlave.ino to the slave Arduino.
 
   Author: Sebastian Strobl,
   More information on: https://github.com/sebaJoSt/BlaeckSerial
@@ -54,6 +56,9 @@ void loop()
 {
   UpdateRandomNumbers();
 
+  /*Keeps watching for serial input (Serial.read), polls slave
+    signals via I2C and transmits all data at the user-set
+    interval (Serial.write)*/
   BlaeckSerial.tick();
 }
 
