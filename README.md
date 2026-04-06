@@ -164,3 +164,5 @@ Serial.println(BlaeckSerial.isBufferedWrites() ? "ON" : "OFF");
 
 For the binary wire format, message keys, elements, status codes, data types, timestamp modes, and decoding examples, see [docs/protocol.md](docs/protocol.md).
 
+Full protocol specification with version history: [sebajost.github.io/blaeck-protocol](https://sebajost.github.io/blaeck-protocol/blaeckserial/overview)
+
