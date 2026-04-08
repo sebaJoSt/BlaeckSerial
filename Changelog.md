@@ -47,7 +47,7 @@ All notable changes to this project will be documented in this file.
   `OnReceiveHandler` → `OnRequestHandler` (wiring unchanged, names only).
 - I2C slave packs multiple data-point chunks per `onRequest` response,
   reducing round-trips (e.g. 25 floats: 9 requests instead of 25 on AVR).
-  Buffer size defaults to 32, overridable with `BLAECK_WIRE_BUFFER_SIZE`.
+  Buffer size auto-detected from Wire.h, overridable with `BLAECK_WIRE_BUFFER_SIZE`.
 - Dedicated `indexBytes` buffer in slave data-point transmit replaces
   fragile `intCvt` reuse for signal index vs. value.
 - `scanI2CSlaves` parameter type changed from `char` to `uint8_t`.

@@ -83,11 +83,20 @@
 #endif
 
 // I2C (Wire) buffer size used for slave→master data packing.
-// Must match on both master and slave for cross-platform setups.
-// Defaults to 32 (AVR Wire TX buffer). Override via BlaeckSerialConfig.h
-// or build flag for platforms with larger buffers (e.g. ESP32: 128).
+// Auto-detected from Wire.h platform defines; falls back to 32.
+// Only increase if BOTH master and slave support larger buffers;
+// the value should match on both sides.
+// Override via BlaeckSerialConfig.h or build flag.
 #ifndef BLAECK_WIRE_BUFFER_SIZE
-  #define BLAECK_WIRE_BUFFER_SIZE 32
+  #if defined(BUFFER_LENGTH)
+    // AVR and most platforms define BUFFER_LENGTH in Wire.h
+    #define BLAECK_WIRE_BUFFER_SIZE BUFFER_LENGTH
+  #elif defined(I2C_BUFFER_LENGTH)
+    // ESP32 defines I2C_BUFFER_LENGTH in Wire.h
+    #define BLAECK_WIRE_BUFFER_SIZE I2C_BUFFER_LENGTH
+  #else
+    #define BLAECK_WIRE_BUFFER_SIZE 32
+  #endif
 #endif
 
 typedef enum MasterSlaveConfig
