@@ -1844,12 +1844,12 @@ void BlaeckSerial::writeSlaveDevices(bool send_eol)
         }
 
         bool eolist_found = false;
-        const unsigned long timeout_ms = 50;
-        unsigned long start_ms = millis();
-        while ((millis() - start_ms) < timeout_ms && !eolist_found)
+        int requestCount = 0;
+        while (requestCount < 1000 && !eolist_found)
         {
           // request 32 bytes from slave device
           byte receivedBytes = Wire.requestFrom(slaveindex, 32);
+          requestCount++;
           if (receivedBytes < 1)
             continue;
 
@@ -2187,12 +2187,12 @@ void BlaeckSerial::writeSlaveData(bool send_eol, bool onlyUpdated, uint8_t *skip
       {
         bool eolist_found = false;
         bool slaveFailed = false;
-        const unsigned long timeout_ms = 50;
-        unsigned long start_ms = millis();
-        while ((millis() - start_ms) < timeout_ms && !eolist_found)
+        int requestCount = 0;
+        while (requestCount < 1000 && !eolist_found)
         {
           // request 32 bytes from slave device
           byte receivedBytes = Wire.requestFrom(slaveindex, 32);
+          requestCount++;
           // try again
           if (receivedBytes < 2)
             continue;
@@ -2493,12 +2493,12 @@ void BlaeckSerial::writeSlaveSymbols(bool send_eol)
 
         bool eolist_found = false;
         bool afterNull = false; // true = next non-control byte is datatype
-        const unsigned long timeout_ms = 50;
-        unsigned long start_ms = millis();
-        while ((millis() - start_ms) < timeout_ms && !eolist_found)
+        int requestCount = 0;
+        while (requestCount < 1000 && !eolist_found)
         {
           // request 32 bytes from slave device
           byte receivedBytes = Wire.requestFrom(slaveindex, 32);
+          requestCount++;
           if (receivedBytes < 2)
             continue; // try again
 
@@ -2550,14 +2550,14 @@ void BlaeckSerial::writeSlaveSymbols(bool send_eol)
                 StreamRef->print(c);
 
               // Feed into schema hash accumulator
-              if (c == char(0x00))
+              if (afterNull)
+              {
+                _schemaHashFeedByte((byte)c); // datatype code (incl. 0x00 for bool)
+                afterNull = false;
+              }
+              else if (c == char(0x00))
               {
                 afterNull = true; // next byte is datatype
-              }
-              else if (afterNull)
-              {
-                _schemaHashFeedByte((byte)c); // datatype code
-                afterNull = false;
               }
               else
               {
