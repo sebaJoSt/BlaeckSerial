@@ -105,7 +105,15 @@ void UpdateSineNumbers()
 
     for (byte i = 1; i <= MAXIMUM_SIGNALS; i++)
     {
-      sine[i].value = i * sin(millis() * 0.000005 * i);
+      float val = i * sin(millis() * 0.000005 * i);
+
+      // In Slave mode the I2C ISR can read signal values at any time.
+      // Disable interrupts briefly so the 4-byte float write is atomic.
+      if (masterSlaveMode == 2)
+        noInterrupts();
+      sine[i].value = val;
+      if (masterSlaveMode == 2)
+        interrupts();
     }
   }
 }
