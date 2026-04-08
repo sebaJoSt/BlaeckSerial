@@ -54,8 +54,8 @@ void BlaeckSerial::beginMaster(Stream *Ref, unsigned int size, uint32_t WireCloc
 void BlaeckSerial::beginMaster(Stream *Ref, unsigned int size, uint32_t WireClockFrequency, Stream *DebugRef)
 {
   _masterSlaveConfig = Master;
-  Wire.setClock(WireClockFrequency);
   Wire.begin();
+  Wire.setClock(WireClockFrequency);
 
   begin(Ref, size, DebugRef);
 }
