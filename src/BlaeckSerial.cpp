@@ -1847,8 +1847,8 @@ void BlaeckSerial::writeSlaveDevices(bool send_eol)
         int requestCount = 0;
         while (requestCount < 1000 && !eolist_found)
         {
-          // request 32 bytes from slave device
-          byte receivedBytes = Wire.requestFrom(slaveindex, 32);
+          // request BLAECK_WIRE_BUFFER_SIZE bytes from slave device
+          byte receivedBytes = Wire.requestFrom(slaveindex, (int)BLAECK_WIRE_BUFFER_SIZE);
           requestCount++;
           if (receivedBytes < 1)
             continue;
@@ -2190,14 +2190,12 @@ void BlaeckSerial::writeSlaveData(bool send_eol, bool onlyUpdated, uint8_t *skip
         int requestCount = 0;
         while (requestCount < 1000 && !eolist_found)
         {
-          // request 32 bytes from slave device
-          byte receivedBytes = Wire.requestFrom(slaveindex, 32);
+          // request BLAECK_WIRE_BUFFER_SIZE bytes from slave device
+          byte receivedBytes = Wire.requestFrom(slaveindex, (int)BLAECK_WIRE_BUFFER_SIZE);
           requestCount++;
           // try again
           if (receivedBytes < 2)
             continue;
-
-          // slave may send less than requested
           while (Wire.available() > 0 && !eolist_found)
           {
             // first receive number of bytes to expect
@@ -2496,8 +2494,8 @@ void BlaeckSerial::writeSlaveSymbols(bool send_eol)
         int requestCount = 0;
         while (requestCount < 1000 && !eolist_found)
         {
-          // request 32 bytes from slave device
-          byte receivedBytes = Wire.requestFrom(slaveindex, 32);
+          // request BLAECK_WIRE_BUFFER_SIZE bytes from slave device
+          byte receivedBytes = Wire.requestFrom(slaveindex, (int)BLAECK_WIRE_BUFFER_SIZE);
           requestCount++;
           if (receivedBytes < 2)
             continue; // try again
@@ -2784,29 +2782,72 @@ void BlaeckSerial::wireSlaveTransmitSingleSymbol()
   }
 }
 
-void BlaeckSerial::wireSlaveTransmitSingleDataPoint(bool onlyUpdated)
+byte BlaeckSerial::_wireDataPointSize(byte dataType)
 {
-  _crcWire.restart();
-  bool dataEmitted = false;
-
-  Signal signal = Signals[_wireSignalIndex];
-
-  if (!onlyUpdated || (onlyUpdated && Signals[_wireSignalIndex].Updated))
+  // Total wire bytes: [bytecount(1)] + [index(2)] + [data(N)] + [CRC(2)]
+  switch (dataType)
   {
-    dataEmitted = true;
+  case Blaeck_bool:
+  case Blaeck_byte:
+    return 6; // 1+2+1+2
+  case Blaeck_short:
+  case Blaeck_ushort:
+  case Blaeck_int:
+  case Blaeck_uint:
+    return 7; // 1+2+2+2
+  case Blaeck_long:
+  case Blaeck_ulong:
+  case Blaeck_float:
+    return 9; // 1+2+4+2
+  case Blaeck_double:
+    return 13; // 1+2+8+2
+  default:
+    return BLAECK_WIRE_BUFFER_SIZE; // won't fit → stops packing
+  }
+}
 
-    // Precompute index bytes (shared by all data types)
+void BlaeckSerial::wireSlaveTransmitDataPoints(bool onlyUpdated)
+{
+  if (_signalIndex == 0)
+  {
+    Wire.write(0);
+    Wire.write(0x7F);
+    return;
+  }
+
+  // Reserve 1 byte for potential EOL marker
+  const byte maxPayload = BLAECK_WIRE_BUFFER_SIZE - 1;
+  byte bytesWritten = 0;
+
+  while (_wireSignalIndex < _signalIndex)
+  {
+    Signal &signal = Signals[_wireSignalIndex];
+
+    // Skip non-updated signals in onlyUpdated mode
+    if (onlyUpdated && !signal.Updated)
+    {
+      Signals[_wireSignalIndex].Updated = false;
+      _wireSignalIndex++;
+      continue;
+    }
+
+    byte wireSize = _wireDataPointSize(signal.DataType);
+
+    if (bytesWritten + wireSize > maxPayload)
+      break;
+
+    // Write this signal: [bytecount][index][data][CRC]
+    _crcWire.restart();
+
     byte indexBytes[2] = {
-      (byte)(_wireSignalIndex & 0xFF),
-      (byte)((_wireSignalIndex >> 8) & 0xFF)
-    };
+        (byte)(_wireSignalIndex & 0xFF),
+        (byte)((_wireSignalIndex >> 8) & 0xFF)};
 
     switch (signal.DataType)
     {
     case (Blaeck_bool):
     {
-      // Send: [index_size + data_size][index_bytes][data_bytes]
-      Wire.write(3); // 2 bytes index + 1 byte data
+      Wire.write(3);
       _crcWire.add(3);
       Wire.write(indexBytes, 2);
       _crcWire.add(indexBytes, 2);
@@ -2914,24 +2955,15 @@ void BlaeckSerial::wireSlaveTransmitSingleDataPoint(bool onlyUpdated)
     }
     break;
     }
-  }
 
-  // Clear the updated flag after transmission if we're only sending updated signals (onlyUpdated)
-  if (onlyUpdated)
-  {
-    Signals[_wireSignalIndex].Updated = false;
-  }
-
-  _wireSignalIndex += 1;
-
-  if (_signalIndex == 0)
-  {
-    Wire.write(0);
-  }
-  else if (dataEmitted)
-  {
     uint16_t crc_value = _crcWire.calc();
     Wire.write((byte *)&crc_value, 2);
+    bytesWritten += wireSize;
+
+    if (onlyUpdated)
+      Signals[_wireSignalIndex].Updated = false;
+
+    _wireSignalIndex++;
   }
 
   if (_wireSignalIndex >= _signalIndex)
@@ -2966,9 +2998,9 @@ void BlaeckSerial::wireSlaveTransmitToMaster()
   if (_wireMode == 0)
     this->wireSlaveTransmitSingleSymbol();
   if (_wireMode == 1)
-    this->wireSlaveTransmitSingleDataPoint(false);
+    this->wireSlaveTransmitDataPoints(false);
   if (_wireMode == 4)
-    this->wireSlaveTransmitSingleDataPoint(true);
+    this->wireSlaveTransmitDataPoints(true);
   if (_wireMode == 2)
     this->wireSlaveTransmitStatusByte();
   if (_wireMode == 3)

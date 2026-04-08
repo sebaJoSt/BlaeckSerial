@@ -82,6 +82,19 @@
   #define BLAECK_COMMAND_MAX_PARAMS_DEFAULT 10
 #endif
 
+// I2C (Wire) buffer size used for slave→master data packing.
+// Must match on both master and slave for cross-platform setups.
+// Defaults to the platform's Wire TX buffer size, or 32 if unknown.
+#ifndef BLAECK_WIRE_BUFFER_SIZE
+  #if defined(BUFFER_LENGTH)
+    #define BLAECK_WIRE_BUFFER_SIZE BUFFER_LENGTH
+  #elif defined(I2C_BUFFER_LENGTH)
+    #define BLAECK_WIRE_BUFFER_SIZE I2C_BUFFER_LENGTH
+  #else
+    #define BLAECK_WIRE_BUFFER_SIZE 32
+  #endif
+#endif
+
 typedef enum MasterSlaveConfig
 {
   Single,
@@ -387,9 +400,10 @@ private:
   void wireSlaveReceive();
 
   void wireSlaveTransmitSingleSymbol();
-  void wireSlaveTransmitSingleDataPoint(bool onlyUpdated);
+  void wireSlaveTransmitDataPoints(bool onlyUpdated);
   void wireSlaveTransmitSingleDevice();
   void wireSlaveTransmitStatusByte();
+  byte _wireDataPointSize(byte dataType);
 
   bool slaveFound(const unsigned int index);
   void storeSlave(const unsigned int index, const boolean value);

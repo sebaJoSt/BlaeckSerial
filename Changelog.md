@@ -45,8 +45,12 @@ All notable changes to this project will be documented in this file.
   so the data channel stays clean.
 - Corrected I2C handler names: `OnSendHandler` → `OnReceiveHandler`,
   `OnReceiveHandler` → `OnRequestHandler` (wiring unchanged, names only).
-- Dedicated `indexBytes` buffer in `wireSlaveTransmitSingleDataPoint`
-  replaces fragile `intCvt` reuse for signal index vs. value.
+- I2C slave packs multiple data-point chunks per `onRequest` response,
+  reducing round-trips (e.g. 25 floats: 9 requests instead of 25 on AVR).
+  Wire buffer size auto-detected via `BUFFER_LENGTH`/`I2C_BUFFER_LENGTH`,
+  user-overridable with `BLAECK_WIRE_BUFFER_SIZE`.
+- Dedicated `indexBytes` buffer in slave data-point transmit replaces
+  fragile `intCvt` reuse for signal index vs. value.
 - `scanI2CSlaves` parameter type changed from `char` to `uint8_t`.
 - `_slaveFound` array zero-initialized at declaration.
 
