@@ -48,6 +48,12 @@ struct BlaeckSignal
 } sine[MAXIMUM_SIGNALS + 1];
 // unused: sine[0]
 
+// Forward declarations for command handlers
+void onSignalActivate(const char *command, const char *const *params, byte paramCount);
+void onMasterSlaveMode(const char *command, const char *const *params, byte paramCount);
+void onStatus(const char *command, const char *const *params, byte paramCount);
+void onHelpOrList(const char *command, const char *const *params, byte paramCount);
+
 //---MEASUREMENT
 unsigned long measurementLastTimeDone = 0; //[ms]
 unsigned long measurementInterval = 10;    //[ms]
@@ -77,7 +83,11 @@ void setup()
   BlaeckSerial.DeviceHWVersion = "Arduino Mega 2560 Rev3";
   BlaeckSerial.DeviceFWVersion = FW_VERSION;
 
-  BlaeckSerial.setCommandCallback(startCommand);
+  BlaeckSerial.onCommand("SIGNAL_ACTIVATE", onSignalActivate);
+  BlaeckSerial.onCommand("MASTER_SLAVE_MODE", onMasterSlaveMode);
+  BlaeckSerial.onCommand("MSM", onMasterSlaveMode);
+  BlaeckSerial.onCommand("STATUS", onStatus);
+  BlaeckSerial.onAnyCommand(onHelpOrList);
 
   // Signals for Logging with BlaeckSerial
   // BlaeckSerial.addSignal..
