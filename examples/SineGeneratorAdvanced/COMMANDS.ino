@@ -179,8 +179,11 @@ void onHelpOrList(const char *command, const char *const *params, byte paramCoun
   {
     shelp(), Serial.println(F("<SIGNAL_ACTIVATE, first signal, last signal>"));
     shelp(), Serial.println(F("Use this command to activate the used signals"));
-    shelp(), Serial.println(F("first signal: 1-MAXIMUM_SIGNALS, 900, 901, 902"));
-    shelp(), Serial.println(F("last signal: 1-MAXIMUM_SIGNALS"));
+    shelp(), Serial.print(F("first signal: 1-"));
+    Serial.print(MAXIMUM_SIGNALS);
+    Serial.println(F(", 900, 901, 902"));
+    shelp(), Serial.print(F("last signal: 1-"));
+    Serial.println(MAXIMUM_SIGNALS);
     shelp(), Serial.println(F("e.g. <SIGNAL_ACTIVATE, 1, 10> activates the first 10 signals"));
     shelp(), Serial.println(F("e.g. <SIGNAL_ACTIVATE> activates all signals"));
     shelp(), Serial.println(F("e.g. <SIGNAL_ACTIVATE, 900> deactivates all signals"));
