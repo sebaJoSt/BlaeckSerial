@@ -50,6 +50,11 @@ All notable changes to this project will be documented in this file.
   Buffer size auto-detected from Wire.h, overridable with `BLAECK_WIRE_BUFFER_SIZE`.
 - Dedicated `indexBytes` buffer in slave data-point transmit replaces
   fragile `intCvt` reuse for signal index vs. value.
+- Command parser now preserves empty fields between consecutive commas instead
+  of collapsing them (`strtok` replaced with manual comma-scanner). For example,
+  `<CMD,,42>` now correctly places `42` in parameter slot 1 instead of shifting
+  it into slot 0. Empty fields default to `0` (legacy `PARAMETER[]`) or empty
+  string (`onCommand` handlers — detectable via `params[i][0] == '\0'`).
 - `scanI2CSlaves` parameter type changed from `char` to `uint8_t`.
 - `_slaveFound` array zero-initialized at declaration.
 

@@ -744,11 +744,29 @@ void BlaeckSerial::parseData()
   char tempChars[sizeof(receivedChars)];
   strncpy(tempChars, receivedChars, sizeof(tempChars) - 1);
   tempChars[sizeof(tempChars) - 1] = '\0';
-  char *strtokIndx;
-  strtokIndx = strtok(tempChars, ",");
-  if (strtokIndx != NULL)
+
+  // Manual comma-scanner that preserves empty fields between consecutive commas.
+  char *p = tempChars;
+  char *tokenStart;
+  bool hasComma;
+
+  STRING_01[0] = '\0';
+  for (int i = 0; i < 10; i++)
+    PARAMETER[i] = 0;
+
+  // --- COMMAND (first token) ---
+  tokenStart = p;
+  while (*p != ',' && *p != '\0')
+    p++;
+  hasComma = (*p == ',');
+  if (hasComma)
   {
-    strncpy(COMMAND, strtokIndx, sizeof(COMMAND) - 1);
+    *p = '\0';
+    p++;
+  }
+  if (tokenStart[0] != '\0')
+  {
+    strncpy(COMMAND, tokenStart, sizeof(COMMAND) - 1);
     COMMAND[sizeof(COMMAND) - 1] = '\0';
   }
   else
@@ -756,111 +774,40 @@ void BlaeckSerial::parseData()
     COMMAND[0] = '\0';
   }
 
-  strtokIndx = strtok(NULL, ",");
-  if (strtokIndx != NULL)
-  {
-    // PARAMETER 1 is stored in PARAMETER_01 & STRING_01 (if PARAMETER 1 is a string)
+  if (!hasComma)
+    return;
 
-    // Only copy first 15 chars
-    strncpy(STRING_01, strtokIndx, 15);
-    // 16th Char = Null Terminator
-    STRING_01[15] = '\0';
-    PARAMETER[0] = atoi(strtokIndx);
-  }
-  else
+  // --- STRING_01 / PARAMETER[0] ---
+  tokenStart = p;
+  while (*p != ',' && *p != '\0')
+    p++;
+  if (*p == ',')
   {
-    STRING_01[0] = '\0';
-    PARAMETER[0] = 0;
+    *p = '\0';
+    p++;
   }
+  while (*tokenStart == ' ')
+    tokenStart++;
+  strncpy(STRING_01, tokenStart, 15);
+  STRING_01[15] = '\0';
+  PARAMETER[0] = atoi(tokenStart);
 
-  strtokIndx = strtok(NULL, ", ");
-  if (strtokIndx != NULL)
+  // --- PARAMETER[1] through PARAMETER[9] ---
+  for (int i = 1; i <= 9; i++)
   {
-    PARAMETER[1] = atoi(strtokIndx);
-  }
-  else
-  {
-    PARAMETER[1] = 0;
-  }
-
-  strtokIndx = strtok(NULL, ", ");
-  if (strtokIndx != NULL)
-  {
-    PARAMETER[2] = atoi(strtokIndx);
-  }
-  else
-  {
-    PARAMETER[2] = 0;
-  }
-
-  strtokIndx = strtok(NULL, ", ");
-  if (strtokIndx != NULL)
-  {
-    PARAMETER[3] = atoi(strtokIndx);
-  }
-  else
-  {
-    PARAMETER[3] = 0;
-  }
-
-  strtokIndx = strtok(NULL, ", ");
-  if (strtokIndx != NULL)
-  {
-    PARAMETER[4] = atoi(strtokIndx);
-  }
-  else
-  {
-    PARAMETER[4] = 0;
-  }
-
-  strtokIndx = strtok(NULL, ", ");
-  if (strtokIndx != NULL)
-  {
-    PARAMETER[5] = atoi(strtokIndx);
-  }
-  else
-  {
-    PARAMETER[5] = 0;
-  }
-
-  strtokIndx = strtok(NULL, ", ");
-  if (strtokIndx != NULL)
-  {
-    PARAMETER[6] = atoi(strtokIndx);
-  }
-  else
-  {
-    PARAMETER[6] = 0;
-  }
-
-  strtokIndx = strtok(NULL, ", ");
-  if (strtokIndx != NULL)
-  {
-    PARAMETER[7] = atoi(strtokIndx);
-  }
-  else
-  {
-    PARAMETER[7] = 0;
-  }
-
-  strtokIndx = strtok(NULL, ", ");
-  if (strtokIndx != NULL)
-  {
-    PARAMETER[8] = atoi(strtokIndx);
-  }
-  else
-  {
-    PARAMETER[8] = 0;
-  }
-
-  strtokIndx = strtok(NULL, ", ");
-  if (strtokIndx != NULL)
-  {
-    PARAMETER[9] = atoi(strtokIndx);
-  }
-  else
-  {
-    PARAMETER[9] = 0;
+    if (*p == '\0')
+      break;
+    tokenStart = p;
+    while (*p != ',' && *p != '\0')
+      p++;
+    if (*p == ',')
+    {
+      *p = '\0';
+      p++;
+    }
+    while (*tokenStart == ' ')
+      tokenStart++;
+    PARAMETER[i] = atoi(tokenStart);
   }
 }
 
@@ -881,25 +828,50 @@ void BlaeckSerial::_parseCommandTokens(const char *raw)
   strncpy(_parsedTokenBuffer, raw, sizeof(_parsedTokenBuffer) - 1);
   _parsedTokenBuffer[sizeof(_parsedTokenBuffer) - 1] = '\0';
 
-  char *token = strtok(_parsedTokenBuffer, ",");
-  if (token == nullptr)
+  // Manual comma-scanner that preserves empty fields between consecutive commas.
+  char *p = _parsedTokenBuffer;
+
+  // Extract command (first token before the first comma)
+  char *tokenStart = p;
+  while (*p != ',' && *p != '\0')
+    p++;
+  bool hasComma = (*p == ',');
+  if (hasComma)
+  {
+    *p = '\0';
+    p++;
+  }
+  while (*tokenStart == ' ')
+    tokenStart++;
+  if (tokenStart[0] == '\0')
   {
     return;
   }
-
-  while (*token == ' ')
-    token++;
-  strncpy(_parsedCommand, token, MAX_COMMAND_NAME_COUNT - 1);
+  strncpy(_parsedCommand, tokenStart, MAX_COMMAND_NAME_COUNT - 1);
   _parsedCommand[MAX_COMMAND_NAME_COUNT - 1] = '\0';
 
-  while (_parsedParamCount < MAX_COMMAND_PARAM_COUNT)
+  if (!hasComma)
+    return;
+
+  // Extract parameters — empty fields (,,) produce a pointer to '\0'
+  bool moreParams = true;
+  while (moreParams && _parsedParamCount < MAX_COMMAND_PARAM_COUNT)
   {
-    token = strtok(NULL, ",");
-    if (token == nullptr)
-      break;
-    while (*token == ' ')
-      token++;
-    _parsedParamPtrs[_parsedParamCount] = token;
+    tokenStart = p;
+    while (*p != ',' && *p != '\0')
+      p++;
+    if (*p == ',')
+    {
+      *p = '\0';
+      p++;
+    }
+    else
+    {
+      moreParams = false;
+    }
+    while (*tokenStart == ' ')
+      tokenStart++;
+    _parsedParamPtrs[_parsedParamCount] = tokenStart;
     _parsedParamCount++;
   }
 }
