@@ -563,6 +563,7 @@ int BlaeckSerial::findSignalIndex(String signalName)
 
 void BlaeckSerial::read()
 {
+  this->writeRestarted();
 
   if (recvWithStartEndMarkers() == true)
   {
@@ -2624,7 +2625,6 @@ void BlaeckSerial::tick(unsigned long msg_id)
 void BlaeckSerial::tick(unsigned long msg_id, bool onlyUpdated)
 {
   this->read();
-  this->writeRestarted(msg_id);
   this->timedWriteData(msg_id, 0, _signalIndex - 1, onlyUpdated, getTimeStamp());
 }
 
