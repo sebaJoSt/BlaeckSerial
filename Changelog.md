@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [6.0.0] - 2026-04-08
+## [6.0.0] - 2026-04-21
 
 ### Added
 - Buffered frame writes: all protocol frames (B0, B3, C0, D2) can be assembled
