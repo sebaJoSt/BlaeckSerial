@@ -57,6 +57,7 @@ All notable changes to this project will be documented in this file.
   string (`onCommand` handlers — detectable via `params[i][0] == '\0'`).
 - `scanI2CSlaves` parameter type changed from `char` to `uint8_t`.
 - `_slaveFound` array zero-initialized at declaration.
+- Restart frame (0xC0) is now sent from `read()` instead of `tick()`, so commands-only sketches also notify the host after reset.
 
 ### Fixed
 - Fixed timer burst issue: when the main loop is delayed beyond the timed
