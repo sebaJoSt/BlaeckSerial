@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [6.0.1] - 2026-04-24
+
+### Fixed
+- Reduced PlatformIO warning noise in library code:
+  - `OnReceiveHandler(int numBytes)` now forwards `numBytes` into `wireSlaveReceive(int numBytes)` instead of leaving it unused.
+  - `wireSlaveReceive(int numBytes)` now drains potential extra incoming bytes after reading the mode byte, keeping the Wire RX path clean for malformed multi-byte writes.
+  - Added explicit signed/unsigned comparison handling in `addSignal(...)` capacity checks to avoid repeated signedness warnings.
+
 ## [6.0.0] - 2026-04-21
 
 ### Added
@@ -257,6 +265,7 @@ New public function: `attachUpdate(void (*updateCallback)());`
 
 Initial release.
 
+[6.0.1]: https://github.com/sebaJoSt/BlaeckSerial/compare/6.0.0...6.0.1
 [6.0.0]: https://github.com/sebaJoSt/BlaeckSerial/compare/5.0.1...6.0.0
 [5.0.1]: https://github.com/sebaJoSt/BlaeckSerial/compare/5.0.0...5.0.1
 [5.0.0]: https://github.com/sebaJoSt/BlaeckSerial/compare/4.3.1...5.0.0

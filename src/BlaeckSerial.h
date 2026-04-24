@@ -17,10 +17,10 @@
 #ifndef BLAECKSERIAL_H
 #define BLAECKSERIAL_H
 
-#define BLAECKSERIAL_VERSION "6.0.0"
+#define BLAECKSERIAL_VERSION "6.0.1"
 #define BLAECKSERIAL_VERSION_MAJOR 6
 #define BLAECKSERIAL_VERSION_MINOR 0
-#define BLAECKSERIAL_VERSION_PATCH 0
+#define BLAECKSERIAL_VERSION_PATCH 1
 #define BLAECKSERIAL_NAME "BlaeckSerial"
 
 #include <Wire.h>
@@ -401,7 +401,7 @@ private:
   void scanI2CSlaves(uint8_t addressStart, uint8_t addressEnd);
 
   void wireSlaveTransmitToMaster();
-  void wireSlaveReceive();
+  void wireSlaveReceive(int numBytes);
 
   void wireSlaveTransmitSingleSymbol();
   void wireSlaveTransmitDataPoints(bool onlyUpdated);
@@ -554,7 +554,7 @@ private:
   static void OnReceiveHandler(int numBytes)
   {
     if (_pSingletonInstance)
-      _pSingletonInstance->wireSlaveReceive();
+      _pSingletonInstance->wireSlaveReceive(numBytes);
   }
 
   static unsigned long long _microsWrapper()

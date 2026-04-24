@@ -84,7 +84,7 @@ void BlaeckSerial::beginSlave(Stream *Ref, unsigned int size, byte slaveID, Stre
 
 void BlaeckSerial::addSignal(String signalName, bool *value, bool prefixSlaveID)
 {
-  if (_signalIndex >= _signalCapacity)
+  if (static_cast<unsigned int>(_signalIndex) >= _signalCapacity)
   {
     _signalOverflowOccurred = true;
     _signalOverflowCount++;
@@ -100,7 +100,7 @@ void BlaeckSerial::addSignal(String signalName, bool *value, bool prefixSlaveID)
 
 void BlaeckSerial::addSignal(String signalName, byte *value, bool prefixSlaveID)
 {
-  if (_signalIndex >= _signalCapacity)
+  if (static_cast<unsigned int>(_signalIndex) >= _signalCapacity)
   {
     _signalOverflowOccurred = true;
     _signalOverflowCount++;
@@ -116,7 +116,7 @@ void BlaeckSerial::addSignal(String signalName, byte *value, bool prefixSlaveID)
 
 void BlaeckSerial::addSignal(String signalName, short *value, bool prefixSlaveID)
 {
-  if (_signalIndex >= _signalCapacity)
+  if (static_cast<unsigned int>(_signalIndex) >= _signalCapacity)
   {
     _signalOverflowOccurred = true;
     _signalOverflowCount++;
@@ -132,7 +132,7 @@ void BlaeckSerial::addSignal(String signalName, short *value, bool prefixSlaveID
 
 void BlaeckSerial::addSignal(String signalName, unsigned short *value, bool prefixSlaveID)
 {
-  if (_signalIndex >= _signalCapacity)
+  if (static_cast<unsigned int>(_signalIndex) >= _signalCapacity)
   {
     _signalOverflowOccurred = true;
     _signalOverflowCount++;
@@ -148,7 +148,7 @@ void BlaeckSerial::addSignal(String signalName, unsigned short *value, bool pref
 
 void BlaeckSerial::addSignal(String signalName, int *value, bool prefixSlaveID)
 {
-  if (_signalIndex >= _signalCapacity)
+  if (static_cast<unsigned int>(_signalIndex) >= _signalCapacity)
   {
     _signalOverflowOccurred = true;
     _signalOverflowCount++;
@@ -168,7 +168,7 @@ void BlaeckSerial::addSignal(String signalName, int *value, bool prefixSlaveID)
 
 void BlaeckSerial::addSignal(String signalName, unsigned int *value, bool prefixSlaveID)
 {
-  if (_signalIndex >= _signalCapacity)
+  if (static_cast<unsigned int>(_signalIndex) >= _signalCapacity)
   {
     _signalOverflowOccurred = true;
     _signalOverflowCount++;
@@ -188,7 +188,7 @@ void BlaeckSerial::addSignal(String signalName, unsigned int *value, bool prefix
 
 void BlaeckSerial::addSignal(String signalName, long *value, bool prefixSlaveID)
 {
-  if (_signalIndex >= _signalCapacity)
+  if (static_cast<unsigned int>(_signalIndex) >= _signalCapacity)
   {
     _signalOverflowOccurred = true;
     _signalOverflowCount++;
@@ -204,7 +204,7 @@ void BlaeckSerial::addSignal(String signalName, long *value, bool prefixSlaveID)
 
 void BlaeckSerial::addSignal(String signalName, unsigned long *value, bool prefixSlaveID)
 {
-  if (_signalIndex >= _signalCapacity)
+  if (static_cast<unsigned int>(_signalIndex) >= _signalCapacity)
   {
     _signalOverflowOccurred = true;
     _signalOverflowCount++;
@@ -220,7 +220,7 @@ void BlaeckSerial::addSignal(String signalName, unsigned long *value, bool prefi
 
 void BlaeckSerial::addSignal(String signalName, float *value, bool prefixSlaveID)
 {
-  if (_signalIndex >= _signalCapacity)
+  if (static_cast<unsigned int>(_signalIndex) >= _signalCapacity)
   {
     _signalOverflowOccurred = true;
     _signalOverflowCount++;
@@ -236,7 +236,7 @@ void BlaeckSerial::addSignal(String signalName, float *value, bool prefixSlaveID
 
 void BlaeckSerial::addSignal(String signalName, double *value, bool prefixSlaveID)
 {
-  if (_signalIndex >= _signalCapacity)
+  if (static_cast<unsigned int>(_signalIndex) >= _signalCapacity)
   {
     _signalOverflowOccurred = true;
     _signalOverflowCount++;
@@ -2945,15 +2945,22 @@ void BlaeckSerial::wireSlaveTransmitDataPoints(bool onlyUpdated)
   }
 }
 
-void BlaeckSerial::wireSlaveReceive()
+void BlaeckSerial::wireSlaveReceive(int numBytes)
 {
-  if (Wire.available())
+  if (numBytes > 0 && Wire.available())
   {
     _wireMode = (byte)Wire.read();
   }
   else
   {
     _wireMode = 0;
+  }
+
+  // Current protocol writes one command byte from master to slave.
+  // Drain potential extra bytes to keep the Wire RX buffer consistent.
+  for (int i = 1; i < numBytes && Wire.available(); i++)
+  {
+    (void)Wire.read();
   }
   _wireSignalIndex = 0;
   _wireDeviceIndex = 0;
