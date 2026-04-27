@@ -2,7 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
-## [6.0.1] - 2026-04-24
+## [6.0.1] - 2026-04-27
+
+### Changed
+- `BLAECK_BUFFERED_WRITES_DEFAULT` now defaults to `false` on ArduinoCore-mbed
+  boards (Giga R1, Portenta, Nicla, Opta, Nano 33 BLE, Nano RP2040 Connect)
+  in addition to AVR. On these boards a bulk `Serial.write(buf, len)` over
+  USB CDC can get stuck permanently if the host closes the port while a
+  write is in progress, freezing the sketch's main loop until reset.
+  Per-byte writes (the unbuffered path) avoid this. Other targets
+  (Uno R4 WiFi, ESP32, SAMD, non-mbed RP2040, ...) continue to default to
+  buffered writes. Override at compile time via `BLAECK_BUFFERED_WRITES_DEFAULT`
+  or at runtime via `setBufferedWrites()`.
 
 ### Fixed
 - Reduced PlatformIO warning noise in library code:

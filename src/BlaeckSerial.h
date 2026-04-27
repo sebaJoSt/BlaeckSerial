@@ -40,14 +40,37 @@
   #endif
 #endif
 
-// Buffered writes: assemble entire frames in RAM before a single
-// StreamRef->write(buf, len) call.  Prevents byte-dropping on boards
-// whose UART-to-USB bridge can't keep up with many small writes
-// (e.g. Arduino Uno R4 WiFi / ESP32-S3 bridge).
-// Default: OFF on AVR (saves SRAM), ON everywhere else.
-// Can also be changed at runtime with setBufferedWrites().
+// Buffered writes
+// ---------------
+// When ON:  each Blaeck data frame is first assembled in a RAM buffer
+//           (60 + signalCapacity * 30 bytes) and then sent with a single
+//           StreamRef->write(buf, len) call.
+// When OFF: the frame is streamed out directly via many small
+//           StreamRef->write(byte) / print() calls as it is produced
+//           (no extra RAM buffer needed).
+//
+// Per-board defaults:
+//   - AVR (Uno, Mega, Nano, ...):                 OFF
+//       Saves scarce SRAM; the classic ATmega USB-to-serial bridges
+//       handle small writes fine.
+//   - ArduinoCore-mbed (Giga R1, Portenta, Nicla, Opta,
+//                       Nano 33 BLE, Nano RP2040 Connect):  OFF
+//       If the USB host closes the port while a bulk
+//       Serial.write(buf, len) is in progress, the Mbed USBSerial
+//       implementation can get stuck permanently: the call never
+//       returns, even after the host reopens the port, so the sketch's
+//       main loop stops processing commands until the board is reset.
+//       Per-byte writes do not exhibit this behavior.
+//   - Everything else (Uno R4 WiFi, ESP32, SAMD, RP2040 non-mbed, ...): ON
+//       Required on Uno R4 WiFi where the RA4M1 -> ESP32-S3 USB bridge
+//       drops bytes if fed many small writes; bulk writes are reliable
+//       on the other targets too.
+//
+// Override at compile time by defining BLAECK_BUFFERED_WRITES_DEFAULT
+// (or via BlaeckSerialConfig.h / build_flags), or at runtime with
+// setBufferedWrites(true|false).
 #ifndef BLAECK_BUFFERED_WRITES_DEFAULT
-  #if defined(__AVR__)
+  #if defined(__AVR__) || defined(ARDUINO_ARCH_MBED)
     #define BLAECK_BUFFERED_WRITES_DEFAULT false
   #else
     #define BLAECK_BUFFERED_WRITES_DEFAULT true
