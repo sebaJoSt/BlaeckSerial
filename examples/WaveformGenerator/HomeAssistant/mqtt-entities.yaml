@@ -1,0 +1,109 @@
+# =============================================================================
+#  Waveform Generator — Home Assistant MQTT entities
+# =============================================================================
+#  Paste the contents of this file into your Home Assistant `configuration.yaml`.
+#  If you already have an `mqtt:` block, merge these platform lists into it
+#  (keep a single top-level `mqtt:` key).
+#
+#  These entities mirror the BlaeckSerial WaveformGenerator example as bridged
+#  to MQTT by Loggbok. Start Loggbok with, e.g.:
+#
+#    lgbk log --port COM24 --table wave --signals * --mqtt \
+#             --mqtt-endpoint mqtt://127.0.0.1:1884
+#
+#  The MQTT --table MUST be "wave" so the topics below line up:
+#    Telemetry (retained):  loggbok/wave/<Signal>
+#    Commands  (live):      loggbok/wave/_cmd/<COMMAND>
+#    Broadcast commands:    loggbok/_all/_cmd/<COMMAND>
+#
+#  Point Home Assistant's MQTT integration at the SAME broker Loggbok publishes
+#  to. After saving, restart Home Assistant (or reload the YAML configuration).
+#
+#  The shared `device:` block (anchor &wave_device) groups all six entities
+#  under a single auto-generated "Waveform Generator" device. The whole block
+#  must be pasted together so the YAML anchor resolves.
+# =============================================================================
+
+mqtt:
+  # ---- Read-only telemetry --------------------------------------------------
+  sensor:
+    - name: "Output"
+      unique_id: loggbok_wave_output
+      state_topic: "loggbok/wave/Output"
+      suggested_display_precision: 3
+      icon: mdi:sine-wave
+      device: &wave_device
+        identifiers: loggbok_waveform_generator
+        name: "Waveform Generator"
+        manufacturer: "Loggbok"
+        model: "BlaeckSerial Waveform Demo"
+
+  # ---- Numeric controls (slider + command) ---------------------------------
+  number:
+    - name: "Frequency"
+      unique_id: loggbok_wave_frequency
+      state_topic: "loggbok/wave/Frequency"
+      command_topic: "loggbok/wave/_cmd/SET_FREQ"
+      min: 0.01
+      max: 5
+      step: 0.01
+      mode: slider
+      unit_of_measurement: "Hz"
+      icon: mdi:sine-wave
+      optimistic: false
+      device: *wave_device
+
+    - name: "Amplitude"
+      unique_id: loggbok_wave_amplitude
+      state_topic: "loggbok/wave/Amplitude"
+      command_topic: "loggbok/wave/_cmd/SET_AMP"
+      min: 0
+      max: 20
+      step: 0.1
+      mode: slider
+      icon: mdi:arrow-expand-vertical
+      optimistic: false
+      device: *wave_device
+
+    - name: "Offset"
+      unique_id: loggbok_wave_offset
+      state_topic: "loggbok/wave/Offset"
+      command_topic: "loggbok/wave/_cmd/SET_OFFSET"
+      min: -10
+      max: 10
+      step: 0.1
+      mode: slider
+      icon: mdi:arrow-up-down
+      optimistic: false
+      device: *wave_device
+
+  # ---- Waveform shape (0..3 <-> names) -------------------------------------
+  select:
+    - name: "Waveform"
+      unique_id: loggbok_wave_waveform
+      state_topic: "loggbok/wave/Waveform"
+      command_topic: "loggbok/wave/_cmd/SET_WAVE"
+      options:
+        - "Sine"
+        - "Square"
+        - "Triangle"
+        - "Sawtooth"
+      value_template: "{{ ['Sine', 'Square', 'Triangle', 'Sawtooth'][value | int(0)] }}"
+      command_template: "{{ {'Sine': 0, 'Square': 1, 'Triangle': 2, 'Sawtooth': 3}[value] }}"
+      icon: mdi:waveform
+      optimistic: false
+      device: *wave_device
+
+  # ---- Enable / disable output ---------------------------------------------
+  switch:
+    - name: "Enabled"
+      unique_id: loggbok_wave_enabled
+      state_topic: "loggbok/wave/Enabled"
+      command_topic: "loggbok/wave/_cmd/SET_ENABLE"
+      payload_on: "1"
+      payload_off: "0"
+      state_on: "1"
+      state_off: "0"
+      icon: mdi:power
+      optimistic: false
+      device: *wave_device

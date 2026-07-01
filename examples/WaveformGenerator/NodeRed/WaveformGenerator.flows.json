@@ -1,0 +1,751 @@
+[
+    {
+        "id": "wtab",
+        "type": "tab",
+        "label": "Waveform Flow",
+        "disabled": false,
+        "info": ""
+    },
+    {
+        "id": "dbase",
+        "type": "ui-base",
+        "name": "Loggbok",
+        "path": "/dashboard",
+        "includeClientData": true,
+        "acceptsClientConfig": [
+            "ui-notification",
+            "ui-control"
+        ],
+        "showPathInSidebar": false,
+        "navigationStyle": "default",
+        "titleBarStyle": "default"
+    },
+    {
+        "id": "dtheme",
+        "type": "ui-theme",
+        "name": "Loggbok Theme",
+        "colors": {
+            "surface": "#ffffff",
+            "primary": "#0094CE",
+            "bgPage": "#eeeeee",
+            "groupBg": "#ffffff",
+            "groupOutline": "#cccccc"
+        },
+        "sizes": {
+            "density": "default",
+            "pagePadding": "12px",
+            "groupGap": "12px",
+            "groupBorderRadius": "4px",
+            "widgetGap": "12px"
+        }
+    },
+    {
+        "id": "dpage",
+        "type": "ui-page",
+        "name": "Waveform",
+        "ui": "dbase",
+        "path": "/",
+        "icon": "home",
+        "layout": "grid",
+        "theme": "dtheme",
+        "order": 1,
+        "className": "",
+        "visible": true,
+        "disabled": false
+    },
+    {
+        "id": "dgrp_chart",
+        "type": "ui-group",
+        "name": "Live output",
+        "page": "dpage",
+        "width": 12,
+        "height": 1,
+        "order": 1,
+        "showTitle": true,
+        "className": "",
+        "visible": true,
+        "disabled": false,
+        "groupType": "default"
+    },
+    {
+        "id": "dgrp_state",
+        "type": "ui-group",
+        "name": "Reported state",
+        "page": "dpage",
+        "width": 6,
+        "height": 1,
+        "order": 2,
+        "showTitle": true,
+        "className": "",
+        "visible": true,
+        "disabled": false,
+        "groupType": "default"
+    },
+    {
+        "id": "dgrp_ctrl",
+        "type": "ui-group",
+        "name": "Controls",
+        "page": "dpage",
+        "width": 6,
+        "height": 1,
+        "order": 3,
+        "showTitle": true,
+        "className": "",
+        "visible": true,
+        "disabled": false,
+        "groupType": "default"
+    },
+    {
+        "id": "wbroker",
+        "type": "mqtt-broker",
+        "name": "local",
+        "broker": "127.0.0.1",
+        "port": "1884",
+        "clientid": "node-red-wave",
+        "autoConnect": true,
+        "keepalive": "60",
+        "cleansession": true
+    },
+    {
+        "id": "in_out",
+        "type": "mqtt in",
+        "z": "wtab",
+        "name": "Output",
+        "topic": "loggbok/wave/Output",
+        "qos": "0",
+        "broker": "wbroker",
+        "x": 110,
+        "y": 60,
+        "wires": [
+            [
+                "num_out"
+            ]
+        ]
+    },
+    {
+        "id": "num_out",
+        "type": "change",
+        "z": "wtab",
+        "name": "to number",
+        "rules": [
+            {
+                "t": "set",
+                "p": "payload",
+                "pt": "msg",
+                "to": "$number(payload)",
+                "tot": "jsonata"
+            },
+            {
+                "t": "set",
+                "p": "topic",
+                "pt": "msg",
+                "to": "Output",
+                "tot": "str"
+            }
+        ],
+        "x": 300,
+        "y": 60,
+        "wires": [
+            [
+                "chart"
+            ]
+        ]
+    },
+    {
+        "id": "chart",
+        "type": "ui-chart",
+        "z": "wtab",
+        "group": "dgrp_chart",
+        "name": "Output",
+        "label": "Output",
+        "order": 1,
+        "chartType": "line",
+        "category": "topic",
+        "categoryType": "string",
+        "line": "",
+        "interpolation": "linear",
+        "stackSeries": false,
+        "pointShape": "circle",
+        "pointRadius": 0,
+        "showLegend": false,
+        "removeOlder": "30",
+        "removeOlderUnit": "1",
+        "removeOlderPoints": "",
+        "xAxisType": "time",
+        "xAxisFormat": "",
+        "xAxisFormatType": "auto",
+        "ymin": "",
+        "ymax": "",
+        "action": "append",
+        "colors": [
+            "#1f77b4",
+            "#ff7f0e",
+            "#2ca02c",
+            "#d62728",
+            "#9467bd",
+            "#8c564b",
+            "#e377c2",
+            "#7f7f7f",
+            "#bcbd22",
+            "#17becf"
+        ],
+        "textColorDefault": true,
+        "textColor": [
+            "#666666"
+        ],
+        "gridColorDefault": true,
+        "gridColor": [
+            "#e5e5e5"
+        ],
+        "width": 0,
+        "height": 8,
+        "className": "",
+        "x": 480,
+        "y": 60,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "in_freq",
+        "type": "mqtt in",
+        "z": "wtab",
+        "name": "Frequency",
+        "topic": "loggbok/wave/Frequency",
+        "qos": "0",
+        "broker": "wbroker",
+        "x": 120,
+        "y": 140,
+        "wires": [
+            [
+                "t_freq",
+                "sl_freq"
+            ]
+        ]
+    },
+    {
+        "id": "t_freq",
+        "type": "ui-text",
+        "z": "wtab",
+        "group": "dgrp_state",
+        "order": 1,
+        "width": 6,
+        "height": 1,
+        "name": "Freq",
+        "label": "Frequency",
+        "format": "{{msg.payload}} Hz",
+        "layout": "row-spread",
+        "style": false,
+        "font": "",
+        "fontSize": 16,
+        "color": "#000000",
+        "className": "",
+        "x": 330,
+        "y": 140,
+        "wires": []
+    },
+    {
+        "id": "in_amp",
+        "type": "mqtt in",
+        "z": "wtab",
+        "name": "Amplitude",
+        "topic": "loggbok/wave/Amplitude",
+        "qos": "0",
+        "broker": "wbroker",
+        "x": 120,
+        "y": 180,
+        "wires": [
+            [
+                "t_amp",
+                "sl_amp"
+            ]
+        ]
+    },
+    {
+        "id": "t_amp",
+        "type": "ui-text",
+        "z": "wtab",
+        "group": "dgrp_state",
+        "order": 2,
+        "width": 6,
+        "height": 1,
+        "name": "Amp",
+        "label": "Amplitude",
+        "format": "{{msg.payload}}",
+        "layout": "row-spread",
+        "style": false,
+        "font": "",
+        "fontSize": 16,
+        "color": "#000000",
+        "className": "",
+        "x": 330,
+        "y": 180,
+        "wires": []
+    },
+    {
+        "id": "in_off",
+        "type": "mqtt in",
+        "z": "wtab",
+        "name": "Offset",
+        "topic": "loggbok/wave/Offset",
+        "qos": "0",
+        "broker": "wbroker",
+        "x": 110,
+        "y": 220,
+        "wires": [
+            [
+                "t_off",
+                "sl_off"
+            ]
+        ]
+    },
+    {
+        "id": "t_off",
+        "type": "ui-text",
+        "z": "wtab",
+        "group": "dgrp_state",
+        "order": 3,
+        "width": 6,
+        "height": 1,
+        "name": "Offset",
+        "label": "Offset",
+        "format": "{{msg.payload}}",
+        "layout": "row-spread",
+        "style": false,
+        "font": "",
+        "fontSize": 16,
+        "color": "#000000",
+        "className": "",
+        "x": 330,
+        "y": 220,
+        "wires": []
+    },
+    {
+        "id": "in_wave",
+        "type": "mqtt in",
+        "z": "wtab",
+        "name": "Waveform",
+        "topic": "loggbok/wave/Waveform",
+        "qos": "0",
+        "broker": "wbroker",
+        "x": 120,
+        "y": 260,
+        "wires": [
+            [
+                "m_wave"
+            ]
+        ]
+    },
+    {
+        "id": "m_wave",
+        "type": "change",
+        "z": "wtab",
+        "name": "map wave",
+        "rules": [
+            {
+                "t": "set",
+                "p": "payload",
+                "pt": "msg",
+                "to": "payload = \"0\" ? \"Sine\" : payload = \"1\" ? \"Square\" : payload = \"2\" ? \"Triangle\" : payload = \"3\" ? \"Sawtooth\" : payload",
+                "tot": "jsonata"
+            }
+        ],
+        "x": 320,
+        "y": 260,
+        "wires": [
+            [
+                "t_wave"
+            ]
+        ]
+    },
+    {
+        "id": "t_wave",
+        "type": "ui-text",
+        "z": "wtab",
+        "group": "dgrp_state",
+        "order": 4,
+        "width": 6,
+        "height": 1,
+        "name": "Wave",
+        "label": "Waveform",
+        "format": "{{msg.payload}}",
+        "layout": "row-spread",
+        "style": false,
+        "font": "",
+        "fontSize": 16,
+        "color": "#000000",
+        "className": "",
+        "x": 510,
+        "y": 260,
+        "wires": []
+    },
+    {
+        "id": "in_en",
+        "type": "mqtt in",
+        "z": "wtab",
+        "name": "Enabled",
+        "topic": "loggbok/wave/Enabled",
+        "qos": "0",
+        "broker": "wbroker",
+        "x": 110,
+        "y": 300,
+        "wires": [
+            [
+                "m_en",
+                "sw_en"
+            ]
+        ]
+    },
+    {
+        "id": "m_en",
+        "type": "change",
+        "z": "wtab",
+        "name": "map en",
+        "rules": [
+            {
+                "t": "set",
+                "p": "payload",
+                "pt": "msg",
+                "to": "payload = \"1\" ? \"ON\" : \"OFF\"",
+                "tot": "jsonata"
+            }
+        ],
+        "x": 310,
+        "y": 300,
+        "wires": [
+            [
+                "t_en"
+            ]
+        ]
+    },
+    {
+        "id": "t_en",
+        "type": "ui-text",
+        "z": "wtab",
+        "group": "dgrp_state",
+        "order": 5,
+        "width": 6,
+        "height": 1,
+        "name": "En",
+        "label": "Output",
+        "format": "{{msg.payload}}",
+        "layout": "row-spread",
+        "style": false,
+        "font": "",
+        "fontSize": 16,
+        "color": "#000000",
+        "className": "",
+        "x": 500,
+        "y": 300,
+        "wires": []
+    },
+    {
+        "id": "sl_freq",
+        "type": "ui-slider",
+        "z": "wtab",
+        "group": "dgrp_ctrl",
+        "name": "Freq",
+        "label": "Frequency (Hz)",
+        "tooltip": "",
+        "order": 1,
+        "width": 6,
+        "height": 1,
+        "passthru": false,
+        "outs": "end",
+        "topic": "",
+        "topicType": "str",
+        "min": 0.01,
+        "max": 1,
+        "step": 0.01,
+        "showLabel": true,
+        "showValue": true,
+        "iconLeft": "",
+        "iconRight": "",
+        "thumbLabel": true,
+        "className": "",
+        "x": 120,
+        "y": 400,
+        "wires": [
+            [
+                "out_freq"
+            ]
+        ]
+    },
+    {
+        "id": "out_freq",
+        "type": "mqtt out",
+        "z": "wtab",
+        "name": "SET_FREQ",
+        "topic": "loggbok/wave/_cmd/SET_FREQ",
+        "qos": "0",
+        "retain": "",
+        "broker": "wbroker",
+        "x": 350,
+        "y": 400,
+        "wires": []
+    },
+    {
+        "id": "sl_amp",
+        "type": "ui-slider",
+        "z": "wtab",
+        "group": "dgrp_ctrl",
+        "name": "Amp",
+        "label": "Amplitude",
+        "tooltip": "",
+        "order": 2,
+        "width": 6,
+        "height": 1,
+        "passthru": false,
+        "outs": "end",
+        "topic": "",
+        "topicType": "str",
+        "min": 0,
+        "max": 10,
+        "step": 0.5,
+        "showLabel": true,
+        "showValue": true,
+        "iconLeft": "",
+        "iconRight": "",
+        "thumbLabel": true,
+        "className": "",
+        "x": 120,
+        "y": 450,
+        "wires": [
+            [
+                "out_amp"
+            ]
+        ]
+    },
+    {
+        "id": "out_amp",
+        "type": "mqtt out",
+        "z": "wtab",
+        "name": "SET_AMP",
+        "topic": "loggbok/wave/_cmd/SET_AMP",
+        "qos": "0",
+        "retain": "",
+        "broker": "wbroker",
+        "x": 350,
+        "y": 450,
+        "wires": []
+    },
+    {
+        "id": "sl_off",
+        "type": "ui-slider",
+        "z": "wtab",
+        "group": "dgrp_ctrl",
+        "name": "Offset",
+        "label": "Offset",
+        "tooltip": "",
+        "order": 3,
+        "width": 6,
+        "height": 1,
+        "passthru": false,
+        "outs": "end",
+        "topic": "",
+        "topicType": "str",
+        "min": -5,
+        "max": 5,
+        "step": 0.5,
+        "showLabel": true,
+        "showValue": true,
+        "iconLeft": "",
+        "iconRight": "",
+        "thumbLabel": true,
+        "className": "",
+        "x": 120,
+        "y": 500,
+        "wires": [
+            [
+                "out_off"
+            ]
+        ]
+    },
+    {
+        "id": "out_off",
+        "type": "mqtt out",
+        "z": "wtab",
+        "name": "SET_OFFSET",
+        "topic": "loggbok/wave/_cmd/SET_OFFSET",
+        "qos": "0",
+        "retain": "",
+        "broker": "wbroker",
+        "x": 355,
+        "y": 500,
+        "wires": []
+    },
+    {
+        "id": "b_sine",
+        "type": "ui-button",
+        "z": "wtab",
+        "group": "dgrp_ctrl",
+        "name": "Sine",
+        "label": "Sine",
+        "order": 4,
+        "width": 3,
+        "height": 1,
+        "emulateClick": false,
+        "tooltip": "",
+        "color": "",
+        "bgcolor": "",
+        "className": "",
+        "icon": "",
+        "iconPosition": "left",
+        "payload": "0",
+        "payloadType": "str",
+        "topic": "",
+        "topicType": "str",
+        "x": 120,
+        "y": 560,
+        "wires": [
+            [
+                "out_wave"
+            ]
+        ]
+    },
+    {
+        "id": "b_sq",
+        "type": "ui-button",
+        "z": "wtab",
+        "group": "dgrp_ctrl",
+        "name": "Square",
+        "label": "Square",
+        "order": 5,
+        "width": 3,
+        "height": 1,
+        "emulateClick": false,
+        "tooltip": "",
+        "color": "",
+        "bgcolor": "",
+        "className": "",
+        "icon": "",
+        "iconPosition": "left",
+        "payload": "1",
+        "payloadType": "str",
+        "topic": "",
+        "topicType": "str",
+        "x": 120,
+        "y": 600,
+        "wires": [
+            [
+                "out_wave"
+            ]
+        ]
+    },
+    {
+        "id": "b_tri",
+        "type": "ui-button",
+        "z": "wtab",
+        "group": "dgrp_ctrl",
+        "name": "Triangle",
+        "label": "Triangle",
+        "order": 6,
+        "width": 3,
+        "height": 1,
+        "emulateClick": false,
+        "tooltip": "",
+        "color": "",
+        "bgcolor": "",
+        "className": "",
+        "icon": "",
+        "iconPosition": "left",
+        "payload": "2",
+        "payloadType": "str",
+        "topic": "",
+        "topicType": "str",
+        "x": 130,
+        "y": 640,
+        "wires": [
+            [
+                "out_wave"
+            ]
+        ]
+    },
+    {
+        "id": "b_saw",
+        "type": "ui-button",
+        "z": "wtab",
+        "group": "dgrp_ctrl",
+        "name": "Sawtooth",
+        "label": "Sawtooth",
+        "order": 7,
+        "width": 3,
+        "height": 1,
+        "emulateClick": false,
+        "tooltip": "",
+        "color": "",
+        "bgcolor": "",
+        "className": "",
+        "icon": "",
+        "iconPosition": "left",
+        "payload": "3",
+        "payloadType": "str",
+        "topic": "",
+        "topicType": "str",
+        "x": 130,
+        "y": 680,
+        "wires": [
+            [
+                "out_wave"
+            ]
+        ]
+    },
+    {
+        "id": "out_wave",
+        "type": "mqtt out",
+        "z": "wtab",
+        "name": "SET_WAVE",
+        "topic": "loggbok/wave/_cmd/SET_WAVE",
+        "qos": "0",
+        "retain": "",
+        "broker": "wbroker",
+        "x": 360,
+        "y": 640,
+        "wires": []
+    },
+    {
+        "id": "sw_en",
+        "type": "ui-switch",
+        "z": "wtab",
+        "group": "dgrp_ctrl",
+        "name": "Enable",
+        "label": "Output ON/OFF",
+        "order": 8,
+        "width": 6,
+        "height": 1,
+        "passthru": false,
+        "decouple": "false",
+        "topic": "",
+        "topicType": "str",
+        "style": "",
+        "className": "",
+        "onvalue": "1",
+        "onvalueType": "str",
+        "onicon": "",
+        "oncolor": "",
+        "offvalue": "0",
+        "offvalueType": "str",
+        "officon": "",
+        "offcolor": "",
+        "x": 140,
+        "y": 730,
+        "wires": [
+            [
+                "out_en"
+            ]
+        ]
+    },
+    {
+        "id": "out_en",
+        "type": "mqtt out",
+        "z": "wtab",
+        "name": "SET_ENABLE",
+        "topic": "loggbok/wave/_cmd/SET_ENABLE",
+        "qos": "0",
+        "retain": "",
+        "broker": "wbroker",
+        "x": 360,
+        "y": 730,
+        "wires": []
+    }
+]

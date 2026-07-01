@@ -1,0 +1,97 @@
+# =============================================================================
+#  Waveform Generator — Home Assistant dashboard (Sections view)
+# =============================================================================
+#  Modern Sections layout using only built-in cards (no HACS required).
+#
+#  How to use:
+#    1. Add the MQTT entities first (see mqtt-entities.yaml) and restart HA.
+#    2. Settings → Dashboards → "+ Add dashboard" → "New dashboard from scratch".
+#    3. Open it, top-right pencil (Edit) → three-dots menu → "Edit in YAML".
+#    4. Replace the contents with this file, or copy the `views:` block into an
+#       existing dashboard.
+#
+#  Home Assistant derives these entity IDs from the device name ("Waveform
+#  Generator") + each entity name in mqtt-entities.yaml:
+#    sensor.waveform_generator_output, number.waveform_generator_frequency, number.waveform_generator_amplitude,
+#    number.waveform_generator_offset, select.waveform_generator_waveform, switch.waveform_generator_enabled
+# =============================================================================
+
+title: Waveform Generator
+views:
+  - title: Waveform
+    path: waveform
+    icon: mdi:sine-wave
+    type: sections
+    max_columns: 2
+    cards: []
+    sections:
+      # ----------------------------- Monitor -------------------------------
+      - type: grid
+        cards:
+          - type: heading
+            heading: Monitor
+            heading_style: title
+            icon: mdi:chart-line
+
+          - type: gauge
+            entity: sensor.waveform_generator_output
+            name: Output
+            min: -30
+            max: 30
+            needle: true
+            segments:
+              - from: -30
+                color: "#03A9F4"
+              - from: -10
+                color: "#4CAF50"
+              - from: 10
+                color: "#FF9800"
+              - from: 20
+                color: "#F44336"
+
+      # ----------------------------- Controls ------------------------------
+      - type: grid
+        cards:
+          - type: heading
+            heading: Controls
+            heading_style: title
+            icon: mdi:tune-variant
+
+          - type: tile
+            entity: switch.waveform_generator_enabled
+            name: Output
+            icon: mdi:power
+            features_position: inline
+            features:
+              - type: toggle
+
+          - type: tile
+            entity: select.waveform_generator_waveform
+            name: Waveform shape
+            icon: mdi:waveform
+            features:
+              - type: select-options
+
+          - type: tile
+            entity: number.waveform_generator_frequency
+            name: Frequency
+            icon: mdi:sine-wave
+            features:
+              - type: numeric-input
+                style: slider
+
+          - type: tile
+            entity: number.waveform_generator_amplitude
+            name: Amplitude
+            icon: mdi:arrow-expand-vertical
+            features:
+              - type: numeric-input
+                style: slider
+
+          - type: tile
+            entity: number.waveform_generator_offset
+            name: Offset
+            icon: mdi:arrow-up-down
+            features:
+              - type: numeric-input
+                style: slider
