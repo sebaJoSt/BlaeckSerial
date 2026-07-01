@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [6.1.0] - 2026-07-01
+
+### Added
+- Added the `WaveformGenerator` example with Loggbok MQTT dashboard examples for
+  Home Assistant and Node-RED.
+
+### Changed
+- Increased the default AVR command-handler limit on larger-SRAM AVR boards
+  (for example Arduino Mega 2560) from 4 to 12 handlers, while keeping smaller
+  AVR boards conservative at 6 handlers. This allows command-rich examples such
+  as `WaveformGenerator` to register their full command set without custom
+  compile-time overrides.
+
 ## [6.0.1] - 2026-04-27
 
 ### Changed
