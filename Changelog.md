@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [6.1.0] - 2026-07-01
+## [6.0.2] - 2026-07-01
 
 ### Added
 - Added the `WaveformGenerator` example with Loggbok MQTT dashboard examples for
