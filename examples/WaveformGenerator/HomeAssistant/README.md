@@ -3,7 +3,8 @@
 A fancy, modern Home Assistant dashboard for the BlaeckSerial **WaveformGenerator**
 example, driven entirely over MQTT by [Loggbok](https://github.com/sebaJoSt/Loggbok).
 
-It uses only **built-in** Home Assistant cards (no HACS, no custom components):
+The dashboard itself uses only **built-in** Home Assistant cards (no HACS, no
+custom cards):
 
 - A **gauge** with colored segments for the live `Output`.
 - **Tile** cards with interactive *features* for the controls — a toggle for the
@@ -112,6 +113,32 @@ new **Waveform Generator** device with six entities.
 **Settings → Dashboards → + Add dashboard → New dashboard from scratch.** Open it,
 click the pencil (Edit), then the three-dots menu → **Edit in YAML**, and paste
 [`dashboard.yaml`](./dashboard.yaml).
+
+---
+
+## Kiosk dashboard view
+
+If you want a dashboard-only view without the Home Assistant header/sidebar,
+install the optional Home Assistant
+[`kiosk-mode`](https://github.com/NemesisRE/kiosk-mode) frontend module. This
+keeps the normal dashboard available while allowing a dashboard-only view via
+URL.
+
+For YAML-mode dashboards, add the kiosk module to `configuration.yaml`:
+
+```yaml
+frontend:
+  extra_module_url:
+    - /local/kiosk-mode.js?v=14.0.1
+```
+
+Place `kiosk-mode.js` in Home Assistant's `www` folder, restart Home Assistant,
+then open the dashboard normally or in kiosk mode:
+
+```text
+http://127.0.0.1:8123/lovelace/waveform
+http://127.0.0.1:8123/lovelace/waveform?kiosk
+```
 
 ---
 
