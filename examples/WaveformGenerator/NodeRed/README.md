@@ -23,8 +23,28 @@ Arduino (WaveformGenerator.ino)
    --mqtt        loggbok/wave/*
 ```
 
-Loggbok publishes each signal to `loggbok/wave/<Signal>` and forwards commands
-received on `loggbok/wave/_cmd/<COMMAND>` to the device.
+Loggbok publishes each signal to `<state topic>/<Signal>` and forwards commands
+received on `<command topic>/_cmd/<COMMAND>` to the device. Both topic roots are
+configurable at runtime from the dashboard's **Topic routing** group (default
+`loggbok/wave`), so the Loggbok `--table` no longer has to be `wave`.
+
+## Topic routing
+
+The dashboard's **Topic routing** group sets where telemetry is read from and
+where commands are published — the same style as the Home Assistant example:
+
+| Control | Purpose |
+| --- | --- |
+| **State topic** | Root Loggbok publishes telemetry under (`<root>/<Signal>`). Defaults to `loggbok/wave`. |
+| **Command topic mode** | Dropdown: *Same as state topic* (default) or *Custom*. |
+| **Command topic** | Root used for commands when the mode is *Custom*. |
+| **Effective command topic** | Read-only readout of the root commands are published to. |
+
+Internally a single `mqtt in` node subscribes to `#` and routes messages whose
+topic matches `<state topic>/<Signal>` to the widgets (mirroring the HA
+automations that trigger on `#`). Commands are published to
+`<effective command topic>/_cmd/<COMMAND>`. Changing either field takes effect
+immediately — no redeploy.
 
 ## Prerequisites
 
@@ -46,7 +66,9 @@ at **115200 baud** and registers the waveform signals and commands.
 
 ### 2. Run Loggbok with the MQTT bridge
 
-The MQTT `--table` **must** be `wave` so the topics match this dashboard.
+The MQTT `--table` sets the topic root; it must match the **State topic** field
+on the dashboard (default `loggbok/wave`). Either run Loggbok with
+`--table wave`, or set the dashboard's State topic to whatever your table is.
 With the local Mosquitto container from the test setup, use `127.0.0.1:1884`:
 
 ```bash
@@ -86,6 +108,9 @@ The `/dashboard` path is configured by the Dashboard 2.0 `ui-base` node in the
 flow.
 
 ## Topic map
+
+Topics below assume the default routing (`loggbok/wave`); replace the root with
+your configured **State topic** / **Command topic**.
 
 | Dashboard value | Direction | Topic |
 | --- | --- | --- |
