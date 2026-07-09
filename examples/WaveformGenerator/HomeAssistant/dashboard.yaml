@@ -10,10 +10,14 @@
 #    4. Replace the contents with this file, or copy the `views:` block into an
 #       existing dashboard.
 #
-#  Home Assistant derives these entity IDs from the device name ("Waveform
-#  Generator") + each entity name in mqtt-entities.yaml:
-#    sensor.waveform_generator_output, number.waveform_generator_frequency, number.waveform_generator_amplitude,
-#    number.waveform_generator_offset, select.waveform_generator_waveform, switch.waveform_generator_enabled
+#  This dashboard uses helpers from command-routing.yaml for controls and keeps
+#  telemetry from routed helper entities:
+#    input_number.waveform_output_state
+#    input_text.waveform_command_topic / waveform_state_topic
+#    input_select.waveform_command_topic_mode
+#    input_number.waveform_frequency_cmd / amplitude_cmd / offset_cmd
+#    input_select.waveform_shape_cmd
+#    input_boolean.waveform_enabled_cmd
 # =============================================================================
 
 title: Waveform Generator
@@ -25,6 +29,32 @@ views:
     max_columns: 2
     cards: []
     sections:
+      # -------------------------- Topic routing ----------------------------
+      - type: grid
+        cards:
+          - type: heading
+            heading: Topic routing
+            heading_style: title
+            icon: mdi:sitemap-outline
+
+          - type: entities
+            entities:
+              - entity: input_text.waveform_state_topic
+                name: State topic
+                icon: mdi:pound
+              - entity: input_select.waveform_command_topic_mode
+                name: Command topic
+                icon: mdi:send
+              - type: conditional
+                conditions:
+                  - entity: input_select.waveform_command_topic_mode
+                    state: Custom
+                row:
+                  entity: input_text.waveform_command_topic
+                  name: Custom command topic
+                  icon: mdi:pencil
+            state_color: false
+
       # ----------------------------- Monitor -------------------------------
       - type: grid
         cards:
@@ -34,7 +64,7 @@ views:
             icon: mdi:chart-line
 
           - type: gauge
-            entity: sensor.waveform_generator_output
+            entity: input_number.waveform_output_state
             name: Output
             min: -30
             max: 30
@@ -58,7 +88,7 @@ views:
             icon: mdi:tune-variant
 
           - type: tile
-            entity: switch.waveform_generator_enabled
+            entity: input_boolean.waveform_enabled_cmd
             name: Output
             icon: mdi:power
             features_position: inline
@@ -66,14 +96,14 @@ views:
               - type: toggle
 
           - type: tile
-            entity: select.waveform_generator_waveform
+            entity: input_select.waveform_shape_cmd
             name: Waveform shape
             icon: mdi:waveform
             features:
               - type: select-options
 
           - type: tile
-            entity: number.waveform_generator_frequency
+            entity: input_number.waveform_frequency_cmd
             name: Frequency
             icon: mdi:sine-wave
             features:
@@ -81,7 +111,7 @@ views:
                 style: slider
 
           - type: tile
-            entity: number.waveform_generator_amplitude
+            entity: input_number.waveform_amplitude_cmd
             name: Amplitude
             icon: mdi:arrow-expand-vertical
             features:
@@ -89,7 +119,7 @@ views:
                 style: slider
 
           - type: tile
-            entity: number.waveform_generator_offset
+            entity: input_number.waveform_offset_cmd
             name: Offset
             icon: mdi:arrow-up-down
             features:

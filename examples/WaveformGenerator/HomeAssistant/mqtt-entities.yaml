@@ -12,9 +12,8 @@
 #             --mqtt-endpoint mqtt://127.0.0.1:1884
 #
 #  The MQTT --table MUST be "wave" so the topics below line up:
-#    Telemetry (retained):  loggbok/wave/<Signal>
+#    Telemetry (live):      loggbok/wave/<Signal>
 #    Commands  (live):      loggbok/wave/_cmd/<COMMAND>
-#    Broadcast commands:    loggbok/_all/_cmd/<COMMAND>
 #
 #  Point Home Assistant's MQTT integration at the SAME broker Loggbok publishes
 #  to. After saving, restart Home Assistant (or reload the YAML configuration).

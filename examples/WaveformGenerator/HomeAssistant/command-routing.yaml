@@ -1,0 +1,278 @@
+# =============================================================================
+#  Waveform Generator — dynamic command topic routing
+# =============================================================================
+#  Add this to your Home Assistant configuration to route dashboard controls
+#  and state subscriptions via full text topics.
+#
+#  Resulting command topics:
+#    <command_topic>/_cmd/<COMMAND>
+#
+#  <command_topic> follows the "Command topic mode" dropdown: it mirrors the
+#  state topic ("Same as state topic", the default) or uses the custom command
+#  topic field ("Custom"). See sensor.waveform_effective_command_topic below.
+#
+#  State is also routed from:
+#    <state_topic>/<Signal>
+# =============================================================================
+
+input_text:
+  waveform_command_topic:
+    name: Waveform command topic
+    initial: loggbok/wave
+    max: 128
+
+  waveform_state_topic:
+    name: Waveform state topic
+    initial: loggbok/wave
+    max: 128
+
+input_number:
+  waveform_output_state:
+    name: Output (state)
+    initial: 0
+    min: -30
+    max: 30
+    step: 0.001
+    mode: box
+
+  waveform_frequency_cmd:
+    name: Frequency
+    initial: 1
+    min: 0.01
+    max: 5
+    step: 0.01
+    mode: slider
+
+  waveform_amplitude_cmd:
+    name: Amplitude
+    initial: 1
+    min: 0
+    max: 20
+    step: 0.1
+    mode: slider
+
+  waveform_offset_cmd:
+    name: Offset
+    initial: 0
+    min: -10
+    max: 10
+    step: 0.1
+    mode: slider
+
+input_select:
+  waveform_shape_cmd:
+    name: Waveform
+    options:
+      - Sine
+      - Square
+      - Triangle
+      - Sawtooth
+    initial: Sine
+
+input_boolean:
+  waveform_enabled_cmd:
+    name: Output enabled
+    initial: true
+
+automation:
+  - alias: Waveform state routing - output
+    trigger:
+      - platform: mqtt
+        topic: "#"
+    condition:
+      - condition: template
+        value_template: >-
+          {% set base = states('input_text.waveform_state_topic') | trim %}
+          {{ base != '' and trigger.topic == base ~ '/Output' }}
+    action:
+      - service: input_number.set_value
+        data:
+          entity_id: input_number.waveform_output_state
+          value: >-
+            {% set v = trigger.payload | float(0) %}
+            {{ [[v, -30] | max, 30] | min }}
+
+  - alias: Waveform state routing - frequency
+    trigger:
+      - platform: mqtt
+        topic: "#"
+    condition:
+      - condition: template
+        value_template: >-
+          {% set base = states('input_text.waveform_state_topic') | trim %}
+          {{ base != '' and trigger.topic == base ~ '/Frequency' }}
+    action:
+      - service: input_number.set_value
+        data:
+          entity_id: input_number.waveform_frequency_cmd
+          value: "{{ trigger.payload | float(1) }}"
+
+  - alias: Waveform state routing - amplitude
+    trigger:
+      - platform: mqtt
+        topic: "#"
+    condition:
+      - condition: template
+        value_template: >-
+          {% set base = states('input_text.waveform_state_topic') | trim %}
+          {{ base != '' and trigger.topic == base ~ '/Amplitude' }}
+    action:
+      - service: input_number.set_value
+        data:
+          entity_id: input_number.waveform_amplitude_cmd
+          value: "{{ trigger.payload | float(1) }}"
+
+  - alias: Waveform state routing - offset
+    trigger:
+      - platform: mqtt
+        topic: "#"
+    condition:
+      - condition: template
+        value_template: >-
+          {% set base = states('input_text.waveform_state_topic') | trim %}
+          {{ base != '' and trigger.topic == base ~ '/Offset' }}
+    action:
+      - service: input_number.set_value
+        data:
+          entity_id: input_number.waveform_offset_cmd
+          value: "{{ trigger.payload | float(0) }}"
+
+  - alias: Waveform state routing - waveform
+    trigger:
+      - platform: mqtt
+        topic: "#"
+    condition:
+      - condition: template
+        value_template: >-
+          {% set base = states('input_text.waveform_state_topic') | trim %}
+          {{ base != '' and trigger.topic == base ~ '/Waveform' }}
+    action:
+      - service: input_select.select_option
+        data:
+          entity_id: input_select.waveform_shape_cmd
+          option: >-
+            {% set mapping = {0: 'Sine', 1: 'Square', 2: 'Triangle', 3: 'Sawtooth'} %}
+            {{ mapping.get(trigger.payload | int(0), 'Sine') }}
+
+  - alias: Waveform state routing - enabled
+    trigger:
+      - platform: mqtt
+        topic: "#"
+    condition:
+      - condition: template
+        value_template: >-
+          {% set base = states('input_text.waveform_state_topic') | trim %}
+          {{ base != '' and trigger.topic == base ~ '/Enabled' }}
+    action:
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ trigger.payload | trim in ['1', 'on', 'ON', 'true', 'True'] }}"
+            sequence:
+              - service: input_boolean.turn_on
+                target:
+                  entity_id: input_boolean.waveform_enabled_cmd
+        default:
+          - service: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.waveform_enabled_cmd
+
+  - alias: Waveform command routing - frequency
+    trigger:
+      - platform: state
+        entity_id: input_number.waveform_frequency_cmd
+    condition:
+      - condition: template
+        value_template: >-
+          {% set topic = states('sensor.waveform_effective_command_topic') | trim %}
+          {{ topic != '' and ',' not in topic }}
+      - condition: template
+        value_template: "{{ trigger.to_state.context.user_id is not none }}"
+    action:
+      - service: mqtt.publish
+        data:
+          topic: "{{ states('sensor.waveform_effective_command_topic') | trim }}/_cmd/SET_FREQ"
+          payload: "{{ trigger.to_state.state }}"
+
+  - alias: Waveform command routing - amplitude
+    trigger:
+      - platform: state
+        entity_id: input_number.waveform_amplitude_cmd
+    condition:
+      - condition: template
+        value_template: >-
+          {% set topic = states('sensor.waveform_effective_command_topic') | trim %}
+          {{ topic != '' and ',' not in topic }}
+      - condition: template
+        value_template: "{{ trigger.to_state.context.user_id is not none }}"
+    action:
+      - service: mqtt.publish
+        data:
+          topic: "{{ states('sensor.waveform_effective_command_topic') | trim }}/_cmd/SET_AMP"
+          payload: "{{ trigger.to_state.state }}"
+
+  - alias: Waveform command routing - offset
+    trigger:
+      - platform: state
+        entity_id: input_number.waveform_offset_cmd
+    condition:
+      - condition: template
+        value_template: >-
+          {% set topic = states('sensor.waveform_effective_command_topic') | trim %}
+          {{ topic != '' and ',' not in topic }}
+      - condition: template
+        value_template: "{{ trigger.to_state.context.user_id is not none }}"
+    action:
+      - service: mqtt.publish
+        data:
+          topic: "{{ states('sensor.waveform_effective_command_topic') | trim }}/_cmd/SET_OFFSET"
+          payload: "{{ trigger.to_state.state }}"
+
+  - alias: Waveform command routing - waveform
+    trigger:
+      - platform: state
+        entity_id: input_select.waveform_shape_cmd
+    condition:
+      - condition: template
+        value_template: >-
+          {% set topic = states('sensor.waveform_effective_command_topic') | trim %}
+          {{ topic != '' and ',' not in topic }}
+      - condition: template
+        value_template: "{{ trigger.to_state.context.user_id is not none }}"
+    action:
+      - service: mqtt.publish
+        data:
+          topic: "{{ states('sensor.waveform_effective_command_topic') | trim }}/_cmd/SET_WAVE"
+          payload: >-
+            {{ {'Sine': 0, 'Square': 1, 'Triangle': 2, 'Sawtooth': 3}[trigger.to_state.state] }}
+
+  - alias: Waveform command routing - enable
+    trigger:
+      - platform: state
+        entity_id: input_boolean.waveform_enabled_cmd
+    condition:
+      - condition: template
+        value_template: >-
+          {% set topic = states('sensor.waveform_effective_command_topic') | trim %}
+          {{ topic != '' and ',' not in topic }}
+      - condition: template
+        value_template: "{{ trigger.to_state.context.user_id is not none }}"
+    action:
+      - service: mqtt.publish
+        data:
+          topic: "{{ states('sensor.waveform_effective_command_topic') | trim }}/_cmd/SET_ENABLE"
+          payload: "{{ 1 if is_state('input_boolean.waveform_enabled_cmd', 'on') else 0 }}"
+
+# ---------------------------------------------------------------------------
+#  Effective command topic: "Same as state topic" mirrors the state topic;
+#  "Custom" uses waveform_command_topic. All command routing above publishes
+#  to this sensor's value.
+# ---------------------------------------------------------------------------
+template:
+  - sensor:
+      - name: Waveform effective command topic
+        unique_id: waveform_effective_command_topic
+        state: >-
+          {{ (states('input_text.waveform_command_topic')
+              if is_state('input_select.waveform_command_topic_mode', 'Custom')
+              else states('input_text.waveform_state_topic')) | trim }}

@@ -17,6 +17,7 @@ device.
 | File | Purpose |
 | --- | --- |
 | `mqtt-entities.yaml` | MQTT entity definitions — paste into `configuration.yaml`. |
+| `command-routing.yaml` | Text-driven command routing helpers + automations (`loggbok/<segment>/_cmd/...`). |
 | `dashboard.yaml` | The Sections-view dashboard (Lovelace YAML). |
 
 > **Note:** these files target Home Assistant **2024.4+** because they use the
@@ -47,7 +48,7 @@ Arduino (WaveformGenerator.ino)
    --mqtt        loggbok/wave/*        (MQTT integration)
 ```
 
-Loggbok publishes each signal to `loggbok/wave/<Signal>` (retained) and forwards
+Loggbok publishes each signal to `loggbok/wave/<Signal>` and forwards
 commands received on `loggbok/wave/_cmd/<COMMAND>` to the device. Home Assistant
 subscribes/publishes to those same topics.
 
@@ -89,8 +90,6 @@ different broker, replace the host/port accordingly.)
 Dashboard commands are routed by MQTT topic, so no command allow-list is needed.
 The controls publish `SET_FREQ`, `SET_AMP`, `SET_OFFSET`, `SET_WAVE` and
 `SET_ENABLE` to the `_cmd` topics listed above.
-Use `loggbok/_all/_cmd/<COMMAND>` instead of `loggbok/wave/_cmd/<COMMAND>` to
-broadcast a command to all Loggbok MQTT bridges.
 
 > **Tip:** disable DTR in Loggbok's serial settings so the Arduino isn't reset
 > each time logging (re)connects — that way the waveform keeps its current
@@ -108,7 +107,21 @@ Copy the contents of [`mqtt-entities.yaml`](./mqtt-entities.yaml) into your
 **Developer Tools → YAML → Restart** (or restart Home Assistant). You should see a
 new **Waveform Generator** device with six entities.
 
-### 5. Add the dashboard
+### 5. Add text-driven command routing
+
+Copy [`command-routing.yaml`](./command-routing.yaml) into `configuration.yaml`
+(merge with existing top-level blocks as needed), then reload/restart YAML.
+This adds helper controls and automations that publish commands to:
+
+`<command-topic>/_cmd/<COMMAND>`
+
+Set the **State topic** field to the full state root topic (for example
+`loggbok/wave`). The **Command topic** dropdown defaults to *Same as state
+topic*, so commands go to that same root. Switch it to *Custom* only if your
+device listens for commands on a different root topic, then enter it in the
+**Custom command topic** field that appears.
+
+### 6. Add the dashboard
 
 **Settings → Dashboards → + Add dashboard → New dashboard from scratch.** Open it,
 click the pencil (Edit), then the three-dots menu → **Edit in YAML**, and paste
