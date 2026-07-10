@@ -45,7 +45,7 @@ float Output = 0.0;
 float Frequency = 1.0; // [Hz]
 float Amplitude = 1.0;
 float Offset = 0.0;
-byte Waveform = 0;     // 0=Sine, 1=Square, 2=Triangle, 3=Sawtooth
+byte Waveform = 0; // 0=Sine, 1=Square, 2=Triangle, 3=Sawtooth
 bool Enabled = true;
 
 //---COMMAND HANDLERS
@@ -65,7 +65,7 @@ void setup()
   Serial.begin(115200);
   BlaeckSerial.begin(&Serial, 6);
 
-  BlaeckSerial.DeviceName = "Waveform Generator Demo";
+  BlaeckSerial.DeviceName = "Waveform Generator Demo Serial";
   BlaeckSerial.DeviceHWVersion = "Arduino Mega 2560 Rev3";
   BlaeckSerial.DeviceFWVersion = ExampleVersion;
 
@@ -131,30 +131,43 @@ void UpdateWaveform()
 void onSetFreq(const char *command, const char *const *params, byte paramCount)
 {
   if (paramCount >= 1 && params[0][0] != '\0')
+  {
     Frequency = constrain((float)atof(params[0]), 0.0f, 50.0f);
+    BlaeckSerial.write("Frequency", Frequency);
+  }
 }
 
 void onSetAmp(const char *command, const char *const *params, byte paramCount)
 {
   if (paramCount >= 1 && params[0][0] != '\0')
+  {
     Amplitude = constrain((float)atof(params[0]), 0.0f, 100.0f);
+    BlaeckSerial.write("Amplitude", Amplitude);
+  }
 }
 
 void onSetOffset(const char *command, const char *const *params, byte paramCount)
 {
   if (paramCount >= 1 && params[0][0] != '\0')
+  {
     Offset = constrain((float)atof(params[0]), -100.0f, 100.0f);
+    BlaeckSerial.write("Offset", Offset);
+  }
 }
 
 void onSetWave(const char *command, const char *const *params, byte paramCount)
 {
   if (paramCount >= 1 && params[0][0] != '\0')
+  {
     Waveform = (byte)constrain(atoi(params[0]), 0, 3);
+    BlaeckSerial.write("Waveform", Waveform);
+  }
 }
 
 void onSetEnable(const char *command, const char *const *params, byte paramCount)
 {
   Enabled = paramCount >= 1 && atoi(params[0]) == 1;
+  BlaeckSerial.write("Enabled", Enabled);
 }
 
 void onStatus(const char *command, const char *const *params, byte paramCount)
