@@ -3,11 +3,10 @@
 
   A dashboard-friendly demo for the BlaeckSerial -> Loggbok -> MQTT bridge.
 
-  It generates ONE fully controllable waveform on a FIXED set of signals, so it is safe
-  to control live while Loggbok is logging (the signal list never changes). Frequency,
-  amplitude, offset and waveform shape are all set over MQTT commands, and each command
-  updates a PAIRED signal - so a dashboard reacts to the reported signal (state-reflection
-  pattern), not to the control widget.
+  It generates one fully controllable waveform. Frequency, amplitude, offset and waveform
+  shape are all set over MQTT commands. Each command writes the accepted value back to its
+  signal, so a dashboard always shows the value the device actually applied (after
+  clamping/rounding).
 
   Author: Sebastian Strobl, https://github.com/sebaJoSt/BlaeckSerial
 
@@ -128,11 +127,19 @@ void UpdateWaveform()
   Output = Offset + Amplitude * w;
 }
 
+// Rounds to a fixed number of decimal places, cleaning up tiny float rounding noise from atof()
+// (e.g. "0.15" -> 0.14999999...).
+float roundToDecimals(float value, byte decimals)
+{
+  float scale = pow(10, decimals);
+  return roundf(value * scale) / scale;
+}
+
 void onSetFreq(const char *command, const char *const *params, byte paramCount)
 {
   if (paramCount >= 1 && params[0][0] != '\0')
   {
-    Frequency = constrain((float)atof(params[0]), 0.0f, 50.0f);
+    Frequency = roundToDecimals(constrain((float)atof(params[0]), 0.0f, 50.0f), 4);
     BlaeckSerial.write("Frequency", Frequency);
   }
 }
@@ -141,7 +148,7 @@ void onSetAmp(const char *command, const char *const *params, byte paramCount)
 {
   if (paramCount >= 1 && params[0][0] != '\0')
   {
-    Amplitude = constrain((float)atof(params[0]), 0.0f, 100.0f);
+    Amplitude = roundToDecimals(constrain((float)atof(params[0]), 0.0f, 100.0f), 4);
     BlaeckSerial.write("Amplitude", Amplitude);
   }
 }
@@ -150,7 +157,7 @@ void onSetOffset(const char *command, const char *const *params, byte paramCount
 {
   if (paramCount >= 1 && params[0][0] != '\0')
   {
-    Offset = constrain((float)atof(params[0]), -100.0f, 100.0f);
+    Offset = roundToDecimals(constrain((float)atof(params[0]), -100.0f, 100.0f), 4);
     BlaeckSerial.write("Offset", Offset);
   }
 }
