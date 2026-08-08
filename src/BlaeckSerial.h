@@ -46,7 +46,14 @@
 //     the sketch folder is not on the compiler's include path, so the
 //     __has_include below fails and your settings are silently ignored.
 //     There is no IDE preference and no sketch.yaml key for compiler flags;
-//     only the core's own config files can add them. Three ways round it:
+//     only the core's own config files can add them.
+//
+//     This is an Arduino build-system limitation, not a library one: a
+//     sketch-local settings header has been requested since 2015
+//     (arduino/arduino-builder#15, closed) and libraries still cannot
+//     extend the include path (arduino/arduino-cli#501, open since 2019).
+//
+//     Three ways round it:
 //
 //     a) Put BlaeckSerialConfig.h in the sketch folder, next to your .ino:
 //
