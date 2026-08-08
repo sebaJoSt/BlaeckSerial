@@ -99,6 +99,8 @@
 #include "Arduino.h"
 #include "BlaeckSerial.h"
 
+#define ExampleVersion "1.0"
+
 // Instantiate a new BlaeckSerial object
 BlaeckSerial BlaeckSerial;
 
@@ -125,6 +127,11 @@ void setup()
 
   // Setup BlaeckSerial, room for one signal
   BlaeckSerial.begin(&Serial, 1);
+
+  // Reported by <BLAECK.GET_DEVICES>, and used by a host to name the device
+  BlaeckSerial.DeviceName = "Command Demo";
+  BlaeckSerial.DeviceHWVersion = "Arduino Mega 2560 Rev3";
+  BlaeckSerial.DeviceFWVersion = ExampleVersion;
 
   // The state signal the typed switch below refers to
   BlaeckSerial.addSignal("LED_State", &ledState);
