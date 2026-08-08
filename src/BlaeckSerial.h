@@ -45,16 +45,24 @@
 //     A BlaeckSerialConfig.h in your sketch folder is NOT found by default:
 //     the sketch folder is not on the compiler's include path, so the
 //     __has_include below fails and your settings are silently ignored.
-//     To enable it, put the sketch folder on the include path by creating
-//     platform.local.txt next to platform.txt in your core, containing:
+//     There is no IDE preference and no sketch.yaml key for compiler flags;
+//     only the core's own config files can add them. Two ways round it:
 //
-//       compiler.cpp.extra_flags=-I{build.source.path}
+//     a) Simplest, no setup: put the config next to this header, at
+//        libraries/BlaeckSerial/src/BlaeckSerialConfig.h. That folder is
+//        already on the include path, so every unit sees it. The catch is
+//        that a library update overwrites it.
 //
-//     e.g. ...\packages\arduino\hardware\avr\1.8.8\platform.local.txt
-//     This is per core - repeat it for esp32, samd, renesas_uno, ... Once set,
-//     BlaeckSerialConfig.h in the sketch folder reaches every unit correctly.
-//     With arduino-cli you can instead pass it per build:
-//       --build-property "compiler.cpp.extra_flags=-I{build.source.path}"
+//     b) Keep it per sketch: put the sketch folder on the include path via
+//        platform.local.txt next to platform.txt in your core (or
+//        boards.local.txt to scope it to one board), containing:
+//
+//          build.extra_flags=-I{build.source.path}
+//
+//        e.g. ...\packages\arduino\hardware\avr\1.8.8\platform.local.txt
+//        This is per core - repeat it for esp32, samd, renesas_uno, ...
+//        With arduino-cli you can pass it per build instead:
+//          --build-property "build.extra_flags=-I{build.source.path}"
 //
 // If you are unsure whether your override took effect, compare
 // configFingerprint() against BLAECK_CONFIG_FINGERPRINT from your sketch;
