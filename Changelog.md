@@ -15,11 +15,19 @@ All notable changes to this project will be documented in this file.
 - **Master-side command-catalog aggregation.** A master now answers
   `BLAECK.WRITE_COMMANDS` with its own command entries *plus* every found slave's
   command entries, so the host sees the full multi-board command palette in one
-  `0xE0` frame. Each slave streams its catalog as a length-prefixed blob over a
-  new I2C wire-mode (5); the master appends it verbatim. Slave-side buffer size
-  is configurable via `BLAECK_SLAVE_COMMAND_BLOB_SIZE` (default 192 bytes);
-  entries that would overflow are dropped at an entry boundary with a debug
-  warning. Requires `BLAECK_ENABLE_COMMAND_META`.
+  `0xE0` frame. Each slave streams its catalog as a length-prefixed byte stream
+  over a new I2C wire-mode (5); the master appends it verbatim. The slave
+  serializes its command entries on the fly per I2C chunk (no RAM staging
+  buffer), so the feature costs no extra SRAM and has no fixed catalog-size cap.
+  Requires `BLAECK_ENABLE_COMMAND_META`.
+- Command acknowledgement (`0xF0` frame): after dispatching an inbound command
+  the device replies on the serial host with an FNV-1a hash of the received
+  command plus an accept/reject status and reason code, so a host (e.g. Loggbok)
+  can confirm the command was applied. For a command routed to a slave with the
+  `@<slaveID>:` prefix the master owns the ack and hashes the exact received
+  frame (prefix included), confirming delivery to the slave; the slave does not
+  ack over I2C. Like `0xE0`, the frame carries no CRC; hosts that don't
+  recognize the key ignore it.
 - Added the `WaveformGenerator` example, registered with the typed command
   helpers (`onNumberCommand` / `onSelectCommand` / `onSwitchCommand` /
   `onButtonCommand`) so the device is self-describing for Loggbok / Home

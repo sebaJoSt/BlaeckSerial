@@ -255,16 +255,6 @@ static inline int blaeckReassembleCommand(const uint8_t *bytes, int numBytes, ch
   #endif
 #endif
 
-// Slave-side RAM buffer used to serialize this board's command catalog (0xE0
-// entries) before streaming it to the master for aggregation (I2C wire-mode 5).
-// Sized to hold a handful of typed commands with metadata; entries that would
-// overflow are dropped at an entry boundary (a debug warning is emitted).
-// Only allocated when command metadata is enabled. Override for boards with more
-// commands (costs SRAM) or shrink on tiny targets.
-#ifndef BLAECK_SLAVE_COMMAND_BLOB_SIZE
-  #define BLAECK_SLAVE_COMMAND_BLOB_SIZE 192
-#endif
-
 typedef enum MasterSlaveConfig
 {
   Single,
@@ -319,6 +309,20 @@ enum BlaeckCommandKind
   BLAECK_CMD_SWITCH = 2, // HA switch   (0/1)
   BLAECK_CMD_SELECT = 3, // HA select   (index into optionsCsv)
   BLAECK_CMD_BUTTON = 4  // HA button   (no value)
+};
+
+// Acknowledgement reason for the 0xF0 Command Ack frame. Sent back to the
+// serial host after a command is dispatched so a host (e.g. Loggbok) can confirm
+// the command was applied and surface accept/reject feedback.
+// status = 0 accepted, 1 rejected.
+enum BlaeckCommandAckReason
+{
+  BLAECK_ACK_OK = 0,           // accepted: delivered to a handler, validation passed
+  BLAECK_ACK_UNKNOWN = 1,      // rejected: no handler / could not deliver to target slave
+  BLAECK_ACK_OUT_OF_RANGE = 2, // rejected: number outside [min, max]
+  BLAECK_ACK_BAD_SWITCH = 3,   // rejected: switch value not 0/1
+  BLAECK_ACK_BAD_SELECT = 4,   // rejected: select value not a valid index/option
+  BLAECK_ACK_TOO_LONG = 5      // rejected: text value longer than the advertised max length
 };
 
 class BlaeckSerial
@@ -570,7 +574,13 @@ private:
   void setSignalName(int signalIndex, String signalName, bool prefixSlaveID);
   void _setTimedDataState(bool timedActivated, unsigned long timedInterval_ms);
   void _parseCommandTokens(const char *raw);
-  void _dispatchRegisteredHandlers();
+  void _dispatchRegisteredHandlers(bool sendAck = true);
+
+  // Send a 0xF0 Command Ack frame (cmdHash + status + reason) to the serial host.
+  // The hash is FNV-1a of the exact received frame bytes (routing prefix included
+  // for master-forwarded commands). The frame carries no CRC (like 0xE0).
+  void _writeCommandAck(const char *rawCommand, byte status, byte reasonCode);
+  static uint32_t _fnv1a32(const char *s);
   uint16_t _computeSchemaHash();
   inline void _schemaHashFeedByte(byte b)
   {
@@ -601,7 +611,7 @@ private:
                         float mn, float mx, float st,
                         const __FlashStringHelper *unit,
                         const __FlashStringHelper *options);
-  bool _validateTypedCommand(byte handlerIndex);
+  byte _validateTypedCommand(byte handlerIndex);
   static byte _flashCsvOptionCount(const __FlashStringHelper *csv);
   static long _flashCsvIndexOf(const __FlashStringHelper *csv, const char *value);
 
@@ -611,7 +621,13 @@ private:
   // RAM blob and stream it in BLAECK_WIRE_BUFFER_SIZE-sized chunks on request.
   void writeSlaveCommands(bool send_eol);
   void wireSlaveTransmitCommandChunk();
-  int _serializeLocalCommandBlob(byte *buf, int bufSize);
+  // Serialize this board's in-use command entries on the fly, emitting (via
+  // Wire.write) only the bytes whose position falls in [windowStart, windowStart+
+  // windowLen). Returns the total serialized length. Pass windowLen == 0 to count
+  // the total without emitting anything. Serialization is deterministic (the
+  // command table and its flash strings are immutable at runtime), so re-walking
+  // per chunk reproduces identical bytes without needing a RAM staging buffer.
+  long _emitLocalCommandBlob(long windowStart, long windowLen);
 #endif
 
   void writeLocalDevices(unsigned long MessageID, bool send_eol);
@@ -625,7 +641,7 @@ private:
 
   // Master->slave single-shot command delivery (I2C wire-mode 6) and the slave-side
   // deferred dispatch of a command received over I2C (run outside the Wire ISR).
-  void wireMasterTransmitCommand(byte slaveID, const char *payload);
+  bool wireMasterTransmitCommand(byte slaveID, const char *payload);
   void _processPendingWireCommand();
 
   void wireSlaveTransmitSingleSymbol();
@@ -677,14 +693,13 @@ private:
   char _wireCommandBuf[BLAECK_WIRE_BUFFER_SIZE] = {0};
 
 #if BLAECK_ENABLE_COMMAND_META
-  // Slave-side staging for streaming this board's command catalog to the master
-  // (I2C wire-mode 5). The blob is built lazily on the first requestFrom() of an
-  // aggregation pass (cursor == 0) and streamed across chunks; a fresh pass is
-  // signalled by wireSlaveReceive() resetting the cursor and "built" flag.
-  byte _wireCommandBlob[BLAECK_SLAVE_COMMAND_BLOB_SIZE] = {0};
-  int _wireCommandBlobLen = 0;
-  int _wireCommandCursor = 0;
-  bool _wireCommandBlobBuilt = false;
+  // Slave-side streaming state for aggregating this board's command catalog to the
+  // master (I2C wire-mode 5). The catalog is serialized on the fly per chunk (no
+  // RAM staging buffer): _wireCommandCursor tracks the byte offset the master has
+  // consumed, _wireCommandTotalLen caches the total length computed on the first
+  // chunk. A fresh pass is signalled by wireSlaveReceive() resetting the cursor.
+  long _wireCommandTotalLen = 0;
+  long _wireCommandCursor = 0;
 #endif
 
   bool _i2cScanInitialized = false;
@@ -841,6 +856,8 @@ private:
   char _parsedCommand[MAX_COMMAND_NAME_COUNT] = {0};
   const char *_parsedParamPtrs[MAX_COMMAND_PARAM_COUNT] = {0};
   byte _parsedParamCount = 0;
+  // Monotonic message id stamped into the 0xF0 Command Ack frame header.
+  unsigned long _commandAckMsgId = 1;
 #if BLAECK_ENABLE_COMMAND_META
   // Scratch buffer holding a select command's normalized index string, so a
   // name payload (e.g. from a Home Assistant select) is handed to index-based
