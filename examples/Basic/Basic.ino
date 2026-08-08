@@ -54,6 +54,13 @@ void setup()
   BlaeckSerial.addSignal("Small Number", &randomSmallNumber);
   BlaeckSerial.addSignal("Big Number", &randomBigNumber);
 
+  /* On AVR, wrapping the name in F() roughly halves the RAM it costs:
+       BlaeckSerial.addSignal(F("Small Number"), &randomSmallNumber);
+     A plain literal is copied into RAM at startup AND again into the String
+     the signal keeps; F() keeps the literal in flash, so only the String
+     copy remains. Worth doing on an Uno or Nano with many signals; other
+     architectures (ESP32, SAMD, ...) handle RAM differently and gain little. */
+
   /*Uncomment for fixed interval lock (ms)
     - ignores ACTIVATE/DEACTIVATE while locked */
   // BlaeckSerial.setIntervalMs(60000);

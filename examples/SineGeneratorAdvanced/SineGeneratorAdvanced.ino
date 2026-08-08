@@ -150,9 +150,9 @@ void UpdateLoggingSignals()
   {
     if (sine[i].isActivated)
     {
-      // Builds a String per active signal. See the
-      // SignalNamesInFlashLessRAMUsage example for the F() alternative when
-      // RAM is tight.
+      // Builds a String per active signal. A fixed name could be wrapped in
+      // F() to keep the literal out of RAM (see Basic), but these are
+      // generated at runtime, so there is no literal to move to flash.
       String signalName = "Sine_";
       BlaeckSerial.addSignal(signalName + i, &sine[i].value);
     }
