@@ -2,9 +2,26 @@
   Commands.ino
 
   This is a sample sketch to show how to use BlaeckSerial to
-  implement your own serial command. The example implements
-  the command <SwitchLED> which turns the on-board LED on
-  or off.
+  implement your own serial commands.
+
+  It registers two kinds of command, on purpose:
+
+    Plain    onCommand(...)         You parse the parameters yourself.
+                                    Full control, no metadata, and NOT
+                                    listed in <BLAECK.WRITE_COMMANDS>.
+
+    Typed    onSwitchCommand(...)   You declare what the command is, and
+             onButtonCommand(...)   the library validates the value and
+                                    advertises it in <BLAECK.WRITE_COMMANDS>
+                                    so a host (e.g. Loggbok / Home Assistant)
+                                    can create an entity for it by itself.
+
+  <SwitchLED> and <LED> both switch the same on-board LED - one plain, one
+  typed - so you can send <BLAECK.WRITE_COMMANDS> and see that only <LED>
+  and <Ping> show up. That is the whole difference between the two styles.
+
+  A typed switch also names a state signal (here "LED_State"), so a
+  dashboard can display the current state, not just send new ones.
 
   Author: Sebastian Strobl,
   More information on: https://github.com/sebaJoSt/BlaeckSerial
@@ -38,10 +55,25 @@
   Using the sketch:
     - Upload the sketch to your Arduino.
     - Open the Serial Monitor and set the baudrate to 9600 baud.
-    - Type the following command and press enter:
-        <SwitchLED,1>    Turn on the LED
-        <SwitchLED,0>    Turn off the LED
-        <SwitchLED,>     Empty param → uses default (OFF)
+    - Type the following commands and press enter:
+
+        Your own commands:
+        <SwitchLED,1>                 Turn on the LED   (plain)
+        <SwitchLED,0>                 Turn off the LED  (plain)
+        <SwitchLED,>                  Empty param -> uses default (OFF)
+        <LED,1>                       Turn on the LED   (typed switch)
+        <LED,0>                       Turn off the LED  (typed switch)
+        <LED,7>                       Rejected: a switch only accepts 0 or 1
+        <Ping>                        Typed button, takes no value
+        <Print,Bye Bye,1>             String parameters
+
+        Built-in Blaeck commands:
+        <BLAECK.GET_DEVICES>          Writes the device's information to the PC
+        <BLAECK.WRITE_SYMBOLS>        Writes the symbol list to the PC
+        <BLAECK.WRITE_COMMANDS>       Writes the command list to the PC
+                                      Only typed commands appear here, so you
+                                      will see LED and Ping, but not SwitchLED.
+        <BLAECK.WRITE_DATA>           Writes the data to the PC
 */
 
 #include "Arduino.h"
@@ -52,9 +84,16 @@ BlaeckSerial BlaeckSerial;
 
 // Sets the pin number:
 const int ledPin = LED_BUILTIN;
+
+// Mirrors the LED state. Registered as a signal so the typed <LED> command
+// can point at it, which lets a dashboard show the state it is controlling.
+bool ledState = false;
+
 void onSwitchLED(const char *command, const char *const *params, byte paramCount);
-void onSomeCommand(const char *command, const char *const *params, byte paramCount);
+void onLED(const char *command, const char *const *params, byte paramCount);
+void onPing(const char *command, const char *const *params, byte paramCount);
 void onPrint(const char *command, const char *const *params, byte paramCount);
+void setLed(bool on);
 
 void setup()
 {
@@ -64,26 +103,36 @@ void setup()
   // Initialize Serial port
   Serial.begin(9600);
 
-  // Setup BlaeckSerial
-  BlaeckSerial.begin(&Serial, 0);
+  // Setup BlaeckSerial, room for one signal
+  BlaeckSerial.begin(&Serial, 1);
 
-  // Register command handlers (new style)
+  // The state signal the typed switch below refers to
+  BlaeckSerial.addSignal("LED_State", &ledState);
+
+  // Plain: you parse the parameters yourself, nothing is advertised
   BlaeckSerial.onCommand("SwitchLED", onSwitchLED);
-  BlaeckSerial.onCommand("SomeCommand", onSomeCommand);
   BlaeckSerial.onCommand("Print", onPrint);
+
+  // Typed: validated by the library and advertised in <BLAECK.WRITE_COMMANDS>.
+  // A switch is 0/1 and mirrors a state signal; a button carries no value.
+  BlaeckSerial.onSwitchCommand("LED", onLED, F("LED_State"));
+  BlaeckSerial.onButtonCommand("Ping", onPing);
 }
 
 void loop()
 {
   /* Keeps watching for serial input and dispatches registered handlers
-     when input with the correct syntax is detected.
-     Instead of BlaeckSerial.read you can use BlaeckSerial.tick
-     if you want to add signals and write them in a user-set interval
-     (see Basic example).
+     when input with the correct syntax is detected. tick() also writes
+     the signals in a user-set interval; use BlaeckSerial.read() instead
+     if you only want commands and no data (see the Basic example).
   */
-  BlaeckSerial.read();
+  BlaeckSerial.tick();
 }
 
+/* Plain command. You get the raw parameters and decide what they mean,
+   including what an empty one should do. Nothing about this command is
+   advertised, so a host cannot discover it.
+*/
 void onSwitchLED(const char *command, const char *const *params, byte paramCount)
 {
   (void)command;
@@ -95,30 +144,46 @@ void onSwitchLED(const char *command, const char *const *params, byte paramCount
   if (params[0][0] == '\0')
   {
     Serial.println("No state given, using default (OFF).");
-    digitalWrite(ledPin, LOW);
+    setLed(false);
     return;
   }
   int state = atoi(params[0]);
   if (state == 1)
   {
-    digitalWrite(ledPin, HIGH);
+    setLed(true);
     Serial.println("LED is ON.");
     return;
   }
   if (state == 0)
   {
-    digitalWrite(ledPin, LOW);
+    setLed(false);
     Serial.println("LED is OFF.");
     return;
   }
 }
 
-void onSomeCommand(const char *command, const char *const *params, byte paramCount)
+/* Typed switch. The library has already checked that the value is 0 or 1
+   before this runs - <LED,7> is rejected and never reaches the handler -
+   so there is less to guard against here.
+*/
+void onLED(const char *command, const char *const *params, byte paramCount)
+{
+  (void)command;
+  if (paramCount < 1 || params[0][0] == '\0')
+  {
+    return;
+  }
+  setLed(atoi(params[0]) == 1);
+  Serial.println(ledState ? "LED is ON." : "LED is OFF.");
+}
+
+/* Typed button. Carries no value, so there is nothing to parse. */
+void onPing(const char *command, const char *const *params, byte paramCount)
 {
   (void)command;
   (void)params;
   (void)paramCount;
-  // Do something
+  Serial.println("pong");
 }
 
 /* Exemplary command using string parameters:
@@ -147,4 +212,12 @@ void onPrint(const char *command, const char *const *params, byte paramCount)
     Serial.println("This'll be the day that I die");
     return;
   }
+}
+
+// Keeps the pin and the state signal in step, so whichever command was used
+// the dashboard sees the same value.
+void setLed(bool on)
+{
+  ledState = on;
+  digitalWrite(ledPin, on ? HIGH : LOW);
 }
