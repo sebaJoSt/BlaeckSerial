@@ -121,7 +121,7 @@ void onHelpOrList(const char *command, const char *const *params, byte paramCoun
   else if (strcmp(command, "LS") == 0)
   {
     sinfo(), Serial.println(F("<LS> <STATUS> <SIGNAL_ACTIVATE>"));
-    sinfo(), Serial.println(F("<BLAECK.ACTIVATE> <BLAECK.DEACTIVATE> <BLAECK.WRITE_SYMBOLS> <BLAECK.WRITE_DATA> <BLAECK.GET_DEVICES>"));
+    sinfo(), Serial.println(F("<BLAECK.ACTIVATE> <BLAECK.DEACTIVATE> <BLAECK.WRITE_SYMBOLS> <BLAECK.WRITE_COMMANDS> <BLAECK.WRITE_DATA> <BLAECK.GET_DEVICES>"));
     sinfo(), Serial.println(F("Enter <command?> for instructions, e.g. <STATUS?>"));
   }
   else if (strcmp(command, "SIGNAL_ACTIVATE?") == 0)
@@ -157,6 +157,10 @@ void onHelpOrList(const char *command, const char *const *params, byte paramCoun
   else if (strcmp(command, "BLAECK.WRITE_SYMBOLS?") == 0)
   {
     shelp(), Serial.println(F("Writes the symbols in Blaeck format"));
+  }
+  else if (strcmp(command, "BLAECK.WRITE_COMMANDS?") == 0)
+  {
+    shelp(), Serial.println(F("Writes the command list in Blaeck format"));
   }
   else if (strcmp(command, "BLAECK.WRITE_DATA?") == 0)
   {
