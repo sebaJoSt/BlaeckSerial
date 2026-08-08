@@ -11,6 +11,8 @@ void EEPROMAddressSetup()
   // Always get the adresses first and in the same order
   eepromaddress.firmware_version = EEPROM.getAddress(sizeof(char) * 6);
   eepromaddress.signalActivated = EEPROM.getAddress(sizeof(bool) * (MAXIMUM_SIGNALS + 1));
+  eepromaddress.signalFirst = EEPROM.getAddress(sizeof(byte));
+  eepromaddress.signalLast = EEPROM.getAddress(sizeof(byte));
 }
 
 void EEPROMWriteDefaultValuesAtFirmwareUpdate()
@@ -39,6 +41,8 @@ void EEPROMWriteDefaultValuesAtFirmwareUpdate()
       isActivated[i] = true;
     }
     EEPROM.updateBlock<bool>(eepromaddress.signalActivated, isActivated, MAXIMUM_SIGNALS + 1);
+    EEPROM.updateByte(eepromaddress.signalFirst, 1);
+    EEPROM.updateByte(eepromaddress.signalLast, MAXIMUM_SIGNALS);
   }
   // END FIRWARE Update Case
 }
@@ -51,4 +55,14 @@ void EEPROMReadStartupValues()
   {
     sine[i].isActivated = isActivated[i];
   }
+
+  // Clamped rather than trusted: the typed commands guarantee a valid value on
+  // the way in, but EEPROM contents survive a firmware change that this
+  // version marker did not catch.
+  signalFirst = EEPROM.readByte(eepromaddress.signalFirst);
+  signalLast = EEPROM.readByte(eepromaddress.signalLast);
+  if (signalFirst < 1 || signalFirst > MAXIMUM_SIGNALS)
+    signalFirst = 1;
+  if (signalLast < 1 || signalLast > MAXIMUM_SIGNALS)
+    signalLast = MAXIMUM_SIGNALS;
 }

@@ -35,13 +35,18 @@
 //---FIRMWARE
 // FW_VERSION[6] = "X.xxx" +  '\0' (total 6 chars)
 // Updating FW_VERSION initializes EEPROM
-const char FW_VERSION[6] = "1.000";
+// 1.001 added signalFirst / signalLast to the EEPROM layout; the bump makes
+// boards that still hold the 1.000 layout re-initialize instead of reading
+// uninitialized bytes (255) as their range bounds.
+const char FW_VERSION[6] = "1.001";
 
 // EEPROM
 struct EEPROMaddress
 { // use int for all addresses
   int firmware_version;
   int signalActivated;
+  int signalFirst;
+  int signalLast;
 } eepromaddress;
 
 //---INSTANCES

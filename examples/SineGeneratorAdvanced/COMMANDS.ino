@@ -13,6 +13,7 @@ void onSetSignalFirst(const char *command, const char *const *params, byte param
   if (paramCount >= 1 && params[0][0] != '\0')
   {
     signalFirst = (byte)atoi(params[0]);
+    EEPROM.updateByte(eepromaddress.signalFirst, signalFirst);
     BlaeckSerial.write("Signal_First", signalFirst);
   }
 }
@@ -23,6 +24,7 @@ void onSetSignalLast(const char *command, const char *const *params, byte paramC
   if (paramCount >= 1 && params[0][0] != '\0')
   {
     signalLast = (byte)atoi(params[0]);
+    EEPROM.updateByte(eepromaddress.signalLast, signalLast);
     BlaeckSerial.write("Signal_Last", signalLast);
   }
 }
