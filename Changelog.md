@@ -54,6 +54,12 @@ All notable changes to this project will be documented in this file.
   AVR boards conservative at 6 handlers. This allows command-rich examples such
   as `WaveformGenerator` to register their full command set without custom
   compile-time overrides.
+- `BlaeckSerial.h` now includes the `CRC.h` umbrella header instead of
+  `<CRC32.h>` and `<CRC16.h>` individually, matching BlaeckTCP, which switched
+  in 6.0.1 after the individual headers collided with core headers on
+  ArduinoCore-mbed. Preventive here — the collision does not reproduce on
+  `arduino:mbed_giga` 4.6.0 with CRC 1.0.4 — and there is no functional change;
+  flash is byte-identical, since the unused CRC variants are declarations only.
 
 ### Fixed
 - **Compile-time configuration now has a documented, working route.** A
