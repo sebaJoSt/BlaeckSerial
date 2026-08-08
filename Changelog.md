@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## [7.0.0] - 2026-08-08
 
+### Breaking
+- **Client compatibility:** string signals introduce a new signal value type
+  (`0xA`) in the binary data frame. Clients must support this variable-length
+  type to decode any frame containing a string signal. Depending on their
+  implementation, clients without support may lose sync, drop data, or fail on
+  such frames. Devices using only numeric signals remain compatible. This
+  matches BlaeckTCP 7.0.0, which carries the identical requirement.
+- **I2C master/slave removal**, detailed under Removed below. Together with the
+  new client requirement above, this is why 7.0.0 is a major release.
+
 ### Added
 - Command acknowledgement (`0xF0` frame): after dispatching an inbound command
   the device replies on the serial host with an FNV-1a hash of the received
