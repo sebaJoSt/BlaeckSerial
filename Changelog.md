@@ -50,8 +50,7 @@ All notable changes to this project will be documented in this file.
   has been removed: `beginMaster(...)` / `beginSlave(...)`, the `MasterSlaveConfig`
   modes, slave discovery/scanning, per-signal `prefixSlaveID`, the `@<slaveID>:`
   command-routing prefix, master-side command-catalog aggregation, and the
-  `<Wire.h>` dependency. BlaeckSerial is now single-board only; use
-  [BlaeckTCP](https://github.com/sebaJoSt/BlaeckTCP) for multi-device setups.
+  `<Wire.h>` dependency. BlaeckSerial is now single-board only.
   The on-the-wire frame layout is unchanged — the per-record master/slave-config
   and slave-ID bytes are still emitted (always `0`), so existing Blaeck hosts
   (e.g. Loggbok) need no changes.
