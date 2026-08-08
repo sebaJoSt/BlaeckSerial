@@ -36,10 +36,20 @@ All notable changes to this project will be documented in this file.
   stored as signal data. Only Single and Master boards write to the host; on a
   Slave the call is a no-op (with a debug notice), since a slave has no direct
   host link — report slave status from the master.
+- **Text command (`onTextCommand`).** New typed command helper
+  `onTextCommand(command, handler, stateSignal = nullptr, maxLength = 255)` for
+  a Home Assistant text entity. The host sends the value percent-encoded (so
+  commas and other frame delimiters survive); the device percent-decodes it in
+  place before the handler runs and rejects values longer than `maxLength`
+  (`0xF0` reason `TOO_LONG`). The max length is advertised in the `0xE0` command
+  entry (flag bit 4, LE uint16). Like the other typed commands it works on
+  Single/Master boards and on slaves reached via the `@<slaveID>:` routing
+  prefix (the owning board decodes and length-checks its own text command).
+  Requires `BLAECK_ENABLE_COMMAND_META`.
 - Added the `WaveformGenerator` example, registered with the typed command
   helpers (`onNumberCommand` / `onSelectCommand` / `onSwitchCommand` /
-  `onButtonCommand`) so the device is self-describing for Loggbok / Home
-  Assistant MQTT auto-discovery.
+  `onTextCommand` / `onButtonCommand`) so the device is self-describing for
+  Loggbok / Home Assistant MQTT auto-discovery.
 
 ### Changed
 - Increased the default AVR command-handler limit on larger-SRAM AVR boards

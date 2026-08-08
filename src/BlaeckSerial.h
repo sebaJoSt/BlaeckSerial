@@ -308,7 +308,8 @@ enum BlaeckCommandKind
   BLAECK_CMD_NUMBER = 1, // HA number   (value in [min,max])
   BLAECK_CMD_SWITCH = 2, // HA switch   (0/1)
   BLAECK_CMD_SELECT = 3, // HA select   (index into optionsCsv)
-  BLAECK_CMD_BUTTON = 4  // HA button   (no value)
+  BLAECK_CMD_BUTTON = 4, // HA button   (no value)
+  BLAECK_CMD_TEXT = 5    // HA text     (free text, percent-encoded on the wire)
 };
 
 // Acknowledgement reason for the 0xF0 Command Ack frame. Sent back to the
@@ -562,6 +563,16 @@ public:
                        const __FlashStringHelper *stateSignal,
                        const __FlashStringHelper *optionsCsv);
   bool onButtonCommand(const char *command, BlaeckCommandHandler handler);
+  // HA text entity: the host sends the value percent-encoded (so commas and other
+  // delimiters survive the frame); the device percent-decodes it in place before
+  // the handler runs, so the handler receives the raw UTF-8 text. maxLength is the
+  // advertised limit (in decoded bytes) enforced before dispatch; a longer value
+  // is rejected (BLAECK_ACK_TOO_LONG). Like the other typed commands this works on
+  // Single/Master boards and on slaves reached via the "@<slaveID>:" routing
+  // prefix (the owning board decodes and length-checks its own text command).
+  bool onTextCommand(const char *command, BlaeckCommandHandler handler,
+                     const __FlashStringHelper *stateSignal = nullptr,
+                     unsigned int maxLength = 255);
 
   // ----- Before data write callback  -----
   // Called just before signal data is sent.
@@ -626,6 +637,7 @@ private:
                         const __FlashStringHelper *unit,
                         const __FlashStringHelper *options);
   byte _validateTypedCommand(byte handlerIndex);
+  static void _percentDecodeInPlace(char *s);
   static byte _flashCsvOptionCount(const __FlashStringHelper *csv);
   static long _flashCsvIndexOf(const __FlashStringHelper *csv, const char *value);
 

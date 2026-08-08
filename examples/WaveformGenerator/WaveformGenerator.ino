@@ -5,7 +5,7 @@
 
   It generates one fully controllable waveform. Frequency, amplitude, offset and waveform
   shape are all set over MQTT commands. The commands are registered with typed helpers
-  (onNumberCommand / onSelectCommand / onSwitchCommand / onButtonCommand) so the device is
+  (onNumberCommand / onSelectCommand / onSwitchCommand / onTextCommand / onButtonCommand) so the device is
   self-describing: it advertises range, unit, options and the mirrored signal in a 0xE0
   "Command List" frame, which Loggbok turns into Home Assistant MQTT Discovery entities.
   Out-of-range values are rejected by the library (and reported on the debug stream); each
@@ -29,6 +29,7 @@
     SET_OFFSET  <-100..100> DC offset                 -> Offset     (HA number, step 0.1)
     SET_WAVE    <0..3>      Sine/Square/Triangle/Saw  -> Waveform   (HA select; name or index)
     SET_ENABLE  <0|1>       output on/off             -> Enabled    (HA switch)
+    SET_LABEL   <text>      free-text label (<=20)                  (HA text; open-loop)
     STATUS                  print info to serial                    (HA button)
 
   Loggbok CLI (log fast enough to resolve the wave, e.g. 20 ms):
@@ -50,6 +51,7 @@ float Amplitude = 1.0;
 float Offset = 0.0;
 byte Waveform = 0; // 0=Sine, 1=Square, 2=Triangle, 3=Sawtooth
 bool Enabled = true;
+char Label[24] = "wave"; // free-text label set via SET_LABEL
 
 //---COMMAND HANDLERS
 void onSetFreq(const char *command, const char *const *params, byte paramCount);
@@ -57,6 +59,7 @@ void onSetAmp(const char *command, const char *const *params, byte paramCount);
 void onSetOffset(const char *command, const char *const *params, byte paramCount);
 void onSetWave(const char *command, const char *const *params, byte paramCount);
 void onSetEnable(const char *command, const char *const *params, byte paramCount);
+void onSetLabel(const char *command, const char *const *params, byte paramCount);
 void onStatus(const char *command, const char *const *params, byte paramCount);
 
 //---GENERATOR STATE
@@ -84,6 +87,9 @@ void setup()
   BlaeckSerial.onNumberCommand("SET_OFFSET", onSetOffset, F("Offset"), -100.0f, 100.0f, 0.1f);
   BlaeckSerial.onSelectCommand("SET_WAVE", onSetWave, F("Waveform"), F("Sine,Square,Triangle,Sawtooth"));
   BlaeckSerial.onSwitchCommand("SET_ENABLE", onSetEnable, F("Enabled"));
+  // HA text: open-loop (no state signal until string signals land). The host
+  // percent-encodes the value; the device decodes it and enforces the 20-byte max.
+  BlaeckSerial.onTextCommand("SET_LABEL", onSetLabel, nullptr, 20);
   BlaeckSerial.onButtonCommand("STATUS", onStatus);
 
   lastMicros = micros();
@@ -181,11 +187,22 @@ void onSetEnable(const char *command, const char *const *params, byte paramCount
   BlaeckSerial.write("Enabled", Enabled);
 }
 
+void onSetLabel(const char *command, const char *const *params, byte paramCount)
+{
+  // params[0] is already percent-decoded and length-checked by the library.
+  if (paramCount >= 1 && params[0] != nullptr)
+  {
+    strncpy(Label, params[0], sizeof(Label) - 1);
+    Label[sizeof(Label) - 1] = '\0';
+  }
+}
+
 void onStatus(const char *command, const char *const *params, byte paramCount)
 {
   Serial.print(F("Enabled=")), Serial.print(Enabled);
   Serial.print(F(" Wave=")), Serial.print(Waveform);
   Serial.print(F(" Freq=")), Serial.print(Frequency);
   Serial.print(F(" Amp=")), Serial.print(Amplitude);
-  Serial.print(F(" Offset=")), Serial.println(Offset);
+  Serial.print(F(" Offset=")), Serial.print(Offset);
+  Serial.print(F(" Label=")), Serial.println(Label);
 }

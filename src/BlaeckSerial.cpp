@@ -804,6 +804,22 @@ bool BlaeckSerial::onButtonCommand(const char *command, BlaeckCommandHandler han
   return ok;
 }
 
+bool BlaeckSerial::onTextCommand(const char *command, BlaeckCommandHandler handler,
+                                 const __FlashStringHelper *stateSignal,
+                                 unsigned int maxLength)
+{
+  bool ok = onCommand(command, handler);
+#if BLAECK_ENABLE_COMMAND_META
+  if (ok)
+    // maxLength is stored in meta_max (reused as the text length limit).
+    _annotateCommand(command, BLAECK_CMD_TEXT, stateSignal, 0.0f, (float)maxLength, 0.0f, nullptr, nullptr);
+#else
+  (void)stateSignal;
+  (void)maxLength;
+#endif
+  return ok;
+}
+
 #if BLAECK_ENABLE_COMMAND_META
 void BlaeckSerial::_annotateCommand(const char *command, uint8_t kind,
                                     const __FlashStringHelper *stateSignal,
@@ -1336,8 +1352,64 @@ byte BlaeckSerial::_validateTypedCommand(byte handlerIndex)
     snprintf(_selectIndexScratch, sizeof(_selectIndexScratch), "%ld", idx);
     _parsedParamPtrs[0] = _selectIndexScratch;
   }
+  else if (e.kind == BLAECK_CMD_TEXT)
+  {
+    // Percent-decode in place (SELECT-style param normalization) so the handler
+    // receives raw UTF-8. The 0xF0 ack still hashes the encoded receivedChars,
+    // so it keeps matching the host's hash of what it sent.
+    char *decoded = (char *)_parsedParamPtrs[0];
+    _percentDecodeInPlace(decoded);
+
+    unsigned int maxLen = (unsigned int)e.meta_max;
+    if (maxLen > 0 && strlen(decoded) > maxLen)
+    {
+      if (_debugStream != nullptr)
+      {
+        _debugStream->print(F("Command rejected (text too long): "));
+        _debugStream->print(e.command);
+        _debugStream->print(F(" len="));
+        _debugStream->print((unsigned int)strlen(decoded));
+        _debugStream->print(F(" max="));
+        _debugStream->println(maxLen);
+      }
+      return BLAECK_ACK_TOO_LONG;
+    }
+  }
 
   return BLAECK_ACK_OK;
+}
+
+void BlaeckSerial::_percentDecodeInPlace(char *s)
+{
+  if (s == nullptr)
+    return;
+
+  const char *src = s;
+  char *dst = s;
+  while (*src != '\0')
+  {
+    if (*src == '%' && src[1] != '\0' && src[2] != '\0')
+    {
+      char hi = src[1];
+      char lo = src[2];
+      int hiVal = (hi >= '0' && hi <= '9') ? hi - '0'
+                  : (hi >= 'a' && hi <= 'f') ? hi - 'a' + 10
+                  : (hi >= 'A' && hi <= 'F') ? hi - 'A' + 10
+                                             : -1;
+      int loVal = (lo >= '0' && lo <= '9') ? lo - '0'
+                  : (lo >= 'a' && lo <= 'f') ? lo - 'a' + 10
+                  : (lo >= 'A' && lo <= 'F') ? lo - 'A' + 10
+                                             : -1;
+      if (hiVal >= 0 && loVal >= 0)
+      {
+        *dst++ = (char)((hiVal << 4) | loVal);
+        src += 3;
+        continue;
+      }
+    }
+    *dst++ = *src++;
+  }
+  *dst = '\0';
 }
 #endif
 
@@ -1456,6 +1528,8 @@ long BlaeckSerial::_emitLocalCommandBlob(long windowStart, long windowLen)
       flags |= 0x04;
     if (e.stateSignal != nullptr)
       flags |= 0x08;
+    if (e.kind == BLAECK_CMD_TEXT)
+      flags |= 0x10;
 
     BLB_EMIT(_masterSlaveConfig);
     BLB_EMIT(_slaveID);
@@ -1500,6 +1574,12 @@ long BlaeckSerial::_emitLocalCommandBlob(long windowStart, long windowLen)
       while ((c = pgm_read_byte(p++)) != 0)
         BLB_EMIT(c);
       BLB_EMIT(0);
+    }
+    if (flags & 0x10)
+    {
+      uint16_t maxLen = (uint16_t)e.meta_max;
+      BLB_EMIT((byte)(maxLen & 0xFF));
+      BLB_EMIT((byte)((maxLen >> 8) & 0xFF));
     }
   }
 
@@ -3115,7 +3195,8 @@ void BlaeckSerial::writeLocalCommands(unsigned long msg_id, bool send_eol)
   //   [unit\0]                 if flags.hasUnit
   //   [optionsCsv\0]           if flags.hasOptions
   //   [stateSignal\0]          if flags.hasStateSignal
-  // flags bits: 0=hasRange 1=hasUnit 2=hasOptions 3=hasStateSignal
+  //   [maxLen(2)]              if flags.isText     (LE uint16)
+  // flags bits: 0=hasRange 1=hasUnit 2=hasOptions 3=hasStateSignal 4=isText
   // All in-use entries are emitted, including plain onCommand() entries
   // (kind=BLAECK_CMD_PLAIN, flags=0, no trailing metadata). Plain entries carry
   // no Home Assistant entity, but are listed so a host can build a full command
@@ -3140,6 +3221,8 @@ void BlaeckSerial::writeLocalCommands(unsigned long msg_id, bool send_eol)
         flags |= 0x04;
       if (e.stateSignal != nullptr)
         flags |= 0x08;
+      if (e.kind == BLAECK_CMD_TEXT)
+        flags |= 0x10;
 
       _bufByte(_masterSlaveConfig);
       _bufByte(_slaveID);
@@ -3162,6 +3245,12 @@ void BlaeckSerial::writeLocalCommands(unsigned long msg_id, bool send_eol)
         _bufFlashStr0(e.options);
       if (flags & 0x08)
         _bufFlashStr0(e.stateSignal);
+      if (flags & 0x10)
+      {
+        uint16_t maxLen = (uint16_t)e.meta_max;
+        _bufByte((byte)(maxLen & 0xFF));
+        _bufByte((byte)((maxLen >> 8) & 0xFF));
+      }
     }
 
     if (send_eol)
@@ -3195,6 +3284,8 @@ void BlaeckSerial::writeLocalCommands(unsigned long msg_id, bool send_eol)
         flags |= 0x04;
       if (e.stateSignal != nullptr)
         flags |= 0x08;
+      if (e.kind == BLAECK_CMD_TEXT)
+        flags |= 0x10;
 
       StreamRef->write(_masterSlaveConfig);
       StreamRef->write(_slaveID);
@@ -3226,6 +3317,12 @@ void BlaeckSerial::writeLocalCommands(unsigned long msg_id, bool send_eol)
       {
         StreamRef->print(e.stateSignal);
         StreamRef->write((byte)0);
+      }
+      if (flags & 0x10)
+      {
+        uint16_t maxLen = (uint16_t)e.meta_max;
+        StreamRef->write((byte)(maxLen & 0xFF));
+        StreamRef->write((byte)((maxLen >> 8) & 0xFF));
       }
     }
 
