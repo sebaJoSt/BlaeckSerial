@@ -118,8 +118,9 @@ All notable changes to this project will be documented in this file.
   - Enabled by default on non-AVR boards, disabled on AVR to save SRAM.
   - Runtime control: `setBufferedWrites(bool)` / `isBufferedWrites()`.
 - Compile-time configuration via `BlaeckSerialConfig.h` in the sketch folder
-  (uses `__has_include`) — *see 7.0.0: the sketch-folder location never worked
-  under the Arduino IDE; only PlatformIO `build_flags` took effect.*
+  (uses `__has_include`) — *see 7.0.0: a config file in the sketch folder is not
+  found by the Arduino IDE or arduino-cli, so following this literally had no
+  effect there. PlatformIO `build_flags` always worked.*
   All command parser defaults and buffered writes can
   now be overridden without modifying library source. PlatformIO users can
   also use `-D` compiler flags.
