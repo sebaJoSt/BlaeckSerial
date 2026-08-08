@@ -42,7 +42,7 @@ double doubleTest[2] = {-1.79769313486231570E+308, 1.79769313486231570E+308};
 void setup()
 {
   // Initialize Serial port
-  Serial.begin(9600);
+  Serial.begin(115200);
 
   // Initialize BlaeckSerial
   BlaeckSerial.begin(&Serial, 27);

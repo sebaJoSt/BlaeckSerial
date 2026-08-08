@@ -10,7 +10,7 @@
 
   Setup:
     Upload the sketch to your Arduino.
-    Open the Serial Monitor and set the baudrate to 9600 baud.
+    Open the Serial Monitor and set the baudrate to 115200 baud.
     Type the following commands and press enter:
 
     <BLAECK.GET_DEVICES>              Writes the device's information to the PC
@@ -40,7 +40,7 @@ BlaeckSerial BlaeckSerial;
 
 void setup()
 {
-  Serial.begin(9600);
+  Serial.begin(115200);
 
   sht31.begin(0x44);
   // sht31.heater(true);
