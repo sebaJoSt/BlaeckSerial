@@ -2796,6 +2796,19 @@ unsigned long long BlaeckSerial::getTimeStamp()
   return timestamp;
 }
 
+// Compiled here, so it reports the settings BlaeckSerial.cpp itself saw.
+unsigned long BlaeckSerial::configFingerprint() const
+{
+  return BLAECK_CONFIG_FINGERPRINT;
+}
+
+// sketchFingerprint defaults to BLAECK_CONFIG_FINGERPRINT at the CALL SITE,
+// so a caller in another translation unit passes that unit's own value.
+bool BlaeckSerial::configMatchesLibrary(unsigned long sketchFingerprint) const
+{
+  return sketchFingerprint == BLAECK_CONFIG_FINGERPRINT;
+}
+
 void BlaeckSerial::validatePlatformSizes()
 {
 #ifdef __AVR__
