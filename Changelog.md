@@ -5,46 +5,24 @@ All notable changes to this project will be documented in this file.
 ## [7.0.0] - 2026-08-08
 
 ### Added
-- **Command routing to a specific master/slave board.** A command frame may now
-  carry an optional `@<slaveID>:` routing prefix (for example
-  `<@3:SET_FREQ,1.5>`). When a master receives a prefixed frame it forwards the
-  command to the addressed slave over I2C (wire-mode 6, single-shot delivery)
-  instead of executing it locally; frames without a prefix keep the previous
-  local-execution behaviour. This lets a single host control several boards that
-  share identical command names (see Loggbok / Home Assistant auto-discovery).
-- **Master-side command-catalog aggregation.** A master now answers
-  `BLAECK.WRITE_COMMANDS` with its own command entries *plus* every found slave's
-  command entries, so the host sees the full multi-board command palette in one
-  `0xE0` frame. Each slave streams its catalog as a length-prefixed byte stream
-  over a new I2C wire-mode (5); the master appends it verbatim. The slave
-  serializes its command entries on the fly per I2C chunk (no RAM staging
-  buffer), so the feature costs no extra SRAM and has no fixed catalog-size cap.
-  Requires `BLAECK_ENABLE_COMMAND_META`.
 - Command acknowledgement (`0xF0` frame): after dispatching an inbound command
   the device replies on the serial host with an FNV-1a hash of the received
   command plus an accept/reject status and reason code, so a host (e.g. Loggbok)
-  can confirm the command was applied. For a command routed to a slave with the
-  `@<slaveID>:` prefix the master owns the ack and hashes the exact received
-  frame (prefix included), confirming delivery to the slave; the slave does not
-  ack over I2C. Like `0xE0`, the frame carries no CRC; hosts that don't
-  recognize the key ignore it.
+  can confirm the command was applied. Like `0xE0`, the frame carries no CRC;
+  hosts that don't recognize the key ignore it.
 - **Message frame (`0x90`).** New `writeMessage(channelName, text[, messageID])`
   sends a free-text status/log message on a named channel to the serial host
   (byte-exact with BlaeckTCP 7.0.0): a host may surface it as an auto-created
   Home Assistant text sensor per channel name. The text is length-prefixed
   (LE uint16, capped at 65535 bytes) and the frame carries no CRC; it is never
-  stored as signal data. Only Single and Master boards write to the host; on a
-  Slave the call is a no-op (with a debug notice), since a slave has no direct
-  host link — report slave status from the master.
+  stored as signal data.
 - **Text command (`onTextCommand`).** New typed command helper
   `onTextCommand(command, handler, stateSignal = nullptr, maxLength = 255)` for
   a Home Assistant text entity. The host sends the value percent-encoded (so
   commas and other frame delimiters survive); the device percent-decodes it in
   place before the handler runs and rejects values longer than `maxLength`
   (`0xF0` reason `TOO_LONG`). The max length is advertised in the `0xE0` command
-  entry (flag bit 4, LE uint16). Like the other typed commands it works on
-  Single/Master boards and on slaves reached via the `@<slaveID>:` routing
-  prefix (the owning board decodes and length-checks its own text command).
+  entry (flag bit 4, LE uint16).
   Requires `BLAECK_ENABLE_COMMAND_META`.
 - **String signals (`addSignal(name, char *value)`).** New signal data type
   `Blaeck_string` (symbol code `0xA`) for reporting textual values (labels,
@@ -53,10 +31,8 @@ All notable changes to this project will be documented in this file.
   BlaeckTCP 7.0.0, the value lives in a user-owned buffer and is read live on
   each transmit. Matching `write(name/index, char *value)` setters repoint the
   buffer and transmit that one signal; you may also update the buffer in place
-  and let the periodic transmit pick it up. String signals are also carried over I2C from a slave to the master: because the
-  self-describing wire chunk must fit in one I2C window, a string is truncated
-  on the wire to `BLAECK_WIRE_BUFFER_SIZE - 6` bytes (25 with the default
-  32-byte buffer); direct Serial (Single/Master) transmits up to 255 bytes.
+  and let the periodic transmit pick it up. A string is transmitted up to 255
+  bytes.
 - Added the `WaveformGenerator` example, registered with the typed command
   helpers (`onNumberCommand` / `onSelectCommand` / `onSwitchCommand` /
   `onTextCommand` / `onButtonCommand`) so the device is self-describing for
@@ -68,6 +44,17 @@ All notable changes to this project will be documented in this file.
   AVR boards conservative at 6 handlers. This allows command-rich examples such
   as `WaveformGenerator` to register their full command set without custom
   compile-time overrides.
+
+### Removed
+- **I2C master/slave support (breaking).** All I2C master/slave functionality
+  has been removed: `beginMaster(...)` / `beginSlave(...)`, the `MasterSlaveConfig`
+  modes, slave discovery/scanning, per-signal `prefixSlaveID`, the `@<slaveID>:`
+  command-routing prefix, master-side command-catalog aggregation, and the
+  `<Wire.h>` dependency. BlaeckSerial is now single-board only; use
+  [BlaeckTCP](https://github.com/sebaJoSt/BlaeckTCP) for multi-device setups.
+  The on-the-wire frame layout is unchanged — the per-record master/slave-config
+  and slave-ID bytes are still emitted (always `0`), so existing Blaeck hosts
+  (e.g. Loggbok) need no changes.
 
 ## [6.0.1] - 2026-04-27
 

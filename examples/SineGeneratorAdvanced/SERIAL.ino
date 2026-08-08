@@ -37,18 +37,6 @@ void PrintInfo(bool IsStartUp)
     Serial.println(BLAECKSERIAL_VERSION);
   }
 
-  //--MASTER SLAVE MODE
-  sinfo(), Serial.print(F("BlaeckSerial Mode: "));
-  if (masterSlaveMode == 0)
-    Serial.println(F("Single Mode"));
-  if (masterSlaveMode == 1)
-    Serial.println(F("Master Mode"));
-  if (masterSlaveMode == 2)
-  {
-    Serial.print(F("Slave Mode ID:"));
-    Serial.println(slaveID);
-  }
-
   //--ACTIVATED SIGNALS INFO
   sinfo(), Serial.print(F("Activated signals ("));
   byte active_count = 0;

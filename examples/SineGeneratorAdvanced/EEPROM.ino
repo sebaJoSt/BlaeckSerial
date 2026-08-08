@@ -11,8 +11,6 @@ void EEPROMAddressSetup()
   // Always get the adresses first and in the same order
   eepromaddress.firmware_version = EEPROM.getAddress(sizeof(char) * 6);
   eepromaddress.signalActivated = EEPROM.getAddress(sizeof(bool) * (MAXIMUM_SIGNALS + 1));
-  eepromaddress.masterSlaveMode = EEPROM.getAddress(sizeof(int));
-  eepromaddress.slaveID = EEPROM.getAddress(sizeof(int));
 }
 
 void EEPROMWriteDefaultValuesAtFirmwareUpdate()
@@ -41,17 +39,12 @@ void EEPROMWriteDefaultValuesAtFirmwareUpdate()
       isActivated[i] = true;
     }
     EEPROM.updateBlock<bool>(eepromaddress.signalActivated, isActivated, MAXIMUM_SIGNALS + 1);
-    EEPROM.updateByte(eepromaddress.masterSlaveMode, 0);
-    EEPROM.updateByte(eepromaddress.slaveID, 1);
   }
   // END FIRWARE Update Case
 }
 
 void EEPROMReadStartupValues()
 {
-  masterSlaveMode = EEPROM.readByte(eepromaddress.masterSlaveMode);
-  slaveID = EEPROM.readByte(eepromaddress.slaveID);
-
   bool isActivated[MAXIMUM_SIGNALS + 1];
   EEPROM.readBlock<bool>(eepromaddress.signalActivated, isActivated, MAXIMUM_SIGNALS + 1);
   for (byte i = 0; i <= MAXIMUM_SIGNALS; i++)

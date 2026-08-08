@@ -8,10 +8,9 @@
   - EEPROMEx Library
 
   Features:
-  - EEPROM stores state (firmware version marker, signal activation mask, master/slave mode, slave ID)
+  - EEPROM stores state (firmware version marker, signal activation mask)
   - Signals can be (de-)activated with <SIGNAL_ACTIVATE>
   - Print status with <STATUS>
-  - Master/Slave mode can be configured with <MASTER_SLAVE_MODE>
 */
 
 #include "Arduino.h"
@@ -28,16 +27,10 @@ struct EEPROMaddress
 { // use int for all addresses
   int firmware_version;
   int signalActivated;
-  int masterSlaveMode;
-  int slaveID;
 } eepromaddress;
 
 //---INSTANCES
 BlaeckSerial BlaeckSerial;
-
-//---SINGLE/MASTER/SLAVE-CONFIG
-byte masterSlaveMode;
-byte slaveID;
 
 //---SIGNALS
 #define MAXIMUM_SIGNALS 25
@@ -50,7 +43,6 @@ struct BlaeckSignal
 
 // Forward declarations for command handlers
 void onSignalActivate(const char *command, const char *const *params, byte paramCount);
-void onMasterSlaveMode(const char *command, const char *const *params, byte paramCount);
 void onStatus(const char *command, const char *const *params, byte paramCount);
 void onHelpOrList(const char *command, const char *const *params, byte paramCount);
 
@@ -66,26 +58,13 @@ void setup()
   EEPROMConfiguration();
 
   Serial.begin(115200);
-  if (masterSlaveMode == 0)
-  { // Single Mode
-    BlaeckSerial.begin(&Serial, MAXIMUM_SIGNALS);
-  }
-  else if (masterSlaveMode == 1)
-  { // Master Mode
-    BlaeckSerial.beginMaster(&Serial, MAXIMUM_SIGNALS, 400000L);
-  }
-  else if (masterSlaveMode == 2)
-  { // Slave Mode
-    BlaeckSerial.beginSlave(&Serial, MAXIMUM_SIGNALS, slaveID);
-  }
+  BlaeckSerial.begin(&Serial, MAXIMUM_SIGNALS);
 
   BlaeckSerial.DeviceName = "Advanced Sine Number Generator";
   BlaeckSerial.DeviceHWVersion = "Arduino Mega 2560 Rev3";
   BlaeckSerial.DeviceFWVersion = FW_VERSION;
 
   BlaeckSerial.onCommand("SIGNAL_ACTIVATE", onSignalActivate);
-  BlaeckSerial.onCommand("MASTER_SLAVE_MODE", onMasterSlaveMode);
-  BlaeckSerial.onCommand("MSM", onMasterSlaveMode);
   BlaeckSerial.onCommand("STATUS", onStatus);
   BlaeckSerial.onAnyCommand(onHelpOrList);
 
@@ -116,14 +95,7 @@ void UpdateSineNumbers()
     for (byte i = 1; i <= MAXIMUM_SIGNALS; i++)
     {
       float val = i * sin(millis() * 0.000005 * i);
-
-      // In Slave mode the I2C ISR can read signal values at any time.
-      // Disable interrupts briefly so the 4-byte float write is atomic.
-      if (masterSlaveMode == 2)
-        noInterrupts();
       sine[i].value = val;
-      if (masterSlaveMode == 2)
-        interrupts();
     }
   }
 }

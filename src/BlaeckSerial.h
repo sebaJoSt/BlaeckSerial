@@ -3,7 +3,6 @@
         Author: Sebastian Strobl
 
     A library which extends Serial functionality to transmit binary data.
-    It supports Master/Slave I2C configuration to include data from slaves.
     Also included is a Message Parser for incoming data in the syntax of
     <HelloWorld, 12, 47>. The parsed command 'HelloWorld' and its parameters
     are available in your own sketch by attaching a callback function.
@@ -23,126 +22,12 @@
 #define BLAECKSERIAL_VERSION_PATCH 0
 #define BLAECKSERIAL_NAME "BlaeckSerial"
 
-#include <Wire.h>
 #include <Arduino.h>
 #include <CRC32.h>
 #include <CRC16.h>
 #include <new>
 #include <string.h>
 #include <limits.h>
-
-// ---------------------------------------------------------------------------
-// Command routing / I2C command framing helpers (transport-agnostic).
-//
-// Pure helpers that parse the optional "@<slaveID>:" command routing prefix and
-// build/reassemble the master->slave command frames carried over I2C. Kept
-// dependency-free (only <stdint.h>/<string.h>) so the same logic is easy to
-// reason about and reuse.
-//
-// Routing prefix grammar (see blaeck-protocol):
-//     <@<slaveID>:NAME,arg1,...>
-// A leading '@', 1..3 decimal digits (0..127), then ':' addresses a specific
-// master/slave board. Loggbok prepends it so a master can forward a command to
-// the correct board even when boards share command names. Frames without the
-// prefix are executed locally (unchanged legacy behaviour).
-// ---------------------------------------------------------------------------
-
-// Maximum addressable I2C slave id (7-bit addressing).
-#define BLAECK_ROUTING_MAX_SLAVE_ID 127
-
-// I2C wire-mode byte that marks a single-shot master->slave command delivery.
-#define BLAECK_WIRE_MODE_COMMAND 6
-
-// I2C wire-mode byte that requests a slave's command-catalog blob (0xE0 entries)
-// for master-side aggregation. The reply is length-prefixed: the first two bytes
-// of the first chunk are the total blob length (little-endian uint16), followed
-// by exactly that many bytes of concatenated command entries spread across
-// BLAECK_WIRE_BUFFER_SIZE-sized requestFrom() chunks.
-#define BLAECK_WIRE_MODE_COMMAND_LIST 5
-
-// Writes a little-endian uint16 length into a 2-byte buffer.
-static inline void blaeckPutLen16(uint8_t *out, uint16_t len)
-{
-  out[0] = (uint8_t)(len & 0xFF);
-  out[1] = (uint8_t)((len >> 8) & 0xFF);
-}
-
-// Reads a little-endian uint16 length from a 2-byte buffer.
-static inline uint16_t blaeckGetLen16(const uint8_t *in)
-{
-  return (uint16_t)in[0] | ((uint16_t)in[1] << 8);
-}
-
-// Parses an optional "@<slaveID>:" routing prefix at the start of `buf`.
-// If present and well-formed (leading '@', 1..3 decimal digits forming an id in
-// 0..127, then ':'), writes the id to *slaveID, shifts the remaining command
-// text to the front of `buf` in place (NUL-terminated), and returns true.
-// Otherwise leaves `buf` unchanged and returns false. `buf` must be NUL-terminated.
-static inline bool blaeckParseRoutingTarget(char *buf, uint8_t *slaveID)
-{
-  if (buf == NULL || buf[0] != '@')
-    return false;
-
-  const char *p = buf + 1;
-  unsigned int id = 0;
-  int digits = 0;
-  while (p[0] >= '0' && p[0] <= '9' && digits < 3)
-  {
-    id = id * 10u + (unsigned int)(p[0] - '0');
-    p++;
-    digits++;
-  }
-
-  if (digits == 0 || p[0] != ':' || id > BLAECK_ROUTING_MAX_SLAVE_ID)
-    return false;
-
-  p++; // consume ':'
-  size_t remaining = strlen(p);
-  memmove(buf, p, remaining + 1); // include the NUL
-
-  if (slaveID != NULL)
-    *slaveID = (uint8_t)id;
-  return true;
-}
-
-// Builds a single-shot mode-6 command frame into `out`: the mode byte followed
-// by the (possibly truncated) payload. Returns the total number of bytes written.
-// `outSize` is the capacity of `out` (should be the I2C wire buffer size); the
-// payload is truncated so the frame never exceeds it.
-static inline int blaeckBuildCommandFrame(const char *payload, uint8_t *out, size_t outSize)
-{
-  if (out == NULL || outSize < 1)
-    return 0;
-
-  out[0] = BLAECK_WIRE_MODE_COMMAND;
-  size_t maxPayload = outSize - 1;
-  size_t len = payload != NULL ? strlen(payload) : 0;
-  if (len > maxPayload)
-    len = maxPayload;
-
-  for (size_t i = 0; i < len; i++)
-    out[1 + i] = (uint8_t)payload[i];
-
-  return (int)(1 + len);
-}
-
-// Reassembles the command text from a received mode-6 frame (`bytes` includes
-// the leading mode byte). Writes a NUL-terminated command string into `out` and
-// returns its length, or -1 if `bytes` is not a mode-6 frame. The result is
-// truncated to fit `outSize`.
-static inline int blaeckReassembleCommand(const uint8_t *bytes, int numBytes, char *out, size_t outSize)
-{
-  if (out == NULL || outSize < 1)
-    return -1;
-  if (bytes == NULL || numBytes < 1 || bytes[0] != BLAECK_WIRE_MODE_COMMAND)
-    return -1;
-
-  size_t n = 0;
-  for (int i = 1; i < numBytes && n < outSize - 1; i++)
-    out[n++] = (char)bytes[i];
-  out[n] = '\0';
-  return (int)n;
-}
 
 // Allow user overrides via a config file in the sketch folder.
 // Create BlaeckSerialConfig.h in your sketch to override defaults, e.g.:
@@ -238,30 +123,6 @@ static inline int blaeckReassembleCommand(const uint8_t *bytes, int numBytes, ch
   #define BLAECK_ENABLE_COMMAND_META 1
 #endif
 
-// I2C (Wire) buffer size used for slave→master data packing.
-// Auto-detected from Wire.h platform defines; falls back to 32.
-// Only increase if BOTH master and slave support larger buffers;
-// the value should match on both sides.
-// Override via BlaeckSerialConfig.h or build flag.
-#ifndef BLAECK_WIRE_BUFFER_SIZE
-  #if defined(BUFFER_LENGTH)
-    // AVR and most platforms define BUFFER_LENGTH in Wire.h
-    #define BLAECK_WIRE_BUFFER_SIZE BUFFER_LENGTH
-  #elif defined(I2C_BUFFER_LENGTH)
-    // ESP32 defines I2C_BUFFER_LENGTH in Wire.h
-    #define BLAECK_WIRE_BUFFER_SIZE I2C_BUFFER_LENGTH
-  #else
-    #define BLAECK_WIRE_BUFFER_SIZE 32
-  #endif
-#endif
-
-typedef enum MasterSlaveConfig
-{
-  Single,
-  Master,
-  Slave
-} masterSlaveConfig;
-
 typedef enum DataType
 {
   Blaeck_bool,
@@ -320,7 +181,7 @@ enum BlaeckCommandKind
 enum BlaeckCommandAckReason
 {
   BLAECK_ACK_OK = 0,           // accepted: delivered to a handler, validation passed
-  BLAECK_ACK_UNKNOWN = 1,      // rejected: no handler / could not deliver to target slave
+  BLAECK_ACK_UNKNOWN = 1,      // rejected: no handler / could not deliver
   BLAECK_ACK_OUT_OF_RANGE = 2, // rejected: number outside [min, max]
   BLAECK_ACK_BAD_SWITCH = 3,   // rejected: switch value not 0/1
   BLAECK_ACK_BAD_SELECT = 4,   // rejected: select value not a valid index/option
@@ -339,10 +200,6 @@ public:
   // ----- Initialize -----
   void begin(Stream *Ref, unsigned int Size);
   void begin(Stream *Ref, unsigned int Size, Stream *DebugRef);
-  void beginMaster(Stream *Ref, unsigned int Size, uint32_t WireClockFrequency);
-  void beginMaster(Stream *Ref, unsigned int Size, uint32_t WireClockFrequency, Stream *DebugRef);
-  void beginSlave(Stream *Ref, unsigned int Size, byte SlaveID);
-  void beginSlave(Stream *Ref, unsigned int Size, byte SlaveID, Stream *DebugRef);
 
   // Set these variables in your Arduino sketch
   String DeviceName = "Unknown";
@@ -351,17 +208,17 @@ public:
 
   // ----- Signals -----
   // Add a Signal
-  void addSignal(String signalName, bool *value, bool prefixSlaveID = true);
-  void addSignal(String signalName, byte *value, bool prefixSlaveID = true);
-  void addSignal(String signalName, short *value, bool prefixSlaveID = true);
-  void addSignal(String signalName, unsigned short *value, bool prefixSlaveID = true);
-  void addSignal(String signalName, int *value, bool prefixSlaveID = true);
-  void addSignal(String signalName, unsigned int *value, bool prefixSlaveID = true);
-  void addSignal(String signalName, long *value, bool prefixSlaveID = true);
-  void addSignal(String signalName, unsigned long *value, bool prefixSlaveID = true);
-  void addSignal(String signalName, float *value, bool prefixSlaveID = true);
-  void addSignal(String signalName, double *value, bool prefixSlaveID = true);
-  void addSignal(String signalName, char *value, bool prefixSlaveID = true);
+  void addSignal(String signalName, bool *value);
+  void addSignal(String signalName, byte *value);
+  void addSignal(String signalName, short *value);
+  void addSignal(String signalName, unsigned short *value);
+  void addSignal(String signalName, int *value);
+  void addSignal(String signalName, unsigned int *value);
+  void addSignal(String signalName, long *value);
+  void addSignal(String signalName, unsigned long *value);
+  void addSignal(String signalName, float *value);
+  void addSignal(String signalName, double *value);
+  void addSignal(String signalName, char *value);
 
   // Delete all Signals
   void deleteSignals();
@@ -393,11 +250,6 @@ public:
   // auto-created per channel name) but it is never stored as signal data. The
   // frame carries no CRC (like the 0xE0/0xF0 frames). Text longer than 65535
   // bytes is truncated.
-  //
-  // Only Single and Master boards write directly to the serial host. On a Slave
-  // this is a no-op (a debug message is emitted if a debug stream is set): a
-  // slave has no direct link to the host, and I2C message forwarding is not
-  // implemented. Report slave status from the master instead.
   void writeMessage(const char *channelName, const char *text);
   void writeMessage(const char *channelName, const char *text, unsigned long messageID);
 
@@ -575,17 +427,14 @@ public:
   // delimiters survive the frame); the device percent-decodes it in place before
   // the handler runs, so the handler receives the raw UTF-8 text. maxLength is the
   // advertised limit (in decoded bytes) enforced before dispatch; a longer value
-  // is rejected (BLAECK_ACK_TOO_LONG). Like the other typed commands this works on
-  // Single/Master boards and on slaves reached via the "@<slaveID>:" routing
-  // prefix (the owning board decodes and length-checks its own text command).
+  // is rejected (BLAECK_ACK_TOO_LONG).
   bool onTextCommand(const char *command, BlaeckCommandHandler handler,
                      const __FlashStringHelper *stateSignal = nullptr,
                      unsigned int maxLength = 255);
 
   // ----- Before data write callback  -----
-  // Called just before signal data is sent.
-  //   Single/Master mode: runs in normal loop context (safe to use Serial, delay, etc.)
-  //   Slave mode: runs inside the I2C receive ISR — keep it short, no Serial/delay!
+  // Called just before signal data is sent, in normal loop context
+  // (safe to use Serial, delay, etc.).
   void setBeforeWriteCallback(void (*callback)());
 
   // Timestamp configuration methods
@@ -604,14 +453,14 @@ public:
 private:
   unsigned long long getTimeStamp();
   int findSignalIndex(String signalName);
-  void setSignalName(int signalIndex, String signalName, bool prefixSlaveID);
+  void setSignalName(int signalIndex, String signalName);
   void _setTimedDataState(bool timedActivated, unsigned long timedInterval_ms);
   void _parseCommandTokens(const char *raw);
   void _dispatchRegisteredHandlers(bool sendAck = true);
 
   // Send a 0xF0 Command Ack frame (cmdHash + status + reason) to the serial host.
-  // The hash is FNV-1a of the exact received frame bytes (routing prefix included
-  // for master-forwarded commands). The frame carries no CRC (like 0xE0).
+  // The hash is FNV-1a of the exact received frame bytes. The frame carries no
+  // CRC (like 0xE0).
   void _writeCommandAck(const char *rawCommand, byte status, byte reasonCode);
   static uint32_t _fnv1a32(const char *s);
   uint16_t _computeSchemaHash();
@@ -631,12 +480,9 @@ private:
   void tick(unsigned long messageID, bool onlyUpdated);
 
   void writeData(unsigned long messageID, int signalIndex_start, int signalIndex_end, bool onlyUpdated, unsigned long long timestamp);
-  void prepareMasterSlaveSkipMap(uint8_t *skipSlaves, byte &skippedSlaveCount, byte &firstSkippedSlaveID, byte &firstSkipReason);
   void writeLocalData(unsigned long MessageID, int signalIndex_start, int signalIndex_end, bool send_eol, bool onlyUpdated, unsigned long long timestamp);
-  void writeSlaveData(bool send_eol, bool onlyUpdated, uint8_t *skipSlaves, byte &skippedSlaveCount, byte &firstSkippedSlaveID, byte &firstSkipReason);
 
   void writeLocalSymbols(unsigned long MessageID, bool send_eol);
-  void writeSlaveSymbols(bool send_eol);
 #if BLAECK_ENABLE_COMMAND_META
   void writeLocalCommands(unsigned long MessageID, bool send_eol);
   void _annotateCommand(const char *command, uint8_t kind,
@@ -648,44 +494,9 @@ private:
   static void _percentDecodeInPlace(char *s);
   static byte _flashCsvOptionCount(const __FlashStringHelper *csv);
   static long _flashCsvIndexOf(const __FlashStringHelper *csv, const char *value);
-
-  // Master-side aggregation of slave command catalogs (I2C wire-mode 5): request
-  // each found slave's length-prefixed command blob and append it verbatim to the
-  // 0xE0 frame. Slave-side: serialize this board's in-use command entries into a
-  // RAM blob and stream it in BLAECK_WIRE_BUFFER_SIZE-sized chunks on request.
-  void writeSlaveCommands(bool send_eol);
-  void wireSlaveTransmitCommandChunk();
-  // Serialize this board's in-use command entries on the fly, emitting (via
-  // Wire.write) only the bytes whose position falls in [windowStart, windowStart+
-  // windowLen). Returns the total serialized length. Pass windowLen == 0 to count
-  // the total without emitting anything. Serialization is deterministic (the
-  // command table and its flash strings are immutable at runtime), so re-walking
-  // per chunk reproduces identical bytes without needing a RAM staging buffer.
-  long _emitLocalCommandBlob(long windowStart, long windowLen);
 #endif
 
   void writeLocalDevices(unsigned long MessageID, bool send_eol);
-  void writeSlaveDevices(bool send_eol);
-
-  void refreshI2CSlavesIfNeeded();
-  void scanI2CSlaves(uint8_t addressStart, uint8_t addressEnd);
-
-  void wireSlaveTransmitToMaster();
-  void wireSlaveReceive(int numBytes);
-
-  // Master->slave single-shot command delivery (I2C wire-mode 6) and the slave-side
-  // deferred dispatch of a command received over I2C (run outside the Wire ISR).
-  bool wireMasterTransmitCommand(byte slaveID, const char *payload);
-  void _processPendingWireCommand();
-
-  void wireSlaveTransmitSingleSymbol();
-  void wireSlaveTransmitDataPoints(bool onlyUpdated);
-  void wireSlaveTransmitSingleDevice();
-  void wireSlaveTransmitStatusByte();
-  byte _wireDataPointSize(byte dataType);
-
-  bool slaveFound(const unsigned int index);
-  void storeSlave(const unsigned int index, const boolean value);
 
   static void validatePlatformSizes();
 
@@ -711,35 +522,6 @@ private:
   unsigned long _timedInterval_ms = 1000;
   long _fixedInterval_ms = BLAECK_INTERVAL_CLIENT;
 
-  masterSlaveConfig _masterSlaveConfig = Single;
-  byte _slaveID = 0;
-  unsigned char _slaveFound[128 / 8] = {}; // 128 bit storage
-  String _slaveSymbolPrefix;
-
-  byte _wireMode = 0;
-  int _wireSignalIndex = 0;
-  int _wireDeviceIndex = 0;
-
-  // Slave-side ingress for a command delivered by the master over I2C wire-mode 6.
-  // Written inside the Wire receive ISR, drained in read() (main loop) so the user
-  // command handler never runs in interrupt context.
-  volatile bool _wireCommandPending = false;
-  char _wireCommandBuf[BLAECK_WIRE_BUFFER_SIZE] = {0};
-
-#if BLAECK_ENABLE_COMMAND_META
-  // Slave-side streaming state for aggregating this board's command catalog to the
-  // master (I2C wire-mode 5). The catalog is serialized on the fly per chunk (no
-  // RAM staging buffer): _wireCommandCursor tracks the byte offset the master has
-  // consumed, _wireCommandTotalLen caches the total length computed on the first
-  // chunk. A fresh pass is signalled by wireSlaveReceive() resetting the cursor.
-  long _wireCommandTotalLen = 0;
-  long _wireCommandCursor = 0;
-#endif
-
-  bool _i2cScanInitialized = false;
-  unsigned long _lastI2CScanMs = 0;
-  static const unsigned long I2C_SCAN_INTERVAL_MS = 250;
-
   static const int MAXIMUM_CHAR_COUNT = BLAECK_COMMAND_MAX_CHARS_DEFAULT;
   static const byte MAX_COMMAND_HANDLERS = BLAECK_COMMAND_MAX_HANDLERS_DEFAULT;
   static const byte MAX_COMMAND_PARAM_COUNT = BLAECK_COMMAND_MAX_PARAMS_DEFAULT;
@@ -752,8 +534,6 @@ private:
   char STRING_01[16];
 
   CRC32 _crc;
-  CRC16 _crcWire;
-  CRC16 _crcWireCalc;
   uint16_t _schemaHash = 0;
   uint16_t _schemaHashAccum = 0;
 
@@ -847,20 +627,6 @@ private:
   }
   void _bufDevice(byte msc, byte sid, const String &name,
                   const String &hw, const String &fw);
-
-  static BlaeckSerial *_pSingletonInstance;
-
-  static void OnRequestHandler()
-  {
-    if (_pSingletonInstance)
-      _pSingletonInstance->wireSlaveTransmitToMaster();
-  }
-
-  static void OnReceiveHandler(int numBytes)
-  {
-    if (_pSingletonInstance)
-      _pSingletonInstance->wireSlaveReceive(numBytes);
-  }
 
   static unsigned long long _microsWrapper()
   {

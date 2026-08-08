@@ -100,57 +100,6 @@ void onSignalActivate(const char *command, const char *const *params, byte param
   UpdateLoggingSignals();
 }
 
-void onMasterSlaveMode(const char *command, const char *const *params, byte paramCount)
-{
-  (void)command;
-  int parameter0 = (paramCount >= 1) ? atoi(params[0]) : 0;
-  int parameter1 = (paramCount >= 2) ? atoi(params[1]) : 0;
-
-  if (parameter0 < 0 || parameter0 > 2)
-  {
-    serror(), Serial.println(F("Only 0 (Single), 1 (Master) or 2 (SLAVE) allowed!"));
-  }
-  else
-  {
-
-    if (parameter0 == 0 || parameter0 == 1)
-    {
-      masterSlaveMode = parameter0;
-      EEPROM.update(eepromaddress.masterSlaveMode, masterSlaveMode);
-      Serial.print(F("Changed to new mode: "));
-      if (masterSlaveMode == 0)
-      {
-        Serial.println(F(" Single Mode"));
-      }
-      if (masterSlaveMode == 1)
-      {
-        Serial.println(F(" Master Mode"));
-      }
-    }
-
-    if (parameter0 == 2)
-    {
-      if (parameter1 >= 1 && parameter1 <= 127)
-      {
-        masterSlaveMode = parameter0;
-        slaveID = parameter1;
-        EEPROM.updateByte(eepromaddress.masterSlaveMode, masterSlaveMode);
-        EEPROM.updateByte(eepromaddress.slaveID, slaveID);
-        Serial.print(F("Changed to new mode: "));
-        Serial.print(F(" Slave Mode (ID: "));
-        Serial.print(slaveID);
-        Serial.println(F(")"));
-      }
-      else
-      {
-        serror(), Serial.println(F("slaveID must be between 1 and 127"));
-      }
-    }
-
-    Serial.println(F("RESTART MICROCONTROLLER FOR CHANGES TO TAKE EFFECT"));
-  }
-}
-
 void onStatus(const char *command, const char *const *params, byte paramCount)
 {
   (void)command;
@@ -171,7 +120,7 @@ void onHelpOrList(const char *command, const char *const *params, byte paramCoun
   }
   else if (strcmp(command, "LS") == 0)
   {
-    sinfo(), Serial.println(F("<LS> <STATUS> <SIGNAL_ACTIVATE> <MASTER_SLAVE_MODE>"));
+    sinfo(), Serial.println(F("<LS> <STATUS> <SIGNAL_ACTIVATE>"));
     sinfo(), Serial.println(F("<BLAECK.ACTIVATE> <BLAECK.DEACTIVATE> <BLAECK.WRITE_SYMBOLS> <BLAECK.WRITE_DATA> <BLAECK.GET_DEVICES>"));
     sinfo(), Serial.println(F("Enter <command?> for instructions, e.g. <STATUS?>"));
   }
@@ -189,19 +138,6 @@ void onHelpOrList(const char *command, const char *const *params, byte paramCoun
     shelp(), Serial.println(F("e.g. <SIGNAL_ACTIVATE, 900> deactivates all signals"));
     shelp(), Serial.println(F("e.g. <SIGNAL_ACTIVATE, 901> activates all odd numbered signals"));
     shelp(), Serial.println(F("e.g. <SIGNAL_ACTIVATE, 902> activates all even numbered signals"));
-  }
-  else if (strcmp(command, "MASTER_SLAVE_MODE?") == 0)
-  {
-    shelp(), Serial.println(F("<MASTER_SLAVE_MODE, mode, slaveID>"));
-    shelp(), Serial.println(F("mode:"));
-    shelp(), Serial.println(F("0 (Single Mode)"));
-    shelp(), Serial.println(F("1 (Master Mode"));
-    shelp(), Serial.println(F("2 (Slave Mode)"));
-    shelp(), Serial.println(F("slaveID:"));
-    shelp(), Serial.println(F("Only updated when mode is set to Slave Mode)"));
-    shelp(), Serial.println(F("1 ... 127"));
-    shelp(), Serial.println(F("e.g. <MASTER_SLAVE_MODE, 2, 1> changes to Slave Mode with Slave ID: 1"));
-    shelp(), Serial.println(F("RESTART MICROCONTROLLER FOR CHANGES TO TAKE EFFECT"));
   }
   else if (strcmp(command, "STATUS?") == 0)
   {

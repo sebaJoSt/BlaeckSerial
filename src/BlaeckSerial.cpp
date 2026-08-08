@@ -6,9 +6,6 @@
 #include <Arduino.h>
 #include "BlaeckSerial.h"
 
-// static initializer for the static member.
-BlaeckSerial *BlaeckSerial::_pSingletonInstance = 0;
-
 BlaeckSerial::BlaeckSerial()
 {
   validatePlatformSizes();
@@ -41,48 +38,12 @@ void BlaeckSerial::begin(Stream *Ref, unsigned int size, Stream *DebugRef)
   _schemaHash = 0;
   _signalOverflowOccurred = false;
   _signalOverflowCount = 0;
-  // Assign the static singleton used in the static handlers.
-  BlaeckSerial::_pSingletonInstance = this;
 
   if (_bufferedWrites)
     _bufAllocate();
 }
-void BlaeckSerial::beginMaster(Stream *Ref, unsigned int size, uint32_t WireClockFrequency)
-{
-  beginMaster(Ref, size, WireClockFrequency, nullptr);
-}
-void BlaeckSerial::beginMaster(Stream *Ref, unsigned int size, uint32_t WireClockFrequency, Stream *DebugRef)
-{
-  _masterSlaveConfig = Master;
-  Wire.begin();
-  Wire.setClock(WireClockFrequency);
 
-  begin(Ref, size, DebugRef);
-}
-void BlaeckSerial::beginSlave(Stream *Ref, unsigned int size, byte slaveID)
-{
-  beginSlave(Ref, size, slaveID, nullptr);
-}
-void BlaeckSerial::beginSlave(Stream *Ref, unsigned int size, byte slaveID, Stream *DebugRef)
-{
-  _masterSlaveConfig = Slave;
-  _slaveID = slaveID;
-  if (_slaveID > 127)
-    _slaveID = 127;
-  _slaveSymbolPrefix = "";
-  _slaveSymbolPrefix.reserve(8); // "S127_" + null
-  _slaveSymbolPrefix += "S";
-  _slaveSymbolPrefix += _slaveID;
-  _slaveSymbolPrefix += "_";
-
-  Wire.onReceive(OnReceiveHandler);
-  Wire.onRequest(OnRequestHandler);
-  Wire.begin(_slaveID);
-
-  begin(Ref, size, DebugRef);
-}
-
-void BlaeckSerial::addSignal(String signalName, bool *value, bool prefixSlaveID)
+void BlaeckSerial::addSignal(String signalName, bool *value)
 {
   if (static_cast<unsigned int>(_signalIndex) >= _signalCapacity)
   {
@@ -90,7 +51,7 @@ void BlaeckSerial::addSignal(String signalName, bool *value, bool prefixSlaveID)
     _signalOverflowCount++;
     return;
   }
-  setSignalName(_signalIndex, signalName, prefixSlaveID);
+  setSignalName(_signalIndex, signalName);
   Signals[_signalIndex].DataType = Blaeck_bool;
   Signals[_signalIndex].Address = value;
   _signalIndex++;
@@ -98,7 +59,7 @@ void BlaeckSerial::addSignal(String signalName, bool *value, bool prefixSlaveID)
   _schemaHash = _computeSchemaHash();
 }
 
-void BlaeckSerial::addSignal(String signalName, byte *value, bool prefixSlaveID)
+void BlaeckSerial::addSignal(String signalName, byte *value)
 {
   if (static_cast<unsigned int>(_signalIndex) >= _signalCapacity)
   {
@@ -106,7 +67,7 @@ void BlaeckSerial::addSignal(String signalName, byte *value, bool prefixSlaveID)
     _signalOverflowCount++;
     return;
   }
-  setSignalName(_signalIndex, signalName, prefixSlaveID);
+  setSignalName(_signalIndex, signalName);
   Signals[_signalIndex].DataType = Blaeck_byte;
   Signals[_signalIndex].Address = value;
   _signalIndex++;
@@ -114,7 +75,7 @@ void BlaeckSerial::addSignal(String signalName, byte *value, bool prefixSlaveID)
   _schemaHash = _computeSchemaHash();
 }
 
-void BlaeckSerial::addSignal(String signalName, short *value, bool prefixSlaveID)
+void BlaeckSerial::addSignal(String signalName, short *value)
 {
   if (static_cast<unsigned int>(_signalIndex) >= _signalCapacity)
   {
@@ -122,7 +83,7 @@ void BlaeckSerial::addSignal(String signalName, short *value, bool prefixSlaveID
     _signalOverflowCount++;
     return;
   }
-  setSignalName(_signalIndex, signalName, prefixSlaveID);
+  setSignalName(_signalIndex, signalName);
   Signals[_signalIndex].DataType = Blaeck_short;
   Signals[_signalIndex].Address = value;
   _signalIndex++;
@@ -130,7 +91,7 @@ void BlaeckSerial::addSignal(String signalName, short *value, bool prefixSlaveID
   _schemaHash = _computeSchemaHash();
 }
 
-void BlaeckSerial::addSignal(String signalName, unsigned short *value, bool prefixSlaveID)
+void BlaeckSerial::addSignal(String signalName, unsigned short *value)
 {
   if (static_cast<unsigned int>(_signalIndex) >= _signalCapacity)
   {
@@ -138,7 +99,7 @@ void BlaeckSerial::addSignal(String signalName, unsigned short *value, bool pref
     _signalOverflowCount++;
     return;
   }
-  setSignalName(_signalIndex, signalName, prefixSlaveID);
+  setSignalName(_signalIndex, signalName);
   Signals[_signalIndex].DataType = Blaeck_ushort;
   Signals[_signalIndex].Address = value;
   _signalIndex++;
@@ -146,7 +107,7 @@ void BlaeckSerial::addSignal(String signalName, unsigned short *value, bool pref
   _schemaHash = _computeSchemaHash();
 }
 
-void BlaeckSerial::addSignal(String signalName, int *value, bool prefixSlaveID)
+void BlaeckSerial::addSignal(String signalName, int *value)
 {
   if (static_cast<unsigned int>(_signalIndex) >= _signalCapacity)
   {
@@ -154,7 +115,7 @@ void BlaeckSerial::addSignal(String signalName, int *value, bool prefixSlaveID)
     _signalOverflowCount++;
     return;
   }
-  setSignalName(_signalIndex, signalName, prefixSlaveID);
+  setSignalName(_signalIndex, signalName);
 #ifdef __AVR__
   Signals[_signalIndex].DataType = Blaeck_int; // 2 bytes
 #else
@@ -166,7 +127,7 @@ void BlaeckSerial::addSignal(String signalName, int *value, bool prefixSlaveID)
   _schemaHash = _computeSchemaHash();
 }
 
-void BlaeckSerial::addSignal(String signalName, unsigned int *value, bool prefixSlaveID)
+void BlaeckSerial::addSignal(String signalName, unsigned int *value)
 {
   if (static_cast<unsigned int>(_signalIndex) >= _signalCapacity)
   {
@@ -174,7 +135,7 @@ void BlaeckSerial::addSignal(String signalName, unsigned int *value, bool prefix
     _signalOverflowCount++;
     return;
   }
-  setSignalName(_signalIndex, signalName, prefixSlaveID);
+  setSignalName(_signalIndex, signalName);
 #ifdef __AVR__
   Signals[_signalIndex].DataType = Blaeck_uint; // 2 bytes
 #else
@@ -186,7 +147,7 @@ void BlaeckSerial::addSignal(String signalName, unsigned int *value, bool prefix
   _schemaHash = _computeSchemaHash();
 }
 
-void BlaeckSerial::addSignal(String signalName, long *value, bool prefixSlaveID)
+void BlaeckSerial::addSignal(String signalName, long *value)
 {
   if (static_cast<unsigned int>(_signalIndex) >= _signalCapacity)
   {
@@ -194,7 +155,7 @@ void BlaeckSerial::addSignal(String signalName, long *value, bool prefixSlaveID)
     _signalOverflowCount++;
     return;
   }
-  setSignalName(_signalIndex, signalName, prefixSlaveID);
+  setSignalName(_signalIndex, signalName);
   Signals[_signalIndex].DataType = Blaeck_long;
   Signals[_signalIndex].Address = value;
   _signalIndex++;
@@ -202,7 +163,7 @@ void BlaeckSerial::addSignal(String signalName, long *value, bool prefixSlaveID)
   _schemaHash = _computeSchemaHash();
 }
 
-void BlaeckSerial::addSignal(String signalName, unsigned long *value, bool prefixSlaveID)
+void BlaeckSerial::addSignal(String signalName, unsigned long *value)
 {
   if (static_cast<unsigned int>(_signalIndex) >= _signalCapacity)
   {
@@ -210,7 +171,7 @@ void BlaeckSerial::addSignal(String signalName, unsigned long *value, bool prefi
     _signalOverflowCount++;
     return;
   }
-  setSignalName(_signalIndex, signalName, prefixSlaveID);
+  setSignalName(_signalIndex, signalName);
   Signals[_signalIndex].DataType = Blaeck_ulong;
   Signals[_signalIndex].Address = value;
   _signalIndex++;
@@ -218,7 +179,7 @@ void BlaeckSerial::addSignal(String signalName, unsigned long *value, bool prefi
   _schemaHash = _computeSchemaHash();
 }
 
-void BlaeckSerial::addSignal(String signalName, float *value, bool prefixSlaveID)
+void BlaeckSerial::addSignal(String signalName, float *value)
 {
   if (static_cast<unsigned int>(_signalIndex) >= _signalCapacity)
   {
@@ -226,7 +187,7 @@ void BlaeckSerial::addSignal(String signalName, float *value, bool prefixSlaveID
     _signalOverflowCount++;
     return;
   }
-  setSignalName(_signalIndex, signalName, prefixSlaveID);
+  setSignalName(_signalIndex, signalName);
   Signals[_signalIndex].DataType = Blaeck_float;
   Signals[_signalIndex].Address = value;
   _signalIndex++;
@@ -234,7 +195,7 @@ void BlaeckSerial::addSignal(String signalName, float *value, bool prefixSlaveID
   _schemaHash = _computeSchemaHash();
 }
 
-void BlaeckSerial::addSignal(String signalName, double *value, bool prefixSlaveID)
+void BlaeckSerial::addSignal(String signalName, double *value)
 {
   if (static_cast<unsigned int>(_signalIndex) >= _signalCapacity)
   {
@@ -242,7 +203,7 @@ void BlaeckSerial::addSignal(String signalName, double *value, bool prefixSlaveI
     _signalOverflowCount++;
     return;
   }
-  setSignalName(_signalIndex, signalName, prefixSlaveID);
+  setSignalName(_signalIndex, signalName);
 #ifdef __AVR__
   /*On the Uno and other ATMEGA based boards, the double implementation occupies 4 bytes
   and is exactly the same as the float, with no gain in precision.*/
@@ -256,7 +217,7 @@ void BlaeckSerial::addSignal(String signalName, double *value, bool prefixSlaveI
   _schemaHash = _computeSchemaHash();
 }
 
-void BlaeckSerial::addSignal(String signalName, char *value, bool prefixSlaveID)
+void BlaeckSerial::addSignal(String signalName, char *value)
 {
   if (static_cast<unsigned int>(_signalIndex) >= _signalCapacity)
   {
@@ -264,7 +225,7 @@ void BlaeckSerial::addSignal(String signalName, char *value, bool prefixSlaveID)
     _signalOverflowCount++;
     return;
   }
-  setSignalName(_signalIndex, signalName, prefixSlaveID);
+  setSignalName(_signalIndex, signalName);
   Signals[_signalIndex].DataType = Blaeck_string;
   Signals[_signalIndex].Address = value;
   _signalIndex++;
@@ -314,19 +275,15 @@ uint16_t BlaeckSerial::_computeSchemaHash()
   return crc & 0xFFFF;
 }
 
-void BlaeckSerial::setSignalName(int signalIndex, String signalName, bool prefixSlaveID)
+void BlaeckSerial::setSignalName(int signalIndex, String signalName)
 {
   if (signalIndex < 0 || signalIndex >= (int)_signalCapacity)
     return;
 
   Signals[signalIndex].SignalName = "";
   size_t needed = signalName.length() + 1;
-  if (_masterSlaveConfig == Slave && prefixSlaveID)
-    needed += _slaveSymbolPrefix.length();
   Signals[signalIndex].SignalName.reserve(needed);
 
-  if (_masterSlaveConfig == Slave && prefixSlaveID)
-    Signals[signalIndex].SignalName += _slaveSymbolPrefix;
   Signals[signalIndex].SignalName += signalName;
 }
 
@@ -581,36 +538,8 @@ void BlaeckSerial::read()
 {
   this->writeRestarted();
 
-  // Dispatch any command the master delivered to this slave over I2C (captured in
-  // the Wire ISR, run here so the user handler executes in the main loop, not the ISR).
-  this->_processPendingWireCommand();
-
   if (recvWithStartEndMarkers() == true)
   {
-    // Command routing: a master forwards an "@<slaveID>:NAME,args" frame to the
-    // addressed slave over I2C instead of executing it locally. Frames without the
-    // prefix (and every frame on Single/Slave boards) fall through to local dispatch.
-    if (_masterSlaveConfig == Master && receivedChars[0] == '@')
-    {
-      uint8_t targetSlave = 0;
-
-      // Preserve the original frame (routing prefix included) for the ack hash;
-      // blaeckParseRoutingTarget strips the prefix in place.
-      char routedRaw[MAXIMUM_CHAR_COUNT];
-      strncpy(routedRaw, receivedChars, sizeof(routedRaw) - 1);
-      routedRaw[sizeof(routedRaw) - 1] = '\0';
-
-      if (blaeckParseRoutingTarget(receivedChars, &targetSlave))
-      {
-        bool delivered = this->wireMasterTransmitCommand(targetSlave, receivedChars);
-        // The master owns the ack for forwarded commands: it can confirm delivery
-        // to the slave (fire-and-forget), not the slave's value-level validation.
-        _writeCommandAck(routedRaw, delivered ? 0 : 1,
-                         delivered ? BLAECK_ACK_OK : BLAECK_ACK_UNKNOWN);
-        return;
-      }
-    }
-
     parseData();
     if (_debugStream != nullptr)
     {
@@ -1153,8 +1082,7 @@ void BlaeckSerial::_dispatchRegisteredHandlers(bool sendAck)
   }
 
   // Acknowledge every non-internal command back to the sender. BLAECK.* frames
-  // are handled in read() and must not be acked here. Commands delivered to a
-  // slave over I2C are not acked by the slave (the master owns their ack).
+  // are handled in read() and must not be acked here.
   if (sendAck && strncmp(_parsedCommand, "BLAECK.", 7) != 0)
   {
     _writeCommandAck(receivedChars, ackStatus, ackReason);
@@ -1227,17 +1155,6 @@ void BlaeckSerial::writeMessage(const char *channelName, const char *text, unsig
   // No CRC (like the 0xE0/0xF0 frames). The host may surface it (e.g. an
   // auto-created Home Assistant text sensor per channel); it is never treated as
   // signal/telemetry data and is not stored.
-  //
-  // Only Single and Master boards have a direct link to the serial host. A Slave
-  // would need to forward the message to the master over I2C, which is not
-  // implemented; report slave status from the master instead.
-  if (_masterSlaveConfig == Slave)
-  {
-    if (_debugStream != nullptr)
-      _debugStream->println("BlaeckSerial: writeMessage() ignored on a slave (no host link; report from the master).");
-    return;
-  }
-
   if (StreamRef == nullptr)
     return;
 
@@ -1470,20 +1387,7 @@ void BlaeckSerial::writeSymbols()
 }
 void BlaeckSerial::writeSymbols(unsigned long msg_id)
 {
-  if (_masterSlaveConfig == Single || _masterSlaveConfig == Slave)
-  {
-    this->writeLocalSymbols(msg_id, true);
-  }
-  else if (_masterSlaveConfig == Master)
-  {
-    refreshI2CSlavesIfNeeded();
-
-    // Recompute schema hash from local + slave signals
-    _schemaHashAccum = 0x0000;
-    this->writeLocalSymbols(msg_id, false);
-    this->writeSlaveSymbols(true);
-    _schemaHash = _schemaHashAccum & 0xFFFF;
-  }
+  this->writeLocalSymbols(msg_id, true);
 }
 
 #if BLAECK_ENABLE_COMMAND_META
@@ -1493,240 +1397,7 @@ void BlaeckSerial::writeCommands()
 }
 void BlaeckSerial::writeCommands(unsigned long msg_id)
 {
-  if (_masterSlaveConfig == Master)
-  {
-    // Master: emit local command entries (no footer), then aggregate every found
-    // slave's command catalog and close the frame.
-    this->refreshI2CSlavesIfNeeded();
-    this->writeLocalCommands(msg_id, false);
-    this->writeSlaveCommands(true);
-  }
-  else
-  {
-    // Single / Slave: local command entries only.
-    this->writeLocalCommands(msg_id, true);
-  }
-}
-
-long BlaeckSerial::_emitLocalCommandBlob(long windowStart, long windowLen)
-{
-  // Serialize all in-use command handlers using the exact 0xE0 per-entry format
-  // (see writeLocalCommands), emitting via Wire.write() only the bytes whose
-  // position falls in [windowStart, windowStart + windowLen). Returns the total
-  // serialized length. Pass windowLen == 0 to count the total without emitting.
-  // No RAM staging buffer is used: because the command table and its flash
-  // strings are immutable at runtime, re-walking the table per chunk reproduces
-  // an identical byte stream, so the master can read it length-prefixed across
-  // multiple requestFrom() calls without the slave holding the whole blob.
-  long pos = 0;
-  const long windowEnd = windowStart + windowLen;
-
-#define BLB_EMIT(b)                                    \
-  do                                                   \
-  {                                                    \
-    if (pos >= windowStart && pos < windowEnd)         \
-      Wire.write((byte)(b));                           \
-    pos++;                                             \
-  } while (0)
-
-  for (byte i = 0; i < MAX_COMMAND_HANDLERS; i++)
-  {
-    CommandHandlerEntry &e = _commandHandlers[i];
-    if (!e.inUse)
-      continue;
-
-    byte flags = 0;
-    if (e.kind == BLAECK_CMD_NUMBER)
-      flags |= 0x01;
-    if (e.unit != nullptr)
-      flags |= 0x02;
-    if (e.kind == BLAECK_CMD_SELECT && e.options != nullptr)
-      flags |= 0x04;
-    if (e.stateSignal != nullptr)
-      flags |= 0x08;
-    if (e.kind == BLAECK_CMD_TEXT)
-      flags |= 0x10;
-
-    BLB_EMIT(_masterSlaveConfig);
-    BLB_EMIT(_slaveID);
-    for (const char *p = e.command; *p != '\0'; p++)
-      BLB_EMIT(*p);
-    BLB_EMIT(0);
-    BLB_EMIT(e.kind);
-    BLB_EMIT(flags);
-
-    if (flags & 0x01)
-    {
-      fltCvt.val = e.meta_min;
-      for (int k = 0; k < 4; k++)
-        BLB_EMIT(fltCvt.bval[k]);
-      fltCvt.val = e.meta_max;
-      for (int k = 0; k < 4; k++)
-        BLB_EMIT(fltCvt.bval[k]);
-      fltCvt.val = e.meta_step;
-      for (int k = 0; k < 4; k++)
-        BLB_EMIT(fltCvt.bval[k]);
-    }
-    if (flags & 0x02)
-    {
-      PGM_P p = reinterpret_cast<PGM_P>(e.unit);
-      byte c;
-      while ((c = pgm_read_byte(p++)) != 0)
-        BLB_EMIT(c);
-      BLB_EMIT(0);
-    }
-    if (flags & 0x04)
-    {
-      PGM_P p = reinterpret_cast<PGM_P>(e.options);
-      byte c;
-      while ((c = pgm_read_byte(p++)) != 0)
-        BLB_EMIT(c);
-      BLB_EMIT(0);
-    }
-    if (flags & 0x08)
-    {
-      PGM_P p = reinterpret_cast<PGM_P>(e.stateSignal);
-      byte c;
-      while ((c = pgm_read_byte(p++)) != 0)
-        BLB_EMIT(c);
-      BLB_EMIT(0);
-    }
-    if (flags & 0x10)
-    {
-      uint16_t maxLen = (uint16_t)e.meta_max;
-      BLB_EMIT((byte)(maxLen & 0xFF));
-      BLB_EMIT((byte)((maxLen >> 8) & 0xFF));
-    }
-  }
-
-#undef BLB_EMIT
-
-  return pos;
-}
-
-void BlaeckSerial::wireSlaveTransmitCommandChunk()
-{
-  if (_wireCommandCursor == 0)
-  {
-    // First chunk of an aggregation pass: count the total length, then emit the
-    // 2-byte length prefix followed by the first window of serialized bytes.
-    _wireCommandTotalLen = _emitLocalCommandBlob(0, 0);
-
-    uint8_t lenPrefix[2];
-    blaeckPutLen16(lenPrefix, (uint16_t)_wireCommandTotalLen);
-    Wire.write(lenPrefix[0]);
-    Wire.write(lenPrefix[1]);
-
-    long windowLen = (long)BLAECK_WIRE_BUFFER_SIZE - 2;
-    if (windowLen < 0)
-      windowLen = 0;
-    _emitLocalCommandBlob(0, windowLen);
-
-    long remaining = _wireCommandTotalLen;
-    _wireCommandCursor = (windowLen < remaining) ? windowLen : remaining;
-  }
-  else
-  {
-    // Subsequent chunks: emit the next window starting at the master's cursor.
-    long windowLen = (long)BLAECK_WIRE_BUFFER_SIZE;
-    _emitLocalCommandBlob(_wireCommandCursor, windowLen);
-
-    long remaining = _wireCommandTotalLen - _wireCommandCursor;
-    _wireCommandCursor += (windowLen < remaining) ? windowLen : remaining;
-  }
-}
-
-void BlaeckSerial::writeSlaveCommands(bool send_eol)
-{
-  // Absolute sanity cap on a slave's reported blob length. Guards against a slave
-  // built without command-metadata support (which never answers wire-mode 5 and
-  // whose reply would decode as garbage) or a corrupt length prefix.
-  const long BLAECK_SLAVE_COMMAND_MAX = 1024;
-
-  for (int slaveindex = 0; slaveindex <= 127; slaveindex++)
-  {
-    if (!slaveFound(slaveindex))
-      continue;
-
-    byte transmissionIsSuccess = false;
-    for (byte retries = 0; retries < 4; retries++)
-    {
-      Wire.beginTransmission(slaveindex);
-      Wire.write(BLAECK_WIRE_MODE_COMMAND_LIST);
-      transmissionIsSuccess = Wire.endTransmission();
-      if (transmissionIsSuccess == 0)
-        break;
-    }
-    if (transmissionIsSuccess != 0)
-      continue;
-
-    bool headerRead = false;
-    long totalLen = 0;
-    long bytesRead = 0;
-    int requestCount = 0;
-
-    while (requestCount < 2000)
-    {
-      byte receivedBytes = Wire.requestFrom(slaveindex, (int)BLAECK_WIRE_BUFFER_SIZE);
-      requestCount++;
-      if (receivedBytes < 1)
-        continue;
-
-      int idx = 0;
-
-      if (!headerRead)
-      {
-        if (Wire.available() < 2)
-        {
-          while (Wire.available())
-            Wire.read();
-          continue;
-        }
-        uint8_t lenPrefix[2];
-        lenPrefix[0] = (uint8_t)Wire.read();
-        lenPrefix[1] = (uint8_t)Wire.read();
-        idx = 2;
-        totalLen = (long)blaeckGetLen16(lenPrefix);
-        headerRead = true;
-        if (totalLen <= 0 || totalLen > BLAECK_SLAVE_COMMAND_MAX)
-        {
-          while (Wire.available())
-            Wire.read();
-          break; // nothing to append for this slave
-        }
-      }
-
-      for (; idx < receivedBytes && Wire.available() && bytesRead < totalLen; idx++)
-      {
-        byte b = (byte)Wire.read();
-        if (_bufferedWrites && _frameBuf)
-          _bufByte(b);
-        else
-          StreamRef->write(b);
-        bytesRead++;
-      }
-      while (Wire.available())
-        Wire.read();
-
-      if (headerRead && bytesRead >= totalLen)
-        break;
-    }
-  }
-
-  if (send_eol)
-  {
-    if (_bufferedWrites && _frameBuf)
-    {
-      _bufFooter();
-      _bufSend();
-    }
-    else
-    {
-      StreamRef->write("/BLAECK>");
-      StreamRef->write("\r\n");
-      StreamRef->flush();
-    }
-  }
+  this->writeLocalCommands(msg_id, true);
 }
 #endif
 
@@ -2194,100 +1865,12 @@ void BlaeckSerial::writeUpdatedData(unsigned long messageID, unsigned long long 
 
 void BlaeckSerial::writeData(unsigned long msg_id, int signalIndex_start, int signalIndex_end, bool onlyUpdated, unsigned long long timestamp)
 {
-  if (_signalIndex == 0 && _masterSlaveConfig != Master)
+  if (_signalIndex == 0)
     return;
 
-  if (_masterSlaveConfig == Single)
-  {
-    if (_beforeWriteCallback != NULL)
-      _beforeWriteCallback();
-    this->writeLocalData(msg_id, signalIndex_start, signalIndex_end, true, onlyUpdated, timestamp);
-  }
-  else if (_masterSlaveConfig == Slave)
-  {
-    // _beforeWriteCallback is called in BlaeckSerial::wireSlaveReceive()
-    this->writeLocalData(msg_id, signalIndex_start, signalIndex_end, true, onlyUpdated, timestamp);
-  }
-  else if (_masterSlaveConfig == Master)
-  {
-    uint8_t skipSlaves[16] = {}; // 128-bit bitfield, same as _slaveFound
-    byte skippedSlaveCount = 0;
-    byte firstSkippedSlaveID = 0xFF;
-    byte firstSkipReason = 0x00;
-
-    refreshI2CSlavesIfNeeded();
-    prepareMasterSlaveSkipMap(skipSlaves, skippedSlaveCount, firstSkippedSlaveID, firstSkipReason);
-
-    if (_beforeWriteCallback != NULL)
-      _beforeWriteCallback();
-    this->writeLocalData(msg_id, signalIndex_start, signalIndex_end, false, onlyUpdated, timestamp);
-    this->writeSlaveData(true, onlyUpdated, skipSlaves, skippedSlaveCount, firstSkippedSlaveID, firstSkipReason);
-  }
-}
-
-void BlaeckSerial::prepareMasterSlaveSkipMap(uint8_t *skipSlaves, byte &skippedSlaveCount, byte &firstSkippedSlaveID, byte &firstSkipReason)
-{
-  for (int slaveindex = 0; slaveindex <= 127; slaveindex++)
-  {
-    if (!slaveFound(slaveindex))
-      continue;
-
-    byte transmissionIsSuccess = false;
-    for (byte retries = 0; retries < 4; retries++)
-    {
-      Wire.beginTransmission(slaveindex);
-      Wire.write(2);
-      transmissionIsSuccess = Wire.endTransmission();
-      if (transmissionIsSuccess == 0)
-        break;
-    }
-    if (transmissionIsSuccess != 0)
-    {
-      if (!bitRead(skipSlaves[slaveindex / 8], slaveindex % 8))
-      {
-        bitSet(skipSlaves[slaveindex / 8], slaveindex % 8);
-        skippedSlaveCount++;
-        if (firstSkippedSlaveID == 0xFF)
-        {
-          firstSkippedSlaveID = (byte)slaveindex;
-          firstSkipReason = 0x01; // Preflight no response
-        }
-      }
-      continue;
-    }
-
-    const unsigned long timeout_ms = 20;
-    unsigned long start_ms = millis();
-    bool statusOk = false;
-
-    while ((millis() - start_ms) < timeout_ms && !statusOk)
-    {
-      byte receivedBytes = Wire.requestFrom(slaveindex, 1);
-      if (receivedBytes < 1)
-        continue;
-
-      for (int i = 0; i < receivedBytes && Wire.available(); i++)
-      {
-        int c = Wire.read();
-        if (c == 0xAA)
-        {
-          statusOk = true;
-          break;
-        }
-      }
-    }
-
-    if (!statusOk && !bitRead(skipSlaves[slaveindex / 8], slaveindex % 8))
-    {
-      bitSet(skipSlaves[slaveindex / 8], slaveindex % 8);
-      skippedSlaveCount++;
-      if (firstSkippedSlaveID == 0xFF)
-      {
-        firstSkippedSlaveID = (byte)slaveindex;
-        firstSkipReason = 0x01; // Preflight no response
-      }
-    }
-  }
+  if (_beforeWriteCallback != NULL)
+    _beforeWriteCallback();
+  this->writeLocalData(msg_id, signalIndex_start, signalIndex_end, true, onlyUpdated, timestamp);
 }
 
 void BlaeckSerial::timedWriteAllData()
@@ -2448,8 +2031,8 @@ void BlaeckSerial::_bufHeader(byte msgKey, unsigned long msgId)
 void BlaeckSerial::_bufDevice(byte msc, byte sid, const String &name,
                               const String &hw, const String &fw)
 {
-  _bufByte(msc);
-  _bufByte(sid);
+  _bufByte((byte)0);
+  _bufByte((byte)0);
   _bufStr0(name);
   _bufStr0(hw);
   _bufStr0(fw);
@@ -2474,7 +2057,7 @@ void BlaeckSerial::writeRestarted(unsigned long msg_id)
     {
       _bufReset();
       _bufHeader(0xC0, msg_id);
-      _bufDevice(_masterSlaveConfig, _slaveID, DeviceName, DeviceHWVersion, DeviceFWVersion);
+      _bufDevice((byte)0, (byte)0, DeviceName, DeviceHWVersion, DeviceFWVersion);
       _bufFooter();
       _bufSend();
     }
@@ -2488,8 +2071,8 @@ void BlaeckSerial::writeRestarted(unsigned long msg_id)
       StreamRef->write(ulngCvt.bval, 4);
       StreamRef->write(":");
 
-      StreamRef->write(_masterSlaveConfig);
-      StreamRef->write(_slaveID);
+      StreamRef->write((byte)0);
+      StreamRef->write((byte)0);
       StreamRef->print(DeviceName);
       StreamRef->print('\0');
       StreamRef->print(DeviceHWVersion);
@@ -2515,28 +2098,7 @@ void BlaeckSerial::writeDevices()
 
 void BlaeckSerial::writeDevices(unsigned long msg_id)
 {
-  if (_masterSlaveConfig == Single || _masterSlaveConfig == Slave)
-  {
-    this->writeLocalDevices(msg_id, true);
-  }
-  else if (_masterSlaveConfig == Master)
-  {
-    refreshI2CSlavesIfNeeded();
-
-    this->writeLocalDevices(msg_id, false);
-    this->writeSlaveDevices(true);
-  }
-}
-
-void BlaeckSerial::refreshI2CSlavesIfNeeded()
-{
-  unsigned long now = millis();
-  if (!_i2cScanInitialized || (now - _lastI2CScanMs) >= I2C_SCAN_INTERVAL_MS)
-  {
-    scanI2CSlaves(0, 127);
-    _lastI2CScanMs = now;
-    _i2cScanInitialized = true;
-  }
+  this->writeLocalDevices(msg_id, true);
 }
 
 void BlaeckSerial::writeLocalDevices(unsigned long msg_id, bool send_eol)
@@ -2545,7 +2107,7 @@ void BlaeckSerial::writeLocalDevices(unsigned long msg_id, bool send_eol)
   {
     _bufReset();
     _bufHeader(0xB3, msg_id);
-    _bufDevice(_masterSlaveConfig, _slaveID, DeviceName, DeviceHWVersion, DeviceFWVersion);
+    _bufDevice((byte)0, (byte)0, DeviceName, DeviceHWVersion, DeviceFWVersion);
     if (send_eol)
     {
       _bufFooter();
@@ -2561,8 +2123,8 @@ void BlaeckSerial::writeLocalDevices(unsigned long msg_id, bool send_eol)
     ulngCvt.val = msg_id;
     StreamRef->write(ulngCvt.bval, 4);
     StreamRef->write(":");
-    StreamRef->write(_masterSlaveConfig);
-    StreamRef->write(_slaveID);
+    StreamRef->write((byte)0);
+    StreamRef->write((byte)0);
     StreamRef->print(DeviceName);
     StreamRef->print('\0');
     StreamRef->print(DeviceHWVersion);
@@ -2575,97 +2137,6 @@ void BlaeckSerial::writeLocalDevices(unsigned long msg_id, bool send_eol)
     StreamRef->print('\0');
 
     if (send_eol)
-    {
-      StreamRef->write("/BLAECK>");
-      StreamRef->write("\r\n");
-      StreamRef->flush();
-    }
-  }
-}
-
-void BlaeckSerial::writeSlaveDevices(bool send_eol)
-{
-
-  // Cycle through slaves
-  for (int slaveindex = 0; slaveindex <= 127; slaveindex++)
-  {
-    if (slaveFound(slaveindex))
-    {
-      byte transmissionIsSuccess = false;
-
-      for (byte retries = 0; retries < 4; retries++)
-      {
-        Wire.beginTransmission(slaveindex);
-        Wire.write(3);
-        transmissionIsSuccess = Wire.endTransmission();
-        // 0: success
-        if (transmissionIsSuccess == 0)
-        {
-          break;
-        }
-      }
-
-      if (transmissionIsSuccess == 0)
-      {
-        if (_bufferedWrites && _frameBuf)
-        {
-          _bufByte(2);          // Slave config
-          _bufByte(slaveindex); // Slave ID
-        }
-        else
-        {
-          StreamRef->write(2);          // Slave config
-          StreamRef->write(slaveindex); // Slave ID
-        }
-
-        bool eolist_found = false;
-        int requestCount = 0;
-        while (requestCount < 1000 && !eolist_found)
-        {
-          // request BLAECK_WIRE_BUFFER_SIZE bytes from slave device
-          byte receivedBytes = Wire.requestFrom(slaveindex, (int)BLAECK_WIRE_BUFFER_SIZE);
-          requestCount++;
-          if (receivedBytes < 1)
-            continue;
-
-          bool eosignal_found = false;
-
-          for (int symbolchar = 0; symbolchar < receivedBytes && Wire.available(); symbolchar++)
-          {
-            // Slave may send less than requested
-            // DeviceInfo + \0
-            //  receive a byte as character
-            char c = (char)Wire.read();
-            //'\r'
-            if (c == char(0x0D))
-            {
-              eosignal_found = true;
-            }
-            //'\n'
-            if (c == char(0x0A))
-              eolist_found = true;
-            if (eosignal_found != true && eolist_found != true)
-            {
-              if (_bufferedWrites && _frameBuf)
-                _bufByte((byte)c);
-              else
-                StreamRef->print(c);
-            }
-          }
-          if (eolist_found)
-            break;
-        }
-      }
-    }
-  }
-  if (send_eol)
-  {
-    if (_bufferedWrites && _frameBuf)
-    {
-      _bufFooter();
-      _bufSend();
-    }
-    else
     {
       StreamRef->write("/BLAECK>");
       StreamRef->write("\r\n");
@@ -2952,224 +2423,6 @@ void BlaeckSerial::writeLocalData(unsigned long msg_id, int signalIndex_start, i
   }
 }
 
-void BlaeckSerial::writeSlaveData(bool send_eol, bool onlyUpdated, uint8_t *skipSlaves, byte &skippedSlaveCount, byte &firstSkippedSlaveID, byte &firstSkipReason)
-{
-  for (int slaveindex = 0; slaveindex <= 127; slaveindex++)
-  {
-    // Cycle through slaves
-    if (slaveFound(slaveindex))
-    {
-      if (bitRead(skipSlaves[slaveindex / 8], slaveindex % 8))
-        continue;
-
-      byte transmissionIsSuccess = false;
-
-      for (byte retries = 0; retries < 40; retries++)
-      {
-        Wire.beginTransmission(slaveindex);
-        if (!onlyUpdated)
-        {
-          Wire.write(1);
-        }
-        else
-        {
-          Wire.write(4);
-        }
-
-        transmissionIsSuccess = Wire.endTransmission();
-        // 0: success
-        if (transmissionIsSuccess == 0)
-          break;
-      }
-
-      if (transmissionIsSuccess == 0)
-      {
-        bool eolist_found = false;
-        bool slaveFailed = false;
-        int requestCount = 0;
-        while (requestCount < 1000 && !eolist_found)
-        {
-          // request BLAECK_WIRE_BUFFER_SIZE bytes from slave device
-          byte receivedBytes = Wire.requestFrom(slaveindex, (int)BLAECK_WIRE_BUFFER_SIZE);
-          requestCount++;
-          // try again
-          if (receivedBytes < 2)
-            continue;
-          while (Wire.available() > 0 && !eolist_found)
-          {
-            // first receive number of bytes to expect
-            uint8_t bytecount = (uint8_t)Wire.read();
-
-            if (bytecount > 0 && bytecount < 127)
-            {
-              // Need full payload: [2 bytes index] + [N-2 data bytes] + [2 bytes crc]
-              if (Wire.available() < bytecount + 2)
-              {
-                // Incomplete chunk, skip and request next chunk to avoid partial parsing.
-                slaveFailed = true;
-                break;
-              }
-
-              _crcWireCalc.restart();
-              _crcWireCalc.add(bytecount);
-
-              // First 2 bytes are always the signal index from slave
-              uint8_t indexLow = (uint8_t)Wire.read();
-              uint8_t indexHigh = (uint8_t)Wire.read();
-              uint16_t slaveSignalIndex = ((uint16_t)indexHigh << 8) | ((uint16_t)indexLow);
-
-              _crcWireCalc.add(indexLow);
-              _crcWireCalc.add(indexHigh);
-
-              intCvt.val = _signalIndex + slaveSignalIndex;
-              // Read the remaining data bytes (bytecount - 2 since we already read the index).
-              // Variable-length string data points can be larger than a fixed scalar, but a
-              // slave never packs a chunk bigger than one wire window, so the buffer is bounded.
-              int remainingDataBytes = bytecount - 2;
-              if (remainingDataBytes > (int)BLAECK_WIRE_BUFFER_SIZE)
-              {
-                slaveFailed = true;
-                break;
-              }
-
-              byte dataBuffer[BLAECK_WIRE_BUFFER_SIZE];
-
-              for (int i = 0; i < remainingDataBytes; i++)
-              {
-                // then read the data bytes
-                dataBuffer[i] = (byte)Wire.read();
-                _crcWireCalc.add(dataBuffer[i]);
-              }
-
-              // After reading all data, read the CRC bytes
-              uint8_t crcWireTransmittedByte0 = (uint8_t)Wire.read();
-              uint8_t crcWireTransmittedByte1 = (uint8_t)Wire.read();
-
-              uint16_t crcWireTransmitted = ((uint16_t)crcWireTransmittedByte1 << 8) | ((uint16_t)crcWireTransmittedByte0);
-              uint16_t crcWireCalculated = _crcWireCalc.calc();
-
-              if (crcWireTransmitted != crcWireCalculated)
-              {
-                slaveFailed = true;
-                break;
-              }
-
-              // Write only after full slave chunk validation.
-              if (_bufferedWrites && _frameBuf)
-              {
-                _bufBytes(intCvt.bval, 2);
-                _bufBytes(dataBuffer, remainingDataBytes);
-              }
-              else
-              {
-                StreamRef->write(lowByte(_signalIndex + slaveSignalIndex));
-                StreamRef->write(highByte(_signalIndex + slaveSignalIndex));
-                _crc.add(intCvt.bval, 2);
-                for (int i = 0; i < remainingDataBytes; i++)
-                {
-                  StreamRef->write(dataBuffer[i]);
-                  _crc.add(dataBuffer[i]);
-                }
-              }
-            }
-            else
-            {
-              if (bytecount == 127)
-              {
-                eolist_found = true;
-                break;
-              }
-            }
-            if (slaveFailed)
-              break;
-          }
-          if (eolist_found)
-            break;
-          if (slaveFailed)
-            break;
-        }
-
-        if (!eolist_found)
-          slaveFailed = true;
-
-        if (slaveFailed && !bitRead(skipSlaves[slaveindex / 8], slaveindex % 8))
-        {
-          bitSet(skipSlaves[slaveindex / 8], slaveindex % 8);
-          skippedSlaveCount++;
-          if (firstSkippedSlaveID == 0xFF)
-          {
-            firstSkippedSlaveID = (byte)slaveindex;
-            firstSkipReason = 0x02; // Runtime timeout/short read/malformed/CRC mismatch
-          }
-        }
-      }
-      else if (!bitRead(skipSlaves[slaveindex / 8], slaveindex % 8))
-      {
-        bitSet(skipSlaves[slaveindex / 8], slaveindex % 8);
-        skippedSlaveCount++;
-        if (firstSkippedSlaveID == 0xFF)
-        {
-          firstSkippedSlaveID = (byte)slaveindex;
-          firstSkipReason = 0x01; // No response
-        }
-      }
-    }
-  }
-
-  if (send_eol)
-  {
-    // D2 tail: StatusByte + StatusPayload(4) + CRC32(4)
-    byte statusByte = 0;
-    byte statusPayload[4] = {0, 0, 0, 0};
-    if (skippedSlaveCount > 0)
-    {
-      // StatusByte 1: One or more slaves skipped/unavailable.
-      // StatusPayload: [SkippedSlaveCount][FirstSkippedSlaveID][FirstSkipReason][Reserved]
-      statusByte = 1;
-      statusPayload[0] = skippedSlaveCount;
-      statusPayload[1] = firstSkippedSlaveID;
-      statusPayload[2] = firstSkipReason;
-      statusPayload[3] = 0x00;
-    }
-
-    if (_bufferedWrites && _frameBuf)
-    {
-      _bufByte(statusByte);
-      _bufBytes(statusPayload, 4);
-
-      // CRC32 over content: buffer[8..framePos-1] (after "<BLAECK:")
-      _crc.setPolynome(0x04C11DB7);
-      _crc.setInitial(0xFFFFFFFF);
-      _crc.setXorOut(0xFFFFFFFF);
-      _crc.setReverseIn(true);
-      _crc.setReverseOut(true);
-      _crc.restart();
-      _crc.add(_frameBuf + 8, _framePos - 8);
-      uint32_t crc_value = _crc.calc();
-      _bufBytes((byte *)&crc_value, 4);
-
-      _bufFooter();
-      _bufSend();
-      if (!_bufOverflow)
-        _sendRestartFlag = false;
-    }
-    else
-    {
-      StreamRef->write(statusByte);
-      StreamRef->write(statusPayload, 4);
-      _crc.add(statusByte);
-      _crc.add(statusPayload, 4);
-
-      uint32_t crc_value = _crc.calc();
-      StreamRef->write((byte *)&crc_value, 4);
-
-      StreamRef->write("/BLAECK>");
-      StreamRef->write("\r\n");
-      StreamRef->flush();
-    }
-  }
-}
-
 void BlaeckSerial::writeLocalSymbols(unsigned long msg_id, bool send_eol)
 {
   if (_bufferedWrites && _frameBuf)
@@ -3179,8 +2432,8 @@ void BlaeckSerial::writeLocalSymbols(unsigned long msg_id, bool send_eol)
 
     for (int i = 0; i < _signalIndex; i++)
     {
-      _bufByte(_masterSlaveConfig);
-      _bufByte(_slaveID);
+      _bufByte((byte)0);
+      _bufByte((byte)0);
 
       Signal signal = Signals[i];
 
@@ -3227,8 +2480,8 @@ void BlaeckSerial::writeLocalSymbols(unsigned long msg_id, bool send_eol)
 
     for (int i = 0; i < _signalIndex; i++)
     {
-      StreamRef->write(_masterSlaveConfig);
-      StreamRef->write(_slaveID);
+      StreamRef->write((byte)0);
+      StreamRef->write((byte)0);
 
       Signal signal = Signals[i];
 
@@ -3271,7 +2524,7 @@ void BlaeckSerial::writeLocalSymbols(unsigned long msg_id, bool send_eol)
 void BlaeckSerial::writeLocalCommands(unsigned long msg_id, bool send_eol)
 {
   // 0xE0 "Command List" frame. Per discovered command entry:
-  //   msConfig(1) slaveID(1) name\0 kind(1) flags(1)
+  //   reserved(1) reserved(1) name\0 kind(1) flags(1)
   //   [min(4) max(4) step(4)]  if flags.hasRange   (LE float)
   //   [unit\0]                 if flags.hasUnit
   //   [optionsCsv\0]           if flags.hasOptions
@@ -3305,8 +2558,8 @@ void BlaeckSerial::writeLocalCommands(unsigned long msg_id, bool send_eol)
       if (e.kind == BLAECK_CMD_TEXT)
         flags |= 0x10;
 
-      _bufByte(_masterSlaveConfig);
-      _bufByte(_slaveID);
+      _bufByte((byte)0);
+      _bufByte((byte)0);
       _bufStr0(e.command);
       _bufByte(e.kind);
       _bufByte(flags);
@@ -3368,8 +2621,8 @@ void BlaeckSerial::writeLocalCommands(unsigned long msg_id, bool send_eol)
       if (e.kind == BLAECK_CMD_TEXT)
         flags |= 0x10;
 
-      StreamRef->write(_masterSlaveConfig);
-      StreamRef->write(_slaveID);
+      StreamRef->write((byte)0);
+      StreamRef->write((byte)0);
       StreamRef->print(e.command);
       StreamRef->write((byte)0);
       StreamRef->write(e.kind);
@@ -3417,169 +2670,6 @@ void BlaeckSerial::writeLocalCommands(unsigned long msg_id, bool send_eol)
 }
 #endif
 
-void BlaeckSerial::writeSlaveSymbols(bool send_eol)
-{
-
-  int signalCount = 0;
-
-  // Cycle through slaves
-  for (int slaveindex = 0; slaveindex <= 127; slaveindex++)
-  {
-    if (slaveFound(slaveindex))
-    {
-      byte transmissionIsSuccess = false;
-
-      for (byte retries = 0; retries < 4; retries++)
-      {
-        Wire.beginTransmission(slaveindex);
-        Wire.write(0);
-        transmissionIsSuccess = Wire.endTransmission();
-        // 0: success
-        if (transmissionIsSuccess == 0)
-          break;
-      }
-
-      if (transmissionIsSuccess == 0)
-      {
-
-        bool eolist_found = false;
-        bool afterNull = false; // true = next non-control byte is datatype
-        int requestCount = 0;
-        while (requestCount < 1000 && !eolist_found)
-        {
-          // request BLAECK_WIRE_BUFFER_SIZE bytes from slave device
-          byte receivedBytes = Wire.requestFrom(slaveindex, (int)BLAECK_WIRE_BUFFER_SIZE);
-          requestCount++;
-          if (receivedBytes < 2)
-            continue; // try again
-
-          bool eosignal_found = false;
-
-          for (int symbolchar = 0; symbolchar < receivedBytes && Wire.available(); symbolchar++)
-          {
-            // Slave may send less than requested
-            // SignalName + \0 + DataType
-            //  receive a byte as character
-            char c = (char)Wire.read();
-
-            //'\0'
-            if (c != char(0x00) && symbolchar == 0)
-            {
-              if (_bufferedWrites && _frameBuf)
-              {
-                _bufByte(2);          // Slave config
-                _bufByte(slaveindex); // Slave ID
-              }
-              else
-              {
-                StreamRef->write(2);          // Slave config
-                StreamRef->write(slaveindex); // Slave ID
-              }
-            }
-            if (c == char(0x00) && symbolchar == 0)
-            {
-              continue;
-            }
-
-            //'\r'
-            if (c == char(0x0D))
-            {
-              eosignal_found = true;
-              afterNull = false;
-              signalCount += 1;
-            }
-
-            //'\n'
-            if (c == char(0x0A))
-              eolist_found = true;
-
-            if (eosignal_found != true && eolist_found != true)
-            {
-              if (_bufferedWrites && _frameBuf)
-                _bufByte((byte)c);
-              else
-                StreamRef->print(c);
-
-              // Feed into schema hash accumulator
-              if (afterNull)
-              {
-                _schemaHashFeedByte((byte)c); // datatype code (incl. 0x00 for bool)
-                afterNull = false;
-              }
-              else if (c == char(0x00))
-              {
-                afterNull = true; // next byte is datatype
-              }
-              else
-              {
-                _schemaHashFeedByte((byte)c); // name character
-              }
-            }
-          }
-          if (eolist_found)
-            break;
-        }
-      }
-    }
-  }
-  if (send_eol)
-  {
-    if (_bufferedWrites && _frameBuf)
-    {
-      _bufFooter();
-      _bufSend();
-    }
-    else
-    {
-      StreamRef->write("/BLAECK>");
-      StreamRef->write("\r\n");
-      StreamRef->flush();
-    }
-  }
-}
-
-void BlaeckSerial::scanI2CSlaves(uint8_t addressStart, uint8_t addressEnd)
-{
-  // Cycle through slaves (add-only: once found, a slave stays registered
-  // until reboot.  Temporary I2C failures are reported via StatusByte=1
-  // in data frames, not as schema changes.)
-  for (int slaveindex = addressStart; slaveindex <= addressEnd; slaveindex++)
-  {
-    if (slaveFound(slaveindex))
-      continue; // already registered, skip
-
-    byte transmissionIsSuccess = false;
-
-    for (byte retries = 0; retries < 4; retries++)
-    {
-      Wire.beginTransmission(slaveindex);
-      Wire.write(2);
-      transmissionIsSuccess = Wire.endTransmission();
-      // 0: success
-      if (transmissionIsSuccess == 0)
-        break;
-    }
-
-    if (transmissionIsSuccess == 0)
-    {
-      byte receivedBytes = Wire.requestFrom(slaveindex, 1);
-      if (receivedBytes < 1 || !Wire.available())
-      {
-        continue;
-      }
-
-      // Expecting response 0xAA from slave -> Slave found
-      // Receive a byte as character
-      char c = (char)Wire.read();
-
-      if (c == char(0xAA))
-      {
-        storeSlave(slaveindex, true);
-      }
-    }
-  }
-}
-
 void BlaeckSerial::tickUpdated()
 {
   unsigned long id = (_fixedInterval_ms >= 0) ? 185273100 : 185273099;
@@ -3606,503 +2696,6 @@ void BlaeckSerial::tick(unsigned long msg_id, bool onlyUpdated)
 {
   this->read();
   this->timedWriteData(msg_id, 0, _signalIndex - 1, onlyUpdated, getTimeStamp());
-}
-
-void BlaeckSerial::wireSlaveTransmitStatusByte()
-{
-  Wire.write(0xAA);
-}
-
-void BlaeckSerial::wireSlaveTransmitSingleDevice()
-{
-  char little_s_string[32] = "";
-
-  if (_wireDeviceIndex == 0)
-  {
-    DeviceName.toCharArray(little_s_string, 32);
-    Wire.print(little_s_string);
-    Wire.write('\0');
-  }
-  else if (_wireDeviceIndex == 1)
-  {
-    DeviceHWVersion.toCharArray(little_s_string, 32);
-    Wire.print(little_s_string);
-    Wire.write('\0');
-  }
-  else if (_wireDeviceIndex == 2)
-  {
-    DeviceFWVersion.toCharArray(little_s_string, 32);
-    Wire.print(little_s_string);
-    Wire.write('\0');
-  }
-  else if (_wireDeviceIndex == 3)
-  {
-    strncpy(little_s_string, BLAECKSERIAL_VERSION, 31);
-    little_s_string[31] = '\0';
-    Wire.print(little_s_string);
-    Wire.write('\0');
-  }
-  else if (_wireDeviceIndex == 4)
-  {
-    strncpy(little_s_string, BLAECKSERIAL_NAME, 31);
-    little_s_string[31] = '\0';
-    Wire.print(little_s_string);
-    Wire.write('\0');
-  }
-
-  Wire.write(0x0D);
-
-  _wireDeviceIndex += 1;
-  if (_wireDeviceIndex > 4)
-  {
-    _wireDeviceIndex = 0;
-    Wire.write(0x0A);
-  }
-}
-
-void BlaeckSerial::wireSlaveTransmitSingleSymbol()
-{
-  Signal signal = Signals[_wireSignalIndex];
-
-  char little_s_string[32] = "";
-  signal.SignalName.toCharArray(little_s_string, 32);
-
-  Wire.print(little_s_string);
-  Wire.write('\0');
-
-  switch (signal.DataType)
-  {
-  case (Blaeck_bool):
-  {
-    Wire.write(0x0);
-    break;
-  }
-  case (Blaeck_byte):
-  {
-    Wire.write(0x1);
-    break;
-  }
-  case (Blaeck_short):
-  {
-    Wire.write(0x2);
-    break;
-  }
-  case (Blaeck_ushort):
-  {
-    Wire.write(0x3);
-    break;
-  }
-  case (Blaeck_int):
-  {
-    Wire.write(0x4);
-    break;
-  }
-  case (Blaeck_uint):
-  {
-    Wire.write(0x5);
-    break;
-  }
-  case (Blaeck_long):
-  {
-    Wire.write(0x6);
-    break;
-  }
-  case (Blaeck_ulong):
-  {
-    Wire.write(0x7);
-    break;
-  }
-  case (Blaeck_float):
-  {
-    Wire.write(0x8);
-    break;
-  }
-  case (Blaeck_double):
-  {
-    Wire.write(0x9);
-    break;
-  }
-  case (Blaeck_string):
-  {
-    Wire.write(0xA);
-    break;
-  }
-  }
-
-  Wire.write(0x0D);
-
-  _wireSignalIndex += 1;
-  if (_wireSignalIndex >= _signalIndex)
-  {
-    _wireSignalIndex = 0;
-    Wire.write(0x0A);
-  }
-}
-
-byte BlaeckSerial::_wireDataPointSize(byte dataType)
-{
-  // Total wire bytes: [bytecount(1)] + [index(2)] + [data(N)] + [CRC(2)]
-  switch (dataType)
-  {
-  case Blaeck_bool:
-  case Blaeck_byte:
-    return 6; // 1+2+1+2
-  case Blaeck_short:
-  case Blaeck_ushort:
-  case Blaeck_int:
-  case Blaeck_uint:
-    return 7; // 1+2+2+2
-  case Blaeck_long:
-  case Blaeck_ulong:
-  case Blaeck_float:
-    return 9; // 1+2+4+2
-  case Blaeck_double:
-    return 13; // 1+2+8+2
-  default:
-    return BLAECK_WIRE_BUFFER_SIZE; // won't fit → stops packing
-  }
-}
-
-void BlaeckSerial::wireSlaveTransmitDataPoints(bool onlyUpdated)
-{
-  if (_signalIndex == 0)
-  {
-    Wire.write(0);
-    Wire.write(0x7F);
-    return;
-  }
-
-  // Reserve 1 byte for potential EOL marker
-  const byte maxPayload = BLAECK_WIRE_BUFFER_SIZE - 1;
-  byte bytesWritten = 0;
-
-  while (_wireSignalIndex < _signalIndex)
-  {
-    Signal &signal = Signals[_wireSignalIndex];
-
-    // Skip non-updated signals in onlyUpdated mode
-    if (onlyUpdated && !signal.Updated)
-    {
-      Signals[_wireSignalIndex].Updated = false;
-      _wireSignalIndex++;
-      continue;
-    }
-
-    // For fixed-width types wireSize is looked up; strings are variable length.
-    // A string data point must fit within a single wire window on its own, so we
-    // truncate it to (maxPayload - 6): bytecount(1)+index(2)+len(1)+CRC(2) overhead.
-    byte strLen = 0;
-    byte wireSize;
-    if (signal.DataType == Blaeck_string)
-    {
-      const char *str = (const char *)signal.Address;
-      size_t rawLen = (str != nullptr) ? strlen(str) : 0;
-      byte maxStr = (byte)(maxPayload - 6);
-      strLen = (rawLen > maxStr) ? maxStr : (byte)rawLen;
-      wireSize = 6 + strLen; // 1+2+(1+strLen)+2
-    }
-    else
-    {
-      wireSize = _wireDataPointSize(signal.DataType);
-    }
-
-    if (bytesWritten + wireSize > maxPayload)
-      break;
-
-    // Write this signal: [bytecount][index][data][CRC]
-    _crcWire.restart();
-
-    byte indexBytes[2] = {
-        (byte)(_wireSignalIndex & 0xFF),
-        (byte)((_wireSignalIndex >> 8) & 0xFF)};
-
-    switch (signal.DataType)
-    {
-    case (Blaeck_bool):
-    {
-      Wire.write(3);
-      _crcWire.add(3);
-      Wire.write(indexBytes, 2);
-      _crcWire.add(indexBytes, 2);
-      boolCvt.val = *((bool *)signal.Address);
-      Wire.write(boolCvt.bval, 1);
-      _crcWire.add(boolCvt.bval, 1);
-    }
-    break;
-    case (Blaeck_byte):
-    {
-      Wire.write(3);
-      _crcWire.add(3);
-      Wire.write(indexBytes, 2);
-      _crcWire.add(indexBytes, 2);
-      Wire.write(*((byte *)signal.Address));
-      _crcWire.add(*((byte *)signal.Address));
-    }
-    break;
-    case (Blaeck_short):
-    {
-      Wire.write(4);
-      _crcWire.add(4);
-      Wire.write(indexBytes, 2);
-      _crcWire.add(indexBytes, 2);
-      shortCvt.val = *((short *)signal.Address);
-      Wire.write(shortCvt.bval, 2);
-      _crcWire.add(shortCvt.bval, 2);
-    }
-    break;
-    case (Blaeck_ushort):
-    {
-      Wire.write(4);
-      _crcWire.add(4);
-      Wire.write(indexBytes, 2);
-      _crcWire.add(indexBytes, 2);
-      ushortCvt.val = *((unsigned short *)signal.Address);
-      Wire.write(ushortCvt.bval, 2);
-      _crcWire.add(ushortCvt.bval, 2);
-    }
-    break;
-    case (Blaeck_int):
-    {
-      Wire.write(4);
-      _crcWire.add(4);
-      Wire.write(indexBytes, 2);
-      _crcWire.add(indexBytes, 2);
-      intCvt.val = *((int *)signal.Address);
-      Wire.write(intCvt.bval, 2);
-      _crcWire.add(intCvt.bval, 2);
-    }
-    break;
-    case (Blaeck_uint):
-    {
-      Wire.write(4);
-      _crcWire.add(4);
-      Wire.write(indexBytes, 2);
-      _crcWire.add(indexBytes, 2);
-      uintCvt.val = *((unsigned int *)signal.Address);
-      Wire.write(uintCvt.bval, 2);
-      _crcWire.add(uintCvt.bval, 2);
-    }
-    break;
-    case (Blaeck_long):
-    {
-      Wire.write(6);
-      _crcWire.add(6);
-      Wire.write(indexBytes, 2);
-      _crcWire.add(indexBytes, 2);
-      lngCvt.val = *((long *)signal.Address);
-      Wire.write(lngCvt.bval, 4);
-      _crcWire.add(lngCvt.bval, 4);
-    }
-    break;
-    case (Blaeck_ulong):
-    {
-      Wire.write(6);
-      _crcWire.add(6);
-      Wire.write(indexBytes, 2);
-      _crcWire.add(indexBytes, 2);
-      ulngCvt.val = *((unsigned long *)signal.Address);
-      Wire.write(ulngCvt.bval, 4);
-      _crcWire.add(ulngCvt.bval, 4);
-    }
-    break;
-    case (Blaeck_float):
-    {
-      Wire.write(6);
-      _crcWire.add(6);
-      Wire.write(indexBytes, 2);
-      _crcWire.add(indexBytes, 2);
-      fltCvt.val = *((float *)signal.Address);
-      Wire.write(fltCvt.bval, 4);
-      _crcWire.add(fltCvt.bval, 4);
-    }
-    break;
-    case (Blaeck_double):
-    {
-      Wire.write(10);
-      _crcWire.add(10);
-      Wire.write(indexBytes, 2);
-      _crcWire.add(indexBytes, 2);
-      dblCvt.val = *((double *)signal.Address);
-      Wire.write(dblCvt.bval, 8);
-      _crcWire.add(dblCvt.bval, 8);
-    }
-    break;
-    case (Blaeck_string):
-    {
-      // bytecount = index(2) + len(1) + strLen chars
-      byte bc = (byte)(3 + strLen);
-      Wire.write(bc);
-      _crcWire.add(bc);
-      Wire.write(indexBytes, 2);
-      _crcWire.add(indexBytes, 2);
-      Wire.write(strLen);
-      _crcWire.add(strLen);
-      if (strLen > 0)
-      {
-        const char *str = (const char *)signal.Address;
-        Wire.write((const uint8_t *)str, strLen);
-        _crcWire.add((uint8_t *)str, strLen);
-      }
-    }
-    break;
-    }
-
-    uint16_t crc_value = _crcWire.calc();
-    Wire.write((byte *)&crc_value, 2);
-    bytesWritten += wireSize;
-
-    if (onlyUpdated)
-      Signals[_wireSignalIndex].Updated = false;
-
-    _wireSignalIndex++;
-  }
-
-  if (_wireSignalIndex >= _signalIndex)
-  {
-    _wireSignalIndex = 0;
-    Wire.write(0x7F);
-  }
-}
-
-void BlaeckSerial::wireSlaveReceive(int numBytes)
-{
-  if (numBytes > 0 && Wire.available())
-  {
-    _wireMode = (byte)Wire.read();
-  }
-  else
-  {
-    _wireMode = 0;
-  }
-
-  // Current protocol writes one command byte from master to slave, except wire-mode 6
-  // (BLAECK_WIRE_MODE_COMMAND), which additionally carries a single-shot command payload.
-  if (_masterSlaveConfig == Slave && _wireMode == BLAECK_WIRE_MODE_COMMAND)
-  {
-    // Reassemble the received frame (mode byte + payload) into the pending-command
-    // buffer; the actual dispatch happens later in read(), outside this ISR.
-    uint8_t raw[BLAECK_WIRE_BUFFER_SIZE];
-    int n = 0;
-    raw[n++] = BLAECK_WIRE_MODE_COMMAND;
-    for (int i = 1; i < numBytes && Wire.available() && n < (int)sizeof(raw); i++)
-      raw[n++] = (uint8_t)Wire.read();
-
-    blaeckReassembleCommand(raw, n, _wireCommandBuf, sizeof(_wireCommandBuf));
-    _wireCommandPending = true;
-  }
-  else
-  {
-    // Drain potential extra bytes to keep the Wire RX buffer consistent.
-    for (int i = 1; i < numBytes && Wire.available(); i++)
-    {
-      (void)Wire.read();
-    }
-  }
-  _wireSignalIndex = 0;
-  _wireDeviceIndex = 0;
-
-#if BLAECK_ENABLE_COMMAND_META
-  // A new command-catalog aggregation pass starts with this mode byte; reset the
-  // streaming cursor so serialization restarts from the beginning on the next
-  // requestFrom().
-  if (_masterSlaveConfig == Slave && _wireMode == BLAECK_WIRE_MODE_COMMAND_LIST)
-  {
-    _wireCommandCursor = 0;
-    _wireCommandTotalLen = 0;
-  }
-#endif
-
-  if (_masterSlaveConfig == Slave && (_wireMode == 1 || _wireMode == 4))
-  {
-    if (_beforeWriteCallback != NULL)
-      _beforeWriteCallback();
-  };
-}
-
-void BlaeckSerial::wireSlaveTransmitToMaster()
-{
-  if (_wireMode == 0)
-    this->wireSlaveTransmitSingleSymbol();
-  if (_wireMode == 1)
-    this->wireSlaveTransmitDataPoints(false);
-  if (_wireMode == 4)
-    this->wireSlaveTransmitDataPoints(true);
-  if (_wireMode == 2)
-    this->wireSlaveTransmitStatusByte();
-  if (_wireMode == 3)
-    this->wireSlaveTransmitSingleDevice();
-#if BLAECK_ENABLE_COMMAND_META
-  if (_wireMode == BLAECK_WIRE_MODE_COMMAND_LIST)
-    this->wireSlaveTransmitCommandChunk();
-#endif
-}
-
-// Master -> slave single-shot command delivery (I2C wire-mode 6). Sends the mode
-// byte followed by the command payload in one transmission. Payloads longer than
-// the wire buffer are truncated (chunked delivery is planned); such commands are
-// rare in practice (short "NAME,value" frames dominate). Returns true if the frame
-// was delivered to a known slave (I2C transmission acknowledged), false otherwise.
-bool BlaeckSerial::wireMasterTransmitCommand(byte slaveID, const char *payload)
-{
-  if (_masterSlaveConfig != Master)
-    return false;
-
-  if (slaveID > BLAECK_ROUTING_MAX_SLAVE_ID || !this->slaveFound(slaveID))
-  {
-    if (_debugStream != nullptr)
-    {
-      _debugStream->print("BlaeckSerial: command target slave not found: ");
-      _debugStream->println(slaveID);
-    }
-    return false;
-  }
-
-  uint8_t frame[BLAECK_WIRE_BUFFER_SIZE];
-  int frameLen = blaeckBuildCommandFrame(payload, frame, sizeof(frame));
-
-  if (_debugStream != nullptr && (int)strlen(payload) > (int)(sizeof(frame) - 1))
-  {
-    _debugStream->print("BlaeckSerial: command truncated for single-shot I2C delivery to slave ");
-    _debugStream->println(slaveID);
-  }
-
-  Wire.beginTransmission(slaveID);
-  Wire.write(frame, frameLen);
-  // endTransmission() returns 0 on success (slave ACKed the address+data).
-  return (Wire.endTransmission() == 0);
-}
-
-// Slave-side deferred dispatch: if the Wire ISR captured a command from the master,
-// copy it out (briefly masking interrupts so the ISR can't overwrite mid-copy) and
-// run it through the normal command-handler dispatch on the main loop.
-void BlaeckSerial::_processPendingWireCommand()
-{
-  if (!_wireCommandPending)
-    return;
-
-  noInterrupts();
-  strncpy(receivedChars, _wireCommandBuf, sizeof(receivedChars) - 1);
-  receivedChars[sizeof(receivedChars) - 1] = '\0';
-  _wireCommandPending = false;
-  interrupts();
-
-  // Commands delivered over I2C are acked by the master, not the slave (the slave
-  // usually has no path back to the serial host).
-  _dispatchRegisteredHandlers(false);
-}
-
-bool BlaeckSerial::slaveFound(const unsigned int index)
-{
-  if (index > 127)
-    return false;
-  return (boolean)bitRead(_slaveFound[index / 8], index % 8);
-}
-
-void BlaeckSerial::storeSlave(const unsigned int index, const boolean value)
-{
-  if (index > 127)
-    return;
-  bitWrite(_slaveFound[index / 8], index % 8, value);
 }
 
 void BlaeckSerial::markSignalUpdated(int signalIndex)
