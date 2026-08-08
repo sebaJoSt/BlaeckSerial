@@ -413,6 +413,7 @@ public:
   void write(String signalName, unsigned long value);
   void write(String signalName, float value);
   void write(String signalName, double value);
+  void write(String signalName, char *value);
 
   void write(String signalName, bool value, unsigned long messageID);
   void write(String signalName, byte value, unsigned long messageID);
@@ -424,6 +425,7 @@ public:
   void write(String signalName, unsigned long value, unsigned long messageID);
   void write(String signalName, float value, unsigned long messageID);
   void write(String signalName, double value, unsigned long messageID);
+  void write(String signalName, char *value, unsigned long messageID);
 
   void write(String signalName, bool value, unsigned long messageID, unsigned long long timestamp);
   void write(String signalName, byte value, unsigned long messageID, unsigned long long timestamp);
@@ -435,6 +437,7 @@ public:
   void write(String signalName, unsigned long value, unsigned long messageID, unsigned long long timestamp);
   void write(String signalName, float value, unsigned long messageID, unsigned long long timestamp);
   void write(String signalName, double value, unsigned long messageID, unsigned long long timestamp);
+  void write(String signalName, char *value, unsigned long messageID, unsigned long long timestamp);
 
   // Update value and write directly - by index
   void write(int signalIndex, bool value);
@@ -447,6 +450,7 @@ public:
   void write(int signalIndex, unsigned long value);
   void write(int signalIndex, float value);
   void write(int signalIndex, double value);
+  void write(int signalIndex, char *value);
 
   void write(int signalIndex, bool value, unsigned long messageID);
   void write(int signalIndex, byte value, unsigned long messageID);
@@ -458,6 +462,7 @@ public:
   void write(int signalIndex, unsigned long value, unsigned long messageID);
   void write(int signalIndex, float value, unsigned long messageID);
   void write(int signalIndex, double value, unsigned long messageID);
+  void write(int signalIndex, char *value, unsigned long messageID);
 
   void write(int signalIndex, bool value, unsigned long messageID, unsigned long long timestamp);
   void write(int signalIndex, byte value, unsigned long messageID, unsigned long long timestamp);
@@ -469,6 +474,7 @@ public:
   void write(int signalIndex, unsigned long value, unsigned long messageID, unsigned long long timestamp);
   void write(int signalIndex, float value, unsigned long messageID, unsigned long long timestamp);
   void write(int signalIndex, double value, unsigned long messageID, unsigned long long timestamp);
+  void write(int signalIndex, char *value, unsigned long messageID, unsigned long long timestamp);
 
   // ----- Data Update -----
   // Update value and mark Signal as updated - by name

@@ -22,6 +22,7 @@
     loggbok/wave/Offset         number          DC offset             (-100..100)
     loggbok/wave/Waveform       select          0=Sine 1=Square 2=Triangle 3=Sawtooth
     loggbok/wave/Enabled        switch          output on/off (off -> Output = Offset)
+    loggbok/wave/Label          text            free-text label (string signal)
 
   --- COMMANDS (publish to loggbok/<table>/_cmd/<NAME>, or loggbok/_all/_cmd/<NAME>) ---
     SET_FREQ    <0..2>      frequency [Hz]            -> Frequency  (HA number, step 0.01)
@@ -29,7 +30,7 @@
     SET_OFFSET  <-100..100> DC offset                 -> Offset     (HA number, step 0.1)
     SET_WAVE    <0..3>      Sine/Square/Triangle/Saw  -> Waveform   (HA select; name or index)
     SET_ENABLE  <0|1>       output on/off             -> Enabled    (HA switch)
-    SET_LABEL   <text>      free-text label (<=20)                  (HA text; open-loop)
+    SET_LABEL   <text>      free-text label (<=20)    -> Label      (HA text; string signal)
     STATUS                  print info to serial                    (HA button)
 
   Loggbok CLI (log fast enough to resolve the wave, e.g. 20 ms):
@@ -81,15 +82,16 @@ void setup()
   BlaeckSerial.addSignal("Offset", &Offset);
   BlaeckSerial.addSignal("Waveform", &Waveform);
   BlaeckSerial.addSignal("Enabled", &Enabled);
+  BlaeckSerial.addSignal("Label", Label);
 
   BlaeckSerial.onNumberCommand("SET_FREQ", onSetFreq, F("Frequency"), 0.0f, 2.0f, 0.01f, F("Hz"));
   BlaeckSerial.onNumberCommand("SET_AMP", onSetAmp, F("Amplitude"), 0.0f, 100.0f, 0.1f);
   BlaeckSerial.onNumberCommand("SET_OFFSET", onSetOffset, F("Offset"), -100.0f, 100.0f, 0.1f);
   BlaeckSerial.onSelectCommand("SET_WAVE", onSetWave, F("Waveform"), F("Sine,Square,Triangle,Sawtooth"));
   BlaeckSerial.onSwitchCommand("SET_ENABLE", onSetEnable, F("Enabled"));
-  // HA text: open-loop (no state signal until string signals land). The host
+  // HA text: closed-loop, mirrored to the "Label" string signal. The host
   // percent-encodes the value; the device decodes it and enforces the 20-byte max.
-  BlaeckSerial.onTextCommand("SET_LABEL", onSetLabel, nullptr, 20);
+  BlaeckSerial.onTextCommand("SET_LABEL", onSetLabel, F("Label"), 20);
   BlaeckSerial.onButtonCommand("STATUS", onStatus);
 
   lastMicros = micros();
@@ -194,6 +196,7 @@ void onSetLabel(const char *command, const char *const *params, byte paramCount)
   {
     strncpy(Label, params[0], sizeof(Label) - 1);
     Label[sizeof(Label) - 1] = '\0';
+    BlaeckSerial.write("Label", Label);
   }
 }
 

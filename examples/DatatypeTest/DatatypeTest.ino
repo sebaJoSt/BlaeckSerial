@@ -118,6 +118,7 @@ void loop()
     BlaeckSerial.write("Double_NaN", doubleNaN);
     BlaeckSerial.write("Double_Inf", doubleInfinity);
     BlaeckSerial.write("Double_NegInf", doubleNegativeInfinity);
+    BlaeckSerial.write("String_test", stringTest);
 
     BlaeckSerial.markAllSignalsUpdated();
   }

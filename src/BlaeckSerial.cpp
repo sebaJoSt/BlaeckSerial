@@ -2124,6 +2124,43 @@ void BlaeckSerial::write(int signalIndex, double value, unsigned long messageID,
   }
 }
 
+void BlaeckSerial::write(String signalName, char *value)
+{
+  this->write(signalName, value, 1);
+}
+void BlaeckSerial::write(String signalName, char *value, unsigned long messageID)
+{
+  this->write(signalName, value, messageID, getTimeStamp());
+}
+void BlaeckSerial::write(String signalName, char *value, unsigned long messageID, unsigned long long timestamp)
+{
+  int index = findSignalIndex(signalName);
+  if (index >= 0)
+  {
+    this->write(index, value, messageID, timestamp);
+  }
+}
+void BlaeckSerial::write(int signalIndex, char *value)
+{
+  this->write(signalIndex, value, 1);
+}
+void BlaeckSerial::write(int signalIndex, char *value, unsigned long messageID)
+{
+  this->write(signalIndex, value, messageID, getTimeStamp());
+}
+void BlaeckSerial::write(int signalIndex, char *value, unsigned long messageID, unsigned long long timestamp)
+{
+  if (signalIndex >= 0 && signalIndex < _signalIndex)
+  {
+    if (Signals[signalIndex].DataType == Blaeck_string)
+    {
+      // String values live in a user-owned buffer; repoint Address like addSignal(char*).
+      Signals[signalIndex].Address = value;
+      this->writeLocalData(messageID, signalIndex, signalIndex, true, false, timestamp);
+    }
+  }
+}
+
 void BlaeckSerial::writeAllData()
 {
   this->writeAllData(1);

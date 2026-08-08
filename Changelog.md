@@ -51,8 +51,9 @@ All notable changes to this project will be documented in this file.
   states, small JSON, etc.). On the wire the value is length-prefixed: a
   1-byte length followed by that many UTF-8 bytes. Like a `char*` signal in
   BlaeckTCP 7.0.0, the value lives in a user-owned buffer and is read live on
-  each transmit (no `write()` setter — update the buffer directly). String
-  signals are also carried over I2C from a slave to the master: because the
+  each transmit. Matching `write(name/index, char *value)` setters repoint the
+  buffer and transmit that one signal; you may also update the buffer in place
+  and let the periodic transmit pick it up. String signals are also carried over I2C from a slave to the master: because the
   self-describing wire chunk must fit in one I2C window, a string is truncated
   on the wire to `BLAECK_WIRE_BUFFER_SIZE - 6` bytes (25 with the default
   32-byte buffer); direct Serial (Single/Master) transmits up to 255 bytes.
