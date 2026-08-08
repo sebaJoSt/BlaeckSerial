@@ -27,7 +27,9 @@ void setup()
   // Setup the Real Time Clock
   RTC.begin();
 
-  // Set the start time (UTC)
+  // Set the start time (UTC). The date is arbitrary - it only gives the RTC
+  // something to count from, so the timestamps in the data are plausible.
+  // Replace it with a real time source if you need the actual wall clock.
   RTCTime startTime(13, Month::AUGUST, 2025, 14, 00, 00, DayOfWeek::WEDNESDAY, SaveLight::SAVING_TIME_ACTIVE);
   RTC.setTime(startTime);
 

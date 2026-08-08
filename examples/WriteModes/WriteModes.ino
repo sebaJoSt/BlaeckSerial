@@ -54,7 +54,7 @@ void setup()
       3        // Maximal signal count used;
   );
 
-  BlaeckSerial.DeviceName = "Basic Sine Number Generator";
+  BlaeckSerial.DeviceName = "Write Modes Demo";
   BlaeckSerial.DeviceHWVersion = "Arduino Mega 2560 Rev3";
   BlaeckSerial.DeviceFWVersion = ExampleVersion;
 

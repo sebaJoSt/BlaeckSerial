@@ -11,6 +11,8 @@
 #include "Arduino.h"
 #include "BlaeckSerial.h"
 
+#define ExampleVersion "1.0"
+
 // Instantiate a new BlaeckSerial object
 BlaeckSerial BlaeckSerial;
 
@@ -46,6 +48,11 @@ void setup()
 
   // Initialize BlaeckSerial
   BlaeckSerial.begin(&Serial, 27);
+
+  // Reported by <BLAECK.GET_DEVICES>, and used by a host to name the device
+  BlaeckSerial.DeviceName = "Datatype Test";
+  BlaeckSerial.DeviceHWVersion = "Arduino Mega 2560 Rev3";
+  BlaeckSerial.DeviceFWVersion = ExampleVersion;
 
   // Add signals to BlaeckSerial
   BlaeckSerial.addSignal("Bool_false", &boolTest[0]);
