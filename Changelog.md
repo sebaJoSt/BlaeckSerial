@@ -55,6 +55,25 @@ All notable changes to this project will be documented in this file.
   as `WaveformGenerator` to register their full command set without custom
   compile-time overrides.
 
+### Fixed
+- **Compile-time configuration now has a documented, working route.** A
+  `BlaeckSerialConfig.h` in the sketch folder — the method described since
+  6.0.0 — is never found under the Arduino IDE or arduino-cli: the sketch
+  folder is not on the compiler's include path, so the `__has_include` in
+  `BlaeckSerial.h` finds nothing and the settings are silently ignored.
+  Anyone who set overrides that way on 6.x was running the built-in defaults,
+  and registrations beyond the real handler limit failed quietly. PlatformIO
+  `build_flags` were unaffected and always worked. README.md now documents
+  three routes that do work (arduino-cli `--build-property`, a config inside
+  the library's `src/`, or `platform.local.txt`), and warns that an override
+  must reach every translation unit — a setting seen by the sketch but not by
+  `BlaeckSerial.cpp` gives `class BlaeckSerial` two layouts (an ODR
+  violation). This is an Arduino build-system limitation, not a library one:
+  see arduino/arduino-builder#15 (closed) and arduino/arduino-cli#501 (open).
+- `writeMessage()`'s length cap no longer trips `-Wtype-limits` on AVR, where
+  `size_t` is 16-bit and the comparison could never be true. No behaviour
+  change; `strlen` could not exceed the cap there in any case.
+
 ### Removed
 - **I2C master/slave support (breaking).** All I2C master/slave functionality
   has been removed: `beginMaster(...)` / `beginSlave(...)`, the `MasterSlaveConfig`
@@ -93,7 +112,9 @@ All notable changes to this project will be documented in this file.
   - Enabled by default on non-AVR boards, disabled on AVR to save SRAM.
   - Runtime control: `setBufferedWrites(bool)` / `isBufferedWrites()`.
 - Compile-time configuration via `BlaeckSerialConfig.h` in the sketch folder
-  (uses `__has_include`). All command parser defaults and buffered writes can
+  (uses `__has_include`) — *see 7.0.0: the sketch-folder location never worked
+  under the Arduino IDE; only PlatformIO `build_flags` took effect.*
+  All command parser defaults and buffered writes can
   now be overridden without modifying library source. PlatformIO users can
   also use `-D` compiler flags.
 - Preprocessor version macros: `BLAECKSERIAL_VERSION`, `BLAECKSERIAL_VERSION_MAJOR`,
