@@ -30,10 +30,9 @@
     <LED>         its state signal         The dashboard follows LED_State.
     <Ping>        writeMessage(...)        A button has no state signal, so it
                                            pushes a line to a named message
-                                           channel, written only on a press -
-                                           an on-demand state report, the same
-                                           pattern as WaveformGenerator's
-                                           STATUS button.
+                                           channel. It is written only on a
+                                           press, so the host sees an answer
+                                           on demand rather than continuously.
 
   Author: Sebastian Strobl,
   More information on: https://github.com/sebaJoSt/BlaeckSerial
@@ -200,9 +199,9 @@ void onLED(const char *command, const char *const *params, byte paramCount)
    a text sensor. Serial.println() would only reach the Serial Monitor - a
    Blaeck host skips anything that is not a frame.
 
-   The channel is only written on a button press, so its sensor updates on
-   demand rather than continuously. WaveformGenerator uses the same pattern
-   for its STATUS button, alongside a periodic heartbeat on a second channel.
+   The channel is only written on a button press, so a sensor bound to it
+   updates on demand rather than continuously. Calling writeMessage() from
+   loop() on a timer instead would give the same channel a steady heartbeat.
 */
 void onPing(const char *command, const char *const *params, byte paramCount)
 {
