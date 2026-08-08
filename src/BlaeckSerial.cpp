@@ -580,6 +580,14 @@ void BlaeckSerial::read()
       this->writeCommands(msg_id);
     }
 #endif
+#if BLAECK_ENABLE_MESSAGES
+    else if (strcmp(COMMAND, "BLAECK.WRITE_MESSAGE_CHANNELS") == 0)
+    {
+      unsigned long msg_id = ((unsigned long)PARAMETER[3] << 24) | ((unsigned long)PARAMETER[2] << 16) | ((unsigned long)PARAMETER[1] << 8) | ((unsigned long)PARAMETER[0]);
+
+      this->writeMessageChannels(msg_id);
+    }
+#endif
     else if (strcmp(COMMAND, "BLAECK.ACTIVATE") == 0)
     {
       if (_fixedInterval_ms == BLAECK_INTERVAL_CLIENT)
@@ -1130,23 +1138,114 @@ void BlaeckSerial::_writeCommandAck(const char *rawCommand, byte status, byte re
   }
 }
 
+#if BLAECK_ENABLE_MESSAGES
 void BlaeckSerial::writeMessage(const char *channelName, const char *text)
 {
   this->writeMessage(channelName, text, _messageMsgId++);
 }
 
+bool BlaeckSerial::addMessageChannel(const char *channelName)
+{
+  return this->addMessageChannel(channelName, nullptr, false);
+}
+
+bool BlaeckSerial::addMessageChannel(const char *channelName, const __FlashStringHelper *icon)
+{
+  return this->addMessageChannel(channelName, icon, false);
+}
+
+bool BlaeckSerial::addMessageChannel(const char *channelName, const __FlashStringHelper *icon, bool diagnostic)
+{
+  if (channelName == nullptr || channelName[0] == '\0')
+    return false;
+
+  if (strlen(channelName) >= MAX_MESSAGE_NAME_COUNT)
+  {
+    if (_debugStream != nullptr)
+    {
+      _debugStream->print(F("Channel name too long for message channel table: "));
+      _debugStream->println(channelName);
+    }
+    return false;
+  }
+
+  // Re-declaring a channel updates its metadata rather than consuming a slot.
+  int existing = _findMessageChannel(channelName);
+  if (existing >= 0)
+  {
+    _messageChannels[existing].icon = icon;
+    _messageChannels[existing].diagnostic = diagnostic;
+    return true;
+  }
+
+  for (byte i = 0; i < MAX_MESSAGE_CHANNELS; i++)
+  {
+    if (!_messageChannels[i].inUse)
+    {
+      strncpy(_messageChannels[i].name, channelName, MAX_MESSAGE_NAME_COUNT - 1);
+      _messageChannels[i].name[MAX_MESSAGE_NAME_COUNT - 1] = '\0';
+      _messageChannels[i].icon = icon;
+      _messageChannels[i].diagnostic = diagnostic;
+      _messageChannels[i].inUse = true;
+      return true;
+    }
+  }
+
+  if (_debugStream != nullptr)
+  {
+    _debugStream->print(F("Message channel table full for: "));
+    _debugStream->println(channelName);
+  }
+  return false;
+}
+
+void BlaeckSerial::clearAllMessageChannels()
+{
+  for (byte i = 0; i < MAX_MESSAGE_CHANNELS; i++)
+  {
+    _messageChannels[i].inUse = false;
+    _messageChannels[i].icon = nullptr;
+    _messageChannels[i].diagnostic = false;
+    _messageChannels[i].name[0] = '\0';
+  }
+}
+
+int BlaeckSerial::_findMessageChannel(const char *channelName) const
+{
+  if (channelName == nullptr || channelName[0] == '\0')
+    return -1;
+
+  for (byte i = 0; i < MAX_MESSAGE_CHANNELS; i++)
+  {
+    if (_messageChannels[i].inUse && strcmp(_messageChannels[i].name, channelName) == 0)
+      return (int)i;
+  }
+  return -1;
+}
+
 void BlaeckSerial::writeMessage(const char *channelName, const char *text, unsigned long messageID)
 {
-  // 0x90 "Message" frame: a named free-text status/log channel, device -> host.
+  // 0x90 "Message" frame: a free-text status/log line on a declared channel,
+  // device -> host.
   //   name\0  length(2, LE uint16)  text[length]
-  // No CRC (like the 0xE0/0xF0 frames). The host may surface it (e.g. an
-  // auto-created Home Assistant text sensor per channel); it is never treated as
-  // signal/telemetry data and is not stored.
+  // No CRC (like the 0xE0/0xF0 frames). The host may surface it (e.g. a Home
+  // Assistant text sensor announced from the 0x8A channel catalog); it is never
+  // treated as signal/telemetry data and is not stored.
   if (StreamRef == nullptr)
     return;
 
-  if (channelName == nullptr)
-    channelName = "";
+  // Only declared channels are sent: the host announces its entities from the
+  // 0x8A catalog, so a line on an undeclared channel would have nowhere to go.
+  if (_findMessageChannel(channelName) < 0)
+  {
+    if (_debugStream != nullptr)
+    {
+      _debugStream->print(F("Message dropped, channel not declared with addMessageChannel(): "));
+      _debugStream->println(channelName != nullptr ? channelName : "");
+    }
+    return;
+  }
+
   if (text == nullptr)
     text = "";
 
@@ -1190,6 +1289,113 @@ void BlaeckSerial::writeMessage(const char *channelName, const char *text, unsig
     StreamRef->flush();
   }
 }
+
+void BlaeckSerial::writeMessageChannels()
+{
+  this->writeMessageChannels(1);
+}
+
+void BlaeckSerial::writeMessageChannels(unsigned long msg_id)
+{
+  this->writeMessageChannelsFrame(msg_id);
+}
+
+void BlaeckSerial::writeMessageChannelsFrame(unsigned long msg_id)
+{
+  // 0x8A "Message Channel List" frame. Per declared channel entry:
+  //   reserved(1) reserved(1) name\0 flags(1)
+  //   [icon\0]                 if flags.hasIcon
+  // flags bits: 0=hasIcon 1=isDiagnostic
+  // The two leading bytes are always zero. They keep the entry byte-shape
+  // identical to a 0xE0 command entry (where they carried the now-removed I2C
+  // masterSlaveConfig/slaveID), so a host parses both frames the same way:
+  // skip two, read the NUL-terminated name, then the flags.
+  // Declared up-front so the host can announce one text entity per channel
+  // before any 0x90 message arrives, the same way 0xE0 announces commands.
+  if (StreamRef == nullptr)
+    return;
+
+  if (_bufferedWrites && _frameBuf)
+  {
+    _bufReset();
+    _bufHeader(0x8A, msg_id);
+
+    for (byte i = 0; i < MAX_MESSAGE_CHANNELS; i++)
+    {
+      MessageChannelEntry &e = _messageChannels[i];
+      if (!e.inUse)
+        continue;
+
+      byte flags = 0;
+      if (e.icon != nullptr)
+        flags |= 0x01;
+      if (e.diagnostic)
+        flags |= 0x02;
+
+      _bufByte((byte)0);
+      _bufByte((byte)0);
+      _bufStr0(e.name);
+      _bufByte(flags);
+
+      if (flags & 0x01)
+        _bufFlashStr0(e.icon);
+    }
+
+    _bufFooter();
+    _bufSend();
+  }
+  else
+  {
+    StreamRef->write("<BLAECK:");
+    byte msg_key = 0x8A;
+    StreamRef->write(msg_key);
+    StreamRef->write(":");
+    ulngCvt.val = msg_id;
+    StreamRef->write(ulngCvt.bval, 4);
+    StreamRef->write(":");
+
+    for (byte i = 0; i < MAX_MESSAGE_CHANNELS; i++)
+    {
+      MessageChannelEntry &e = _messageChannels[i];
+      if (!e.inUse)
+        continue;
+
+      byte flags = 0;
+      if (e.icon != nullptr)
+        flags |= 0x01;
+      if (e.diagnostic)
+        flags |= 0x02;
+
+      StreamRef->write((byte)0);
+      StreamRef->write((byte)0);
+      StreamRef->print(e.name);
+      StreamRef->write((byte)0);
+      StreamRef->write(flags);
+
+      if (flags & 0x01)
+      {
+        StreamRef->print(e.icon);
+        StreamRef->write((byte)0);
+      }
+    }
+
+    StreamRef->write("/BLAECK>");
+    StreamRef->write("\r\n");
+    StreamRef->flush();
+  }
+}
+#else
+// BLAECK_ENABLE_MESSAGES=0: the API stays so sketches still build, but nothing
+// is stored and no frame is emitted.
+bool BlaeckSerial::addMessageChannel(const char *) { return false; }
+bool BlaeckSerial::addMessageChannel(const char *, const __FlashStringHelper *) { return false; }
+bool BlaeckSerial::addMessageChannel(const char *, const __FlashStringHelper *, bool) { return false; }
+void BlaeckSerial::clearAllMessageChannels() {}
+void BlaeckSerial::writeMessageChannels() {}
+void BlaeckSerial::writeMessageChannels(unsigned long) {}
+void BlaeckSerial::writeMessage(const char *, const char *) {}
+void BlaeckSerial::writeMessage(const char *, const char *, unsigned long) {}
+#endif
 
 #if BLAECK_ENABLE_COMMAND_META
 byte BlaeckSerial::_validateTypedCommand(byte handlerIndex)

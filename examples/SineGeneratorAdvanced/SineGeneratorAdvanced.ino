@@ -101,6 +101,10 @@ void setup()
   BlaeckSerial.onButtonCommand("SIGNAL_DEACTIVATE_RANGE", onSignalDeactivateRange);
   BlaeckSerial.onButtonCommand("STATUS", onStatus);
 
+  // Message channels are declared up-front so the host can announce a text
+  // sensor for "Status" before the first line is written.
+  BlaeckSerial.addMessageChannel("Status", F("mdi:message-text"));
+
   // Plain catch-all: <LS> and <command?> answer with free-form help text,
   // which no dashboard control can represent, so it stays untyped.
   BlaeckSerial.onAnyCommand(onHelpOrList);

@@ -146,6 +146,10 @@ void setup()
   // carries no value.
   BlaeckSerial.onSwitchCommand("LED", onLED, F("LED_State"));
   BlaeckSerial.onButtonCommand("Ping", onPing);
+
+  // Message channels are declared up-front so the host can announce a text
+  // sensor for "Status" before the first line is written.
+  BlaeckSerial.addMessageChannel("Status", F("mdi:message-text"));
 }
 
 void loop()

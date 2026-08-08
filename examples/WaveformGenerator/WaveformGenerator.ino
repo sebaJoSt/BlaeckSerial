@@ -107,6 +107,11 @@ void setup()
   BlaeckSerial.onTextCommand("SET_LABEL", onSetLabel, F("DeviceLabel"), 32);
   BlaeckSerial.onButtonCommand("STATUS", onStatus);
 
+  // Message channels are declared up-front so the host can announce one text
+  // sensor per channel before the first line is written.
+  BlaeckSerial.addMessageChannel("status", F("mdi:pulse"));
+  BlaeckSerial.addMessageChannel("status_ondemand", F("mdi:message-text"));
+
   lastMicros = micros();
 }
 

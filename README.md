@@ -140,7 +140,8 @@ Serial.println(BlaeckSerial.isBufferedWrites() ? "ON" : "OFF");
 
 ## Configuration
 
-Compile-time settings (buffer sizes, command parser limits, `BLAECK_ENABLE_COMMAND_META`)
+Compile-time settings (buffer sizes, command parser limits, message channel
+limits, `BLAECK_ENABLE_COMMAND_META`, `BLAECK_ENABLE_MESSAGES`)
 are plain `#define`s with `#ifndef` guards, so any value you define first wins.
 
 > [!IMPORTANT]
@@ -230,6 +231,8 @@ for esp32, samd, renesas_uno, … Without this file the config is silently ignor
 #define BLAECK_COMMAND_MAX_HANDLERS_DEFAULT 8
 #define BLAECK_COMMAND_MAX_NAME_CHARS_DEFAULT 48
 #define BLAECK_COMMAND_MAX_PARAMS_DEFAULT 16
+#define BLAECK_MESSAGE_MAX_CHANNELS_DEFAULT 4
+#define BLAECK_MESSAGE_MAX_NAME_CHARS_DEFAULT 24
 #define BLAECK_BUFFERED_WRITES_DEFAULT false
 ```
 

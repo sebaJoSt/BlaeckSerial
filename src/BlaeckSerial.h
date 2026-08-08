@@ -134,6 +134,38 @@
   #define BLAECK_ENABLE_COMMAND_META 1
 #endif
 
+// Messages (Home Assistant text/log channels).
+// When ON, the device can declare named message channels with
+// addMessageChannel(), emit the 0x8A "Message Channel List" frame in response to
+// BLAECK.WRITE_MESSAGE_CHANNELS, and send free-text lines on those channels with
+// writeMessage() (0x90). Turn OFF to save SRAM/flash on tiny targets; both
+// writeMessage() and addMessageChannel() then compile away.
+// Override via BlaeckSerialConfig.h or build flag.
+#ifndef BLAECK_ENABLE_MESSAGES
+  #define BLAECK_ENABLE_MESSAGES 1
+#endif
+
+#ifndef BLAECK_MESSAGE_MAX_CHANNELS_DEFAULT
+  #if defined(__AVR__)
+    // Each entry costs BLAECK_MESSAGE_MAX_NAME_CHARS_DEFAULT + ~3 bytes of SRAM.
+    #if defined(RAMEND) && (RAMEND >= 0x10FF)
+      #define BLAECK_MESSAGE_MAX_CHANNELS_DEFAULT 6
+    #else
+      #define BLAECK_MESSAGE_MAX_CHANNELS_DEFAULT 3
+    #endif
+  #else
+    #define BLAECK_MESSAGE_MAX_CHANNELS_DEFAULT 8
+  #endif
+#endif
+
+#ifndef BLAECK_MESSAGE_MAX_NAME_CHARS_DEFAULT
+  #if defined(__AVR__)
+    #define BLAECK_MESSAGE_MAX_NAME_CHARS_DEFAULT 16
+  #else
+    #define BLAECK_MESSAGE_MAX_NAME_CHARS_DEFAULT 32
+  #endif
+#endif
+
 
 typedef enum DataType
 {
@@ -257,11 +289,32 @@ public:
   void writeCommands(unsigned long messageID);
 
   // ----- Messages (Home Assistant text/log channel, 0x90) -----
-  // Send a free-text status/log message on a named channel to the serial host.
+  // With BLAECK_ENABLE_MESSAGES=0 these still compile but do nothing, so a
+  // sketch can be built for a tiny target without being rewritten.
+  //
+  // Declare a message channel. Channels must be declared up-front (typically in
+  // setup()) so the host can announce every text sensor before the first line
+  // arrives; writeMessage() on an undeclared channel is dropped.
+  // `channelName` is copied; `icon` must outlive the call (use a string literal
+  // or F("mdi:...")). Returns false if the name is empty/too long or the table
+  // is full.
+  bool addMessageChannel(const char *channelName);
+  bool addMessageChannel(const char *channelName, const __FlashStringHelper *icon);
+  // `diagnostic` groups the sensor under the HA device's diagnostic section.
+  bool addMessageChannel(const char *channelName, const __FlashStringHelper *icon, bool diagnostic);
+  void clearAllMessageChannels();
+
+  // Send the 0x8A "Message Channel List" frame (the declared-channel catalog).
+  // Sent automatically in response to BLAECK.WRITE_MESSAGE_CHANNELS.
+  void writeMessageChannels();
+  void writeMessageChannels(unsigned long messageID);
+
+  // Send a free-text status/log message on a declared channel to the serial host.
   // Fire-and-forget: a host may surface it (e.g. a Home Assistant text sensor
-  // auto-created per channel name) but it is never stored as signal data. The
-  // frame carries no CRC (like the 0xE0/0xF0 frames). Text longer than 65535
-  // bytes is truncated.
+  // per declared channel) but it is never stored as signal data. The frame
+  // carries no CRC (like the 0xE0/0xF0 frames). Text longer than 65535 bytes is
+  // truncated. Messages on channels that were never passed to
+  // addMessageChannel() are dropped.
   void writeMessage(const char *channelName, const char *text);
   void writeMessage(const char *channelName, const char *text, unsigned long messageID);
 
@@ -505,6 +558,11 @@ private:
   static byte _flashCsvOptionCount(const __FlashStringHelper *csv);
   static long _flashCsvIndexOf(const __FlashStringHelper *csv, const char *value);
 #endif
+#if BLAECK_ENABLE_MESSAGES
+  void writeMessageChannelsFrame(unsigned long MessageID);
+  // Index of a declared channel, or -1 when the name was never declared.
+  int _findMessageChannel(const char *channelName) const;
+#endif
 
   void writeDevicesFrame(unsigned long MessageID);
 
@@ -536,6 +594,10 @@ private:
   static const byte MAX_COMMAND_HANDLERS = BLAECK_COMMAND_MAX_HANDLERS_DEFAULT;
   static const byte MAX_COMMAND_PARAM_COUNT = BLAECK_COMMAND_MAX_PARAMS_DEFAULT;
   static const byte MAX_COMMAND_NAME_COUNT = BLAECK_COMMAND_MAX_NAME_CHARS_DEFAULT;
+#if BLAECK_ENABLE_MESSAGES
+  static const byte MAX_MESSAGE_CHANNELS = BLAECK_MESSAGE_MAX_CHANNELS_DEFAULT;
+  static const byte MAX_MESSAGE_NAME_COUNT = BLAECK_MESSAGE_MAX_NAME_CHARS_DEFAULT;
+#endif
   char receivedChars[MAXIMUM_CHAR_COUNT];
   char COMMAND[MAXIMUM_CHAR_COUNT] = {0};
   int PARAMETER[10];
@@ -659,6 +721,16 @@ private:
 #endif
   };
   CommandHandlerEntry _commandHandlers[MAX_COMMAND_HANDLERS];
+#if BLAECK_ENABLE_MESSAGES
+  struct MessageChannelEntry
+  {
+    char name[MAX_MESSAGE_NAME_COUNT];
+    const __FlashStringHelper *icon = nullptr;
+    bool diagnostic = false;
+    bool inUse = false;
+  };
+  MessageChannelEntry _messageChannels[MAX_MESSAGE_CHANNELS];
+#endif
   BlaeckAnyCommandHandler _anyCommandHandler = nullptr;
   char _parsedTokenBuffer[MAXIMUM_CHAR_COUNT] = {0};
   char _parsedCommand[MAX_COMMAND_NAME_COUNT] = {0};
@@ -666,8 +738,10 @@ private:
   byte _parsedParamCount = 0;
   // Monotonic message id stamped into the 0xF0 Command Ack frame header.
   unsigned long _commandAckMsgId = 0;
+#if BLAECK_ENABLE_MESSAGES
   // Monotonic message id stamped into the 0x90 Message frame header.
   unsigned long _messageMsgId = 0;
+#endif
 #if BLAECK_ENABLE_COMMAND_META
   // Scratch buffer holding a select command's normalized index string, so a
   // name payload (e.g. from a Home Assistant select) is handed to index-based

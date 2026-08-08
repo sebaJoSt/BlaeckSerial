@@ -20,12 +20,19 @@ All notable changes to this project will be documented in this file.
   command plus an accept/reject status and reason code, so a host (e.g. Loggbok)
   can confirm the command was applied. Like `0xE0`, the frame carries no CRC;
   hosts that don't recognize the key ignore it.
-- **Message frame (`0x90`).** New `writeMessage(channelName, text[, messageID])`
-  sends a free-text status/log message on a named channel to the serial host
-  (byte-exact with BlaeckTCP 7.0.0): a host may surface it as an auto-created
-  Home Assistant text sensor per channel name. The text is length-prefixed
-  (LE uint16, capped at 65535 bytes) and the frame carries no CRC; it is never
-  stored as signal data.
+- **Message frames (`0x8A` / `0x90`).** New `addMessageChannel(channelName[, icon[,
+  diagnostic]])` declares a free-text status/log channel, and
+  `writeMessage(channelName, text[, messageID])` sends a line on it (byte-exact
+  with BlaeckTCP 7.0.0). Declared channels are advertised in a `0x8A` "Message
+  Channel List" frame in response to `BLAECK.WRITE_MESSAGE_CHANNELS`, so a host
+  (e.g. Loggbok) can announce one Home Assistant text sensor per channel before
+  the first line arrives, alongside the signals and commands it already
+  announces. Messages on channels that were never declared are dropped. The text
+  is length-prefixed (LE uint16, capped at 65535 bytes) and neither frame carries
+  a CRC; it is never stored as signal data. Set `BLAECK_ENABLE_MESSAGES` to `0`
+  to compile the feature out (the API remains as no-ops); the channel table size
+  and name length are tunable via `BLAECK_MESSAGE_MAX_CHANNELS_DEFAULT` and
+  `BLAECK_MESSAGE_MAX_NAME_CHARS_DEFAULT`.
 - **Text command (`onTextCommand`).** New typed command helper
   `onTextCommand(command, handler, stateSignal = nullptr, maxLength = 255)` for
   a Home Assistant text entity. The host sends the value percent-encoded (so
