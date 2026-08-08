@@ -28,6 +28,14 @@ All notable changes to this project will be documented in this file.
   frame (prefix included), confirming delivery to the slave; the slave does not
   ack over I2C. Like `0xE0`, the frame carries no CRC; hosts that don't
   recognize the key ignore it.
+- **Message frame (`0x90`).** New `writeMessage(channelName, text[, messageID])`
+  sends a free-text status/log message on a named channel to the serial host
+  (byte-exact with BlaeckTCP 7.0.0): a host may surface it as an auto-created
+  Home Assistant text sensor per channel name. The text is length-prefixed
+  (LE uint16, capped at 65535 bytes) and the frame carries no CRC; it is never
+  stored as signal data. Only Single and Master boards write to the host; on a
+  Slave the call is a no-op (with a debug notice), since a slave has no direct
+  host link — report slave status from the master.
 - Added the `WaveformGenerator` example, registered with the typed command
   helpers (`onNumberCommand` / `onSelectCommand` / `onSwitchCommand` /
   `onButtonCommand`) so the device is self-describing for Loggbok / Home

@@ -384,6 +384,20 @@ public:
   void writeCommands();
   void writeCommands(unsigned long messageID);
 
+  // ----- Messages (Home Assistant text/log channel, 0x90) -----
+  // Send a free-text status/log message on a named channel to the serial host.
+  // Fire-and-forget: a host may surface it (e.g. a Home Assistant text sensor
+  // auto-created per channel name) but it is never stored as signal data. The
+  // frame carries no CRC (like the 0xE0/0xF0 frames). Text longer than 65535
+  // bytes is truncated.
+  //
+  // Only Single and Master boards write directly to the serial host. On a Slave
+  // this is a no-op (a debug message is emitted if a debug stream is set): a
+  // slave has no direct link to the host, and I2C message forwarding is not
+  // implemented. Report slave status from the master instead.
+  void writeMessage(const char *channelName, const char *text);
+  void writeMessage(const char *channelName, const char *text, unsigned long messageID);
+
   // ----- Data Write -----
   // Update value and write directly - by name
   void write(String signalName, bool value);
@@ -858,6 +872,8 @@ private:
   byte _parsedParamCount = 0;
   // Monotonic message id stamped into the 0xF0 Command Ack frame header.
   unsigned long _commandAckMsgId = 1;
+  // Monotonic message id stamped into the 0x90 Message frame header.
+  unsigned long _messageMsgId = 0;
 #if BLAECK_ENABLE_COMMAND_META
   // Scratch buffer holding a select command's normalized index string, so a
   // name payload (e.g. from a Home Assistant select) is handed to index-based

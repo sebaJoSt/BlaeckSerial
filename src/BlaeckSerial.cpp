@@ -1183,6 +1183,76 @@ void BlaeckSerial::_writeCommandAck(const char *rawCommand, byte status, byte re
   }
 }
 
+void BlaeckSerial::writeMessage(const char *channelName, const char *text)
+{
+  this->writeMessage(channelName, text, _messageMsgId++);
+}
+
+void BlaeckSerial::writeMessage(const char *channelName, const char *text, unsigned long messageID)
+{
+  // 0x90 "Message" frame: a named free-text status/log channel, device -> host.
+  //   name\0  length(2, LE uint16)  text[length]
+  // No CRC (like the 0xE0/0xF0 frames). The host may surface it (e.g. an
+  // auto-created Home Assistant text sensor per channel); it is never treated as
+  // signal/telemetry data and is not stored.
+  //
+  // Only Single and Master boards have a direct link to the serial host. A Slave
+  // would need to forward the message to the master over I2C, which is not
+  // implemented; report slave status from the master instead.
+  if (_masterSlaveConfig == Slave)
+  {
+    if (_debugStream != nullptr)
+      _debugStream->println("BlaeckSerial: writeMessage() ignored on a slave (no host link; report from the master).");
+    return;
+  }
+
+  if (StreamRef == nullptr)
+    return;
+
+  if (channelName == nullptr)
+    channelName = "";
+  if (text == nullptr)
+    text = "";
+
+  size_t len = strlen(text);
+  if (len > 65535)
+    len = 65535; // 2-byte length prefix caps a single message at 65535 bytes
+
+  if (_bufferedWrites && _frameBuf)
+  {
+    _bufReset();
+    _bufHeader(0x90, messageID);
+    // Channel name (NUL-terminated), then the UTF-8 text length-prefixed (LE uint16).
+    _bufStr0(channelName);
+    _bufByte((byte)(len & 0xFF));
+    _bufByte((byte)((len >> 8) & 0xFF));
+    _bufBytes((const byte *)text, len);
+    _bufFooter();
+    _bufSend();
+  }
+  else
+  {
+    StreamRef->write("<BLAECK:");
+    byte msg_key = 0x90;
+    StreamRef->write(msg_key);
+    StreamRef->write(":");
+    ulngCvt.val = messageID;
+    StreamRef->write(ulngCvt.bval, 4);
+    StreamRef->write(":");
+
+    // Channel name (NUL-terminated), then the UTF-8 text length-prefixed (LE uint16).
+    StreamRef->print(channelName);
+    StreamRef->write((byte)0);
+    StreamRef->write((byte)(len & 0xFF));
+    StreamRef->write((byte)((len >> 8) & 0xFF));
+    StreamRef->write((const uint8_t *)text, len);
+
+    StreamRef->write("/BLAECK>");
+    StreamRef->write("\r\n");
+    StreamRef->flush();
+  }
+}
+
 #if BLAECK_ENABLE_COMMAND_META
 byte BlaeckSerial::_validateTypedCommand(byte handlerIndex)
 {
