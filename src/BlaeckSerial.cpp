@@ -39,13 +39,19 @@ void BlaeckSerial::begin(Stream *Ref, unsigned int size, Stream *DebugRef)
   _signalOverflowOccurred = false;
   _signalOverflowCount = 0;
 
+  // Requesting more signals than the board has RAM for leaves Signals null.
+  // Reported through the same flag addSignal uses, so hasSignalOverflow()
+  // catches it even before the first addSignal call.
+  if (Signals == nullptr)
+    _signalOverflowOccurred = true;
+
   if (_bufferedWrites)
     _bufAllocate();
 }
 
 void BlaeckSerial::addSignal(String signalName, bool *value)
 {
-  if (static_cast<unsigned int>(_signalIndex) >= _signalCapacity)
+  if (Signals == nullptr || static_cast<unsigned int>(_signalIndex) >= _signalCapacity)
   {
     _signalOverflowOccurred = true;
     _signalOverflowCount++;
@@ -61,7 +67,7 @@ void BlaeckSerial::addSignal(String signalName, bool *value)
 
 void BlaeckSerial::addSignal(String signalName, byte *value)
 {
-  if (static_cast<unsigned int>(_signalIndex) >= _signalCapacity)
+  if (Signals == nullptr || static_cast<unsigned int>(_signalIndex) >= _signalCapacity)
   {
     _signalOverflowOccurred = true;
     _signalOverflowCount++;
@@ -77,7 +83,7 @@ void BlaeckSerial::addSignal(String signalName, byte *value)
 
 void BlaeckSerial::addSignal(String signalName, short *value)
 {
-  if (static_cast<unsigned int>(_signalIndex) >= _signalCapacity)
+  if (Signals == nullptr || static_cast<unsigned int>(_signalIndex) >= _signalCapacity)
   {
     _signalOverflowOccurred = true;
     _signalOverflowCount++;
@@ -93,7 +99,7 @@ void BlaeckSerial::addSignal(String signalName, short *value)
 
 void BlaeckSerial::addSignal(String signalName, unsigned short *value)
 {
-  if (static_cast<unsigned int>(_signalIndex) >= _signalCapacity)
+  if (Signals == nullptr || static_cast<unsigned int>(_signalIndex) >= _signalCapacity)
   {
     _signalOverflowOccurred = true;
     _signalOverflowCount++;
@@ -109,7 +115,7 @@ void BlaeckSerial::addSignal(String signalName, unsigned short *value)
 
 void BlaeckSerial::addSignal(String signalName, int *value)
 {
-  if (static_cast<unsigned int>(_signalIndex) >= _signalCapacity)
+  if (Signals == nullptr || static_cast<unsigned int>(_signalIndex) >= _signalCapacity)
   {
     _signalOverflowOccurred = true;
     _signalOverflowCount++;
@@ -129,7 +135,7 @@ void BlaeckSerial::addSignal(String signalName, int *value)
 
 void BlaeckSerial::addSignal(String signalName, unsigned int *value)
 {
-  if (static_cast<unsigned int>(_signalIndex) >= _signalCapacity)
+  if (Signals == nullptr || static_cast<unsigned int>(_signalIndex) >= _signalCapacity)
   {
     _signalOverflowOccurred = true;
     _signalOverflowCount++;
@@ -149,7 +155,7 @@ void BlaeckSerial::addSignal(String signalName, unsigned int *value)
 
 void BlaeckSerial::addSignal(String signalName, long *value)
 {
-  if (static_cast<unsigned int>(_signalIndex) >= _signalCapacity)
+  if (Signals == nullptr || static_cast<unsigned int>(_signalIndex) >= _signalCapacity)
   {
     _signalOverflowOccurred = true;
     _signalOverflowCount++;
@@ -165,7 +171,7 @@ void BlaeckSerial::addSignal(String signalName, long *value)
 
 void BlaeckSerial::addSignal(String signalName, unsigned long *value)
 {
-  if (static_cast<unsigned int>(_signalIndex) >= _signalCapacity)
+  if (Signals == nullptr || static_cast<unsigned int>(_signalIndex) >= _signalCapacity)
   {
     _signalOverflowOccurred = true;
     _signalOverflowCount++;
@@ -181,7 +187,7 @@ void BlaeckSerial::addSignal(String signalName, unsigned long *value)
 
 void BlaeckSerial::addSignal(String signalName, float *value)
 {
-  if (static_cast<unsigned int>(_signalIndex) >= _signalCapacity)
+  if (Signals == nullptr || static_cast<unsigned int>(_signalIndex) >= _signalCapacity)
   {
     _signalOverflowOccurred = true;
     _signalOverflowCount++;
@@ -197,7 +203,7 @@ void BlaeckSerial::addSignal(String signalName, float *value)
 
 void BlaeckSerial::addSignal(String signalName, double *value)
 {
-  if (static_cast<unsigned int>(_signalIndex) >= _signalCapacity)
+  if (Signals == nullptr || static_cast<unsigned int>(_signalIndex) >= _signalCapacity)
   {
     _signalOverflowOccurred = true;
     _signalOverflowCount++;
@@ -219,7 +225,7 @@ void BlaeckSerial::addSignal(String signalName, double *value)
 
 void BlaeckSerial::addSignal(String signalName, char *value)
 {
-  if (static_cast<unsigned int>(_signalIndex) >= _signalCapacity)
+  if (Signals == nullptr || static_cast<unsigned int>(_signalIndex) >= _signalCapacity)
   {
     _signalOverflowOccurred = true;
     _signalOverflowCount++;
@@ -277,7 +283,7 @@ uint16_t BlaeckSerial::_computeSchemaHash()
 
 void BlaeckSerial::setSignalName(int signalIndex, String signalName)
 {
-  if (signalIndex < 0 || signalIndex >= (int)_signalCapacity)
+  if (Signals == nullptr || signalIndex < 0 || signalIndex >= (int)_signalCapacity)
     return;
 
   Signals[signalIndex].SignalName = "";
