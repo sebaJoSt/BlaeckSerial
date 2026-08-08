@@ -590,26 +590,7 @@ void BlaeckSerial::read()
       }
     }
 
-    if (_commandCallback != NULL)
-    {
-      if (!_commandCallbackDeprecationWarned && _debugStream != nullptr)
-      {
-        _debugStream->println("WARNING: setCommandCallback(...) is deprecated; use onCommand(...) / onAnyCommand(...)");
-        _commandCallbackDeprecationWarned = true;
-      }
-      _commandCallback(COMMAND, PARAMETER, STRING_01);
-    }
     _dispatchRegisteredHandlers();
-  }
-}
-
-void BlaeckSerial::setCommandCallback(void (*callback)(char *command, int *parameter, char *string_01))
-{
-  _commandCallback = callback;
-  if (_commandCallback != NULL && !_commandCallbackDeprecationWarned && _debugStream != nullptr)
-  {
-    _debugStream->println("WARNING: setCommandCallback(...) is deprecated; use onCommand(...) / onAnyCommand(...)");
-    _commandCallbackDeprecationWarned = true;
   }
 }
 

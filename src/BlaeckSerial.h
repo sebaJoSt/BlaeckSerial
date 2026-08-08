@@ -409,8 +409,6 @@ public:
   void read();
 
   // ----- Command callback  -----
-  // Deprecated: use onCommand(...) / onAnyCommand(...)
-  void setCommandCallback(void (*callback)(char *command, int *parameter, char *string_01));
   bool onCommand(const char *command, BlaeckCommandHandler handler);
   void onAnyCommand(BlaeckAnyCommandHandler handler);
   void clearAllCommandHandlers();
@@ -645,8 +643,6 @@ private:
     return (unsigned long long)micros();
   }
 
-  void (*_commandCallback)(char *command, int *parameter, char *string01) = nullptr;
-  bool _commandCallbackDeprecationWarned = false;
   struct CommandHandlerEntry
   {
     char command[MAX_COMMAND_NAME_COUNT];

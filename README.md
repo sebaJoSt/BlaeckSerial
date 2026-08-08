@@ -89,7 +89,6 @@ BlaeckSerial.setIntervalMs(BLAECK_INTERVAL_CLIENT);
 
 Available callbacks:
 - `onCommand(...)` and `onAnyCommand(...)` for parsed incoming commands
-- `setCommandCallback(...)` (deprecated, still supported with runtime warning)
 - `setBeforeWriteCallback(...)` before data is written
 
 Command parser defaults are architecture-aware:

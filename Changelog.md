@@ -81,6 +81,16 @@ All notable changes to this project will be documented in this file.
   change; `strlen` could not exceed the cap there in any case.
 
 ### Removed
+- **`setCommandCallback(...)` (breaking).** Deprecated since 6.0.0 in favour of
+  `onCommand(...)` / `onAnyCommand(...)`, which it has warned about at runtime
+  ever since. A full major cycle of notice is enough, and 7.0 is the window;
+  keeping it would carry it to 8.0. Sketches still using it now fail to compile
+  instead of silently taking the legacy path — replace
+  `setCommandCallback(cb)` with `onAnyCommand(cb)` and adjust the handler
+  signature from `(char *command, int *parameter, char *string01)` to
+  `(const char *command, const char *const *params, byte paramCount)`.
+  No example in the library used it. Frees roughly 167 bytes of flash per
+  sketch on AVR, plus the callback pointer and its warning flag in RAM.
 - **I2C master/slave support (breaking).** All I2C master/slave functionality
   has been removed: `beginMaster(...)` / `beginSlave(...)`, the `MasterSlaveConfig`
   modes, slave discovery/scanning, per-signal `prefixSlaveID`, the `@<slaveID>:`
