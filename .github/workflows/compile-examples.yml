@@ -120,6 +120,26 @@ jobs:
               - examples/WaveformGenerator
               - examples/WriteModes
             artifact-name-suffix: arduino-renesas_uno-unor4wifi
+          # --- ArduinoCore-mbed (Giga R1): no EEPROMEx, no RTC.
+          #     Covered because the buffered-writes defaults treat mbed as a
+          #     special case, so this family must not regress unnoticed. ---
+          - fqbn: arduino:mbed_giga:giga
+            platforms: |
+              - name: arduino:mbed_giga
+            libraries: |
+              - source-path: ./
+              - name: CRC
+              - name: Adafruit SHT31 Library
+            sketch-paths: |
+              - examples/Basic
+              - examples/Commands
+              - examples/DatatypeTest
+              - examples/SHT31TempHumiditySensor
+              - examples/SignalNamesInFlashLessRAMUsage
+              - examples/SineGeneratorBasic
+              - examples/WaveformGenerator
+              - examples/WriteModes
+            artifact-name-suffix: arduino-mbed_giga-giga
 
     steps:
       - name: Checkout repository

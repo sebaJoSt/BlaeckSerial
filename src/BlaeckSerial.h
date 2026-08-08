@@ -23,8 +23,10 @@
 #define BLAECKSERIAL_NAME "BlaeckSerial"
 
 #include <Arduino.h>
-#include <CRC32.h>
-#include <CRC16.h>
+// Umbrella header rather than <CRC32.h> / <CRC16.h>: the individual headers
+// collided with core headers on ArduinoCore-mbed once (see BlaeckTCP 6.0.1).
+// CRC.h pulls in CRC8/12/16/32/64 and is what BlaeckTCP has used since.
+#include <CRC.h>
 #include <new>
 #include <string.h>
 #include <limits.h>
