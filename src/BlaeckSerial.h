@@ -48,21 +48,29 @@
 //     There is no IDE preference and no sketch.yaml key for compiler flags;
 //     only the core's own config files can add them. Two ways round it:
 //
-//     a) Simplest, no setup: put the config next to this header, at
-//        libraries/BlaeckSerial/src/BlaeckSerialConfig.h. That folder is
-//        already on the include path, so every unit sees it. The catch is
-//        that a library update overwrites it.
+//     a) Build with arduino-cli instead of the IDE. Nothing in your Arduino
+//        installation is touched, and it stays per sketch:
 //
-//     b) Keep it per sketch: put the sketch folder on the include path via
-//        platform.local.txt next to platform.txt in your core (or
-//        boards.local.txt to scope it to one board), containing:
+//          arduino-cli compile --fqbn <board> \
+//            --build-property "build.extra_flags=-I{build.source.path}" \
+//            MySketch
+//
+//        {build.source.path} expands to the sketch folder, so
+//        BlaeckSerialConfig.h next to your .ino is found by every unit.
+//
+//     b) Staying in the IDE, and no config file needed: put the settings at
+//        libraries/BlaeckSerial/src/BlaeckSerialConfig.h, next to this
+//        header. That folder is already on the include path, so every unit
+//        sees it. The catch is that a library update overwrites it.
+//
+//     c) Staying in the IDE, per sketch: put the sketch folder on the
+//        include path via platform.local.txt next to platform.txt in your
+//        core (or boards.local.txt to scope it to one board), containing:
 //
 //          build.extra_flags=-I{build.source.path}
 //
 //        e.g. ...\packages\arduino\hardware\avr\1.8.8\platform.local.txt
 //        This is per core - repeat it for esp32, samd, renesas_uno, ...
-//        With arduino-cli you can pass it per build instead:
-//          --build-property "build.extra_flags=-I{build.source.path}"
 //
 // If you are unsure whether your override took effect, compare
 // configFingerprint() against BLAECK_CONFIG_FINGERPRINT from your sketch;
