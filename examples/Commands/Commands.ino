@@ -65,7 +65,7 @@
 
   Using the sketch:
     - Upload the sketch to your Arduino.
-    - Open the Serial Monitor and set the baudrate to 9600 baud.
+    - Open the Serial Monitor and set the baudrate to 115200 baud.
     - Type the following commands and press enter:
 
         Your own commands:
@@ -116,7 +116,7 @@ void setup()
   pinMode(ledPin, OUTPUT);
 
   // Initialize Serial port
-  Serial.begin(9600);
+  Serial.begin(115200);
 
   // Setup BlaeckSerial, room for one signal
   BlaeckSerial.begin(&Serial, 1);
