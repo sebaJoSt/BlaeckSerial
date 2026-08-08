@@ -21,7 +21,7 @@
   --- DASHBOARD MAPPING (Loggbok topic prefix: "loggbok" table name: "wave") ---
     Topic                       Widget          Meaning
     loggbok/wave/Output         chart           live generated sample
-    loggbok/wave/Frequency      number          wave frequency [Hz]   (0..50)
+    loggbok/wave/Frequency      number          wave frequency [Hz]   (0..2)
     loggbok/wave/Amplitude      number          peak amplitude        (0..100)
     loggbok/wave/Offset         number          DC offset             (-100..100)
     loggbok/wave/Waveform       select          0=Sine 1=Square 2=Triangle 3=Sawtooth
