@@ -48,49 +48,52 @@
 //     There is no IDE preference and no sketch.yaml key for compiler flags;
 //     only the core's own config files can add them. Three ways round it:
 //
-//     a) Build with arduino-cli instead of the IDE. Nothing in your Arduino
-//        installation is touched, and it stays per sketch:
+//     a) Put BlaeckSerialConfig.h in the sketch folder, next to your .ino:
+//
+//          MySketch\
+//            MySketch.ino
+//            BlaeckSerialConfig.h
+//
+//        Then build with arduino-cli rather than the IDE, handing it the
+//        sketch folder as an include path:
 //
 //          arduino-cli compile --fqbn <board> \
 //            --build-property "build.extra_flags=-I{build.source.path}" \
 //            MySketch
 //
-//        {build.source.path} expands to the sketch folder, so
-//        BlaeckSerialConfig.h next to your .ino is found by every unit.
+//        {build.source.path} expands to the sketch folder, so the config is
+//        found by every unit. Nothing in your Arduino installation is
+//        touched and the setting stays with the sketch, which also makes
+//        this the one option your CI can reproduce exactly.
 //
-//     b) Staying in the IDE, and no config file needed: put the settings at
-//        libraries/BlaeckSerial/src/BlaeckSerialConfig.h, next to this
-//        header. That folder is already on the include path, so every unit
-//        sees it. The catch is that a library update overwrites it.
+//     b) Put BlaeckSerialConfig.h next to this header:
 //
-//     c) Staying in the IDE, per sketch. Two files are involved:
+//          libraries\BlaeckSerial\src\BlaeckSerialConfig.h
 //
-//        1. platform.local.txt, which you create yourself next to the
-//           core's platform.txt, containing the single line:
+//        Nothing else to do - that folder is already on the include path,
+//        so every unit sees it, in the IDE as well as the CLI. The catch is
+//        that it belongs to the library, not the sketch: it applies to every
+//        sketch you build, and a library update overwrites it.
 //
-//             build.extra_flags=-I{build.source.path}
+//     c) Put BlaeckSerialConfig.h in the sketch folder, next to your .ino,
+//        exactly as in a):
 //
-//           On Windows, for the AVR core, that path is:
-//             C:\Users\<you>\AppData\Local\Arduino15\packages\arduino
-//                  \hardware\avr\1.8.8\platform.local.txt
-//           macOS/Linux: ~/.arduino15/packages/... , same tail.
-//           Use boards.local.txt instead to scope it to a single board.
-//           This is per core - repeat it for esp32, samd, renesas_uno, ...
+//          MySketch\
+//            MySketch.ino
+//            BlaeckSerialConfig.h
 //
-//        2. BlaeckSerialConfig.h, in the sketch folder next to your .ino:
+//        Then make the IDE look there, by creating platform.local.txt next
+//        to the core's platform.txt with the single line:
 //
-//             MySketch\
-//               MySketch.ino
-//               BlaeckSerialConfig.h
+//          build.extra_flags=-I{build.source.path}
 //
-//           containing just your overrides:
-//
-//             #pragma once
-//             #define BLAECK_COMMAND_MAX_CHARS_DEFAULT 128
-//
-//        Step 1 is what makes step 2 visible to the compiler. Without it
-//        the config file is silently ignored. Option a) uses this same
-//        sketch-folder layout, without needing step 1.
+//        On Windows, for the AVR core, that file goes at:
+//          C:\Users\<you>\AppData\Local\Arduino15\packages\arduino
+//               \hardware\avr\1.8.8\platform.local.txt
+//        macOS/Linux: ~/.arduino15/packages/... , same tail.
+//        Use boards.local.txt instead to scope it to a single board.
+//        This is per core - repeat it for esp32, samd, renesas_uno, ...
+//        Without this file the config file is silently ignored.
 //
 // If you are unsure whether your override took effect, compare
 // configFingerprint() against BLAECK_CONFIG_FINGERPRINT from your sketch;
