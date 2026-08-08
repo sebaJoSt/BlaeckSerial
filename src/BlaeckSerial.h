@@ -66,7 +66,7 @@
 //        touched and the setting stays with the sketch, which also makes
 //        this the one option your CI can reproduce exactly.
 //
-//     b) Put BlaeckSerialConfig.h next to this header:
+//     b) Put BlaeckSerialConfig.h inside the library itself:
 //
 //          libraries\BlaeckSerial\src\BlaeckSerialConfig.h
 //
