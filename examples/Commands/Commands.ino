@@ -23,6 +23,18 @@
   A typed switch also names a state signal (here "LED_State"), so a
   dashboard can display the current state, not just send new ones.
 
+  How a command reports back differs accordingly:
+
+    <SwitchLED>   Serial.println(...)      Serial Monitor only. A Blaeck host
+                                           skips anything that is not a frame.
+    <LED>         its state signal         The dashboard follows LED_State.
+    <Ping>        writeMessage(...)        A button has no state signal, so it
+                                           pushes a line to a named message
+                                           channel, written only on a press -
+                                           an on-demand state report, the same
+                                           pattern as WaveformGenerator's
+                                           STATUS button.
+
   Author: Sebastian Strobl,
   More information on: https://github.com/sebaJoSt/BlaeckSerial
 
@@ -64,7 +76,11 @@
         <LED,1>                       Turn on the LED   (typed switch)
         <LED,0>                       Turn off the LED  (typed switch)
         <LED,7>                       Rejected: a switch only accepts 0 or 1
-        <Ping>                        Typed button, takes no value
+        <Ping>                        Typed button, takes no value. Reports the
+                                      current LED state on the
+                                      "status_ondemand" message channel, so the
+                                      answer reaches a host and not just the
+                                      Serial Monitor.
         <Print,Bye Bye,1>             String parameters
 
         Built-in Blaeck commands:
@@ -177,13 +193,23 @@ void onLED(const char *command, const char *const *params, byte paramCount)
   Serial.println(ledState ? "LED is ON." : "LED is OFF.");
 }
 
-/* Typed button. Carries no value, so there is nothing to parse. */
+/* Typed button. Carries no value, so there is nothing to parse.
+
+   A button has no state signal, so writeMessage() is how it reports back: it
+   pushes a line to a named 0x90 message channel, which a host can surface as
+   a text sensor. Serial.println() would only reach the Serial Monitor - a
+   Blaeck host skips anything that is not a frame.
+
+   The channel is only written on a button press, so its sensor updates on
+   demand rather than continuously. WaveformGenerator uses the same pattern
+   for its STATUS button, alongside a periodic heartbeat on a second channel.
+*/
 void onPing(const char *command, const char *const *params, byte paramCount)
 {
   (void)command;
   (void)params;
   (void)paramCount;
-  Serial.println("pong");
+  BlaeckSerial.writeMessage("status_ondemand", ledState ? "LED is ON" : "LED is OFF");
 }
 
 /* Exemplary command using string parameters:
