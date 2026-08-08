@@ -30,9 +30,9 @@
     <LED>         its state signal         The dashboard follows LED_State.
     <Ping>        writeMessage(...)        A button has no state signal, so it
                                            pushes a line to a named message
-                                           channel. It is written only on a
-                                           press, so the host sees an answer
-                                           on demand rather than continuously.
+                                           channel ("Status"). It is written
+                                           only on a press, so the host gets an
+                                           answer when it asks for one.
 
   Author: Sebastian Strobl,
   More information on: https://github.com/sebaJoSt/BlaeckSerial
@@ -75,11 +75,10 @@
         <LED,1>                       Turn on the LED   (typed switch)
         <LED,0>                       Turn off the LED  (typed switch)
         <LED,7>                       Rejected: a switch only accepts 0 or 1
-        <Ping>                        Typed button, takes no value. Reports the
-                                      current LED state on the
-                                      "status_ondemand" message channel, so the
-                                      answer reaches a host and not just the
-                                      Serial Monitor.
+        <Ping>                        Typed button, takes no value. The board
+                                      answers "pong" on the "Status" message
+                                      channel, so the reply reaches a host and
+                                      not just the Serial Monitor.
         <Print,Bye Bye,1>             String parameters
 
         Built-in Blaeck commands:
@@ -200,7 +199,7 @@ void onLED(const char *command, const char *const *params, byte paramCount)
    Blaeck host skips anything that is not a frame.
 
    The channel is only written on a button press, so a sensor bound to it
-   updates on demand rather than continuously. Calling writeMessage() from
+   updates when asked rather than continuously. Calling writeMessage() from
    loop() on a timer instead would give the same channel a steady heartbeat.
 */
 void onPing(const char *command, const char *const *params, byte paramCount)
@@ -208,7 +207,7 @@ void onPing(const char *command, const char *const *params, byte paramCount)
   (void)command;
   (void)params;
   (void)paramCount;
-  BlaeckSerial.writeMessage("status_ondemand", ledState ? "LED is ON" : "LED is OFF");
+  BlaeckSerial.writeMessage("Status", "pong");
 }
 
 /* Exemplary command using string parameters:
