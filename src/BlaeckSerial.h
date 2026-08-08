@@ -480,11 +480,11 @@ private:
   void tick(unsigned long messageID, bool onlyUpdated);
 
   void writeData(unsigned long messageID, int signalIndex_start, int signalIndex_end, bool onlyUpdated, unsigned long long timestamp);
-  void writeLocalData(unsigned long MessageID, int signalIndex_start, int signalIndex_end, bool send_eol, bool onlyUpdated, unsigned long long timestamp);
+  void writeDataFrame(unsigned long MessageID, int signalIndex_start, int signalIndex_end, bool onlyUpdated, unsigned long long timestamp);
 
-  void writeLocalSymbols(unsigned long MessageID, bool send_eol);
+  void writeSymbolsFrame(unsigned long MessageID);
 #if BLAECK_ENABLE_COMMAND_META
-  void writeLocalCommands(unsigned long MessageID, bool send_eol);
+  void writeCommandsFrame(unsigned long MessageID);
   void _annotateCommand(const char *command, uint8_t kind,
                         const __FlashStringHelper *stateSignal,
                         float mn, float mx, float st,
@@ -496,7 +496,7 @@ private:
   static long _flashCsvIndexOf(const __FlashStringHelper *csv, const char *value);
 #endif
 
-  void writeLocalDevices(unsigned long MessageID, bool send_eol);
+  void writeDevicesFrame(unsigned long MessageID);
 
   static void validatePlatformSizes();
 
@@ -625,7 +625,7 @@ private:
   {
     _bufStr("/BLAECK>\r\n");
   }
-  void _bufDevice(byte msc, byte sid, const String &name,
+  void _bufDevice(const String &name,
                   const String &hw, const String &fw);
 
   static unsigned long long _microsWrapper()
@@ -657,7 +657,7 @@ private:
   const char *_parsedParamPtrs[MAX_COMMAND_PARAM_COUNT] = {0};
   byte _parsedParamCount = 0;
   // Monotonic message id stamped into the 0xF0 Command Ack frame header.
-  unsigned long _commandAckMsgId = 1;
+  unsigned long _commandAckMsgId = 0;
   // Monotonic message id stamped into the 0x90 Message frame header.
   unsigned long _messageMsgId = 0;
 #if BLAECK_ENABLE_COMMAND_META

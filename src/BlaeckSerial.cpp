@@ -1387,7 +1387,7 @@ void BlaeckSerial::writeSymbols()
 }
 void BlaeckSerial::writeSymbols(unsigned long msg_id)
 {
-  this->writeLocalSymbols(msg_id, true);
+  this->writeSymbolsFrame(msg_id);
 }
 
 #if BLAECK_ENABLE_COMMAND_META
@@ -1397,7 +1397,7 @@ void BlaeckSerial::writeCommands()
 }
 void BlaeckSerial::writeCommands(unsigned long msg_id)
 {
-  this->writeLocalCommands(msg_id, true);
+  this->writeCommandsFrame(msg_id);
 }
 #endif
 
@@ -1662,7 +1662,7 @@ void BlaeckSerial::write(int signalIndex, bool value, unsigned long messageID, u
     if (Signals[signalIndex].DataType == Blaeck_bool)
     {
       *((bool *)Signals[signalIndex].Address) = value;
-      this->writeLocalData(messageID, signalIndex, signalIndex, true, false, timestamp);
+      this->writeDataFrame(messageID, signalIndex, signalIndex, false, timestamp);
     }
   }
 }
@@ -1673,7 +1673,7 @@ void BlaeckSerial::write(int signalIndex, byte value, unsigned long messageID, u
     if (Signals[signalIndex].DataType == Blaeck_byte)
     {
       *((byte *)Signals[signalIndex].Address) = value;
-      this->writeLocalData(messageID, signalIndex, signalIndex, true, false, timestamp);
+      this->writeDataFrame(messageID, signalIndex, signalIndex, false, timestamp);
     }
   }
 }
@@ -1684,7 +1684,7 @@ void BlaeckSerial::write(int signalIndex, short value, unsigned long messageID, 
     if (Signals[signalIndex].DataType == Blaeck_short)
     {
       *((short *)Signals[signalIndex].Address) = value;
-      this->writeLocalData(messageID, signalIndex, signalIndex, true, false, timestamp);
+      this->writeDataFrame(messageID, signalIndex, signalIndex, false, timestamp);
     }
   }
 }
@@ -1695,7 +1695,7 @@ void BlaeckSerial::write(int signalIndex, unsigned short value, unsigned long me
     if (Signals[signalIndex].DataType == Blaeck_ushort)
     {
       *((unsigned short *)Signals[signalIndex].Address) = value;
-      this->writeLocalData(messageID, signalIndex, signalIndex, true, false, timestamp);
+      this->writeDataFrame(messageID, signalIndex, signalIndex, false, timestamp);
     }
   }
 }
@@ -1708,14 +1708,14 @@ void BlaeckSerial::write(int signalIndex, int value, unsigned long messageID, un
     if (Signals[signalIndex].DataType == Blaeck_int)
     {
       *((int *)Signals[signalIndex].Address) = value;
-      this->writeLocalData(messageID, signalIndex, signalIndex, true, false, timestamp);
+      this->writeDataFrame(messageID, signalIndex, signalIndex, false, timestamp);
     }
 #else
     // On 32-bit platforms, int is mapped to Blaeck_long (4 bytes)
     if (Signals[signalIndex].DataType == Blaeck_long)
     {
       *((int *)Signals[signalIndex].Address) = value;
-      this->writeLocalData(messageID, signalIndex, signalIndex, true, false, timestamp);
+      this->writeDataFrame(messageID, signalIndex, signalIndex, false, timestamp);
     }
 #endif
   }
@@ -1729,14 +1729,14 @@ void BlaeckSerial::write(int signalIndex, unsigned int value, unsigned long mess
     if (Signals[signalIndex].DataType == Blaeck_uint)
     {
       *((unsigned int *)Signals[signalIndex].Address) = value;
-      this->writeLocalData(messageID, signalIndex, signalIndex, true, false, timestamp);
+      this->writeDataFrame(messageID, signalIndex, signalIndex, false, timestamp);
     }
 #else
     // On 32-bit platforms, unsigned int is mapped to Blaeck_ulong (4 bytes)
     if (Signals[signalIndex].DataType == Blaeck_ulong)
     {
       *((unsigned int *)Signals[signalIndex].Address) = value;
-      this->writeLocalData(messageID, signalIndex, signalIndex, true, false, timestamp);
+      this->writeDataFrame(messageID, signalIndex, signalIndex, false, timestamp);
     }
 #endif
   }
@@ -1748,7 +1748,7 @@ void BlaeckSerial::write(int signalIndex, long value, unsigned long messageID, u
     if (Signals[signalIndex].DataType == Blaeck_long)
     {
       *((long *)Signals[signalIndex].Address) = value;
-      this->writeLocalData(messageID, signalIndex, signalIndex, true, false, timestamp);
+      this->writeDataFrame(messageID, signalIndex, signalIndex, false, timestamp);
     }
   }
 }
@@ -1759,7 +1759,7 @@ void BlaeckSerial::write(int signalIndex, unsigned long value, unsigned long mes
     if (Signals[signalIndex].DataType == Blaeck_ulong)
     {
       *((unsigned long *)Signals[signalIndex].Address) = value;
-      this->writeLocalData(messageID, signalIndex, signalIndex, true, false, timestamp);
+      this->writeDataFrame(messageID, signalIndex, signalIndex, false, timestamp);
     }
   }
 }
@@ -1770,7 +1770,7 @@ void BlaeckSerial::write(int signalIndex, float value, unsigned long messageID, 
     if (Signals[signalIndex].DataType == Blaeck_float)
     {
       *((float *)Signals[signalIndex].Address) = value;
-      this->writeLocalData(messageID, signalIndex, signalIndex, true, false, timestamp);
+      this->writeDataFrame(messageID, signalIndex, signalIndex, false, timestamp);
     }
   }
 }
@@ -1783,13 +1783,13 @@ void BlaeckSerial::write(int signalIndex, double value, unsigned long messageID,
     if (Signals[signalIndex].DataType == Blaeck_float)
     {
       *((float *)Signals[signalIndex].Address) = (float)value;
-      this->writeLocalData(messageID, signalIndex, signalIndex, true, false, timestamp);
+      this->writeDataFrame(messageID, signalIndex, signalIndex, false, timestamp);
     }
 #else
     if (Signals[signalIndex].DataType == Blaeck_double)
     {
       *((double *)Signals[signalIndex].Address) = value;
-      this->writeLocalData(messageID, signalIndex, signalIndex, true, false, timestamp);
+      this->writeDataFrame(messageID, signalIndex, signalIndex, false, timestamp);
     }
 #endif
   }
@@ -1827,7 +1827,7 @@ void BlaeckSerial::write(int signalIndex, char *value, unsigned long messageID, 
     {
       // String values live in a user-owned buffer; repoint Address like addSignal(char*).
       Signals[signalIndex].Address = value;
-      this->writeLocalData(messageID, signalIndex, signalIndex, true, false, timestamp);
+      this->writeDataFrame(messageID, signalIndex, signalIndex, false, timestamp);
     }
   }
 }
@@ -1870,7 +1870,7 @@ void BlaeckSerial::writeData(unsigned long msg_id, int signalIndex_start, int si
 
   if (_beforeWriteCallback != NULL)
     _beforeWriteCallback();
-  this->writeLocalData(msg_id, signalIndex_start, signalIndex_end, true, onlyUpdated, timestamp);
+  this->writeDataFrame(msg_id, signalIndex_start, signalIndex_end, onlyUpdated, timestamp);
 }
 
 void BlaeckSerial::timedWriteAllData()
@@ -2028,9 +2028,10 @@ void BlaeckSerial::_bufHeader(byte msgKey, unsigned long msgId)
   _bufByte(':');
 }
 
-void BlaeckSerial::_bufDevice(byte msc, byte sid, const String &name,
+void BlaeckSerial::_bufDevice(const String &name,
                               const String &hw, const String &fw)
 {
+  // Leading 2 bytes preserved for wire-format compatibility (always 0).
   _bufByte((byte)0);
   _bufByte((byte)0);
   _bufStr0(name);
@@ -2057,7 +2058,7 @@ void BlaeckSerial::writeRestarted(unsigned long msg_id)
     {
       _bufReset();
       _bufHeader(0xC0, msg_id);
-      _bufDevice((byte)0, (byte)0, DeviceName, DeviceHWVersion, DeviceFWVersion);
+      _bufDevice(DeviceName, DeviceHWVersion, DeviceFWVersion);
       _bufFooter();
       _bufSend();
     }
@@ -2098,21 +2099,19 @@ void BlaeckSerial::writeDevices()
 
 void BlaeckSerial::writeDevices(unsigned long msg_id)
 {
-  this->writeLocalDevices(msg_id, true);
+  this->writeDevicesFrame(msg_id);
 }
 
-void BlaeckSerial::writeLocalDevices(unsigned long msg_id, bool send_eol)
+void BlaeckSerial::writeDevicesFrame(unsigned long msg_id)
 {
   if (_bufferedWrites && _frameBuf)
   {
     _bufReset();
     _bufHeader(0xB3, msg_id);
-    _bufDevice((byte)0, (byte)0, DeviceName, DeviceHWVersion, DeviceFWVersion);
-    if (send_eol)
-    {
+    _bufDevice(DeviceName, DeviceHWVersion, DeviceFWVersion);
       _bufFooter();
       _bufSend();
-    }
+
   }
   else
   {
@@ -2136,18 +2135,16 @@ void BlaeckSerial::writeLocalDevices(unsigned long msg_id, bool send_eol)
     StreamRef->print(BLAECKSERIAL_NAME);
     StreamRef->print('\0');
 
-    if (send_eol)
-    {
       StreamRef->write("/BLAECK>");
       StreamRef->write("\r\n");
       StreamRef->flush();
-    }
+
   }
 }
 
-void BlaeckSerial::writeLocalData(unsigned long msg_id, int signalIndex_start, int signalIndex_end, bool send_eol, bool onlyUpdated, unsigned long long timestamp)
+void BlaeckSerial::writeDataFrame(unsigned long msg_id, int signalIndex_start, int signalIndex_end, bool onlyUpdated, unsigned long long timestamp)
 {
-  if (onlyUpdated && !hasUpdatedSignals() && send_eol)
+  if (onlyUpdated && !hasUpdatedSignals())
     return; // No updated signals
 
   // Bounds checking
@@ -2155,7 +2152,7 @@ void BlaeckSerial::writeLocalData(unsigned long msg_id, int signalIndex_start, i
     signalIndex_start = 0;
   if (signalIndex_end >= _signalIndex)
     signalIndex_end = _signalIndex - 1;
-  if (signalIndex_start > signalIndex_end && send_eol)
+  if (signalIndex_start > signalIndex_end)
     return; // No valid range
 
   if (_bufferedWrites && _frameBuf)
@@ -2222,29 +2219,26 @@ void BlaeckSerial::writeLocalData(unsigned long msg_id, int signalIndex_start, i
         Signals[i].Updated = false;
     }
 
-    if (send_eol)
-    {
-      byte statusByte = 0;
-      byte statusPayload[4] = {0, 0, 0, 0};
-      _bufByte(statusByte);
-      _bufBytes(statusPayload, 4);
+    byte statusByte = 0;
+    byte statusPayload[4] = {0, 0, 0, 0};
+    _bufByte(statusByte);
+    _bufBytes(statusPayload, 4);
 
-      // CRC32 over content (crcStart..framePos-1)
-      _crc.setPolynome(0x04C11DB7);
-      _crc.setInitial(0xFFFFFFFF);
-      _crc.setXorOut(0xFFFFFFFF);
-      _crc.setReverseIn(true);
-      _crc.setReverseOut(true);
-      _crc.restart();
-      _crc.add(_frameBuf + crcStart, _framePos - crcStart);
-      uint32_t crc_value = _crc.calc();
-      _bufBytes((byte *)&crc_value, 4);
+    // CRC32 over content (crcStart..framePos-1)
+    _crc.setPolynome(0x04C11DB7);
+    _crc.setInitial(0xFFFFFFFF);
+    _crc.setXorOut(0xFFFFFFFF);
+    _crc.setReverseIn(true);
+    _crc.setReverseOut(true);
+    _crc.restart();
+    _crc.add(_frameBuf + crcStart, _framePos - crcStart);
+    uint32_t crc_value = _crc.calc();
+    _bufBytes((byte *)&crc_value, 4);
 
-      _bufFooter();
-      _bufSend();
-      if (!_bufOverflow)
-        _sendRestartFlag = false;
-    }
+    _bufFooter();
+    _bufSend();
+    if (!_bufOverflow)
+      _sendRestartFlag = false;
   }
   else
   {
@@ -2404,26 +2398,23 @@ void BlaeckSerial::writeLocalData(unsigned long msg_id, int signalIndex_start, i
         Signals[i].Updated = false;
     }
 
-    if (send_eol)
-    {
-      byte statusByte = 0;
-      byte statusPayload[4] = {0, 0, 0, 0};
-      StreamRef->write(statusByte);
-      StreamRef->write(statusPayload, 4);
-      _crc.add(statusByte);
-      _crc.add(statusPayload, 4);
+    byte statusByte = 0;
+    byte statusPayload[4] = {0, 0, 0, 0};
+    StreamRef->write(statusByte);
+    StreamRef->write(statusPayload, 4);
+    _crc.add(statusByte);
+    _crc.add(statusPayload, 4);
 
-      uint32_t crc_value = _crc.calc();
-      StreamRef->write((byte *)&crc_value, 4);
+    uint32_t crc_value = _crc.calc();
+    StreamRef->write((byte *)&crc_value, 4);
 
-      StreamRef->write("/BLAECK>");
-      StreamRef->write("\r\n");
-      StreamRef->flush();
-    }
+    StreamRef->write("/BLAECK>");
+    StreamRef->write("\r\n");
+    StreamRef->flush();
   }
 }
 
-void BlaeckSerial::writeLocalSymbols(unsigned long msg_id, bool send_eol)
+void BlaeckSerial::writeSymbolsFrame(unsigned long msg_id)
 {
   if (_bufferedWrites && _frameBuf)
   {
@@ -2462,11 +2453,9 @@ void BlaeckSerial::writeLocalSymbols(unsigned long msg_id, bool send_eol)
       _bufByte(dtCode);
       _schemaHashFeedByte(dtCode);
     }
-    if (send_eol)
-    {
       _bufFooter();
       _bufSend();
-    }
+
   }
   else
   {
@@ -2511,17 +2500,15 @@ void BlaeckSerial::writeLocalSymbols(unsigned long msg_id, bool send_eol)
       StreamRef->write(dtCode);
       _schemaHashFeedByte(dtCode);
     }
-    if (send_eol)
-    {
       StreamRef->write("/BLAECK>");
       StreamRef->write("\r\n");
       StreamRef->flush();
-    }
+
   }
 }
 
 #if BLAECK_ENABLE_COMMAND_META
-void BlaeckSerial::writeLocalCommands(unsigned long msg_id, bool send_eol)
+void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
 {
   // 0xE0 "Command List" frame. Per discovered command entry:
   //   reserved(1) reserved(1) name\0 kind(1) flags(1)
@@ -2587,11 +2574,9 @@ void BlaeckSerial::writeLocalCommands(unsigned long msg_id, bool send_eol)
       }
     }
 
-    if (send_eol)
-    {
       _bufFooter();
       _bufSend();
-    }
+
   }
   else
   {
@@ -2660,12 +2645,10 @@ void BlaeckSerial::writeLocalCommands(unsigned long msg_id, bool send_eol)
       }
     }
 
-    if (send_eol)
-    {
       StreamRef->write("/BLAECK>");
       StreamRef->write("\r\n");
       StreamRef->flush();
-    }
+
   }
 }
 #endif
