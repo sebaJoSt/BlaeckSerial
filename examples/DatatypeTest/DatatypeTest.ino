@@ -28,6 +28,7 @@ float floatNegativeInfinity = -1.0 / 0.0;
 double doubleNaN = 0.0 / 0.0;
 double doubleInfinity = 1.0 / 0.0;
 double doubleNegativeInfinity = -1.0 / 0.0;
+char stringTest[] = "Hello Blaeck";
 #ifdef __AVR__
 int intTest[2] = {-32768, 32767};
 unsigned int uintTest[2] = {0, 65535};
@@ -44,7 +45,7 @@ void setup()
   Serial.begin(9600);
 
   // Initialize BlaeckSerial
-  BlaeckSerial.begin(&Serial, 26);
+  BlaeckSerial.begin(&Serial, 27);
 
   // Add signals to BlaeckSerial
   BlaeckSerial.addSignal("Bool_false", &boolTest[0]);
@@ -73,6 +74,7 @@ void setup()
   BlaeckSerial.addSignal("Double_NaN", &doubleNaN);
   BlaeckSerial.addSignal("Double_Inf", &doubleInfinity);
   BlaeckSerial.addSignal("Double_NegInf", &doubleNegativeInfinity);
+  BlaeckSerial.addSignal("String_test", stringTest);
 }
 
 void loop()

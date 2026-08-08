@@ -256,6 +256,22 @@ void BlaeckSerial::addSignal(String signalName, double *value, bool prefixSlaveI
   _schemaHash = _computeSchemaHash();
 }
 
+void BlaeckSerial::addSignal(String signalName, char *value, bool prefixSlaveID)
+{
+  if (static_cast<unsigned int>(_signalIndex) >= _signalCapacity)
+  {
+    _signalOverflowOccurred = true;
+    _signalOverflowCount++;
+    return;
+  }
+  setSignalName(_signalIndex, signalName, prefixSlaveID);
+  Signals[_signalIndex].DataType = Blaeck_string;
+  Signals[_signalIndex].Address = value;
+  _signalIndex++;
+  SignalCount = _signalIndex;
+  _schemaHash = _computeSchemaHash();
+}
+
 void BlaeckSerial::deleteSignals()
 {
   _signalIndex = 0;
@@ -2682,6 +2698,16 @@ void BlaeckSerial::writeLocalData(unsigned long msg_id, int signalIndex_start, i
       case (Blaeck_ulong):  ulngCvt.val  = *((unsigned long *)signal.Address);  _bufBytes(ulngCvt.bval, 4);  break;
       case (Blaeck_float):  fltCvt.val   = *((float *)signal.Address);          _bufBytes(fltCvt.bval, 4);   break;
       case (Blaeck_double): dblCvt.val   = *((double *)signal.Address);         _bufBytes(dblCvt.bval, 8);   break;
+      case (Blaeck_string):
+      {
+        const char *str = (const char *)signal.Address;
+        size_t rawLen = (str != nullptr) ? strlen(str) : 0;
+        byte len = (rawLen > 255) ? 255 : (byte)rawLen;
+        _bufByte(len);
+        if (len > 0)
+          _bufBytes((byte *)str, len);
+      }
+      break;
       }
 
       if (onlyUpdated)
@@ -2850,6 +2876,20 @@ void BlaeckSerial::writeLocalData(unsigned long msg_id, int signalIndex_start, i
         _crc.add(dblCvt.bval, 8);
       }
       break;
+      case (Blaeck_string):
+      {
+        const char *str = (const char *)signal.Address;
+        size_t rawLen = (str != nullptr) ? strlen(str) : 0;
+        byte len = (rawLen > 255) ? 255 : (byte)rawLen;
+        StreamRef->write(len);
+        _crc.add(len);
+        if (len > 0)
+        {
+          StreamRef->write((const uint8_t *)str, len);
+          _crc.add((uint8_t *)str, len);
+        }
+      }
+      break;
       }
 
       if (onlyUpdated)
@@ -2945,15 +2985,17 @@ void BlaeckSerial::writeSlaveData(bool send_eol, bool onlyUpdated, uint8_t *skip
               _crcWireCalc.add(indexHigh);
 
               intCvt.val = _signalIndex + slaveSignalIndex;
-              // Read the remaining data bytes (bytecount - 2 since we already read the index)
+              // Read the remaining data bytes (bytecount - 2 since we already read the index).
+              // Variable-length string data points can be larger than a fixed scalar, but a
+              // slave never packs a chunk bigger than one wire window, so the buffer is bounded.
               int remainingDataBytes = bytecount - 2;
-              if (remainingDataBytes > 8)
+              if (remainingDataBytes > (int)BLAECK_WIRE_BUFFER_SIZE)
               {
                 slaveFailed = true;
                 break;
               }
 
-              byte dataBuffer[8];
+              byte dataBuffer[BLAECK_WIRE_BUFFER_SIZE];
 
               for (int i = 0; i < remainingDataBytes; i++)
               {
@@ -3124,6 +3166,7 @@ void BlaeckSerial::writeLocalSymbols(unsigned long msg_id, bool send_eol)
       case (Blaeck_ulong):  dtCode = 0x7; break;
       case (Blaeck_float):  dtCode = 0x8; break;
       case (Blaeck_double): dtCode = 0x9; break;
+      case (Blaeck_string): dtCode = 0xA; break;
       default:              dtCode = 0x8; break;
       }
       _bufByte(dtCode);
@@ -3172,6 +3215,7 @@ void BlaeckSerial::writeLocalSymbols(unsigned long msg_id, bool send_eol)
       case (Blaeck_ulong):  dtCode = 0x7; break;
       case (Blaeck_float):  dtCode = 0x8; break;
       case (Blaeck_double): dtCode = 0x9; break;
+      case (Blaeck_string): dtCode = 0xA; break;
       default:              dtCode = 0x8; break;
       }
       StreamRef->write(dtCode);
@@ -3641,6 +3685,11 @@ void BlaeckSerial::wireSlaveTransmitSingleSymbol()
     Wire.write(0x9);
     break;
   }
+  case (Blaeck_string):
+  {
+    Wire.write(0xA);
+    break;
+  }
   }
 
   Wire.write(0x0D);
@@ -3702,7 +3751,23 @@ void BlaeckSerial::wireSlaveTransmitDataPoints(bool onlyUpdated)
       continue;
     }
 
-    byte wireSize = _wireDataPointSize(signal.DataType);
+    // For fixed-width types wireSize is looked up; strings are variable length.
+    // A string data point must fit within a single wire window on its own, so we
+    // truncate it to (maxPayload - 6): bytecount(1)+index(2)+len(1)+CRC(2) overhead.
+    byte strLen = 0;
+    byte wireSize;
+    if (signal.DataType == Blaeck_string)
+    {
+      const char *str = (const char *)signal.Address;
+      size_t rawLen = (str != nullptr) ? strlen(str) : 0;
+      byte maxStr = (byte)(maxPayload - 6);
+      strLen = (rawLen > maxStr) ? maxStr : (byte)rawLen;
+      wireSize = 6 + strLen; // 1+2+(1+strLen)+2
+    }
+    else
+    {
+      wireSize = _wireDataPointSize(signal.DataType);
+    }
 
     if (bytesWritten + wireSize > maxPayload)
       break;
@@ -3823,6 +3888,24 @@ void BlaeckSerial::wireSlaveTransmitDataPoints(bool onlyUpdated)
       dblCvt.val = *((double *)signal.Address);
       Wire.write(dblCvt.bval, 8);
       _crcWire.add(dblCvt.bval, 8);
+    }
+    break;
+    case (Blaeck_string):
+    {
+      // bytecount = index(2) + len(1) + strLen chars
+      byte bc = (byte)(3 + strLen);
+      Wire.write(bc);
+      _crcWire.add(bc);
+      Wire.write(indexBytes, 2);
+      _crcWire.add(indexBytes, 2);
+      Wire.write(strLen);
+      _crcWire.add(strLen);
+      if (strLen > 0)
+      {
+        const char *str = (const char *)signal.Address;
+        Wire.write((const uint8_t *)str, strLen);
+        _crcWire.add((uint8_t *)str, strLen);
+      }
     }
     break;
     }

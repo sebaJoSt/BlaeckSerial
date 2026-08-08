@@ -273,7 +273,8 @@ typedef enum DataType
   Blaeck_long,
   Blaeck_ulong,
   Blaeck_float,
-  Blaeck_double
+  Blaeck_double,
+  Blaeck_string
 } dataType;
 
 struct Signal
@@ -360,6 +361,7 @@ public:
   void addSignal(String signalName, unsigned long *value, bool prefixSlaveID = true);
   void addSignal(String signalName, float *value, bool prefixSlaveID = true);
   void addSignal(String signalName, double *value, bool prefixSlaveID = true);
+  void addSignal(String signalName, char *value, bool prefixSlaveID = true);
 
   // Delete all Signals
   void deleteSignals();

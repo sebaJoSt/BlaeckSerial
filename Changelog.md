@@ -46,6 +46,16 @@ All notable changes to this project will be documented in this file.
   Single/Master boards and on slaves reached via the `@<slaveID>:` routing
   prefix (the owning board decodes and length-checks its own text command).
   Requires `BLAECK_ENABLE_COMMAND_META`.
+- **String signals (`addSignal(name, char *value)`).** New signal data type
+  `Blaeck_string` (symbol code `0xA`) for reporting textual values (labels,
+  states, small JSON, etc.). On the wire the value is length-prefixed: a
+  1-byte length followed by that many UTF-8 bytes. Like a `char*` signal in
+  BlaeckTCP 7.0.0, the value lives in a user-owned buffer and is read live on
+  each transmit (no `write()` setter — update the buffer directly). String
+  signals are also carried over I2C from a slave to the master: because the
+  self-describing wire chunk must fit in one I2C window, a string is truncated
+  on the wire to `BLAECK_WIRE_BUFFER_SIZE - 6` bytes (25 with the default
+  32-byte buffer); direct Serial (Single/Master) transmits up to 255 bytes.
 - Added the `WaveformGenerator` example, registered with the typed command
   helpers (`onNumberCommand` / `onSelectCommand` / `onSwitchCommand` /
   `onTextCommand` / `onButtonCommand`) so the device is self-describing for
