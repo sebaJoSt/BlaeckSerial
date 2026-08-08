@@ -17,10 +17,10 @@
 #ifndef BLAECKSERIAL_H
 #define BLAECKSERIAL_H
 
-#define BLAECKSERIAL_VERSION "6.0.2"
-#define BLAECKSERIAL_VERSION_MAJOR 6
+#define BLAECKSERIAL_VERSION "7.0.0"
+#define BLAECKSERIAL_VERSION_MAJOR 7
 #define BLAECKSERIAL_VERSION_MINOR 0
-#define BLAECKSERIAL_VERSION_PATCH 2
+#define BLAECKSERIAL_VERSION_PATCH 0
 #define BLAECKSERIAL_NAME "BlaeckSerial"
 
 #include <Wire.h>
@@ -28,7 +28,121 @@
 #include <CRC32.h>
 #include <CRC16.h>
 #include <new>
+#include <string.h>
 #include <limits.h>
+
+// ---------------------------------------------------------------------------
+// Command routing / I2C command framing helpers (transport-agnostic).
+//
+// Pure helpers that parse the optional "@<slaveID>:" command routing prefix and
+// build/reassemble the master->slave command frames carried over I2C. Kept
+// dependency-free (only <stdint.h>/<string.h>) so the same logic is easy to
+// reason about and reuse.
+//
+// Routing prefix grammar (see blaeck-protocol):
+//     <@<slaveID>:NAME,arg1,...>
+// A leading '@', 1..3 decimal digits (0..127), then ':' addresses a specific
+// master/slave board. Loggbok prepends it so a master can forward a command to
+// the correct board even when boards share command names. Frames without the
+// prefix are executed locally (unchanged legacy behaviour).
+// ---------------------------------------------------------------------------
+
+// Maximum addressable I2C slave id (7-bit addressing).
+#define BLAECK_ROUTING_MAX_SLAVE_ID 127
+
+// I2C wire-mode byte that marks a single-shot master->slave command delivery.
+#define BLAECK_WIRE_MODE_COMMAND 6
+
+// I2C wire-mode byte that requests a slave's command-catalog blob (0xE0 entries)
+// for master-side aggregation. The reply is length-prefixed: the first two bytes
+// of the first chunk are the total blob length (little-endian uint16), followed
+// by exactly that many bytes of concatenated command entries spread across
+// BLAECK_WIRE_BUFFER_SIZE-sized requestFrom() chunks.
+#define BLAECK_WIRE_MODE_COMMAND_LIST 5
+
+// Writes a little-endian uint16 length into a 2-byte buffer.
+static inline void blaeckPutLen16(uint8_t *out, uint16_t len)
+{
+  out[0] = (uint8_t)(len & 0xFF);
+  out[1] = (uint8_t)((len >> 8) & 0xFF);
+}
+
+// Reads a little-endian uint16 length from a 2-byte buffer.
+static inline uint16_t blaeckGetLen16(const uint8_t *in)
+{
+  return (uint16_t)in[0] | ((uint16_t)in[1] << 8);
+}
+
+// Parses an optional "@<slaveID>:" routing prefix at the start of `buf`.
+// If present and well-formed (leading '@', 1..3 decimal digits forming an id in
+// 0..127, then ':'), writes the id to *slaveID, shifts the remaining command
+// text to the front of `buf` in place (NUL-terminated), and returns true.
+// Otherwise leaves `buf` unchanged and returns false. `buf` must be NUL-terminated.
+static inline bool blaeckParseRoutingTarget(char *buf, uint8_t *slaveID)
+{
+  if (buf == NULL || buf[0] != '@')
+    return false;
+
+  const char *p = buf + 1;
+  unsigned int id = 0;
+  int digits = 0;
+  while (p[0] >= '0' && p[0] <= '9' && digits < 3)
+  {
+    id = id * 10u + (unsigned int)(p[0] - '0');
+    p++;
+    digits++;
+  }
+
+  if (digits == 0 || p[0] != ':' || id > BLAECK_ROUTING_MAX_SLAVE_ID)
+    return false;
+
+  p++; // consume ':'
+  size_t remaining = strlen(p);
+  memmove(buf, p, remaining + 1); // include the NUL
+
+  if (slaveID != NULL)
+    *slaveID = (uint8_t)id;
+  return true;
+}
+
+// Builds a single-shot mode-6 command frame into `out`: the mode byte followed
+// by the (possibly truncated) payload. Returns the total number of bytes written.
+// `outSize` is the capacity of `out` (should be the I2C wire buffer size); the
+// payload is truncated so the frame never exceeds it.
+static inline int blaeckBuildCommandFrame(const char *payload, uint8_t *out, size_t outSize)
+{
+  if (out == NULL || outSize < 1)
+    return 0;
+
+  out[0] = BLAECK_WIRE_MODE_COMMAND;
+  size_t maxPayload = outSize - 1;
+  size_t len = payload != NULL ? strlen(payload) : 0;
+  if (len > maxPayload)
+    len = maxPayload;
+
+  for (size_t i = 0; i < len; i++)
+    out[1 + i] = (uint8_t)payload[i];
+
+  return (int)(1 + len);
+}
+
+// Reassembles the command text from a received mode-6 frame (`bytes` includes
+// the leading mode byte). Writes a NUL-terminated command string into `out` and
+// returns its length, or -1 if `bytes` is not a mode-6 frame. The result is
+// truncated to fit `outSize`.
+static inline int blaeckReassembleCommand(const uint8_t *bytes, int numBytes, char *out, size_t outSize)
+{
+  if (out == NULL || outSize < 1)
+    return -1;
+  if (bytes == NULL || numBytes < 1 || bytes[0] != BLAECK_WIRE_MODE_COMMAND)
+    return -1;
+
+  size_t n = 0;
+  for (int i = 1; i < numBytes && n < outSize - 1; i++)
+    out[n++] = (char)bytes[i];
+  out[n] = '\0';
+  return (int)n;
+}
 
 // Allow user overrides via a config file in the sketch folder.
 // Create BlaeckSerialConfig.h in your sketch to override defaults, e.g.:
@@ -113,6 +227,17 @@
   #define BLAECK_COMMAND_MAX_PARAMS_DEFAULT 10
 #endif
 
+// Command metadata (Home Assistant discovery catalog).
+// When ON, the typed command registration helpers (onNumberCommand/
+// onSwitchCommand/onSelectCommand/onButtonCommand) store parameter metadata and
+// the device can emit a 0xE0 "Command List" frame in response to
+// BLAECK.WRITE_COMMANDS. Turn OFF to save SRAM/flash on tiny targets; the typed
+// helpers then behave exactly like plain onCommand() (no metadata, no 0xE0).
+// Override via BlaeckSerialConfig.h or build flag.
+#ifndef BLAECK_ENABLE_COMMAND_META
+  #define BLAECK_ENABLE_COMMAND_META 1
+#endif
+
 // I2C (Wire) buffer size used for slave→master data packing.
 // Auto-detected from Wire.h platform defines; falls back to 32.
 // Only increase if BOTH master and slave support larger buffers;
@@ -128,6 +253,16 @@
   #else
     #define BLAECK_WIRE_BUFFER_SIZE 32
   #endif
+#endif
+
+// Slave-side RAM buffer used to serialize this board's command catalog (0xE0
+// entries) before streaming it to the master for aggregation (I2C wire-mode 5).
+// Sized to hold a handful of typed commands with metadata; entries that would
+// overflow are dropped at an entry boundary (a debug warning is emitted).
+// Only allocated when command metadata is enabled. Override for boards with more
+// commands (costs SRAM) or shrink on tiny targets.
+#ifndef BLAECK_SLAVE_COMMAND_BLOB_SIZE
+  #define BLAECK_SLAVE_COMMAND_BLOB_SIZE 192
 #endif
 
 typedef enum MasterSlaveConfig
@@ -175,6 +310,16 @@ enum BlaeckIntervalMode
 
 typedef void (*BlaeckCommandHandler)(const char *command, const char *const *params, byte paramCount);
 typedef void (*BlaeckAnyCommandHandler)(const char *command, const char *const *params, byte paramCount);
+
+// Command kind for Home Assistant discovery (0xE0 Command List frame).
+enum BlaeckCommandKind
+{
+  BLAECK_CMD_PLAIN = 0,  // registered via onCommand(): no HA entity, but listed in 0xE0 for command palettes
+  BLAECK_CMD_NUMBER = 1, // HA number   (value in [min,max])
+  BLAECK_CMD_SWITCH = 2, // HA switch   (0/1)
+  BLAECK_CMD_SELECT = 3, // HA select   (index into optionsCsv)
+  BLAECK_CMD_BUTTON = 4  // HA button   (no value)
+};
 
 class BlaeckSerial
 {
@@ -230,6 +375,10 @@ public:
   // ----- Symbols -----
   void writeSymbols();
   void writeSymbols(unsigned long messageID);
+
+  // ----- Commands (Home Assistant discovery catalog, 0xE0) -----
+  void writeCommands();
+  void writeCommands(unsigned long messageID);
 
   // ----- Data Write -----
   // Update value and write directly - by name
@@ -375,6 +524,27 @@ public:
   void onAnyCommand(BlaeckAnyCommandHandler handler);
   void clearAllCommandHandlers();
 
+  // ----- Typed command registration (Home Assistant discovery metadata) -----
+  // Same runtime behavior as onCommand(), but attach metadata so the device can
+  // describe the command in a 0xE0 "Command List" frame (BLAECK.WRITE_COMMANDS).
+  // stateSignal (nullable): name of the signal that mirrors this command's value
+  // (closed-loop -> HA state_topic + logged); pass nullptr for an optimistic /
+  // open-loop control. All metadata strings must be F()/PROGMEM literals with
+  // program lifetime (stored as pointers, never copied).
+  // Number values outside [min,max], bad select indices and non-0/1 switch
+  // values are rejected (handler skipped) and reported on DebugRef.
+  // step is HA display resolution only; the firmware does not round.
+  bool onNumberCommand(const char *command, BlaeckCommandHandler handler,
+                       const __FlashStringHelper *stateSignal,
+                       float min, float max, float step,
+                       const __FlashStringHelper *unit = nullptr);
+  bool onSwitchCommand(const char *command, BlaeckCommandHandler handler,
+                       const __FlashStringHelper *stateSignal);
+  bool onSelectCommand(const char *command, BlaeckCommandHandler handler,
+                       const __FlashStringHelper *stateSignal,
+                       const __FlashStringHelper *optionsCsv);
+  bool onButtonCommand(const char *command, BlaeckCommandHandler handler);
+
   // ----- Before data write callback  -----
   // Called just before signal data is sent.
   //   Single/Master mode: runs in normal loop context (safe to use Serial, delay, etc.)
@@ -424,6 +594,25 @@ private:
 
   void writeLocalSymbols(unsigned long MessageID, bool send_eol);
   void writeSlaveSymbols(bool send_eol);
+#if BLAECK_ENABLE_COMMAND_META
+  void writeLocalCommands(unsigned long MessageID, bool send_eol);
+  void _annotateCommand(const char *command, uint8_t kind,
+                        const __FlashStringHelper *stateSignal,
+                        float mn, float mx, float st,
+                        const __FlashStringHelper *unit,
+                        const __FlashStringHelper *options);
+  bool _validateTypedCommand(byte handlerIndex);
+  static byte _flashCsvOptionCount(const __FlashStringHelper *csv);
+  static long _flashCsvIndexOf(const __FlashStringHelper *csv, const char *value);
+
+  // Master-side aggregation of slave command catalogs (I2C wire-mode 5): request
+  // each found slave's length-prefixed command blob and append it verbatim to the
+  // 0xE0 frame. Slave-side: serialize this board's in-use command entries into a
+  // RAM blob and stream it in BLAECK_WIRE_BUFFER_SIZE-sized chunks on request.
+  void writeSlaveCommands(bool send_eol);
+  void wireSlaveTransmitCommandChunk();
+  int _serializeLocalCommandBlob(byte *buf, int bufSize);
+#endif
 
   void writeLocalDevices(unsigned long MessageID, bool send_eol);
   void writeSlaveDevices(bool send_eol);
@@ -433,6 +622,11 @@ private:
 
   void wireSlaveTransmitToMaster();
   void wireSlaveReceive(int numBytes);
+
+  // Master->slave single-shot command delivery (I2C wire-mode 6) and the slave-side
+  // deferred dispatch of a command received over I2C (run outside the Wire ISR).
+  void wireMasterTransmitCommand(byte slaveID, const char *payload);
+  void _processPendingWireCommand();
 
   void wireSlaveTransmitSingleSymbol();
   void wireSlaveTransmitDataPoints(bool onlyUpdated);
@@ -475,6 +669,23 @@ private:
   byte _wireMode = 0;
   int _wireSignalIndex = 0;
   int _wireDeviceIndex = 0;
+
+  // Slave-side ingress for a command delivered by the master over I2C wire-mode 6.
+  // Written inside the Wire receive ISR, drained in read() (main loop) so the user
+  // command handler never runs in interrupt context.
+  volatile bool _wireCommandPending = false;
+  char _wireCommandBuf[BLAECK_WIRE_BUFFER_SIZE] = {0};
+
+#if BLAECK_ENABLE_COMMAND_META
+  // Slave-side staging for streaming this board's command catalog to the master
+  // (I2C wire-mode 5). The blob is built lazily on the first requestFrom() of an
+  // aggregation pass (cursor == 0) and streamed across chunks; a fresh pass is
+  // signalled by wireSlaveReceive() resetting the cursor and "built" flag.
+  byte _wireCommandBlob[BLAECK_SLAVE_COMMAND_BLOB_SIZE] = {0};
+  int _wireCommandBlobLen = 0;
+  int _wireCommandCursor = 0;
+  bool _wireCommandBlobBuilt = false;
+#endif
 
   bool _i2cScanInitialized = false;
   unsigned long _lastI2CScanMs = 0;
@@ -552,6 +763,20 @@ private:
     _bufStr(s.c_str());
     _bufByte(0);
   }
+  void _bufFlashStr(const __FlashStringHelper *s)
+  {
+    if (s == nullptr)
+      return;
+    PGM_P p = reinterpret_cast<PGM_P>(s);
+    byte c;
+    while ((c = pgm_read_byte(p++)) != 0)
+      _bufByte(c);
+  }
+  void _bufFlashStr0(const __FlashStringHelper *s)
+  {
+    _bufFlashStr(s);
+    _bufByte(0);
+  }
   void _bufSend()
   {
     if (_bufOverflow)
@@ -600,6 +825,15 @@ private:
     char command[MAX_COMMAND_NAME_COUNT];
     BlaeckCommandHandler handler = nullptr;
     bool inUse = false;
+#if BLAECK_ENABLE_COMMAND_META
+    uint8_t kind = BLAECK_CMD_PLAIN;
+    float meta_min = 0.0f;
+    float meta_max = 0.0f;
+    float meta_step = 0.0f;
+    const __FlashStringHelper *unit = nullptr;
+    const __FlashStringHelper *options = nullptr;
+    const __FlashStringHelper *stateSignal = nullptr;
+#endif
   };
   CommandHandlerEntry _commandHandlers[MAX_COMMAND_HANDLERS];
   BlaeckAnyCommandHandler _anyCommandHandler = nullptr;
@@ -607,6 +841,12 @@ private:
   char _parsedCommand[MAX_COMMAND_NAME_COUNT] = {0};
   const char *_parsedParamPtrs[MAX_COMMAND_PARAM_COUNT] = {0};
   byte _parsedParamCount = 0;
+#if BLAECK_ENABLE_COMMAND_META
+  // Scratch buffer holding a select command's normalized index string, so a
+  // name payload (e.g. from a Home Assistant select) is handed to index-based
+  // handlers as its numeric index.
+  char _selectIndexScratch[8] = {0};
+#endif
   bool recvWithStartEndMarkers();
   void parseData();
 

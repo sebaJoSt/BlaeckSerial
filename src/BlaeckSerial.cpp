@@ -565,8 +565,25 @@ void BlaeckSerial::read()
 {
   this->writeRestarted();
 
+  // Dispatch any command the master delivered to this slave over I2C (captured in
+  // the Wire ISR, run here so the user handler executes in the main loop, not the ISR).
+  this->_processPendingWireCommand();
+
   if (recvWithStartEndMarkers() == true)
   {
+    // Command routing: a master forwards an "@<slaveID>:NAME,args" frame to the
+    // addressed slave over I2C instead of executing it locally. Frames without the
+    // prefix (and every frame on Single/Slave boards) fall through to local dispatch.
+    if (_masterSlaveConfig == Master && receivedChars[0] == '@')
+    {
+      uint8_t targetSlave = 0;
+      if (blaeckParseRoutingTarget(receivedChars, &targetSlave))
+      {
+        this->wireMasterTransmitCommand(targetSlave, receivedChars);
+        return;
+      }
+    }
+
     parseData();
     if (_debugStream != nullptr)
     {
@@ -593,6 +610,14 @@ void BlaeckSerial::read()
 
       this->writeDevices(msg_id);
     }
+#if BLAECK_ENABLE_COMMAND_META
+    else if (strcmp(COMMAND, "BLAECK.WRITE_COMMANDS") == 0)
+    {
+      unsigned long msg_id = ((unsigned long)PARAMETER[3] << 24) | ((unsigned long)PARAMETER[2] << 16) | ((unsigned long)PARAMETER[1] << 8) | ((unsigned long)PARAMETER[0]);
+
+      this->writeCommands(msg_id);
+    }
+#endif
     else if (strcmp(COMMAND, "BLAECK.ACTIVATE") == 0)
     {
       if (_fixedInterval_ms == BLAECK_INTERVAL_CLIENT)
@@ -658,6 +683,12 @@ bool BlaeckSerial::onCommand(const char *command, BlaeckCommandHandler handler)
     if (_commandHandlers[i].inUse && strcmp(_commandHandlers[i].command, command) == 0)
     {
       _commandHandlers[i].handler = handler;
+#if BLAECK_ENABLE_COMMAND_META
+      _commandHandlers[i].kind = BLAECK_CMD_PLAIN;
+      _commandHandlers[i].unit = nullptr;
+      _commandHandlers[i].options = nullptr;
+      _commandHandlers[i].stateSignal = nullptr;
+#endif
       return true;
     }
   }
@@ -670,6 +701,12 @@ bool BlaeckSerial::onCommand(const char *command, BlaeckCommandHandler handler)
       _commandHandlers[i].command[MAX_COMMAND_NAME_COUNT - 1] = '\0';
       _commandHandlers[i].handler = handler;
       _commandHandlers[i].inUse = true;
+#if BLAECK_ENABLE_COMMAND_META
+      _commandHandlers[i].kind = BLAECK_CMD_PLAIN;
+      _commandHandlers[i].unit = nullptr;
+      _commandHandlers[i].options = nullptr;
+      _commandHandlers[i].stateSignal = nullptr;
+#endif
       return true;
     }
   }
@@ -694,9 +731,152 @@ void BlaeckSerial::clearAllCommandHandlers()
     _commandHandlers[i].inUse = false;
     _commandHandlers[i].handler = nullptr;
     _commandHandlers[i].command[0] = '\0';
+#if BLAECK_ENABLE_COMMAND_META
+    _commandHandlers[i].kind = BLAECK_CMD_PLAIN;
+    _commandHandlers[i].unit = nullptr;
+    _commandHandlers[i].options = nullptr;
+    _commandHandlers[i].stateSignal = nullptr;
+#endif
   }
   _anyCommandHandler = nullptr;
 }
+
+bool BlaeckSerial::onNumberCommand(const char *command, BlaeckCommandHandler handler,
+                                   const __FlashStringHelper *stateSignal,
+                                   float min, float max, float step,
+                                   const __FlashStringHelper *unit)
+{
+  bool ok = onCommand(command, handler);
+#if BLAECK_ENABLE_COMMAND_META
+  if (ok)
+    _annotateCommand(command, BLAECK_CMD_NUMBER, stateSignal, min, max, step, unit, nullptr);
+#else
+  (void)stateSignal; (void)min; (void)max; (void)step; (void)unit;
+#endif
+  return ok;
+}
+
+bool BlaeckSerial::onSwitchCommand(const char *command, BlaeckCommandHandler handler,
+                                   const __FlashStringHelper *stateSignal)
+{
+  bool ok = onCommand(command, handler);
+#if BLAECK_ENABLE_COMMAND_META
+  if (ok)
+    _annotateCommand(command, BLAECK_CMD_SWITCH, stateSignal, 0.0f, 0.0f, 0.0f, nullptr, nullptr);
+#else
+  (void)stateSignal;
+#endif
+  return ok;
+}
+
+bool BlaeckSerial::onSelectCommand(const char *command, BlaeckCommandHandler handler,
+                                   const __FlashStringHelper *stateSignal,
+                                   const __FlashStringHelper *optionsCsv)
+{
+  bool ok = onCommand(command, handler);
+#if BLAECK_ENABLE_COMMAND_META
+  if (ok)
+    _annotateCommand(command, BLAECK_CMD_SELECT, stateSignal, 0.0f, 0.0f, 0.0f, nullptr, optionsCsv);
+#else
+  (void)stateSignal; (void)optionsCsv;
+#endif
+  return ok;
+}
+
+bool BlaeckSerial::onButtonCommand(const char *command, BlaeckCommandHandler handler)
+{
+  bool ok = onCommand(command, handler);
+#if BLAECK_ENABLE_COMMAND_META
+  if (ok)
+    _annotateCommand(command, BLAECK_CMD_BUTTON, nullptr, 0.0f, 0.0f, 0.0f, nullptr, nullptr);
+#endif
+  return ok;
+}
+
+#if BLAECK_ENABLE_COMMAND_META
+void BlaeckSerial::_annotateCommand(const char *command, uint8_t kind,
+                                    const __FlashStringHelper *stateSignal,
+                                    float mn, float mx, float st,
+                                    const __FlashStringHelper *unit,
+                                    const __FlashStringHelper *options)
+{
+  for (byte i = 0; i < MAX_COMMAND_HANDLERS; i++)
+  {
+    if (_commandHandlers[i].inUse && strcmp(_commandHandlers[i].command, command) == 0)
+    {
+      _commandHandlers[i].kind = kind;
+      _commandHandlers[i].meta_min = mn;
+      _commandHandlers[i].meta_max = mx;
+      _commandHandlers[i].meta_step = st;
+      _commandHandlers[i].unit = unit;
+      _commandHandlers[i].options = options;
+      _commandHandlers[i].stateSignal = stateSignal;
+      return;
+    }
+  }
+}
+
+byte BlaeckSerial::_flashCsvOptionCount(const __FlashStringHelper *csv)
+{
+  if (csv == nullptr)
+    return 0;
+  PGM_P p = reinterpret_cast<PGM_P>(csv);
+  byte count = 1;
+  bool any = false;
+  byte c;
+  while ((c = pgm_read_byte(p++)) != 0)
+  {
+    any = true;
+    if (c == ',')
+      count++;
+  }
+  return any ? count : 0;
+}
+
+long BlaeckSerial::_flashCsvIndexOf(const __FlashStringHelper *csv, const char *value)
+{
+  if (csv == nullptr || value == nullptr || value[0] == '\0')
+    return -1;
+
+  PGM_P p = reinterpret_cast<PGM_P>(csv);
+  long index = 0;
+  const char *v = value;
+  bool matching = true; // current token still matches value so far
+
+  byte c;
+  while (true)
+  {
+    c = pgm_read_byte(p++);
+    if (c == ',' || c == '\0')
+    {
+      // End of a token: match if value was fully consumed too.
+      if (matching && *v == '\0')
+        return index;
+      if (c == '\0')
+        return -1;
+      // Advance to next token
+      index++;
+      v = value;
+      matching = true;
+    }
+    else
+    {
+      if (matching)
+      {
+        char a = (char)c;
+        char b = *v;
+        // Case-insensitive compare
+        if (a >= 'A' && a <= 'Z') a = (char)(a - 'A' + 'a');
+        if (b >= 'A' && b <= 'Z') b = (char)(b - 'A' + 'a');
+        if (b == '\0' || a != b)
+          matching = false;
+        else
+          v++;
+      }
+    }
+  }
+}
+#endif
 
 bool BlaeckSerial::recvWithStartEndMarkers()
 {
@@ -891,10 +1071,13 @@ void BlaeckSerial::_dispatchRegisteredHandlers()
         _commandHandlers[i].handler != nullptr &&
         strcmp(_commandHandlers[i].command, _parsedCommand) == 0)
     {
-      _commandHandlers[i].handler(
-          _parsedCommand,
-          (const char *const *)_parsedParamPtrs,
-          _parsedParamCount);
+#if BLAECK_ENABLE_COMMAND_META
+      if (_validateTypedCommand(i))
+#endif
+        _commandHandlers[i].handler(
+            _parsedCommand,
+            (const char *const *)_parsedParamPtrs,
+            _parsedParamCount);
       break;
     }
   }
@@ -907,6 +1090,94 @@ void BlaeckSerial::_dispatchRegisteredHandlers()
         _parsedParamCount);
   }
 }
+
+#if BLAECK_ENABLE_COMMAND_META
+bool BlaeckSerial::_validateTypedCommand(byte handlerIndex)
+{
+  const CommandHandlerEntry &e = _commandHandlers[handlerIndex];
+
+  // Plain and button commands carry no value to validate.
+  if (e.kind == BLAECK_CMD_PLAIN || e.kind == BLAECK_CMD_BUTTON)
+    return true;
+
+  // No value supplied -> let the handler decide (e.g. query/toggle usage).
+  if (_parsedParamCount < 1 || _parsedParamPtrs[0] == nullptr || _parsedParamPtrs[0][0] == '\0')
+    return true;
+
+  const char *v = _parsedParamPtrs[0];
+
+  if (e.kind == BLAECK_CMD_NUMBER)
+  {
+    float f = (float)atof(v);
+    if (f < e.meta_min || f > e.meta_max)
+    {
+      if (_debugStream != nullptr)
+      {
+        _debugStream->print(F("Command rejected (out of range): "));
+        _debugStream->print(e.command);
+        _debugStream->print('=');
+        _debugStream->print(v);
+        _debugStream->print(F(" allowed ["));
+        _debugStream->print(e.meta_min);
+        _debugStream->print(F(", "));
+        _debugStream->print(e.meta_max);
+        _debugStream->println(F("]"));
+      }
+      return false;
+    }
+  }
+  else if (e.kind == BLAECK_CMD_SWITCH)
+  {
+    if (!(strcmp(v, "0") == 0 || strcmp(v, "1") == 0))
+    {
+      if (_debugStream != nullptr)
+      {
+        _debugStream->print(F("Command rejected (switch expects 0/1): "));
+        _debugStream->print(e.command);
+        _debugStream->print('=');
+        _debugStream->println(v);
+      }
+      return false;
+    }
+  }
+  else if (e.kind == BLAECK_CMD_SELECT)
+  {
+    byte count = _flashCsvOptionCount(e.options);
+
+    // Accept either an option name (case-insensitive) or a numeric index.
+    long idx = _flashCsvIndexOf(e.options, v);
+    if (idx < 0)
+    {
+      char *endp = nullptr;
+      long n = strtol(v, &endp, 10);
+      if (endp != v && *endp == '\0')
+        idx = n;
+    }
+
+    if (idx < 0 || idx >= (long)count)
+    {
+      if (_debugStream != nullptr)
+      {
+        _debugStream->print(F("Command rejected (bad select value): "));
+        _debugStream->print(e.command);
+        _debugStream->print('=');
+        _debugStream->print(v);
+        _debugStream->print(F(" allowed [0, "));
+        _debugStream->print((int)count - 1);
+        _debugStream->println(F("] or an option name"));
+      }
+      return false;
+    }
+
+    // Normalize to the index string so index-based handlers work whether the
+    // caller sent a name (e.g. HA select) or a raw index.
+    snprintf(_selectIndexScratch, sizeof(_selectIndexScratch), "%ld", idx);
+    _parsedParamPtrs[0] = _selectIndexScratch;
+  }
+
+  return true;
+}
+#endif
 
 void BlaeckSerial::_setTimedDataState(bool timedActivated, unsigned long timedInterval_ms)
 {
@@ -964,6 +1235,247 @@ void BlaeckSerial::writeSymbols(unsigned long msg_id)
     _schemaHash = _schemaHashAccum & 0xFFFF;
   }
 }
+
+#if BLAECK_ENABLE_COMMAND_META
+void BlaeckSerial::writeCommands()
+{
+  this->writeCommands(1);
+}
+void BlaeckSerial::writeCommands(unsigned long msg_id)
+{
+  if (_masterSlaveConfig == Master)
+  {
+    // Master: emit local command entries (no footer), then aggregate every found
+    // slave's command catalog and close the frame.
+    this->refreshI2CSlavesIfNeeded();
+    this->writeLocalCommands(msg_id, false);
+    this->writeSlaveCommands(true);
+  }
+  else
+  {
+    // Single / Slave: local command entries only.
+    this->writeLocalCommands(msg_id, true);
+  }
+}
+
+int BlaeckSerial::_serializeLocalCommandBlob(byte *buf, int bufSize)
+{
+  // Serialize all in-use command handlers into `buf` using the exact 0xE0
+  // per-entry format (see writeLocalCommands). Entries are appended whole; if the
+  // next entry would not fit, serialization stops at that boundary (a debug
+  // warning is emitted) so the master always receives well-formed entries.
+  // Returns the number of bytes written.
+  int pos = 0;
+
+#define BLB_PUT(b)                    \
+  do                                  \
+  {                                   \
+    if (pos < bufSize)                \
+      buf[pos++] = (byte)(b);         \
+    else                              \
+      entryOverflow = true;           \
+  } while (0)
+
+  for (byte i = 0; i < MAX_COMMAND_HANDLERS; i++)
+  {
+    CommandHandlerEntry &e = _commandHandlers[i];
+    if (!e.inUse)
+      continue;
+
+    int entryStart = pos;
+    bool entryOverflow = false;
+
+    byte flags = 0;
+    if (e.kind == BLAECK_CMD_NUMBER)
+      flags |= 0x01;
+    if (e.unit != nullptr)
+      flags |= 0x02;
+    if (e.kind == BLAECK_CMD_SELECT && e.options != nullptr)
+      flags |= 0x04;
+    if (e.stateSignal != nullptr)
+      flags |= 0x08;
+
+    BLB_PUT(_masterSlaveConfig);
+    BLB_PUT(_slaveID);
+    for (const char *p = e.command; *p != '\0'; p++)
+      BLB_PUT(*p);
+    BLB_PUT(0);
+    BLB_PUT(e.kind);
+    BLB_PUT(flags);
+
+    if (flags & 0x01)
+    {
+      fltCvt.val = e.meta_min;
+      for (int k = 0; k < 4; k++)
+        BLB_PUT(fltCvt.bval[k]);
+      fltCvt.val = e.meta_max;
+      for (int k = 0; k < 4; k++)
+        BLB_PUT(fltCvt.bval[k]);
+      fltCvt.val = e.meta_step;
+      for (int k = 0; k < 4; k++)
+        BLB_PUT(fltCvt.bval[k]);
+    }
+    if (flags & 0x02)
+    {
+      PGM_P p = reinterpret_cast<PGM_P>(e.unit);
+      byte c;
+      while ((c = pgm_read_byte(p++)) != 0)
+        BLB_PUT(c);
+      BLB_PUT(0);
+    }
+    if (flags & 0x04)
+    {
+      PGM_P p = reinterpret_cast<PGM_P>(e.options);
+      byte c;
+      while ((c = pgm_read_byte(p++)) != 0)
+        BLB_PUT(c);
+      BLB_PUT(0);
+    }
+    if (flags & 0x08)
+    {
+      PGM_P p = reinterpret_cast<PGM_P>(e.stateSignal);
+      byte c;
+      while ((c = pgm_read_byte(p++)) != 0)
+        BLB_PUT(c);
+      BLB_PUT(0);
+    }
+
+    if (entryOverflow)
+    {
+      // Roll back the partial entry and stop; the master receives only whole entries.
+      pos = entryStart;
+      if (_debugStream != nullptr)
+        _debugStream->println("BlaeckSerial: slave command blob full; some command entries omitted.");
+      break;
+    }
+  }
+
+#undef BLB_PUT
+
+  return pos;
+}
+
+void BlaeckSerial::wireSlaveTransmitCommandChunk()
+{
+  // Build the blob lazily on the first chunk of an aggregation pass.
+  if (!_wireCommandBlobBuilt)
+  {
+    _wireCommandBlobLen = _serializeLocalCommandBlob(_wireCommandBlob, sizeof(_wireCommandBlob));
+    if (_wireCommandBlobLen < 0)
+      _wireCommandBlobLen = 0;
+    _wireCommandBlobBuilt = true;
+  }
+
+  int written = 0;
+  if (_wireCommandCursor == 0)
+  {
+    uint8_t lenPrefix[2];
+    blaeckPutLen16(lenPrefix, (uint16_t)_wireCommandBlobLen);
+    Wire.write(lenPrefix[0]);
+    Wire.write(lenPrefix[1]);
+    written += 2;
+  }
+
+  while (written < (int)BLAECK_WIRE_BUFFER_SIZE && _wireCommandCursor < _wireCommandBlobLen)
+  {
+    Wire.write(_wireCommandBlob[_wireCommandCursor++]);
+    written++;
+  }
+}
+
+void BlaeckSerial::writeSlaveCommands(bool send_eol)
+{
+  // Absolute sanity cap on a slave's reported blob length. Guards against a slave
+  // built without command-metadata support (which never answers wire-mode 5 and
+  // whose reply would decode as garbage) or a corrupt length prefix.
+  const long BLAECK_SLAVE_COMMAND_MAX = 1024;
+
+  for (int slaveindex = 0; slaveindex <= 127; slaveindex++)
+  {
+    if (!slaveFound(slaveindex))
+      continue;
+
+    byte transmissionIsSuccess = false;
+    for (byte retries = 0; retries < 4; retries++)
+    {
+      Wire.beginTransmission(slaveindex);
+      Wire.write(BLAECK_WIRE_MODE_COMMAND_LIST);
+      transmissionIsSuccess = Wire.endTransmission();
+      if (transmissionIsSuccess == 0)
+        break;
+    }
+    if (transmissionIsSuccess != 0)
+      continue;
+
+    bool headerRead = false;
+    long totalLen = 0;
+    long bytesRead = 0;
+    int requestCount = 0;
+
+    while (requestCount < 2000)
+    {
+      byte receivedBytes = Wire.requestFrom(slaveindex, (int)BLAECK_WIRE_BUFFER_SIZE);
+      requestCount++;
+      if (receivedBytes < 1)
+        continue;
+
+      int idx = 0;
+
+      if (!headerRead)
+      {
+        if (Wire.available() < 2)
+        {
+          while (Wire.available())
+            Wire.read();
+          continue;
+        }
+        uint8_t lenPrefix[2];
+        lenPrefix[0] = (uint8_t)Wire.read();
+        lenPrefix[1] = (uint8_t)Wire.read();
+        idx = 2;
+        totalLen = (long)blaeckGetLen16(lenPrefix);
+        headerRead = true;
+        if (totalLen <= 0 || totalLen > BLAECK_SLAVE_COMMAND_MAX)
+        {
+          while (Wire.available())
+            Wire.read();
+          break; // nothing to append for this slave
+        }
+      }
+
+      for (; idx < receivedBytes && Wire.available() && bytesRead < totalLen; idx++)
+      {
+        byte b = (byte)Wire.read();
+        if (_bufferedWrites && _frameBuf)
+          _bufByte(b);
+        else
+          StreamRef->write(b);
+        bytesRead++;
+      }
+      while (Wire.available())
+        Wire.read();
+
+      if (headerRead && bytesRead >= totalLen)
+        break;
+    }
+  }
+
+  if (send_eol)
+  {
+    if (_bufferedWrites && _frameBuf)
+    {
+      _bufFooter();
+      _bufSend();
+    }
+    else
+    {
+      StreamRef->write("/BLAECK>");
+      StreamRef->write("\r\n");
+      StreamRef->flush();
+    }
+  }
+}
+#endif
 
 void BlaeckSerial::write(String signalName, bool value)
 {
@@ -2437,6 +2949,139 @@ void BlaeckSerial::writeLocalSymbols(unsigned long msg_id, bool send_eol)
   }
 }
 
+#if BLAECK_ENABLE_COMMAND_META
+void BlaeckSerial::writeLocalCommands(unsigned long msg_id, bool send_eol)
+{
+  // 0xE0 "Command List" frame. Per discovered command entry:
+  //   msConfig(1) slaveID(1) name\0 kind(1) flags(1)
+  //   [min(4) max(4) step(4)]  if flags.hasRange   (LE float)
+  //   [unit\0]                 if flags.hasUnit
+  //   [optionsCsv\0]           if flags.hasOptions
+  //   [stateSignal\0]          if flags.hasStateSignal
+  // flags bits: 0=hasRange 1=hasUnit 2=hasOptions 3=hasStateSignal
+  // All in-use entries are emitted, including plain onCommand() entries
+  // (kind=BLAECK_CMD_PLAIN, flags=0, no trailing metadata). Plain entries carry
+  // no Home Assistant entity, but are listed so a host can build a full command
+  // palette / autocomplete of every command the device accepts.
+  if (_bufferedWrites && _frameBuf)
+  {
+    _bufReset();
+    _bufHeader(0xE0, msg_id);
+
+    for (byte i = 0; i < MAX_COMMAND_HANDLERS; i++)
+    {
+      CommandHandlerEntry &e = _commandHandlers[i];
+      if (!e.inUse)
+        continue;
+
+      byte flags = 0;
+      if (e.kind == BLAECK_CMD_NUMBER)
+        flags |= 0x01;
+      if (e.unit != nullptr)
+        flags |= 0x02;
+      if (e.kind == BLAECK_CMD_SELECT && e.options != nullptr)
+        flags |= 0x04;
+      if (e.stateSignal != nullptr)
+        flags |= 0x08;
+
+      _bufByte(_masterSlaveConfig);
+      _bufByte(_slaveID);
+      _bufStr0(e.command);
+      _bufByte(e.kind);
+      _bufByte(flags);
+
+      if (flags & 0x01)
+      {
+        fltCvt.val = e.meta_min;
+        _bufBytes(fltCvt.bval, 4);
+        fltCvt.val = e.meta_max;
+        _bufBytes(fltCvt.bval, 4);
+        fltCvt.val = e.meta_step;
+        _bufBytes(fltCvt.bval, 4);
+      }
+      if (flags & 0x02)
+        _bufFlashStr0(e.unit);
+      if (flags & 0x04)
+        _bufFlashStr0(e.options);
+      if (flags & 0x08)
+        _bufFlashStr0(e.stateSignal);
+    }
+
+    if (send_eol)
+    {
+      _bufFooter();
+      _bufSend();
+    }
+  }
+  else
+  {
+    StreamRef->write("<BLAECK:");
+    byte msg_key = 0xE0;
+    StreamRef->write(msg_key);
+    StreamRef->write(":");
+    ulngCvt.val = msg_id;
+    StreamRef->write(ulngCvt.bval, 4);
+    StreamRef->write(":");
+
+    for (byte i = 0; i < MAX_COMMAND_HANDLERS; i++)
+    {
+      CommandHandlerEntry &e = _commandHandlers[i];
+      if (!e.inUse)
+        continue;
+
+      byte flags = 0;
+      if (e.kind == BLAECK_CMD_NUMBER)
+        flags |= 0x01;
+      if (e.unit != nullptr)
+        flags |= 0x02;
+      if (e.kind == BLAECK_CMD_SELECT && e.options != nullptr)
+        flags |= 0x04;
+      if (e.stateSignal != nullptr)
+        flags |= 0x08;
+
+      StreamRef->write(_masterSlaveConfig);
+      StreamRef->write(_slaveID);
+      StreamRef->print(e.command);
+      StreamRef->write((byte)0);
+      StreamRef->write(e.kind);
+      StreamRef->write(flags);
+
+      if (flags & 0x01)
+      {
+        fltCvt.val = e.meta_min;
+        StreamRef->write(fltCvt.bval, 4);
+        fltCvt.val = e.meta_max;
+        StreamRef->write(fltCvt.bval, 4);
+        fltCvt.val = e.meta_step;
+        StreamRef->write(fltCvt.bval, 4);
+      }
+      if (flags & 0x02)
+      {
+        StreamRef->print(e.unit);
+        StreamRef->write((byte)0);
+      }
+      if (flags & 0x04)
+      {
+        StreamRef->print(e.options);
+        StreamRef->write((byte)0);
+      }
+      if (flags & 0x08)
+      {
+        StreamRef->print(e.stateSignal);
+        StreamRef->write((byte)0);
+      }
+    }
+
+    if (send_eol)
+    {
+      StreamRef->write("/BLAECK>");
+      StreamRef->write("\r\n");
+      StreamRef->flush();
+    }
+  }
+}
+#endif
+
 void BlaeckSerial::writeSlaveSymbols(bool send_eol)
 {
 
@@ -2956,14 +3601,41 @@ void BlaeckSerial::wireSlaveReceive(int numBytes)
     _wireMode = 0;
   }
 
-  // Current protocol writes one command byte from master to slave.
-  // Drain potential extra bytes to keep the Wire RX buffer consistent.
-  for (int i = 1; i < numBytes && Wire.available(); i++)
+  // Current protocol writes one command byte from master to slave, except wire-mode 6
+  // (BLAECK_WIRE_MODE_COMMAND), which additionally carries a single-shot command payload.
+  if (_masterSlaveConfig == Slave && _wireMode == BLAECK_WIRE_MODE_COMMAND)
   {
-    (void)Wire.read();
+    // Reassemble the received frame (mode byte + payload) into the pending-command
+    // buffer; the actual dispatch happens later in read(), outside this ISR.
+    uint8_t raw[BLAECK_WIRE_BUFFER_SIZE];
+    int n = 0;
+    raw[n++] = BLAECK_WIRE_MODE_COMMAND;
+    for (int i = 1; i < numBytes && Wire.available() && n < (int)sizeof(raw); i++)
+      raw[n++] = (uint8_t)Wire.read();
+
+    blaeckReassembleCommand(raw, n, _wireCommandBuf, sizeof(_wireCommandBuf));
+    _wireCommandPending = true;
+  }
+  else
+  {
+    // Drain potential extra bytes to keep the Wire RX buffer consistent.
+    for (int i = 1; i < numBytes && Wire.available(); i++)
+    {
+      (void)Wire.read();
+    }
   }
   _wireSignalIndex = 0;
   _wireDeviceIndex = 0;
+
+#if BLAECK_ENABLE_COMMAND_META
+  // A new command-catalog aggregation pass starts with this mode byte; force the
+  // blob to be rebuilt from scratch on the next requestFrom().
+  if (_masterSlaveConfig == Slave && _wireMode == BLAECK_WIRE_MODE_COMMAND_LIST)
+  {
+    _wireCommandCursor = 0;
+    _wireCommandBlobBuilt = false;
+  }
+#endif
 
   if (_masterSlaveConfig == Slave && (_wireMode == 1 || _wireMode == 4))
   {
@@ -2984,6 +3656,60 @@ void BlaeckSerial::wireSlaveTransmitToMaster()
     this->wireSlaveTransmitStatusByte();
   if (_wireMode == 3)
     this->wireSlaveTransmitSingleDevice();
+#if BLAECK_ENABLE_COMMAND_META
+  if (_wireMode == BLAECK_WIRE_MODE_COMMAND_LIST)
+    this->wireSlaveTransmitCommandChunk();
+#endif
+}
+
+// Master -> slave single-shot command delivery (I2C wire-mode 6). Sends the mode
+// byte followed by the command payload in one transmission. Payloads longer than
+// the wire buffer are truncated (chunked delivery is planned); such commands are
+// rare in practice (short "NAME,value" frames dominate).
+void BlaeckSerial::wireMasterTransmitCommand(byte slaveID, const char *payload)
+{
+  if (_masterSlaveConfig != Master)
+    return;
+
+  if (slaveID > BLAECK_ROUTING_MAX_SLAVE_ID || !this->slaveFound(slaveID))
+  {
+    if (_debugStream != nullptr)
+    {
+      _debugStream->print("BlaeckSerial: command target slave not found: ");
+      _debugStream->println(slaveID);
+    }
+    return;
+  }
+
+  uint8_t frame[BLAECK_WIRE_BUFFER_SIZE];
+  int frameLen = blaeckBuildCommandFrame(payload, frame, sizeof(frame));
+
+  if (_debugStream != nullptr && (int)strlen(payload) > (int)(sizeof(frame) - 1))
+  {
+    _debugStream->print("BlaeckSerial: command truncated for single-shot I2C delivery to slave ");
+    _debugStream->println(slaveID);
+  }
+
+  Wire.beginTransmission(slaveID);
+  Wire.write(frame, frameLen);
+  Wire.endTransmission();
+}
+
+// Slave-side deferred dispatch: if the Wire ISR captured a command from the master,
+// copy it out (briefly masking interrupts so the ISR can't overwrite mid-copy) and
+// run it through the normal command-handler dispatch on the main loop.
+void BlaeckSerial::_processPendingWireCommand()
+{
+  if (!_wireCommandPending)
+    return;
+
+  noInterrupts();
+  strncpy(receivedChars, _wireCommandBuf, sizeof(receivedChars) - 1);
+  receivedChars[sizeof(receivedChars) - 1] = '\0';
+  _wireCommandPending = false;
+  interrupts();
+
+  _dispatchRegisteredHandlers();
 }
 
 bool BlaeckSerial::slaveFound(const unsigned int index)

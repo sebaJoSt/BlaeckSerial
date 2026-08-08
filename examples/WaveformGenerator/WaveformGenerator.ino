@@ -4,28 +4,32 @@
   A dashboard-friendly demo for the BlaeckSerial -> Loggbok -> MQTT bridge.
 
   It generates one fully controllable waveform. Frequency, amplitude, offset and waveform
-  shape are all set over MQTT commands. Each command writes the accepted value back to its
-  signal, so a dashboard always shows the value the device actually applied (after
-  clamping/rounding).
+  shape are all set over MQTT commands. The commands are registered with typed helpers
+  (onNumberCommand / onSelectCommand / onSwitchCommand / onButtonCommand) so the device is
+  self-describing: it advertises range, unit, options and the mirrored signal in a 0xE0
+  "Command List" frame, which Loggbok turns into Home Assistant MQTT Discovery entities.
+  Out-of-range values are rejected by the library (and reported on the debug stream); each
+  accepted value is written back to its signal, so a dashboard always shows the value the
+  device actually applied.
 
   Author: Sebastian Strobl, https://github.com/sebaJoSt/BlaeckSerial
 
   --- DASHBOARD MAPPING (Loggbok topic prefix: "loggbok" table name: "wave") ---
     Topic                       Widget          Meaning
     loggbok/wave/Output         chart           live generated sample
-    loggbok/wave/Frequency      slider / text   wave frequency [Hz]
-    loggbok/wave/Amplitude      slider / text   peak amplitude
-    loggbok/wave/Offset         slider / text   DC offset
-    loggbok/wave/Waveform       text/select     0=Sine 1=Square 2=Triangle 3=Sawtooth
+    loggbok/wave/Frequency      number          wave frequency [Hz]   (0..50)
+    loggbok/wave/Amplitude      number          peak amplitude        (0..100)
+    loggbok/wave/Offset         number          DC offset             (-100..100)
+    loggbok/wave/Waveform       select          0=Sine 1=Square 2=Triangle 3=Sawtooth
     loggbok/wave/Enabled        switch          output on/off (off -> Output = Offset)
 
   --- COMMANDS (publish to loggbok/<table>/_cmd/<NAME>, or loggbok/_all/_cmd/<NAME>) ---
-    SET_FREQ    <float>   frequency [Hz]            -> Frequency
-    SET_AMP     <float>   peak amplitude            -> Amplitude
-    SET_OFFSET  <float>   DC offset                 -> Offset
-    SET_WAVE    <0..3>    Sine/Square/Triangle/Saw  -> Waveform
-    SET_ENABLE  <0|1>     output on/off             -> Enabled
-    STATUS                print info to serial
+    SET_FREQ    <0..2>      frequency [Hz]            -> Frequency  (HA number, step 0.01)
+    SET_AMP     <0..100>    peak amplitude            -> Amplitude  (HA number, step 0.1)
+    SET_OFFSET  <-100..100> DC offset                 -> Offset     (HA number, step 0.1)
+    SET_WAVE    <0..3>      Sine/Square/Triangle/Saw  -> Waveform   (HA select; name or index)
+    SET_ENABLE  <0|1>       output on/off             -> Enabled    (HA switch)
+    STATUS                  print info to serial                    (HA button)
 
   Loggbok CLI (log fast enough to resolve the wave, e.g. 20 ms):
     lgbk log --port COM24 --table wave --signals * --interval 20 \
@@ -64,7 +68,7 @@ void setup()
   Serial.begin(115200);
   BlaeckSerial.begin(&Serial, 6);
 
-  BlaeckSerial.DeviceName = "Waveform Generator Demo Serial";
+  BlaeckSerial.DeviceName = "Waveform Generator Demo Serial Discovery";
   BlaeckSerial.DeviceHWVersion = "Arduino Mega 2560 Rev3";
   BlaeckSerial.DeviceFWVersion = ExampleVersion;
 
@@ -75,12 +79,12 @@ void setup()
   BlaeckSerial.addSignal("Waveform", &Waveform);
   BlaeckSerial.addSignal("Enabled", &Enabled);
 
-  BlaeckSerial.onCommand("SET_FREQ", onSetFreq);
-  BlaeckSerial.onCommand("SET_AMP", onSetAmp);
-  BlaeckSerial.onCommand("SET_OFFSET", onSetOffset);
-  BlaeckSerial.onCommand("SET_WAVE", onSetWave);
-  BlaeckSerial.onCommand("SET_ENABLE", onSetEnable);
-  BlaeckSerial.onCommand("STATUS", onStatus);
+  BlaeckSerial.onNumberCommand("SET_FREQ", onSetFreq, F("Frequency"), 0.0f, 2.0f, 0.01f, F("Hz"));
+  BlaeckSerial.onNumberCommand("SET_AMP", onSetAmp, F("Amplitude"), 0.0f, 100.0f, 0.1f);
+  BlaeckSerial.onNumberCommand("SET_OFFSET", onSetOffset, F("Offset"), -100.0f, 100.0f, 0.1f);
+  BlaeckSerial.onSelectCommand("SET_WAVE", onSetWave, F("Waveform"), F("Sine,Square,Triangle,Sawtooth"));
+  BlaeckSerial.onSwitchCommand("SET_ENABLE", onSetEnable, F("Enabled"));
+  BlaeckSerial.onButtonCommand("STATUS", onStatus);
 
   lastMicros = micros();
 }
@@ -139,7 +143,7 @@ void onSetFreq(const char *command, const char *const *params, byte paramCount)
 {
   if (paramCount >= 1 && params[0][0] != '\0')
   {
-    Frequency = roundToDecimals(constrain((float)atof(params[0]), 0.0f, 50.0f), 4);
+    Frequency = roundToDecimals((float)atof(params[0]), 4);
     BlaeckSerial.write("Frequency", Frequency);
   }
 }
@@ -148,7 +152,7 @@ void onSetAmp(const char *command, const char *const *params, byte paramCount)
 {
   if (paramCount >= 1 && params[0][0] != '\0')
   {
-    Amplitude = roundToDecimals(constrain((float)atof(params[0]), 0.0f, 100.0f), 4);
+    Amplitude = roundToDecimals((float)atof(params[0]), 4);
     BlaeckSerial.write("Amplitude", Amplitude);
   }
 }
@@ -157,7 +161,7 @@ void onSetOffset(const char *command, const char *const *params, byte paramCount
 {
   if (paramCount >= 1 && params[0][0] != '\0')
   {
-    Offset = roundToDecimals(constrain((float)atof(params[0]), -100.0f, 100.0f), 4);
+    Offset = roundToDecimals((float)atof(params[0]), 4);
     BlaeckSerial.write("Offset", Offset);
   }
 }
@@ -166,7 +170,7 @@ void onSetWave(const char *command, const char *const *params, byte paramCount)
 {
   if (paramCount >= 1 && params[0][0] != '\0')
   {
-    Waveform = (byte)constrain(atoi(params[0]), 0, 3);
+    Waveform = (byte)atoi(params[0]);
     BlaeckSerial.write("Waveform", Waveform);
   }
 }

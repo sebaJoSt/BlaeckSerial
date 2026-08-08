@@ -2,11 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
-## [6.0.2] - 2026-07-01
+## [7.0.0] - 2026-08-08
 
 ### Added
-- Added the `WaveformGenerator` example with Loggbok MQTT dashboard examples for
-  Home Assistant and Node-RED.
+- **Command routing to a specific master/slave board.** A command frame may now
+  carry an optional `@<slaveID>:` routing prefix (for example
+  `<@3:SET_FREQ,1.5>`). When a master receives a prefixed frame it forwards the
+  command to the addressed slave over I2C (wire-mode 6, single-shot delivery)
+  instead of executing it locally; frames without a prefix keep the previous
+  local-execution behaviour. This lets a single host control several boards that
+  share identical command names (see Loggbok / Home Assistant auto-discovery).
+- **Master-side command-catalog aggregation.** A master now answers
+  `BLAECK.WRITE_COMMANDS` with its own command entries *plus* every found slave's
+  command entries, so the host sees the full multi-board command palette in one
+  `0xE0` frame. Each slave streams its catalog as a length-prefixed blob over a
+  new I2C wire-mode (5); the master appends it verbatim. Slave-side buffer size
+  is configurable via `BLAECK_SLAVE_COMMAND_BLOB_SIZE` (default 192 bytes);
+  entries that would overflow are dropped at an entry boundary with a debug
+  warning. Requires `BLAECK_ENABLE_COMMAND_META`.
+- Added the `WaveformGenerator` example, registered with the typed command
+  helpers (`onNumberCommand` / `onSelectCommand` / `onSwitchCommand` /
+  `onButtonCommand`) so the device is self-describing for Loggbok / Home
+  Assistant MQTT auto-discovery.
 
 ### Changed
 - Increased the default AVR command-handler limit on larger-SRAM AVR boards
