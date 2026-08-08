@@ -82,7 +82,7 @@ unsigned long lastMicros = 0;
 void setup()
 {
   Serial.begin(115200);
-  BlaeckSerial.begin(&Serial, 6);
+  BlaeckSerial.begin(&Serial, 8);
 
   BlaeckSerial.DeviceName = "Waveform Generator Demo Serial Discovery";
   BlaeckSerial.DeviceHWVersion = "Arduino Mega 2560 Rev3";
