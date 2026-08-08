@@ -27,6 +27,11 @@ jobs:
       matrix:
         board:
           # --- AVR boards: all examples including EEPROMEx-based ones ---
+          # SineGeneratorAdvanced is mega-only: it declares an EEPROMSizeMega
+          # memory pool (4096 bytes, four times a nano's EEPROM) and names a
+          # Mega 2560 as its hardware. On a nano it also left only ~300 bytes
+          # for locals, which is uncomfortable for a sketch that builds 25
+          # String signal names on the heap at startup.
           - fqbn: arduino:avr:nano
             platforms: |
               - name: arduino:avr
@@ -41,7 +46,6 @@ jobs:
               - examples/DatatypeTest
               - examples/SHT31TempHumiditySensor
               - examples/SignalNamesInFlashLessRAMUsage
-              - examples/SineGeneratorAdvanced
               - examples/SineGeneratorBasic
               - examples/WaveformGenerator
               - examples/WriteModes

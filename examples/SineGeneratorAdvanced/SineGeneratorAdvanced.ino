@@ -9,8 +9,23 @@
 
   Features:
   - EEPROM stores state (firmware version marker, signal activation mask)
-  - Signals can be (de-)activated with <SIGNAL_ACTIVATE>
-  - Print status with <STATUS>
+  - Signals can be (de-)activated over a range, set with <SIGNAL_FIRST> and
+    <SIGNAL_LAST> and applied with <SIGNAL_ACTIVATE_RANGE> /
+    <SIGNAL_DEACTIVATE_RANGE>
+  - Print status with <STATUS>, which also pushes a one-line summary to a host
+
+  The commands are registered with the typed helpers, so the device describes
+  itself in <BLAECK.WRITE_COMMANDS> and a host (e.g. Loggbok / Home Assistant)
+  can build controls for it: the two bounds are numbers with a range and a
+  mirrored state signal, and the three actions are buttons.
+
+  Splitting the range into "set the bounds, then press apply" is what makes
+  that possible. A single <SIGNAL_ACTIVATE,first,last> command with magic
+  values for all/none/odd/even maps to no dashboard control at all.
+
+  <LS> and <command?> are still answered by a plain onAnyCommand catch-all -
+  free-form help text is not something a dashboard can model, so it stays
+  untyped on purpose.
 */
 
 #include "Arduino.h"
@@ -41,10 +56,21 @@ struct BlaeckSignal
 } sine[MAXIMUM_SIGNALS + 1];
 // unused: sine[0]
 
+//---SIGNAL RANGE
+// Bounds for the activate/deactivate buttons. Mirrored as signals so a
+// dashboard shows the range the next button press will apply to.
+byte signalFirst = 1;
+byte signalLast = MAXIMUM_SIGNALS;
+
 // Forward declarations for command handlers
-void onSignalActivate(const char *command, const char *const *params, byte paramCount);
+void onSetSignalFirst(const char *command, const char *const *params, byte paramCount);
+void onSetSignalLast(const char *command, const char *const *params, byte paramCount);
+void onSignalActivateRange(const char *command, const char *const *params, byte paramCount);
+void onSignalDeactivateRange(const char *command, const char *const *params, byte paramCount);
 void onStatus(const char *command, const char *const *params, byte paramCount);
 void onHelpOrList(const char *command, const char *const *params, byte paramCount);
+void ApplySignalRange(bool activate);
+void PersistActivatedSignals();
 
 //---MEASUREMENT
 unsigned long measurementLastTimeDone = 0; //[ms]
@@ -58,14 +84,23 @@ void setup()
   EEPROMConfiguration();
 
   Serial.begin(115200);
-  BlaeckSerial.begin(&Serial, MAXIMUM_SIGNALS);
+  // +2 for the Signal_First / Signal_Last state signals
+  BlaeckSerial.begin(&Serial, MAXIMUM_SIGNALS + 2);
 
   BlaeckSerial.DeviceName = "Advanced Sine Number Generator";
   BlaeckSerial.DeviceHWVersion = "Arduino Mega 2560 Rev3";
   BlaeckSerial.DeviceFWVersion = FW_VERSION;
 
-  BlaeckSerial.onCommand("SIGNAL_ACTIVATE", onSignalActivate);
-  BlaeckSerial.onCommand("STATUS", onStatus);
+  // Typed: each becomes a dashboard control. The bounds are numbers with a
+  // range and a mirrored signal; applying them is a button, as is STATUS.
+  BlaeckSerial.onNumberCommand("SIGNAL_FIRST", onSetSignalFirst, F("Signal_First"), 1.0f, (float)MAXIMUM_SIGNALS, 1.0f);
+  BlaeckSerial.onNumberCommand("SIGNAL_LAST", onSetSignalLast, F("Signal_Last"), 1.0f, (float)MAXIMUM_SIGNALS, 1.0f);
+  BlaeckSerial.onButtonCommand("SIGNAL_ACTIVATE_RANGE", onSignalActivateRange);
+  BlaeckSerial.onButtonCommand("SIGNAL_DEACTIVATE_RANGE", onSignalDeactivateRange);
+  BlaeckSerial.onButtonCommand("STATUS", onStatus);
+
+  // Plain catch-all: <LS> and <command?> answer with free-form help text,
+  // which no dashboard control can represent, so it stays untyped.
   BlaeckSerial.onAnyCommand(onHelpOrList);
 
   // Signals for Logging with BlaeckSerial
@@ -104,10 +139,18 @@ void UpdateLoggingSignals()
 {
   BlaeckSerial.deleteSignals();
 
+  // Re-added first: deleteSignals() drops these too, and the typed number
+  // commands above refer to them by name.
+  BlaeckSerial.addSignal("Signal_First", &signalFirst);
+  BlaeckSerial.addSignal("Signal_Last", &signalLast);
+
   for (int i = 1; i <= MAXIMUM_SIGNALS; i++)
   {
     if (sine[i].isActivated)
     {
+      // Builds a String per active signal. See the
+      // SignalNamesInFlashLessRAMUsage example for the F() alternative when
+      // RAM is tight.
       String signalName = "Sine_";
       BlaeckSerial.addSignal(signalName + i, &sine[i].value);
     }

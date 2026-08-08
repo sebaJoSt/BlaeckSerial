@@ -5,59 +5,72 @@
 //   Empty parameters are preserved positionally and default to empty string / 0.
 //   To check if a parameter was provided: params[i][0] == '\0' means empty.
 
-void onSignalActivate(const char *command, const char *const *params, byte paramCount)
+// The library has already checked that the value is within [1, MAXIMUM_SIGNALS]
+// before these run, so an out-of-range bound never reaches the sketch.
+void onSetSignalFirst(const char *command, const char *const *params, byte paramCount)
 {
   (void)command;
-  int firstsignalno = (paramCount >= 1 && params[0][0] != '\0') ? atoi(params[0]) : 0;
-  int secondsignalno = (paramCount >= 2 && params[1][0] != '\0') ? atoi(params[1]) : 0;
+  if (paramCount >= 1 && params[0][0] != '\0')
+  {
+    signalFirst = (byte)atoi(params[0]);
+    BlaeckSerial.write("Signal_First", signalFirst);
+  }
+}
 
-  if (firstsignalno == 0 && secondsignalno == 0)
+void onSetSignalLast(const char *command, const char *const *params, byte paramCount)
+{
+  (void)command;
+  if (paramCount >= 1 && params[0][0] != '\0')
   {
-    for (byte i = 1; i <= MAXIMUM_SIGNALS; i++)
-      sine[i].isActivated = true;
+    signalLast = (byte)atoi(params[0]);
+    BlaeckSerial.write("Signal_Last", signalLast);
   }
-  if (firstsignalno == 900)
-  {
-    for (byte i = 1; i <= MAXIMUM_SIGNALS; i++)
-      sine[i].isActivated = false;
-  }
-  if (firstsignalno == 901)
-  {
-    for (byte i = 1; i <= MAXIMUM_SIGNALS; i++)
-    {
-      sine[i].isActivated = false;
-      if (i % 2 == 1)
-        sine[i].isActivated = true;
-    }
-  }
-  if (firstsignalno == 902)
-  {
-    for (byte i = 1; i <= MAXIMUM_SIGNALS; i++)
-    {
-      sine[i].isActivated = false;
-      if (i % 2 == 0)
-        sine[i].isActivated = true;
-    }
-  }
-  if (firstsignalno >= 1 && firstsignalno <= MAXIMUM_SIGNALS && secondsignalno >= 1 && secondsignalno <= MAXIMUM_SIGNALS)
-  {
-    byte minimum = firstsignalno;
-    byte maximum = secondsignalno;
-    if (firstsignalno > secondsignalno)
-    {
-      maximum = firstsignalno;
-      minimum = secondsignalno;
-    }
+}
 
-    for (byte i = minimum; i <= maximum; i++)
-    {
-      sine[i].isActivated = true;
-    }
-  }
-  if (firstsignalno >= 1 && firstsignalno <= MAXIMUM_SIGNALS && secondsignalno == 0)
+void onSignalActivateRange(const char *command, const char *const *params, byte paramCount)
+{
+  (void)command;
+  (void)params;
+  (void)paramCount;
+  ApplySignalRange(true);
+}
+
+void onSignalDeactivateRange(const char *command, const char *const *params, byte paramCount)
+{
+  (void)command;
+  (void)params;
+  (void)paramCount;
+  ApplySignalRange(false);
+}
+
+// Applies the current bounds. Only the signals inside the range change, so
+// activating 1-10 and then 15-20 leaves both ranges on - use the deactivate
+// button to clear what you no longer want.
+void ApplySignalRange(bool activate)
+{
+  byte lo = signalFirst;
+  byte hi = signalLast;
+  if (lo > hi)
   {
-    sine[firstsignalno].isActivated = true;
+    byte tmp = lo;
+    lo = hi;
+    hi = tmp;
   }
+  if (lo < 1)
+    lo = 1;
+  if (hi > MAXIMUM_SIGNALS)
+    hi = MAXIMUM_SIGNALS;
+
+  for (byte i = lo; i <= hi; i++)
+  {
+    sine[i].isActivated = activate;
+  }
+
+  sinfo(), Serial.print(activate ? F("Activated") : F("Deactivated"));
+  Serial.print(F(" signals "));
+  Serial.print(lo);
+  Serial.print(F(" - "));
+  Serial.println(hi);
 
   sinfo(), Serial.print(F("Activated signals ("));
   byte active_count = 0;
@@ -91,13 +104,18 @@ void onSignalActivate(const char *command, const char *const *params, byte param
     Serial.print(F("none"));
   Serial.println();
 
+  PersistActivatedSignals();
+  UpdateLoggingSignals();
+}
+
+void PersistActivatedSignals()
+{
   bool isActivated[MAXIMUM_SIGNALS + 1];
   for (byte i = 0; i <= MAXIMUM_SIGNALS; i++)
   {
     isActivated[i] = sine[i].isActivated;
   }
   EEPROM.updateBlock<bool>(eepromaddress.signalActivated, isActivated, MAXIMUM_SIGNALS + 1);
-  UpdateLoggingSignals();
 }
 
 void onStatus(const char *command, const char *const *params, byte paramCount)
@@ -105,7 +123,22 @@ void onStatus(const char *command, const char *const *params, byte paramCount)
   (void)command;
   (void)params;
   (void)paramCount;
+
+  // The terminal gets the full multi-line report, as before.
   PrintInfo(false);
+
+  // A Blaeck host skips anything that is not a frame, so it would see none of
+  // that. Push a one-line summary on a message channel as well, written only
+  // on a button press.
+  byte active = 0;
+  for (byte i = 1; i <= MAXIMUM_SIGNALS; i++)
+  {
+    if (sine[i].isActivated)
+      active++;
+  }
+  char text[48];
+  snprintf(text, sizeof(text), "%u of %u signals active", (unsigned)active, (unsigned)MAXIMUM_SIGNALS);
+  BlaeckSerial.writeMessage("Status", text);
 }
 
 // Catch-all handler for help commands (?) and LS
@@ -120,24 +153,34 @@ void onHelpOrList(const char *command, const char *const *params, byte paramCoun
   }
   else if (strcmp(command, "LS") == 0)
   {
-    sinfo(), Serial.println(F("<LS> <STATUS> <SIGNAL_ACTIVATE>"));
+    sinfo(), Serial.println(F("<LS> <STATUS> <SIGNAL_FIRST> <SIGNAL_LAST> <SIGNAL_ACTIVATE_RANGE> <SIGNAL_DEACTIVATE_RANGE>"));
     sinfo(), Serial.println(F("<BLAECK.ACTIVATE> <BLAECK.DEACTIVATE> <BLAECK.WRITE_SYMBOLS> <BLAECK.WRITE_COMMANDS> <BLAECK.WRITE_DATA> <BLAECK.GET_DEVICES>"));
     sinfo(), Serial.println(F("Enter <command?> for instructions, e.g. <STATUS?>"));
   }
-  else if (strcmp(command, "SIGNAL_ACTIVATE?") == 0)
+  else if (strcmp(command, "SIGNAL_FIRST?") == 0)
   {
-    shelp(), Serial.println(F("<SIGNAL_ACTIVATE, first signal, last signal>"));
-    shelp(), Serial.println(F("Use this command to activate the used signals"));
-    shelp(), Serial.print(F("first signal: 1-"));
+    shelp(), Serial.print(F("<SIGNAL_FIRST, 1-"));
     Serial.print(MAXIMUM_SIGNALS);
-    Serial.println(F(", 900, 901, 902"));
-    shelp(), Serial.print(F("last signal: 1-"));
-    Serial.println(MAXIMUM_SIGNALS);
-    shelp(), Serial.println(F("e.g. <SIGNAL_ACTIVATE, 1, 10> activates the first 10 signals"));
-    shelp(), Serial.println(F("e.g. <SIGNAL_ACTIVATE> activates all signals"));
-    shelp(), Serial.println(F("e.g. <SIGNAL_ACTIVATE, 900> deactivates all signals"));
-    shelp(), Serial.println(F("e.g. <SIGNAL_ACTIVATE, 901> activates all odd numbered signals"));
-    shelp(), Serial.println(F("e.g. <SIGNAL_ACTIVATE, 902> activates all even numbered signals"));
+    Serial.println(F(">"));
+    shelp(), Serial.println(F("Sets the first signal of the range"));
+  }
+  else if (strcmp(command, "SIGNAL_LAST?") == 0)
+  {
+    shelp(), Serial.print(F("<SIGNAL_LAST, 1-"));
+    Serial.print(MAXIMUM_SIGNALS);
+    Serial.println(F(">"));
+    shelp(), Serial.println(F("Sets the last signal of the range"));
+  }
+  else if (strcmp(command, "SIGNAL_ACTIVATE_RANGE?") == 0)
+  {
+    shelp(), Serial.println(F("Activates every signal in the current range"));
+    shelp(), Serial.println(F("e.g. <SIGNAL_FIRST,1> <SIGNAL_LAST,10> <SIGNAL_ACTIVATE_RANGE>"));
+    shelp(), Serial.println(F("Signals outside the range keep their state"));
+  }
+  else if (strcmp(command, "SIGNAL_DEACTIVATE_RANGE?") == 0)
+  {
+    shelp(), Serial.println(F("Deactivates every signal in the current range"));
+    shelp(), Serial.println(F("e.g. <SIGNAL_FIRST,1> <SIGNAL_LAST,25> <SIGNAL_DEACTIVATE_RANGE> clears all"));
   }
   else if (strcmp(command, "STATUS?") == 0)
   {
