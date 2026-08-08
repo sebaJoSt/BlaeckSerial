@@ -46,7 +46,7 @@
 //     the sketch folder is not on the compiler's include path, so the
 //     __has_include below fails and your settings are silently ignored.
 //     There is no IDE preference and no sketch.yaml key for compiler flags;
-//     only the core's own config files can add them. Two ways round it:
+//     only the core's own config files can add them. Three ways round it:
 //
 //     a) Build with arduino-cli instead of the IDE. Nothing in your Arduino
 //        installation is touched, and it stays per sketch:
@@ -63,14 +63,34 @@
 //        header. That folder is already on the include path, so every unit
 //        sees it. The catch is that a library update overwrites it.
 //
-//     c) Staying in the IDE, per sketch: put the sketch folder on the
-//        include path via platform.local.txt next to platform.txt in your
-//        core (or boards.local.txt to scope it to one board), containing:
+//     c) Staying in the IDE, per sketch. Two files are involved:
 //
-//          build.extra_flags=-I{build.source.path}
+//        1. platform.local.txt, which you create yourself next to the
+//           core's platform.txt, containing the single line:
 //
-//        e.g. ...\packages\arduino\hardware\avr\1.8.8\platform.local.txt
-//        This is per core - repeat it for esp32, samd, renesas_uno, ...
+//             build.extra_flags=-I{build.source.path}
+//
+//           On Windows, for the AVR core, that path is:
+//             C:\Users\<you>\AppData\Local\Arduino15\packages\arduino
+//                  \hardware\avr\1.8.8\platform.local.txt
+//           macOS/Linux: ~/.arduino15/packages/... , same tail.
+//           Use boards.local.txt instead to scope it to a single board.
+//           This is per core - repeat it for esp32, samd, renesas_uno, ...
+//
+//        2. BlaeckSerialConfig.h, in the sketch folder next to your .ino:
+//
+//             MySketch\
+//               MySketch.ino
+//               BlaeckSerialConfig.h
+//
+//           containing just your overrides:
+//
+//             #pragma once
+//             #define BLAECK_COMMAND_MAX_CHARS_DEFAULT 128
+//
+//        Step 1 is what makes step 2 visible to the compiler. Without it
+//        the config file is silently ignored. Option a) uses this same
+//        sketch-folder layout, without needing step 1.
 //
 // If you are unsure whether your override took effect, compare
 // configFingerprint() against BLAECK_CONFIG_FINGERPRINT from your sketch;
