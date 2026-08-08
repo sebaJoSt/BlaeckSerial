@@ -6,19 +6,23 @@
 
   It registers two kinds of command, on purpose:
 
-    Plain    onCommand(...)         You parse the parameters yourself.
-                                    Full control, no metadata, and NOT
-                                    listed in <BLAECK.WRITE_COMMANDS>.
+    Plain    onCommand(...)         You parse the parameters yourself, and
+                                    nothing is declared about the value.
 
-    Typed    onSwitchCommand(...)   You declare what the command is, and
-             onButtonCommand(...)   the library validates the value and
-                                    advertises it in <BLAECK.WRITE_COMMANDS>
+    Typed    onSwitchCommand(...)   You declare what the command is. The
+             onButtonCommand(...)   library validates the value before your
+                                    handler runs, and describes the command
                                     so a host (e.g. Loggbok / Home Assistant)
                                     can create an entity for it by itself.
 
-  <SwitchLED> and <LED> both switch the same on-board LED - one plain, one
-  typed - so you can send <BLAECK.WRITE_COMMANDS> and see that only <LED>
-  and <Ping> show up. That is the whole difference between the two styles.
+  Every registered command is listed in <BLAECK.WRITE_COMMANDS>, plain ones
+  included, so a host can offer a complete command palette. What differs is
+  the metadata: a plain entry says only "this command exists", while a typed
+  entry carries its kind, its allowed values and its state signal - which is
+  what a dashboard needs to build a control for it.
+
+  <SwitchLED> and <LED> both switch the same on-board LED, one plain and one
+  typed, so you can compare the two entries side by side in that list.
 
   A typed switch also names a state signal (here "LED_State"), so a
   dashboard can display the current state, not just send new ones.
@@ -76,17 +80,19 @@
         <LED,0>                       Turn off the LED  (typed switch)
         <LED,7>                       Rejected: a switch only accepts 0 or 1
         <Ping>                        Typed button, takes no value. The board
-                                      answers "pong" on the "Status" message
-                                      channel, so the reply reaches a host and
-                                      not just the Serial Monitor.
+                                      answers on the "Status" message channel
+                                      with how long it has been running, so the
+                                      reply reaches a host and not just the
+                                      Serial Monitor.
         <Print,Bye Bye,1>             String parameters
 
         Built-in Blaeck commands:
         <BLAECK.GET_DEVICES>          Writes the device's information to the PC
         <BLAECK.WRITE_SYMBOLS>        Writes the symbol list to the PC
         <BLAECK.WRITE_COMMANDS>       Writes the command list to the PC
-                                      Only typed commands appear here, so you
-                                      will see LED and Ping, but not SwitchLED.
+                                      All four commands appear here. The typed
+                                      ones carry their kind and metadata, the
+                                      plain ones only their name.
         <BLAECK.WRITE_DATA>           Writes the data to the PC
 */
 
@@ -123,12 +129,14 @@ void setup()
   // The state signal the typed switch below refers to
   BlaeckSerial.addSignal("LED_State", &ledState);
 
-  // Plain: you parse the parameters yourself, nothing is advertised
+  // Plain: you parse the parameters yourself. Listed by name only, so a host
+  // knows the command exists but cannot build a control for it.
   BlaeckSerial.onCommand("SwitchLED", onSwitchLED);
   BlaeckSerial.onCommand("Print", onPrint);
 
-  // Typed: validated by the library and advertised in <BLAECK.WRITE_COMMANDS>.
-  // A switch is 0/1 and mirrors a state signal; a button carries no value.
+  // Typed: validated by the library, and listed with the metadata a host needs
+  // to create an entity. A switch is 0/1 and mirrors a state signal; a button
+  // carries no value.
   BlaeckSerial.onSwitchCommand("LED", onLED, F("LED_State"));
   BlaeckSerial.onButtonCommand("Ping", onPing);
 }
@@ -207,7 +215,11 @@ void onPing(const char *command, const char *const *params, byte paramCount)
   (void)command;
   (void)params;
   (void)paramCount;
-  BlaeckSerial.writeMessage("Status", "pong");
+  // %lu is fine on AVR; only float formatting (%f) is left out of printf there.
+  char text[40];
+  unsigned long seconds = millis() / 1000UL;
+  snprintf(text, sizeof(text), "alive, running for %lu s", seconds);
+  BlaeckSerial.writeMessage("Status", text);
 }
 
 /* Exemplary command using string parameters:
