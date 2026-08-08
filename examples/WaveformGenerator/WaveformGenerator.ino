@@ -10,7 +10,9 @@
   "Command List" frame, which Loggbok turns into Home Assistant MQTT Discovery entities.
   Out-of-range values are rejected by the library (and reported on the debug stream); each
   accepted value is written back to its signal, so a dashboard always shows the value the
-  device actually applied.
+  device actually applied. A read-only string signal (WaveName) mirrors the selected shape
+  as human-readable text, and a writable free-text command (SET_LABEL / Label) round-trips
+  an arbitrary string as a Home Assistant text entity via onTextCommand.
 
   Author: Sebastian Strobl, https://github.com/sebaJoSt/BlaeckSerial
 
@@ -22,6 +24,7 @@
     loggbok/wave/Offset         number          DC offset             (-100..100)
     loggbok/wave/Waveform       select          0=Sine 1=Square 2=Triangle 3=Sawtooth
     loggbok/wave/Enabled        switch          output on/off (off -> Output = Offset)
+    loggbok/wave/WaveName       text sensor     current waveform shape name (mirrors Waveform)
     loggbok/wave/Label          text            free-text label (string signal)
 
   --- COMMANDS (publish to loggbok/<table>/_cmd/<NAME>, or loggbok/_all/_cmd/<NAME>) ---
@@ -53,6 +56,9 @@ float Offset = 0.0;
 byte Waveform = 0; // 0=Sine, 1=Square, 2=Triangle, 3=Sawtooth
 bool Enabled = true;
 char Label[24] = "wave"; // free-text label set via SET_LABEL
+// Human-readable shape names for the WaveName string signal (-> HA text sensor).
+// Single source for the sensor text; keep in sync with the SET_WAVE options CSV in setup().
+const char *const WAVE_NAMES[] = {"Sine", "Square", "Triangle", "Sawtooth"};
 
 //---COMMAND HANDLERS
 void onSetFreq(const char *command, const char *const *params, byte paramCount);
@@ -82,6 +88,7 @@ void setup()
   BlaeckSerial.addSignal("Offset", &Offset);
   BlaeckSerial.addSignal("Waveform", &Waveform);
   BlaeckSerial.addSignal("Enabled", &Enabled);
+  BlaeckSerial.addSignal("WaveName", (char *)WAVE_NAMES[Waveform]);
   BlaeckSerial.addSignal("Label", Label);
 
   BlaeckSerial.onNumberCommand("SET_FREQ", onSetFreq, F("Frequency"), 0.0f, 2.0f, 0.01f, F("Hz"));
@@ -180,6 +187,7 @@ void onSetWave(const char *command, const char *const *params, byte paramCount)
   {
     Waveform = (byte)atoi(params[0]);
     BlaeckSerial.write("Waveform", Waveform);
+    BlaeckSerial.write("WaveName", (char *)WAVE_NAMES[Waveform]);
   }
 }
 
