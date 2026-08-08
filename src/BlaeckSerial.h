@@ -102,9 +102,6 @@
 //        This is per core - repeat it for esp32, samd, renesas_uno, ...
 //        Without this file the config file is silently ignored.
 //
-// If you are unsure whether your override took effect, compare
-// configFingerprint() against BLAECK_CONFIG_FINGERPRINT from your sketch;
-// see the note further down.
 #if defined __has_include
   #if __has_include(<BlaeckSerialConfig.h>)
     #include <BlaeckSerialConfig.h>
@@ -195,16 +192,6 @@
   #define BLAECK_ENABLE_COMMAND_META 1
 #endif
 
-// Fingerprint of every setting above that sizes a member of class BlaeckSerial.
-// Two translation units that disagree here disagree on the class layout, which
-// is undefined behaviour. Use it to verify an override actually reached the
-// library; see configFingerprint() / configMatchesLibrary().
-#define BLAECK_CONFIG_FINGERPRINT                       \
-  ((unsigned long)(BLAECK_COMMAND_MAX_CHARS_DEFAULT) * 1000003UL +      \
-   (unsigned long)(BLAECK_COMMAND_MAX_HANDLERS_DEFAULT) * 10007UL +     \
-   (unsigned long)(BLAECK_COMMAND_MAX_NAME_CHARS_DEFAULT) * 101UL +     \
-   (unsigned long)(BLAECK_COMMAND_MAX_PARAMS_DEFAULT) * 7UL +           \
-   (unsigned long)(BLAECK_ENABLE_COMMAND_META))
 
 typedef enum DataType
 {
@@ -279,23 +266,6 @@ public:
 
   // ----- Destructor -----
   ~BlaeckSerial();
-
-  // ----- Config consistency -----
-  // configFingerprint() returns BLAECK_CONFIG_FINGERPRINT as BlaeckSerial.cpp
-  // was compiled. configMatchesLibrary() compares it against the value seen
-  // where you call it: the default argument is evaluated at the call site, so
-  // calling it from your sketch compares your settings against the library's.
-  //
-  // Returns false when a config override reached only one of them - the class
-  // then has two layouts and the program is already in undefined behaviour.
-  // Worth a guard in setup() if you override any of the settings:
-  //
-  //   if (!BlaeckSerial.configMatchesLibrary()) { /* halt, log, blink */ }
-  //
-  // It cannot be checked automatically: the constructor lives in the .cpp and
-  // so only ever sees the library's own values.
-  unsigned long configFingerprint() const;
-  bool configMatchesLibrary(unsigned long sketchFingerprint = BLAECK_CONFIG_FINGERPRINT) const;
 
   // ----- Initialize -----
   void begin(Stream *Ref, unsigned int Size);
