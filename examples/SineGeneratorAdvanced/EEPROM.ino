@@ -56,9 +56,10 @@ void EEPROMReadStartupValues()
     sine[i].isActivated = isActivated[i];
   }
 
-  // Clamped rather than trusted: the typed commands guarantee a valid value on
-  // the way in, but EEPROM contents survive a firmware change that this
-  // version marker did not catch.
+  // Clamped rather than trusted. The typed commands guarantee a valid value on
+  // the way in, but EEPROM outlives the sketch: a board that still holds an
+  // older layout reads 255 here, and without the clamp that would go straight
+  // into the activation loop as a signal index.
   signalFirst = EEPROM.readByte(eepromaddress.signalFirst);
   signalLast = EEPROM.readByte(eepromaddress.signalLast);
   if (signalFirst < 1 || signalFirst > MAXIMUM_SIGNALS)
