@@ -93,23 +93,10 @@ Available callbacks:
 - `setBeforeWriteCallback(...)` before data is written
 
 Command parser defaults are architecture-aware:
-- AVR (`__AVR__`): 48 command chars, 4 registered handlers, 24 command-name chars, 10 params
+- AVR (`__AVR__`): 48 command chars, 6 registered handlers (12 on larger-SRAM AVR such as the Mega 2560), 24 command-name chars, 10 params
 - Non-AVR: 96 command chars, 12 registered handlers, 40 command-name chars, 10 params
 
-These defaults can be overridden by placing a `BlaeckSerialConfig.h` file in your sketch folder:
-```CPP
-// BlaeckSerialConfig.h
-#define BLAECK_COMMAND_MAX_CHARS_DEFAULT 128
-#define BLAECK_COMMAND_MAX_HANDLERS_DEFAULT 8
-#define BLAECK_COMMAND_MAX_NAME_CHARS_DEFAULT 48
-#define BLAECK_COMMAND_MAX_PARAMS_DEFAULT 16
-#define BLAECK_BUFFERED_WRITES_DEFAULT false
-```
-
-PlatformIO users can also use compiler flags in `platformio.ini`:
-```ini
-build_flags = -DBLAECK_COMMAND_MAX_CHARS_DEFAULT=128
-```
+See [Configuration](#configuration) to change them.
 
 ```CPP
 void onSwitchLED(const char *command, const char *const *params, byte paramCount)
@@ -150,6 +137,101 @@ BlaeckSerial.setBufferedWrites(true);   // force ON
 BlaeckSerial.setBufferedWrites(false);  // force OFF
 
 Serial.println(BlaeckSerial.isBufferedWrites() ? "ON" : "OFF");
+```
+
+## Configuration
+
+Compile-time settings (buffer sizes, command parser limits, `BLAECK_ENABLE_COMMAND_META`)
+are plain `#define`s with `#ifndef` guards, so any value you define first wins.
+
+> [!IMPORTANT]
+> An override **must reach every translation unit** — your sketch *and*
+> `BlaeckSerial.cpp`. These values size members of `class BlaeckSerial`, so a
+> setting seen by only one of them gives the class two different layouts (an ODR
+> violation) and corrupts memory silently. It is all-or-nothing, never half.
+>
+> In particular, **do not** `#define` them at the top of your `.ino` — that
+> reaches your sketch only, never the library.
+
+### PlatformIO
+
+```ini
+build_flags = -DBLAECK_COMMAND_MAX_CHARS_DEFAULT=128
+```
+
+Reaches every unit. Nothing else to do.
+
+### Arduino IDE / arduino-cli
+
+A `BlaeckSerialConfig.h` in your sketch folder is **not** found by default: the
+sketch folder is not on the compiler's include path, so the `__has_include` in
+`BlaeckSerial.h` finds nothing and your settings are silently ignored. There is
+no IDE preference and no `sketch.yaml` key for compiler flags — only the core's
+own config files can add them.
+
+This is an Arduino build-system limitation, not a library one: a sketch-local
+settings header was requested in 2015 ([arduino-builder#15](https://github.com/arduino/arduino-builder/issues/15),
+closed) and libraries still cannot extend the include path
+([arduino-cli#501](https://github.com/arduino/arduino-cli/issues/501), open since 2019).
+
+Three ways round it:
+
+**a) Build with arduino-cli.** Put `BlaeckSerialConfig.h` next to your `.ino`:
+
+```
+MySketch/
+  MySketch.ino
+  BlaeckSerialConfig.h
+```
+
+```bash
+arduino-cli compile --fqbn <board> \
+  --build-property "compiler.cpp.extra_flags=-I{build.source.path}" \
+  MySketch
+```
+
+`{build.source.path}` expands to the sketch folder, so the config is found by
+every unit. Nothing in your Arduino installation is touched and the setting
+stays with the sketch — the only option your CI can reproduce exactly.
+
+**b) Put the config inside the library**, at
+`libraries/BlaeckSerial/src/BlaeckSerialConfig.h`. That folder is already on the
+include path, so every unit sees it, in the IDE as well as the CLI. The catch is
+that it belongs to the library, not the sketch: it applies to every sketch you
+build, and a library update overwrites it.
+
+**c) Stay in the IDE, per sketch.** Same sketch-folder layout as (a), plus a
+`platform.local.txt` next to your core's `platform.txt` containing:
+
+```
+compiler.cpp.extra_flags=-I{build.source.path}
+```
+
+On Windows, for the AVR core, that file goes at
+`C:\Users\<you>\AppData\Local\Arduino15\packages\arduino\hardware\avr\1.8.8\platform.local.txt`
+(macOS/Linux: `~/.arduino15/packages/…`, same tail). This is per core — repeat it
+for esp32, samd, renesas_uno, … Without this file the config is silently ignored.
+
+> [!NOTE]
+> Use `compiler.cpp.extra_flags` rather than `build.extra_flags` here. 13 of the
+> 27 boards in `arduino:avr` set their own `build.extra_flags={build.usb_flags}`
+> (Leonardo, Micro, Yún and the other 32u4 boards), and a board-specific value
+> overrides the platform-level one — so a `build.extra_flags` line would silently
+> do nothing on those boards. No board overrides `compiler.cpp.extra_flags`.
+>
+> If you scope it per board with `boards.local.txt` instead (e.g.
+> `mega.compiler.cpp.extra_flags=…`) and the board already defines the property
+> you are setting, append to it rather than replacing it.
+
+### Example config file
+
+```CPP
+// BlaeckSerialConfig.h
+#define BLAECK_COMMAND_MAX_CHARS_DEFAULT 128
+#define BLAECK_COMMAND_MAX_HANDLERS_DEFAULT 8
+#define BLAECK_COMMAND_MAX_NAME_CHARS_DEFAULT 48
+#define BLAECK_COMMAND_MAX_PARAMS_DEFAULT 16
+#define BLAECK_BUFFERED_WRITES_DEFAULT false
 ```
 
 ## Protocol
