@@ -14,91 +14,60 @@ All notable changes to this project will be documented in this file.
   new client requirement above, this is why 7.0.0 is a major release.
 
 ### Added
-- Command acknowledgement (`0xA5` frame): after dispatching an inbound command
-  the device replies on the serial host with an FNV-1a hash of the received
-  command plus an accept/reject status and reason code, so a host (e.g. Loggbok)
-  can confirm the command was applied. Like `0xA0`, the frame carries no CRC;
-  hosts that don't recognize the key ignore it.
-- **Message frames (`0x90` / `0x95`).** New `addMessageChannel(channelName[, icon[,
+- **Command acknowledgement (`0xA5`).** After dispatching an inbound command the
+  device replies with an accept/reject status and reason code, so a host (e.g.
+  Loggbok) can confirm the command was applied.
+- **Message frames (`0x90` / `0x95`).** `addMessageChannel(channelName[, icon[,
   diagnostic[, getStateText]]])` declares a free-text status/log channel, and
-  `writeMessage(channelName, text[, messageID])` sends a line on it. Declared
-  channels are advertised in a `0x90` "Message Channel List" frame in response to
-  `BLAECK.WRITE_MESSAGE_CHANNELS`, so a host (e.g. Loggbok) can announce one Home
-  Assistant text sensor per channel before the first line arrives. The `0x95` frame
-  identifies its channel by index into that catalog, so the catalog must reach the
-  host first; messages on undeclared channels are dropped. The text is
-  length-prefixed (LE uint16, capped at 65535 bytes), neither frame carries a CRC,
-  and a message is never stored as signal data. Set `BLAECK_ENABLE_MESSAGES` to `0`
-  to compile the feature out (the API remains as no-ops); table size and name length
-  are tunable via `BLAECK_MESSAGE_MAX_CHANNELS_DEFAULT` and
+  `writeMessage(channelName, text[, messageID])` sends a line on it. Channels are
+  declared up-front so a host can announce one Home Assistant text sensor per
+  channel before the first line arrives; messages on undeclared channels are
+  dropped, and a message is never stored as signal data. Set
+  `BLAECK_ENABLE_MESSAGES` to `0` to compile the feature out (the API remains as
+  no-ops); size the tables with `BLAECK_MESSAGE_MAX_CHANNELS_DEFAULT` and
   `BLAECK_MESSAGE_MAX_NAME_CHARS_DEFAULT`.
-- **Event frames (`0x80` / `0x85`).** New `addEventChannel(channelName[, icon[,
+- **Event frames (`0x80` / `0x85`).** `addEventChannel(channelName[, icon[,
   diagnostic]])` declares an event channel and `addEventType(channelName,
-  F("..."))` gives it the closed set of events it may report; call order defines
-  each type's index. `writeEvent(channelName, F("..."))` then reports one
-  occurrence. Declared channels are advertised in a `0x80` "Event Channel List"
-  frame in response to `BLAECK.WRITE_EVENT_CHANNELS`, so a host (e.g. Loggbok) can
-  announce one Home Assistant event entity per channel, including its list of types,
-  before the first event arrives. An event carries no text: the `0x85` frame holds
-  only the channel and event type indices, so the wording is fixed at compile time
-  and a host cannot interpret an event without the catalog. Use a message channel
-  for anything carrying a runtime value. Events on undeclared channels or types are
-  dropped, and neither frame carries a CRC. Event types share one pool across all
-  channels, so no channel has to be sized for the worst case. Set
-  `BLAECK_ENABLE_EVENTS` to `0` to compile the feature out (the API remains as
-  no-ops); table sizes are tunable via `BLAECK_EVENT_MAX_CHANNELS_DEFAULT`,
-  `BLAECK_EVENT_MAX_NAME_CHARS_DEFAULT` and `BLAECK_EVENT_MAX_TYPES_DEFAULT`.
-- **Home Assistant entity category on commands.** The typed command helpers take
-  an optional trailing `BLAECK_CAT_CONFIG` or `BLAECK_CAT_DIAGNOSTIC`, carried in
-  bits 5-6 of the `0xA0` command flags. A host maps it to Home Assistant's
-  `entity_category`, which moves the entity off auto-generated dashboards and
-  groups it under *Configuration* or *Diagnostic* on the device page. Use it for
-  controls that set up the board rather than operate it; the default,
-  `BLAECK_CAT_NONE`, leaves the command a primary control. Message and event
-  channels keep their existing `diagnostic` flag: they are read-only, and Home
-  Assistant reserves `config` for entities the user can change.
+  F("..."))` gives it the closed set of events it may report, call order defining
+  each index; `writeEvent(channelName, F("..."))` reports one occurrence. An event
+  carries no text, so its wording is fixed at compile time - use a message channel
+  for anything with a runtime value. Events on undeclared channels or types are
+  dropped. Set `BLAECK_ENABLE_EVENTS` to `0` to compile the feature out; size the
+  tables with `BLAECK_EVENT_MAX_CHANNELS_DEFAULT`,
+  `BLAECK_EVENT_MAX_NAME_CHARS_DEFAULT` and `BLAECK_EVENT_MAX_TYPES_DEFAULT` (types
+  share one pool across channels, so no channel needs sizing for the worst case).
+- **Home Assistant entity category on commands.** The typed command helpers take an
+  optional trailing `BLAECK_CAT_CONFIG` or `BLAECK_CAT_DIAGNOSTIC`, which moves the
+  entity off Home Assistant's auto-generated dashboards. Use it for controls that set
+  up the board rather than operate it; the default `BLAECK_CAT_NONE` leaves the
+  command a primary control. Message and event channels keep their own `diagnostic`
+  flag.
 - **A message channel can be a command's state source.** The typed command helpers
   take an optional trailing `BLAECK_STATE_MESSAGE`, saying that `stateSignal` names a
-  channel declared with `addMessageChannel()` rather than a signal; the `0xA0` entry
-  carries it as one byte after the state signal name. The default,
-  `BLAECK_STATE_SIGNAL`, leaves existing declarations unchanged. A message channel is
-  independent of the signal table, so a device that adds no signals can still report
-  what its controls are set to.
-  Paired with it, `addMessageChannel()` takes an optional `getStateText`: a function
-  returning the channel's value as text, called while the `0x90` catalog is built and
-  carried in it under channel flag bit 2. A host learns the value by polling, so
-  nothing has to be pushed to keep it in step, and there is no stored copy to go stale.
-  It runs mid-frame, so format and return rather than sampling slow hardware; build the
-  text in a function-local static. Register none, or return `nullptr`, for a plain log
-  channel. A host that already holds a catalog will not re-read it, so also call
-  `writeMessage()` in `setup()` to cover a device restart - `WaveformGenerator` shows
-  the pattern.
+  channel rather than a signal; the default `BLAECK_STATE_SIGNAL` leaves existing
+  declarations unchanged. A message channel is independent of the signal table, so a
+  device that adds no signals can still report what its controls are set to.
+  Paired with it, `addMessageChannel()` takes an optional `getStateText`, a function
+  returning the channel's value as text that the library calls whenever a host polls
+  the catalog - fetched rather than stored, so it cannot go stale. Format and return;
+  it runs while a frame is being built. A host that already holds a catalog will not
+  re-read it, so also call `writeMessage()` in `setup()` to cover a device restart.
+  `WaveformGenerator` shows the pattern.
 - **A disabled catalog answers with an empty list.** With `BLAECK_ENABLE_EVENTS`,
   `BLAECK_ENABLE_MESSAGES` or `BLAECK_ENABLE_COMMAND_META` set to `0`, the matching
-  poll (`BLAECK.WRITE_EVENT_CHANNELS`, `BLAECK.WRITE_MESSAGE_CHANNELS`,
-  `BLAECK.WRITE_COMMANDS`) still replies, with a frame containing no entries, rather
-  than staying silent. A host gates these polls on the library version and cannot see
-  the build flags, so a silent device would make it wait out its full timeout on every
-  setup. An empty catalog is the legal "nothing declared" case, so hosts need no
-  special handling. Costs roughly 330 bytes of flash and 28 bytes of SRAM per disabled
-  feature; builds with the features enabled are unaffected.
-- **Text command (`onTextCommand`).** New typed command helper
-  `onTextCommand(command, handler, stateSignal = nullptr, maxLength = 255)` for
-  a Home Assistant text entity. The host sends the value percent-encoded (so
-  commas and other frame delimiters survive); the device percent-decodes it in
-  place before the handler runs and rejects values longer than `maxLength`
-  (`0xA5` reason `TOO_LONG`). The max length is advertised in the `0xA0` command
-  entry (flag bit 4, LE uint16).
-  Requires `BLAECK_ENABLE_COMMAND_META`.
-- **String signals (`addSignal(name, char *value)`).** New signal data type
-  `Blaeck_string` (symbol code `0xA`) for reporting textual values (labels,
-  states, small JSON, etc.). On the wire the value is length-prefixed: a
-  1-byte length followed by that many UTF-8 bytes. The value lives in a
-  user-owned buffer and is read live on each transmit. Matching
-  `write(name/index, char *value)` setters repoint the buffer and transmit
-  that one signal; you may also update the buffer in place
-  and let the periodic transmit pick it up. A string is transmitted up to 255
-  bytes.
+  poll still replies with an empty frame rather than staying silent, so a host gating
+  on library version does not wait out its timeout on every setup. Costs roughly 330
+  bytes of flash and 28 bytes of SRAM per disabled feature.
+- **Text command (`onTextCommand`).** `onTextCommand(command, handler, stateSignal =
+  nullptr, maxLength = 255)` for a Home Assistant text entity. The value arrives
+  percent-encoded and is decoded before the handler runs; anything longer than
+  `maxLength` is rejected (`0xA5` reason `TOO_LONG`). Requires
+  `BLAECK_ENABLE_COMMAND_META`.
+- **String signals (`addSignal(name, char *value)`).** New `Blaeck_string` data type
+  for textual values (labels, states, small JSON). The value lives in a user-owned
+  buffer read live on each transmit: `write(name/index, char *value)` repoints the
+  buffer and transmits that one signal, or update the buffer in place and let the
+  periodic transmit pick it up. Up to 255 bytes.
 - Added the `WaveformGenerator` example, registered with the typed command
   helpers (`onNumberCommand` / `onSelectCommand` / `onSwitchCommand` /
   `onTextCommand` / `onButtonCommand`) so the device is self-describing for
@@ -110,40 +79,31 @@ All notable changes to this project will be documented in this file.
   AVR boards conservative at 6 handlers. This allows command-rich examples such
   as `WaveformGenerator` to register their full command set without custom
   compile-time overrides.
-- `BlaeckSerial.h` now includes the `CRC.h` umbrella header instead of
-  `<CRC32.h>` and `<CRC16.h>` individually, after the individual headers were
-  seen to collide with core headers on ArduinoCore-mbed. Preventive here — the
-  collision does not reproduce on `arduino:mbed_giga` 4.6.0 with CRC 1.0.4 —
-  and there is no functional change;
-  flash is byte-identical, since the unused CRC variants are declarations only.
+- `BlaeckSerial.h` includes the `CRC.h` umbrella header instead of `<CRC32.h>` and
+  `<CRC16.h>` individually, preventing a collision with core headers seen on
+  ArduinoCore-mbed. No functional change; flash is byte-identical.
 
 ### Fixed
 - **Compile-time configuration now has a documented, working route.** A
-  `BlaeckSerialConfig.h` in the sketch folder — the method described since
-  6.0.0 — is never found under the Arduino IDE or arduino-cli: the sketch
-  folder is not on the compiler's include path, so the `__has_include` in
-  `BlaeckSerial.h` finds nothing and the settings are silently ignored.
-  Anyone who set overrides that way on 6.x was running the built-in defaults,
-  and registrations beyond the real handler limit failed quietly. PlatformIO
-  `build_flags` were unaffected and always worked. README.md now documents
-  three routes that do work (arduino-cli `--build-property`, a config inside
-  the library's `src/`, or `platform.local.txt`), and warns that an override
-  must reach every translation unit — a setting seen by the sketch but not by
-  `BlaeckSerial.cpp` gives `class BlaeckSerial` two layouts (an ODR
-  violation). This is an Arduino build-system limitation, not a library one:
-  see arduino/arduino-builder#15 (closed) and arduino/arduino-cli#501 (open).
+  `BlaeckSerialConfig.h` in the sketch folder — the method described since 6.0.0 —
+  is never found under the Arduino IDE or arduino-cli, because the sketch folder is
+  not on the compiler's include path. Anyone who set overrides that way on 6.x was
+  silently running the built-in defaults. PlatformIO `build_flags` always worked.
+  README.md now documents three routes that do work (arduino-cli
+  `--build-property`, a config inside the library's `src/`, or
+  `platform.local.txt`), and warns that an override must reach every translation
+  unit — one seen by the sketch but not by `BlaeckSerial.cpp` gives
+  `class BlaeckSerial` two layouts (an ODR violation). This is an Arduino
+  build-system limitation: see arduino/arduino-builder#15 and
+  arduino/arduino-cli#501.
 
 ### Removed
-- **`setCommandCallback(...)` (breaking).** Deprecated since 6.0.0 in favour of
-  `onCommand(...)` / `onAnyCommand(...)`, which it has warned about at runtime
-  ever since. A full major cycle of notice is enough, and 7.0 is the window;
-  keeping it would carry it to 8.0. Sketches still using it now fail to compile
-  instead of silently taking the legacy path — replace
-  `setCommandCallback(cb)` with `onAnyCommand(cb)` and adjust the handler
-  signature from `(char *command, int *parameter, char *string01)` to
-  `(const char *command, const char *const *params, byte paramCount)`.
-  No example in the library used it. Frees roughly 167 bytes of flash per
-  sketch on AVR, plus the callback pointer and its warning flag in RAM.
+- **`setCommandCallback(...)` (breaking).** Deprecated since 6.0.0 and warned about
+  at runtime ever since. Sketches still using it now fail to compile: replace
+  `setCommandCallback(cb)` with `onAnyCommand(cb)` and change the handler signature
+  from `(char *command, int *parameter, char *string01)` to
+  `(const char *command, const char *const *params, byte paramCount)`. Frees roughly
+  167 bytes of flash per sketch on AVR.
 - **I2C master/slave support (breaking).** All I2C master/slave functionality
   has been removed: `beginMaster(...)` / `beginSlave(...)`, the `MasterSlaveConfig`
   modes, slave discovery/scanning, per-signal `prefixSlaveID`, the `@<slaveID>:`
