@@ -121,11 +121,13 @@ void setup()
   // the first line is written.
   BlaeckSerial.addMessageChannel("Status", F("mdi:pulse"), true);
   BlaeckSerial.addMessageChannel("StatusOnDemand", F("mdi:message-text"), true);
-  // Backs the SET_OFFSET control, so it is a normal entity rather than a diagnostic one.
+  // Diagnostic precisely because it backs SET_OFFSET: the control is what you read the
+  // offset from, so this channel's own text sensor is a duplicate of it and belongs off
+  // the dashboard rather than beside it.
   // The fourth argument hands the channel a getter instead of a value: the library asks for the
   // current text whenever a host polls the catalog, so the control is right from the first poll
   // without the sketch pushing anything.
-  BlaeckSerial.addMessageChannel("Offset", F("mdi:arrow-up-down"), false, OffsetState);
+  BlaeckSerial.addMessageChannel("Offset", F("mdi:arrow-up-down"), true, OffsetState);
   // Announce the value once at boot as well. The catalog covers a host that connects or polls
   // afterwards, but a host already connected when the board resets keeps the value from before
   // the reset - it has no reason to re-read a catalog it already has, and Offset is back to 0.
