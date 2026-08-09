@@ -77,6 +77,10 @@ All notable changes to this project will be documented in this file.
   reads the value as it is at that moment rather than waiting for the next `0x95`,
   and the sketch never has to re-send it. The buffer must outlive the channel, as
   `icon` must; pass nothing for a plain log channel, which then carries no value.
+  The catalog is pull-based, so a host holding one keeps the value it read until it
+  asks again - across a device restart included, where the sketch's variables are back
+  at their startup values. Call `writeMessage()` once in `setup()` to announce that
+  too; `WaveformGenerator` shows the pattern.
 - **Disabled catalogs now answer with an empty list.** With  `BLAECK_ENABLE_EVENTS`, `BLAECK_ENABLE_MESSAGES` or `BLAECK_ENABLE_COMMAND_META`
   set to `0`, the matching poll (`BLAECK.WRITE_EVENT_CHANNELS`,
   `BLAECK.WRITE_MESSAGE_CHANNELS`, `BLAECK.WRITE_COMMANDS`) still replies, with a

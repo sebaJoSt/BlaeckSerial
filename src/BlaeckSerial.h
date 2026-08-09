@@ -391,6 +391,10 @@ public:
   // The buffer must outlive the channel, exactly like `icon`; point it at a global
   // or static, never at a local in setup(). Pass nullptr for a plain log channel,
   // which then carries no value in the catalog.
+  // The catalog is read when the host asks for it, so a host that already holds one
+  // keeps the value it read - across a device restart included, where the sketch's
+  // variables are back at their startup values. Call writeMessage() once in setup()
+  // to announce that too.
   bool addMessageChannel(const char *channelName, const __FlashStringHelper *icon, bool diagnostic,
                          const char *stateText);
   void clearAllMessageChannels();

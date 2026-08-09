@@ -126,6 +126,12 @@ void setup()
   // anything. FormatOffset() runs first so the buffer is never blank.
   FormatOffset();
   BlaeckSerial.addMessageChannel("Offset", F("mdi:arrow-up-down"), false, OffsetText);
+  // Announce the value once at boot as well. The catalog covers a host that connects or polls
+  // afterwards, but a host already connected when the board resets keeps the value from before
+  // the reset - it has no reason to re-read a catalog it already has, and Offset is back to 0.
+  // Dropped harmlessly if no host has the catalog yet, which is the cold-start case the poll
+  // already handles.
+  BlaeckSerial.writeMessage("Offset", OffsetText);
 
   // Each event channel declares up-front the closed set of events it can report.
   BlaeckSerial.addEventChannel("Output", F("mdi:sine-wave"));
