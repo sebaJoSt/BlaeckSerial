@@ -20,40 +20,34 @@ All notable changes to this project will be documented in this file.
   can confirm the command was applied. Like `0xA0`, the frame carries no CRC;
   hosts that don't recognize the key ignore it.
 - **Message frames (`0x90` / `0x95`).** New `addMessageChannel(channelName[, icon[,
-  diagnostic[, stateText]]])` declares a free-text status/log channel, and
+  diagnostic[, getStateText]]])` declares a free-text status/log channel, and
   `writeMessage(channelName, text[, messageID])` sends a line on it. Declared
-  channels are advertised in a `0x90` "Message
-  Channel List" frame in response to `BLAECK.WRITE_MESSAGE_CHANNELS`, so a host
-  (e.g. Loggbok) can announce one Home Assistant text sensor per channel before
-  the first line arrives, alongside the signals and commands it already
-  announces. Messages on channels that were never declared are dropped. The
-  `0x95` frame identifies its channel by index into the `0x90` catalog, so that
-  frame must reach the host first. The text
-  is length-prefixed (LE uint16, capped at 65535 bytes) and neither frame carries
-  a CRC; it is never stored as signal data. Set `BLAECK_ENABLE_MESSAGES` to `0`
-  to compile the feature out (the API remains as no-ops); the channel table size
-  and name length are tunable via `BLAECK_MESSAGE_MAX_CHANNELS_DEFAULT` and
+  channels are advertised in a `0x90` "Message Channel List" frame in response to
+  `BLAECK.WRITE_MESSAGE_CHANNELS`, so a host (e.g. Loggbok) can announce one Home
+  Assistant text sensor per channel before the first line arrives. The `0x95` frame
+  identifies its channel by index into that catalog, so the catalog must reach the
+  host first; messages on undeclared channels are dropped. The text is
+  length-prefixed (LE uint16, capped at 65535 bytes), neither frame carries a CRC,
+  and a message is never stored as signal data. Set `BLAECK_ENABLE_MESSAGES` to `0`
+  to compile the feature out (the API remains as no-ops); table size and name length
+  are tunable via `BLAECK_MESSAGE_MAX_CHANNELS_DEFAULT` and
   `BLAECK_MESSAGE_MAX_NAME_CHARS_DEFAULT`.
 - **Event frames (`0x80` / `0x85`).** New `addEventChannel(channelName[, icon[,
   diagnostic]])` declares an event channel and `addEventType(channelName,
   F("..."))` gives it the closed set of events it may report; call order defines
   each type's index. `writeEvent(channelName, F("..."))` then reports one
   occurrence. Declared channels are advertised in a `0x80` "Event Channel List"
-  frame in response to `BLAECK.WRITE_EVENT_CHANNELS`, so a host (e.g. Loggbok)
-  can announce one Home Assistant event entity per channel, including its list of
-  types, before the first event arrives.
-  Unlike a message, an event carries no text: the `0x85` frame holds only the
-  channel and event type indices from the catalog, so an occurrence costs one
-  byte per type instead of a full string, but the wording is fixed at compile
-  time and the host cannot interpret an event without the catalog. Use a message
-  channel for anything that has to carry a runtime value. Events on channels or
-  types that were never declared are dropped, and neither frame carries a CRC.
-  Event types are held in one pool shared by all channels, so a channel needing
-  many types and one needing few are both served without sizing every channel for
-  the worst case. Set `BLAECK_ENABLE_EVENTS` to `0` to compile the feature out
-  (the API remains as no-ops); the table sizes are tunable via
-  `BLAECK_EVENT_MAX_CHANNELS_DEFAULT`, `BLAECK_EVENT_MAX_NAME_CHARS_DEFAULT` and
-  `BLAECK_EVENT_MAX_TYPES_DEFAULT`.
+  frame in response to `BLAECK.WRITE_EVENT_CHANNELS`, so a host (e.g. Loggbok) can
+  announce one Home Assistant event entity per channel, including its list of types,
+  before the first event arrives. An event carries no text: the `0x85` frame holds
+  only the channel and event type indices, so the wording is fixed at compile time
+  and a host cannot interpret an event without the catalog. Use a message channel
+  for anything carrying a runtime value. Events on undeclared channels or types are
+  dropped, and neither frame carries a CRC. Event types share one pool across all
+  channels, so no channel has to be sized for the worst case. Set
+  `BLAECK_ENABLE_EVENTS` to `0` to compile the feature out (the API remains as
+  no-ops); table sizes are tunable via `BLAECK_EVENT_MAX_CHANNELS_DEFAULT`,
+  `BLAECK_EVENT_MAX_NAME_CHARS_DEFAULT` and `BLAECK_EVENT_MAX_TYPES_DEFAULT`.
 - **Home Assistant entity category on commands.** The typed command helpers take
   an optional trailing `BLAECK_CAT_CONFIG` or `BLAECK_CAT_DIAGNOSTIC`, carried in
   bits 5-6 of the `0xA0` command flags. A host maps it to Home Assistant's
@@ -79,7 +73,8 @@ All notable changes to this project will be documented in this file.
   channel. A host that already holds a catalog will not re-read it, so also call
   `writeMessage()` in `setup()` to cover a device restart - `WaveformGenerator` shows
   the pattern.
-- **Disabled catalogs now answer with an empty list.** With  `BLAECK_ENABLE_EVENTS`, `BLAECK_ENABLE_MESSAGES` or `BLAECK_ENABLE_COMMAND_META`
+- **Disabled catalogs now answer with an empty list.** With `BLAECK_ENABLE_EVENTS`,
+  `BLAECK_ENABLE_MESSAGES` or `BLAECK_ENABLE_COMMAND_META`
   set to `0`, the matching poll (`BLAECK.WRITE_EVENT_CHANNELS`,
   `BLAECK.WRITE_MESSAGE_CHANNELS`, `BLAECK.WRITE_COMMANDS`) still replies, with a
   frame containing no entries, instead of staying silent. A host gates these polls
