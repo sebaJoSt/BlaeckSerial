@@ -37,7 +37,7 @@
     SET_OFFSET  <-100..100> DC offset                 -> Offset     (HA number, step 0.1)
     SET_WAVE    <0..3>      Sine/Square/Triangle/Saw  -> Waveform   (HA select; name or index)
     SET_ENABLE  <0|1>       output on/off             -> Enabled    (HA switch)
-    SET_LABEL   <text>      free-text device label    -> DeviceLabel (HA text, max 32)
+    SET_LABEL   <text>      free-text device label    -> DeviceLabel (HA text, max 32, config)
     STATUS                  push status to StatusOnDemand channel   (HA button)
 
   Loggbok CLI (log fast enough to resolve the wave, e.g. 20 ms):
@@ -92,13 +92,15 @@ void setup()
   BlaeckSerial.onSelectCommand("SET_WAVE", onSetWave, F("Waveform"), F("Sine,Square,Triangle,Sawtooth"));
   BlaeckSerial.onSwitchCommand("SET_ENABLE", onSetEnable, F("Enabled"));
   // Host percent-encodes the value; the device decodes it and enforces the 32-byte max.
-  BlaeckSerial.onTextCommand("SET_LABEL", onSetLabel, F("DeviceLabel"), 32);
+  // Config category: a device label is a setting, not a control, so Home Assistant keeps
+  // it off the auto-generated dashboards.
+  BlaeckSerial.onTextCommand("SET_LABEL", onSetLabel, F("DeviceLabel"), 32, BLAECK_CAT_CONFIG);
   BlaeckSerial.onButtonCommand("STATUS", onStatus);
 
   // Declared up-front so the host can announce one text sensor per channel before
   // the first line is written.
-  BlaeckSerial.addMessageChannel("Status", F("mdi:pulse"));
-  BlaeckSerial.addMessageChannel("StatusOnDemand", F("mdi:message-text"));
+  BlaeckSerial.addMessageChannel("Status", F("mdi:pulse"), true);
+  BlaeckSerial.addMessageChannel("StatusOnDemand", F("mdi:message-text"), true);
 
   // Each event channel declares up-front the closed set of events it can report.
   BlaeckSerial.addEventChannel("Output", F("mdi:sine-wave"));
@@ -116,7 +118,7 @@ void loop()
   CheckOutputIdle();
 }
 
-//Warns once per idle stretch (>=5s -> "idle_warning"), and only reports "resumed" if a warning was raised.
+// Warns once per idle stretch (>=5s -> "idle_warning"), and only reports "resumed" if a warning was raised.
 void CheckOutputIdle()
 {
   static unsigned long idleSinceMs = 0;
