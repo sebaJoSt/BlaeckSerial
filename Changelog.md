@@ -22,8 +22,8 @@ All notable changes to this project will be documented in this file.
   hosts that don't recognize the key ignore it.
 - **Message frames (`0x90` / `0x95`).** New `addMessageChannel(channelName[, icon[,
   diagnostic]])` declares a free-text status/log channel, and
-  `writeMessage(channelName, text[, messageID])` sends a line on it (byte-exact
-  with BlaeckTCP 7.0.0). Declared channels are advertised in a `0x90` "Message
+  `writeMessage(channelName, text[, messageID])` sends a line on it. Declared
+  channels are advertised in a `0x90` "Message
   Channel List" frame in response to `BLAECK.WRITE_MESSAGE_CHANNELS`, so a host
   (e.g. Loggbok) can announce one Home Assistant text sensor per channel before
   the first line arrives, alongside the signals and commands it already
