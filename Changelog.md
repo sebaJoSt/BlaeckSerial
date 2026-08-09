@@ -24,11 +24,12 @@ without being configured for that board in advance.
 - **Typed commands (`0xA0` / `0xA5`).** `onNumberCommand`, `onSwitchCommand`,
   `onSelectCommand`, `onTextCommand` and `onButtonCommand` register a command
   together with what it accepts — range, step, unit, options, text length — so the
-  device describes its own controls. Values outside the declared range, bad select
-  indices and over-long text are rejected before the handler runs, and every dispatch
-  is acknowledged with an accept/reject status and reason code. `stateSignal` names
-  what mirrors the command's value: a signal, or a message channel.
-  Requires `BLAECK_ENABLE_COMMAND_META`.
+  device describes its own controls. They join `onCommand` / `onAnyCommand` from
+  6.0.0, which stay for commands that carry no metadata. Values outside the declared
+  range, bad select indices and over-long text are rejected before the handler runs,
+  and every dispatch is acknowledged with an accept/reject status and reason code.
+  `stateSignal` names what mirrors the command's value: a signal, or a message
+  channel. Requires `BLAECK_ENABLE_COMMAND_META`.
 - **Message channels (`0x90` / `0x95`).** `addMessageChannel(channelName[, icon[,
   diagnostic[, getStateText]]])` declares a free-text status/log channel and
   `writeMessage(channelName, text[, messageID])` sends a line on it. Channels are
