@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [7.0.0] - 2026-08-08
 
+This release makes a device self-describing. A board declares its commands, message
+channels and event channels, and a host (e.g. Loggbok) turns those catalogs into Home
+Assistant MQTT auto-discovery — a control per command, a sensor per channel, an entity
+per event — without being configured for that board in advance. The features below are
+what a sketch declares to make that work.
+
 ### Breaking
 - **Client compatibility:** string signals introduce a new signal value type
   (`0xA`) in the binary data frame. Clients must support this variable-length
@@ -17,33 +23,30 @@ All notable changes to this project will be documented in this file.
 - **Typed commands (`0xA0` / `0xA5`).** `onNumberCommand`, `onSwitchCommand`,
   `onSelectCommand`, `onTextCommand` and `onButtonCommand` register a command
   together with what it accepts — range, step, unit, options, text length — so the
-  device describes its own controls and a host can build one Home Assistant entity
-  per command without being told about the board in advance. Values outside the
-  declared range, bad select indices and over-long text are rejected before the
-  handler runs, and every dispatch is acknowledged with an accept/reject status and
-  reason code. `stateSignal` names what mirrors the command's value: a signal, or a
+  device describes its own controls. Values outside the declared range, bad select
+  indices and over-long text are rejected before the handler runs, and every dispatch
+  is acknowledged with an accept/reject status and reason code. `stateSignal` names what mirrors the command's value: a signal, or a
   message channel with a trailing `BLAECK_STATE_MESSAGE`. A trailing
   `BLAECK_CAT_CONFIG` or `BLAECK_CAT_DIAGNOSTIC` moves the entity off Home
   Assistant's auto-generated dashboards. Requires `BLAECK_ENABLE_COMMAND_META`.
 - **Message channels (`0x90` / `0x95`).** `addMessageChannel(channelName[, icon[,
   diagnostic[, getStateText]]])` declares a free-text status/log channel and
-  `writeMessage(channelName, text[, messageID])` sends a line on it, giving a host
-  one Home Assistant text sensor per channel. Channels are declared up-front;
-  messages on undeclared channels are dropped, and a message is never stored as
-  signal data. The optional `getStateText` makes a channel report a current value,
-  which the library fetches whenever a host polls the catalog — so a control backed
-  by that channel is right without anything having been pushed. Set
+  `writeMessage(channelName, text[, messageID])` sends a line on it. Channels are
+  declared up-front; messages on undeclared channels are dropped, and a message is
+  never stored as signal data. The optional `getStateText` makes a channel report a
+  current value, which the library fetches whenever a host polls the catalog — so a
+  control backed by that channel is right without anything having been pushed. Set
   `BLAECK_ENABLE_MESSAGES` to `0` to compile the feature out (the API remains as
   no-ops); size the tables with `BLAECK_MESSAGE_MAX_CHANNELS_DEFAULT` and
   `BLAECK_MESSAGE_MAX_NAME_CHARS_DEFAULT`.
 - **Event channels (`0x80` / `0x85`).** `addEventChannel(channelName[, icon[,
   diagnostic]])` declares a channel and `addEventType(channelName, F("..."))` its
   closed set of events, call order defining each index; `writeEvent(channelName,
-  F("..."))` reports one occurrence, giving a host one Home Assistant event entity
-  per channel. An event carries no text, so its wording is fixed at compile time —
-  use a message channel for anything with a runtime value. Events on undeclared
-  channels or types are dropped. Set `BLAECK_ENABLE_EVENTS` to `0` to compile the
-  feature out; size the tables with `BLAECK_EVENT_MAX_CHANNELS_DEFAULT`,
+  F("..."))` reports one occurrence. An event carries no text, so its wording is
+  fixed at compile time — use a message channel for anything with a runtime value.
+  Events on undeclared channels or types are dropped. Set `BLAECK_ENABLE_EVENTS` to
+  `0` to compile the feature out; size the tables with
+  `BLAECK_EVENT_MAX_CHANNELS_DEFAULT`,
   `BLAECK_EVENT_MAX_NAME_CHARS_DEFAULT` and `BLAECK_EVENT_MAX_TYPES_DEFAULT` (types
   share one pool across channels, so no channel needs sizing for the worst case).
 - **String signals (`addSignal(name, char *value)`).** New `Blaeck_string` data type
