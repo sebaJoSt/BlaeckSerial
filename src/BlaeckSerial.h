@@ -126,9 +126,11 @@
 // Command metadata (Home Assistant discovery catalog).
 // When ON, the typed command registration helpers (onNumberCommand/
 // onSwitchCommand/onSelectCommand/onButtonCommand) store parameter metadata and
-// the device can emit a 0xE0 "Command List" frame in response to
+// the device can emit a 0xA0 "Command List" frame in response to
 // BLAECK.WRITE_COMMANDS. Turn OFF to save SRAM/flash on tiny targets; the typed
-// helpers then behave exactly like plain onCommand() (no metadata, no 0xE0).
+// helpers then behave exactly like plain onCommand() (no metadata), and
+// BLAECK.WRITE_COMMANDS answers with an empty 0xA0 so a polling host does not
+// wait out its timeout.
 // Override via BlaeckSerialConfig.h or build flag.
 #ifndef BLAECK_ENABLE_COMMAND_META
   #define BLAECK_ENABLE_COMMAND_META 1
@@ -136,10 +138,12 @@
 
 // Messages (Home Assistant text/log channels).
 // When ON, the device can declare named message channels with
-// addMessageChannel(), emit the 0x8A "Message Channel List" frame in response to
+// addMessageChannel(), emit the 0x90 "Message Channel List" frame in response to
 // BLAECK.WRITE_MESSAGE_CHANNELS, and send free-text lines on those channels with
-// writeMessage() (0x90). Turn OFF to save SRAM/flash on tiny targets; both
-// writeMessage() and addMessageChannel() then compile away.
+// writeMessage() (0x95). Turn OFF to save SRAM/flash on tiny targets; both
+// writeMessage() and addMessageChannel() then compile away, and
+// BLAECK.WRITE_MESSAGE_CHANNELS answers with an empty 0x90 so a polling host
+// does not wait out its timeout.
 // Override via BlaeckSerialConfig.h or build flag.
 #ifndef BLAECK_ENABLE_MESSAGES
   #define BLAECK_ENABLE_MESSAGES 1
@@ -163,6 +167,59 @@
     #define BLAECK_MESSAGE_MAX_NAME_CHARS_DEFAULT 16
   #else
     #define BLAECK_MESSAGE_MAX_NAME_CHARS_DEFAULT 32
+  #endif
+#endif
+
+// Events (Home Assistant event entities).
+// When ON, the device can declare named event channels with addEventChannel(),
+// give each a closed list of event types with addEventType(), emit the 0x80
+// "Event Channel List" frame in response to BLAECK.WRITE_EVENT_CHANNELS, and
+// report an occurrence with writeEvent() (0x85).
+// Unlike a message, an event carries no text: the frame holds only the channel
+// and event type indices, so the wording is fixed at compile time and a host
+// needs the 0x80 catalog to interpret it. Use a message channel for anything
+// that has to carry a runtime value.
+// Turn OFF to save SRAM/flash on tiny targets; the API then compiles away, and
+// BLAECK.WRITE_EVENT_CHANNELS answers with an empty 0x80 so a polling host does
+// not wait out its timeout.
+// Override via BlaeckSerialConfig.h or build flag.
+#ifndef BLAECK_ENABLE_EVENTS
+  #define BLAECK_ENABLE_EVENTS 1
+#endif
+
+#ifndef BLAECK_EVENT_MAX_CHANNELS_DEFAULT
+  #if defined(__AVR__)
+    // Each entry costs BLAECK_EVENT_MAX_NAME_CHARS_DEFAULT + ~3 bytes of SRAM.
+    #if defined(RAMEND) && (RAMEND >= 0x10FF)
+      #define BLAECK_EVENT_MAX_CHANNELS_DEFAULT 4
+    #else
+      #define BLAECK_EVENT_MAX_CHANNELS_DEFAULT 2
+    #endif
+  #else
+    #define BLAECK_EVENT_MAX_CHANNELS_DEFAULT 6
+  #endif
+#endif
+
+#ifndef BLAECK_EVENT_MAX_NAME_CHARS_DEFAULT
+  #if defined(__AVR__)
+    #define BLAECK_EVENT_MAX_NAME_CHARS_DEFAULT 16
+  #else
+    #define BLAECK_EVENT_MAX_NAME_CHARS_DEFAULT 32
+  #endif
+#endif
+
+// Event types are held in one pool shared by every channel, so a channel that
+// needs ten types and one that needs two are both served without sizing every
+// channel for the worst case. Each entry costs ~3 bytes of SRAM.
+#ifndef BLAECK_EVENT_MAX_TYPES_DEFAULT
+  #if defined(__AVR__)
+    #if defined(RAMEND) && (RAMEND >= 0x10FF)
+      #define BLAECK_EVENT_MAX_TYPES_DEFAULT 16
+    #else
+      #define BLAECK_EVENT_MAX_TYPES_DEFAULT 8
+    #endif
+  #else
+    #define BLAECK_EVENT_MAX_TYPES_DEFAULT 24
   #endif
 #endif
 
@@ -207,10 +264,10 @@ enum BlaeckIntervalMode
 typedef void (*BlaeckCommandHandler)(const char *command, const char *const *params, byte paramCount);
 typedef void (*BlaeckAnyCommandHandler)(const char *command, const char *const *params, byte paramCount);
 
-// Command kind for Home Assistant discovery (0xE0 Command List frame).
+// Command kind for Home Assistant discovery (0xA0 Command List frame).
 enum BlaeckCommandKind
 {
-  BLAECK_CMD_PLAIN = 0,  // registered via onCommand(): no HA entity, but listed in 0xE0 for command palettes
+  BLAECK_CMD_PLAIN = 0,  // registered via onCommand(): no HA entity, but listed in 0xA0 for command palettes
   BLAECK_CMD_NUMBER = 1, // HA number   (value in [min,max])
   BLAECK_CMD_SWITCH = 2, // HA switch   (0/1)
   BLAECK_CMD_SELECT = 3, // HA select   (index into optionsCsv)
@@ -218,7 +275,7 @@ enum BlaeckCommandKind
   BLAECK_CMD_TEXT = 5    // HA text     (free text, percent-encoded on the wire)
 };
 
-// Acknowledgement reason for the 0xF0 Command Ack frame. Sent back to the
+// Acknowledgement reason for the 0xA5 Command Ack frame. Sent back to the
 // serial host after a command is dispatched so a host (e.g. Loggbok) can confirm
 // the command was applied and surface accept/reject feedback.
 // status = 0 accepted, 1 rejected.
@@ -284,11 +341,11 @@ public:
   void writeSymbols();
   void writeSymbols(unsigned long messageID);
 
-  // ----- Commands (Home Assistant discovery catalog, 0xE0) -----
+  // ----- Commands (Home Assistant discovery catalog, 0xA0) -----
   void writeCommands();
   void writeCommands(unsigned long messageID);
 
-  // ----- Messages (Home Assistant text/log channel, 0x90) -----
+  // ----- Messages (Home Assistant text/log channel, 0x95) -----
   // With BLAECK_ENABLE_MESSAGES=0 these still compile but do nothing, so a
   // sketch can be built for a tiny target without being rewritten.
   //
@@ -304,7 +361,7 @@ public:
   bool addMessageChannel(const char *channelName, const __FlashStringHelper *icon, bool diagnostic);
   void clearAllMessageChannels();
 
-  // Send the 0x8A "Message Channel List" frame (the declared-channel catalog).
+  // Send the 0x90 "Message Channel List" frame (the declared-channel catalog).
   // Sent automatically in response to BLAECK.WRITE_MESSAGE_CHANNELS.
   void writeMessageChannels();
   void writeMessageChannels(unsigned long messageID);
@@ -312,11 +369,47 @@ public:
   // Send a free-text status/log message on a declared channel to the serial host.
   // Fire-and-forget: a host may surface it (e.g. a Home Assistant text sensor
   // per declared channel) but it is never stored as signal data. The frame
-  // carries no CRC (like the 0xE0/0xF0 frames). Text longer than 65535 bytes is
-  // truncated. Messages on channels that were never passed to
-  // addMessageChannel() are dropped.
+  // carries the channel's index in the 0x90 catalog rather than its name, so the
+  // catalog must reach the host first. No CRC (like the 0xA0/0xA5 frames). Text
+  // longer than 65535 bytes is truncated. Messages on channels that were never
+  // passed to addMessageChannel() are dropped.
   void writeMessage(const char *channelName, const char *text);
   void writeMessage(const char *channelName, const char *text, unsigned long messageID);
+
+  // ----- Events (Home Assistant event entities, 0x85) -----
+  // With BLAECK_ENABLE_EVENTS=0 these still compile but do nothing.
+  //
+  // Declare an event channel, then give it its event types with addEventType().
+  // Both must happen up-front (typically in setup()) so the host can announce
+  // the entity, including its list of types, before the first event arrives.
+  // `channelName` is copied; `icon` must outlive the call (use a string literal
+  // or F("mdi:...")). Returns false if the name is empty/too long or the table
+  // is full.
+  bool addEventChannel(const char *channelName);
+  bool addEventChannel(const char *channelName, const __FlashStringHelper *icon);
+  // `diagnostic` groups the entity under the HA device's diagnostic section.
+  bool addEventChannel(const char *channelName, const __FlashStringHelper *icon, bool diagnostic);
+
+  // Append an event type to a declared channel. Call order defines the index
+  // used on the wire: the first type added to a channel is index 0, the next 1.
+  // `eventType` must outlive the call (use F("...")). Types are held in one pool
+  // shared by all channels. Returns false if the channel was never declared, the
+  // pool is full, or the channel already has that type.
+  bool addEventType(const char *channelName, const __FlashStringHelper *eventType);
+  void clearAllEventChannels();
+
+  // Send the 0x80 "Event Channel List" frame (the declared-channel catalog).
+  // Sent automatically in response to BLAECK.WRITE_EVENT_CHANNELS.
+  void writeEventChannels();
+  void writeEventChannels(unsigned long messageID);
+
+  // Report that an event occurred on a declared channel. Fire-and-forget: a host
+  // may surface it (e.g. a Home Assistant event entity per channel) but it is
+  // never stored as signal data. The frame carries only the channel and event
+  // type indices from the 0x80 catalog, which must reach the host first, and no
+  // CRC. Events on channels or types that were never declared are dropped.
+  void writeEvent(const char *channelName, const __FlashStringHelper *eventType);
+  void writeEvent(const char *channelName, const __FlashStringHelper *eventType, unsigned long messageID);
 
   // ----- Data Write -----
   // Update value and write directly - by name
@@ -468,7 +561,7 @@ public:
 
   // ----- Typed command registration (Home Assistant discovery metadata) -----
   // Same runtime behavior as onCommand(), but attach metadata so the device can
-  // describe the command in a 0xE0 "Command List" frame (BLAECK.WRITE_COMMANDS).
+  // describe the command in a 0xA0 "Command List" frame (BLAECK.WRITE_COMMANDS).
   // stateSignal (nullable): name of the signal that mirrors this command's value
   // (closed-loop -> HA state_topic + logged); pass nullptr for an optimistic /
   // open-loop control. All metadata strings must be F()/PROGMEM literals with
@@ -521,9 +614,9 @@ private:
   void _parseCommandTokens(const char *raw);
   void _dispatchRegisteredHandlers(bool sendAck = true);
 
-  // Send a 0xF0 Command Ack frame (cmdHash + status + reason) to the serial host.
+  // Send a 0xA5 Command Ack frame (cmdHash + status + reason) to the serial host.
   // The hash is FNV-1a of the exact received frame bytes. The frame carries no
-  // CRC (like 0xE0).
+  // CRC (like 0xA0).
   void _writeCommandAck(const char *rawCommand, byte status, byte reasonCode);
   static uint32_t _fnv1a32(const char *s);
   uint16_t _computeSchemaHash();
@@ -563,8 +656,26 @@ private:
   // Index of a declared channel, or -1 when the name was never declared.
   int _findMessageChannel(const char *channelName) const;
 #endif
+#if BLAECK_ENABLE_EVENTS
+  void writeEventChannelsFrame(unsigned long MessageID);
+  // Index of a declared event channel, or -1 when the name was never declared.
+  int _findEventChannel(const char *channelName) const;
+  // Position of an event type within its own channel's list, or -1 when that
+  // channel never declared it.
+  int _findEventType(byte channelIndex, const __FlashStringHelper *eventType) const;
+  // Byte-wise equality of two PROGMEM strings. Needed because strcmp_P() reads
+  // its first argument from RAM, which silently mismatches when both operands
+  // are flash pointers.
+  static bool _flashStringEquals(const __FlashStringHelper *a, const __FlashStringHelper *b);
+#endif
 
   void writeDevicesFrame(unsigned long MessageID);
+
+  // Emits a catalog frame with no entries. Used by the disabled builds of the
+  // optional catalogs so a polling host gets an immediate "nothing here"
+  // instead of waiting out its timeout: the host cannot tell from the library
+  // version alone whether a feature was compiled out.
+  void _writeEmptyFrame(byte msgKey, unsigned long msg_id);
 
   static void validatePlatformSizes();
 
@@ -597,6 +708,11 @@ private:
 #if BLAECK_ENABLE_MESSAGES
   static const byte MAX_MESSAGE_CHANNELS = BLAECK_MESSAGE_MAX_CHANNELS_DEFAULT;
   static const byte MAX_MESSAGE_NAME_COUNT = BLAECK_MESSAGE_MAX_NAME_CHARS_DEFAULT;
+#endif
+#if BLAECK_ENABLE_EVENTS
+  static const byte MAX_EVENT_CHANNELS = BLAECK_EVENT_MAX_CHANNELS_DEFAULT;
+  static const byte MAX_EVENT_NAME_COUNT = BLAECK_EVENT_MAX_NAME_CHARS_DEFAULT;
+  static const byte MAX_EVENT_TYPES = BLAECK_EVENT_MAX_TYPES_DEFAULT;
 #endif
   char receivedChars[MAXIMUM_CHAR_COUNT];
   char COMMAND[MAXIMUM_CHAR_COUNT] = {0};
@@ -731,16 +847,42 @@ private:
   };
   MessageChannelEntry _messageChannels[MAX_MESSAGE_CHANNELS];
 #endif
+#if BLAECK_ENABLE_EVENTS
+  struct EventChannelEntry
+  {
+    char name[MAX_EVENT_NAME_COUNT];
+    const __FlashStringHelper *icon = nullptr;
+    bool diagnostic = false;
+    bool inUse = false;
+  };
+  EventChannelEntry _eventChannels[MAX_EVENT_CHANNELS];
+
+  // One pool shared by every channel: each entry records which channel owns it,
+  // so a channel with many types and one with few both fit without reserving a
+  // per-channel array. Appended in call order, which is what defines the index
+  // sent in the 0x85 frame.
+  struct EventTypeEntry
+  {
+    byte channelIndex = 0;
+    const __FlashStringHelper *text = nullptr;
+  };
+  EventTypeEntry _eventTypes[MAX_EVENT_TYPES];
+  byte _eventTypeCount = 0;
+#endif
   BlaeckAnyCommandHandler _anyCommandHandler = nullptr;
   char _parsedTokenBuffer[MAXIMUM_CHAR_COUNT] = {0};
   char _parsedCommand[MAX_COMMAND_NAME_COUNT] = {0};
   const char *_parsedParamPtrs[MAX_COMMAND_PARAM_COUNT] = {0};
   byte _parsedParamCount = 0;
-  // Monotonic message id stamped into the 0xF0 Command Ack frame header.
+  // Monotonic message id stamped into the 0xA5 Command Ack frame header.
   unsigned long _commandAckMsgId = 0;
 #if BLAECK_ENABLE_MESSAGES
-  // Monotonic message id stamped into the 0x90 Message frame header.
+  // Monotonic message id stamped into the 0x95 Message frame header.
   unsigned long _messageMsgId = 0;
+#endif
+#if BLAECK_ENABLE_EVENTS
+  // Monotonic message id stamped into the 0x85 Event frame header.
+  unsigned long _eventMsgId = 0;
 #endif
 #if BLAECK_ENABLE_COMMAND_META
   // Scratch buffer holding a select command's normalized index string, so a

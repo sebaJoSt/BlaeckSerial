@@ -15,30 +15,62 @@ All notable changes to this project will be documented in this file.
   new client requirement above, this is why 7.0.0 is a major release.
 
 ### Added
-- Command acknowledgement (`0xF0` frame): after dispatching an inbound command
+- Command acknowledgement (`0xA5` frame): after dispatching an inbound command
   the device replies on the serial host with an FNV-1a hash of the received
   command plus an accept/reject status and reason code, so a host (e.g. Loggbok)
-  can confirm the command was applied. Like `0xE0`, the frame carries no CRC;
+  can confirm the command was applied. Like `0xA0`, the frame carries no CRC;
   hosts that don't recognize the key ignore it.
-- **Message frames (`0x8A` / `0x90`).** New `addMessageChannel(channelName[, icon[,
+- **Message frames (`0x90` / `0x95`).** New `addMessageChannel(channelName[, icon[,
   diagnostic]])` declares a free-text status/log channel, and
   `writeMessage(channelName, text[, messageID])` sends a line on it (byte-exact
-  with BlaeckTCP 7.0.0). Declared channels are advertised in a `0x8A` "Message
+  with BlaeckTCP 7.0.0). Declared channels are advertised in a `0x90` "Message
   Channel List" frame in response to `BLAECK.WRITE_MESSAGE_CHANNELS`, so a host
   (e.g. Loggbok) can announce one Home Assistant text sensor per channel before
   the first line arrives, alongside the signals and commands it already
-  announces. Messages on channels that were never declared are dropped. The text
+  announces. Messages on channels that were never declared are dropped. The
+  `0x95` frame identifies its channel by index into the `0x90` catalog, so that
+  frame must reach the host first. The text
   is length-prefixed (LE uint16, capped at 65535 bytes) and neither frame carries
   a CRC; it is never stored as signal data. Set `BLAECK_ENABLE_MESSAGES` to `0`
   to compile the feature out (the API remains as no-ops); the channel table size
   and name length are tunable via `BLAECK_MESSAGE_MAX_CHANNELS_DEFAULT` and
   `BLAECK_MESSAGE_MAX_NAME_CHARS_DEFAULT`.
+- **Event frames (`0x80` / `0x85`).** New `addEventChannel(channelName[, icon[,
+  diagnostic]])` declares an event channel and `addEventType(channelName,
+  F("..."))` gives it the closed set of events it may report; call order defines
+  each type's index. `writeEvent(channelName, F("..."))` then reports one
+  occurrence. Declared channels are advertised in a `0x80` "Event Channel List"
+  frame in response to `BLAECK.WRITE_EVENT_CHANNELS`, so a host (e.g. Loggbok)
+  can announce one Home Assistant event entity per channel, including its list of
+  types, before the first event arrives.
+  Unlike a message, an event carries no text: the `0x85` frame holds only the
+  channel and event type indices from the catalog, so an occurrence costs one
+  byte per type instead of a full string, but the wording is fixed at compile
+  time and the host cannot interpret an event without the catalog. Use a message
+  channel for anything that has to carry a runtime value. Events on channels or
+  types that were never declared are dropped, and neither frame carries a CRC.
+  Event types are held in one pool shared by all channels, so a channel needing
+  many types and one needing few are both served without sizing every channel for
+  the worst case. Set `BLAECK_ENABLE_EVENTS` to `0` to compile the feature out
+  (the API remains as no-ops); the table sizes are tunable via
+  `BLAECK_EVENT_MAX_CHANNELS_DEFAULT`, `BLAECK_EVENT_MAX_NAME_CHARS_DEFAULT` and
+  `BLAECK_EVENT_MAX_TYPES_DEFAULT`.
+- **Disabled catalogs now answer with an empty list.** With
+  `BLAECK_ENABLE_EVENTS`, `BLAECK_ENABLE_MESSAGES` or `BLAECK_ENABLE_COMMAND_META`
+  set to `0`, the matching poll (`BLAECK.WRITE_EVENT_CHANNELS`,
+  `BLAECK.WRITE_MESSAGE_CHANNELS`, `BLAECK.WRITE_COMMANDS`) still replies, with a
+  frame containing no entries, instead of staying silent. A host gates these polls
+  on the library version and cannot see the build flags, so a silent device used
+  to make it wait out its full timeout on every setup. An empty catalog is already
+  the legal "nothing declared" case, so hosts need no special handling. Costs
+  roughly 330 bytes of flash and 28 bytes of SRAM per disabled feature; builds
+  with the features enabled are unaffected.
 - **Text command (`onTextCommand`).** New typed command helper
   `onTextCommand(command, handler, stateSignal = nullptr, maxLength = 255)` for
   a Home Assistant text entity. The host sends the value percent-encoded (so
   commas and other frame delimiters survive); the device percent-decodes it in
   place before the handler runs and rejects values longer than `maxLength`
-  (`0xF0` reason `TOO_LONG`). The max length is advertised in the `0xE0` command
+  (`0xA5` reason `TOO_LONG`). The max length is advertised in the `0xA0` command
   entry (flag bit 4, LE uint16).
   Requires `BLAECK_ENABLE_COMMAND_META`.
 - **String signals (`addSignal(name, char *value)`).** New signal data type

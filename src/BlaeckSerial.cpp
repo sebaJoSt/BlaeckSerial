@@ -572,22 +572,24 @@ void BlaeckSerial::read()
 
       this->writeDevices(msg_id);
     }
-#if BLAECK_ENABLE_COMMAND_META
     else if (strcmp(COMMAND, "BLAECK.WRITE_COMMANDS") == 0)
     {
       unsigned long msg_id = ((unsigned long)PARAMETER[3] << 24) | ((unsigned long)PARAMETER[2] << 16) | ((unsigned long)PARAMETER[1] << 8) | ((unsigned long)PARAMETER[0]);
 
       this->writeCommands(msg_id);
     }
-#endif
-#if BLAECK_ENABLE_MESSAGES
     else if (strcmp(COMMAND, "BLAECK.WRITE_MESSAGE_CHANNELS") == 0)
     {
       unsigned long msg_id = ((unsigned long)PARAMETER[3] << 24) | ((unsigned long)PARAMETER[2] << 16) | ((unsigned long)PARAMETER[1] << 8) | ((unsigned long)PARAMETER[0]);
 
       this->writeMessageChannels(msg_id);
     }
-#endif
+    else if (strcmp(COMMAND, "BLAECK.WRITE_EVENT_CHANNELS") == 0)
+    {
+      unsigned long msg_id = ((unsigned long)PARAMETER[3] << 24) | ((unsigned long)PARAMETER[2] << 16) | ((unsigned long)PARAMETER[1] << 8) | ((unsigned long)PARAMETER[0]);
+
+      this->writeEventChannels(msg_id);
+    }
     else if (strcmp(COMMAND, "BLAECK.ACTIVATE") == 0)
     {
       if (_fixedInterval_ms == BLAECK_INTERVAL_CLIENT)
@@ -1106,7 +1108,7 @@ void BlaeckSerial::_writeCommandAck(const char *rawCommand, byte status, byte re
   if (_bufferedWrites && _frameBuf)
   {
     _bufReset();
-    _bufHeader(0xF0, _commandAckMsgId++);
+    _bufHeader(0xA5, _commandAckMsgId++);
     // Payload: command hash (4 bytes, little-endian) + status (1) + reason (1).
     ulngCvt.val = _fnv1a32(rawCommand);
     _bufBytes(ulngCvt.bval, 4);
@@ -1118,7 +1120,7 @@ void BlaeckSerial::_writeCommandAck(const char *rawCommand, byte status, byte re
   else
   {
     StreamRef->write("<BLAECK:");
-    byte msg_key = 0xF0;
+    byte msg_key = 0xA5;
     StreamRef->write(msg_key);
     StreamRef->write(":");
     ulngCvt.val = _commandAckMsgId++;
@@ -1131,7 +1133,7 @@ void BlaeckSerial::_writeCommandAck(const char *rawCommand, byte status, byte re
     StreamRef->write(status);
     StreamRef->write(reasonCode);
 
-    // No CRC32 tail: acks mirror the descriptive 0xE0 frame format.
+    // No CRC32 tail: acks mirror the descriptive 0xA0 frame format.
     StreamRef->write("/BLAECK>");
     StreamRef->write("\r\n");
     StreamRef->flush();
@@ -1225,18 +1227,22 @@ int BlaeckSerial::_findMessageChannel(const char *channelName) const
 
 void BlaeckSerial::writeMessage(const char *channelName, const char *text, unsigned long messageID)
 {
-  // 0x90 "Message" frame: a free-text status/log line on a declared channel,
+  // 0x95 "Message" frame: a free-text status/log line on a declared channel,
   // device -> host.
-  //   name\0  length(2, LE uint16)  text[length]
-  // No CRC (like the 0xE0/0xF0 frames). The host may surface it (e.g. a Home
-  // Assistant text sensor announced from the 0x8A channel catalog); it is never
+  //   channelIndex(1)  length(2, LE uint16)  text[length]
+  // channelIndex is the channel's position in the 0x90 catalog, so that frame
+  // must be received first. Channels are never removed, only cleared as a whole,
+  // so the slot index and the catalog position cannot drift apart.
+  // No CRC (like the 0xA0/0xA5 frames). The host may surface it (e.g. a Home
+  // Assistant text sensor announced from the 0x90 channel catalog); it is never
   // treated as signal/telemetry data and is not stored.
   if (StreamRef == nullptr)
     return;
 
   // Only declared channels are sent: the host announces its entities from the
-  // 0x8A catalog, so a line on an undeclared channel would have nowhere to go.
-  if (_findMessageChannel(channelName) < 0)
+  // 0x90 catalog, so a line on an undeclared channel would have nowhere to go.
+  int channelIndex = _findMessageChannel(channelName);
+  if (channelIndex < 0)
   {
     if (_debugStream != nullptr)
     {
@@ -1258,9 +1264,9 @@ void BlaeckSerial::writeMessage(const char *channelName, const char *text, unsig
   if (_bufferedWrites && _frameBuf)
   {
     _bufReset();
-    _bufHeader(0x90, messageID);
-    // Channel name (NUL-terminated), then the UTF-8 text length-prefixed (LE uint16).
-    _bufStr0(channelName);
+    _bufHeader(0x95, messageID);
+    // Channel index, then the UTF-8 text length-prefixed (LE uint16).
+    _bufByte((byte)channelIndex);
     _bufByte((byte)(len & 0xFF));
     _bufByte((byte)((len >> 8) & 0xFF));
     _bufBytes((const byte *)text, len);
@@ -1270,16 +1276,15 @@ void BlaeckSerial::writeMessage(const char *channelName, const char *text, unsig
   else
   {
     StreamRef->write("<BLAECK:");
-    byte msg_key = 0x90;
+    byte msg_key = 0x95;
     StreamRef->write(msg_key);
     StreamRef->write(":");
     ulngCvt.val = messageID;
     StreamRef->write(ulngCvt.bval, 4);
     StreamRef->write(":");
 
-    // Channel name (NUL-terminated), then the UTF-8 text length-prefixed (LE uint16).
-    StreamRef->print(channelName);
-    StreamRef->write((byte)0);
+    // Channel index, then the UTF-8 text length-prefixed (LE uint16).
+    StreamRef->write((byte)channelIndex);
     StreamRef->write((byte)(len & 0xFF));
     StreamRef->write((byte)((len >> 8) & 0xFF));
     StreamRef->write((const uint8_t *)text, len);
@@ -1302,23 +1307,23 @@ void BlaeckSerial::writeMessageChannels(unsigned long msg_id)
 
 void BlaeckSerial::writeMessageChannelsFrame(unsigned long msg_id)
 {
-  // 0x8A "Message Channel List" frame. Per declared channel entry:
+  // 0x90 "Message Channel List" frame. Per declared channel entry:
   //   reserved(1) reserved(1) name\0 flags(1)
   //   [icon\0]                 if flags.hasIcon
   // flags bits: 0=hasIcon 1=isDiagnostic
   // The two leading bytes are always zero. They keep the entry byte-shape
-  // identical to a 0xE0 command entry (where they carried the now-removed I2C
+  // identical to a 0xA0 command entry (where they carried the now-removed I2C
   // masterSlaveConfig/slaveID), so a host parses both frames the same way:
   // skip two, read the NUL-terminated name, then the flags.
   // Declared up-front so the host can announce one text entity per channel
-  // before any 0x90 message arrives, the same way 0xE0 announces commands.
+  // before any 0x95 message arrives, the same way 0xA0 announces commands.
   if (StreamRef == nullptr)
     return;
 
   if (_bufferedWrites && _frameBuf)
   {
     _bufReset();
-    _bufHeader(0x8A, msg_id);
+    _bufHeader(0x90, msg_id);
 
     for (byte i = 0; i < MAX_MESSAGE_CHANNELS; i++)
     {
@@ -1347,7 +1352,7 @@ void BlaeckSerial::writeMessageChannelsFrame(unsigned long msg_id)
   else
   {
     StreamRef->write("<BLAECK:");
-    byte msg_key = 0x8A;
+    byte msg_key = 0x90;
     StreamRef->write(msg_key);
     StreamRef->write(":");
     ulngCvt.val = msg_id;
@@ -1386,15 +1391,398 @@ void BlaeckSerial::writeMessageChannelsFrame(unsigned long msg_id)
 }
 #else
 // BLAECK_ENABLE_MESSAGES=0: the API stays so sketches still build, but nothing
-// is stored and no frame is emitted.
+// is stored. The catalog still answers, with an empty list (see _writeEmptyFrame).
 bool BlaeckSerial::addMessageChannel(const char *) { return false; }
 bool BlaeckSerial::addMessageChannel(const char *, const __FlashStringHelper *) { return false; }
 bool BlaeckSerial::addMessageChannel(const char *, const __FlashStringHelper *, bool) { return false; }
 void BlaeckSerial::clearAllMessageChannels() {}
-void BlaeckSerial::writeMessageChannels() {}
-void BlaeckSerial::writeMessageChannels(unsigned long) {}
+void BlaeckSerial::writeMessageChannels() { this->writeMessageChannels(1); }
+void BlaeckSerial::writeMessageChannels(unsigned long msg_id) { this->_writeEmptyFrame(0x90, msg_id); }
 void BlaeckSerial::writeMessage(const char *, const char *) {}
 void BlaeckSerial::writeMessage(const char *, const char *, unsigned long) {}
+#endif
+
+#if BLAECK_ENABLE_EVENTS
+bool BlaeckSerial::addEventChannel(const char *channelName)
+{
+  return this->addEventChannel(channelName, nullptr, false);
+}
+
+bool BlaeckSerial::addEventChannel(const char *channelName, const __FlashStringHelper *icon)
+{
+  return this->addEventChannel(channelName, icon, false);
+}
+
+bool BlaeckSerial::addEventChannel(const char *channelName, const __FlashStringHelper *icon, bool diagnostic)
+{
+  if (channelName == nullptr || channelName[0] == '\0')
+    return false;
+
+  if (strlen(channelName) >= MAX_EVENT_NAME_COUNT)
+  {
+    if (_debugStream != nullptr)
+    {
+      _debugStream->print(F("Channel name too long for event channel table: "));
+      _debugStream->println(channelName);
+    }
+    return false;
+  }
+
+  // Re-declaring a channel updates its metadata rather than consuming a slot.
+  // Its already-declared event types keep their indices.
+  int existing = _findEventChannel(channelName);
+  if (existing >= 0)
+  {
+    _eventChannels[existing].icon = icon;
+    _eventChannels[existing].diagnostic = diagnostic;
+    return true;
+  }
+
+  for (byte i = 0; i < MAX_EVENT_CHANNELS; i++)
+  {
+    if (!_eventChannels[i].inUse)
+    {
+      strncpy(_eventChannels[i].name, channelName, MAX_EVENT_NAME_COUNT - 1);
+      _eventChannels[i].name[MAX_EVENT_NAME_COUNT - 1] = '\0';
+      _eventChannels[i].icon = icon;
+      _eventChannels[i].diagnostic = diagnostic;
+      _eventChannels[i].inUse = true;
+      return true;
+    }
+  }
+
+  if (_debugStream != nullptr)
+  {
+    _debugStream->print(F("Event channel table full for: "));
+    _debugStream->println(channelName);
+  }
+  return false;
+}
+
+bool BlaeckSerial::addEventType(const char *channelName, const __FlashStringHelper *eventType)
+{
+  if (eventType == nullptr)
+    return false;
+
+  int channelIndex = _findEventChannel(channelName);
+  if (channelIndex < 0)
+  {
+    if (_debugStream != nullptr)
+    {
+      _debugStream->print(F("Event type dropped, channel not declared with addEventChannel(): "));
+      _debugStream->println(channelName != nullptr ? channelName : "");
+    }
+    return false;
+  }
+
+  // A duplicate would be unreachable: writeEvent() resolves by text and would
+  // always match the first one.
+  if (_findEventType((byte)channelIndex, eventType) >= 0)
+  {
+    if (_debugStream != nullptr)
+    {
+      _debugStream->print(F("Duplicate event type ignored on channel: "));
+      _debugStream->println(channelName);
+    }
+    return false;
+  }
+
+  if (_eventTypeCount >= MAX_EVENT_TYPES)
+  {
+    if (_debugStream != nullptr)
+    {
+      _debugStream->print(F("Event type pool full for channel: "));
+      _debugStream->println(channelName);
+    }
+    return false;
+  }
+
+  _eventTypes[_eventTypeCount].channelIndex = (byte)channelIndex;
+  _eventTypes[_eventTypeCount].text = eventType;
+  _eventTypeCount++;
+  return true;
+}
+
+void BlaeckSerial::clearAllEventChannels()
+{
+  for (byte i = 0; i < MAX_EVENT_CHANNELS; i++)
+  {
+    _eventChannels[i].inUse = false;
+    _eventChannels[i].icon = nullptr;
+    _eventChannels[i].diagnostic = false;
+    _eventChannels[i].name[0] = '\0';
+  }
+  // The count gates every read of the pool, so the entries need no cleanup.
+  _eventTypeCount = 0;
+}
+
+int BlaeckSerial::_findEventChannel(const char *channelName) const
+{
+  if (channelName == nullptr || channelName[0] == '\0')
+    return -1;
+
+  for (byte i = 0; i < MAX_EVENT_CHANNELS; i++)
+  {
+    if (_eventChannels[i].inUse && strcmp(_eventChannels[i].name, channelName) == 0)
+      return (int)i;
+  }
+  return -1;
+}
+
+int BlaeckSerial::_findEventType(byte channelIndex, const __FlashStringHelper *eventType) const
+{
+  if (eventType == nullptr)
+    return -1;
+
+  // Walks the pool in insertion order, counting only this channel's entries, so
+  // the result is both the wire index and the position the 0x80 catalog emits.
+  // Compares by text, not pointer: the compiler is free to keep two identical
+  // F() literals at different addresses. Both operands live in flash, so
+  // neither strcmp() nor strcmp_P() applies (the latter reads its first
+  // argument from RAM) — read both sides with pgm_read_byte().
+  byte index = 0;
+  for (byte i = 0; i < _eventTypeCount; i++)
+  {
+    if (_eventTypes[i].channelIndex != channelIndex)
+      continue;
+
+    if (_flashStringEquals(eventType, _eventTypes[i].text))
+      return (int)index;
+
+    index++;
+  }
+  return -1;
+}
+
+// Compares two PROGMEM strings. On AVR a flash pointer cannot be dereferenced
+// directly, and avr-libc offers no plain flash-to-flash strcmp, so both sides
+// are read a byte at a time. On flat-address cores (ESP32, SAMD) pgm_read_byte
+// is an ordinary dereference, so this stays correct there too.
+bool BlaeckSerial::_flashStringEquals(const __FlashStringHelper *a, const __FlashStringHelper *b)
+{
+  if (a == b)
+    return true;
+  if (a == nullptr || b == nullptr)
+    return false;
+
+  PGM_P pa = reinterpret_cast<PGM_P>(a);
+  PGM_P pb = reinterpret_cast<PGM_P>(b);
+  for (;;)
+  {
+    byte ca = pgm_read_byte(pa++);
+    byte cb = pgm_read_byte(pb++);
+    if (ca != cb)
+      return false;
+    if (ca == 0)
+      return true;
+  }
+}
+
+void BlaeckSerial::writeEventChannels()
+{
+  this->writeEventChannels(1);
+}
+
+void BlaeckSerial::writeEventChannels(unsigned long msg_id)
+{
+  this->writeEventChannelsFrame(msg_id);
+}
+
+void BlaeckSerial::writeEventChannelsFrame(unsigned long msg_id)
+{
+  // 0x80 "Event Channel List" frame. Per declared channel entry:
+  //   reserved(1) reserved(1) name\0 flags(1)
+  //   [icon\0]                 if flags.hasIcon
+  //   count(1) type\0 x count
+  // flags bits: 0=hasIcon 1=isDiagnostic
+  // The two leading bytes are always zero, matching the 0x90 and 0xA0 entries,
+  // so a host parses all three the same way: skip two, read the NUL-terminated
+  // name, then the flags.
+  // Declared up-front so the host can announce one event entity per channel,
+  // including its list of types, before any 0x85 event arrives. The count is
+  // what lets a host reject an out-of-range index without parsing the run.
+  if (StreamRef == nullptr)
+    return;
+
+  if (_bufferedWrites && _frameBuf)
+  {
+    _bufReset();
+    _bufHeader(0x80, msg_id);
+
+    for (byte i = 0; i < MAX_EVENT_CHANNELS; i++)
+    {
+      EventChannelEntry &e = _eventChannels[i];
+      if (!e.inUse)
+        continue;
+
+      byte flags = 0;
+      if (e.icon != nullptr)
+        flags |= 0x01;
+      if (e.diagnostic)
+        flags |= 0x02;
+
+      _bufByte((byte)0);
+      _bufByte((byte)0);
+      _bufStr0(e.name);
+      _bufByte(flags);
+
+      if (flags & 0x01)
+        _bufFlashStr0(e.icon);
+
+      byte typeCount = 0;
+      for (byte t = 0; t < _eventTypeCount; t++)
+      {
+        if (_eventTypes[t].channelIndex == i)
+          typeCount++;
+      }
+      _bufByte(typeCount);
+
+      for (byte t = 0; t < _eventTypeCount; t++)
+      {
+        if (_eventTypes[t].channelIndex == i)
+          _bufFlashStr0(_eventTypes[t].text);
+      }
+    }
+
+    _bufFooter();
+    _bufSend();
+  }
+  else
+  {
+    StreamRef->write("<BLAECK:");
+    byte msg_key = 0x80;
+    StreamRef->write(msg_key);
+    StreamRef->write(":");
+    ulngCvt.val = msg_id;
+    StreamRef->write(ulngCvt.bval, 4);
+    StreamRef->write(":");
+
+    for (byte i = 0; i < MAX_EVENT_CHANNELS; i++)
+    {
+      EventChannelEntry &e = _eventChannels[i];
+      if (!e.inUse)
+        continue;
+
+      byte flags = 0;
+      if (e.icon != nullptr)
+        flags |= 0x01;
+      if (e.diagnostic)
+        flags |= 0x02;
+
+      StreamRef->write((byte)0);
+      StreamRef->write((byte)0);
+      StreamRef->print(e.name);
+      StreamRef->write((byte)0);
+      StreamRef->write(flags);
+
+      if (flags & 0x01)
+      {
+        StreamRef->print(e.icon);
+        StreamRef->write((byte)0);
+      }
+
+      byte typeCount = 0;
+      for (byte t = 0; t < _eventTypeCount; t++)
+      {
+        if (_eventTypes[t].channelIndex == i)
+          typeCount++;
+      }
+      StreamRef->write(typeCount);
+
+      for (byte t = 0; t < _eventTypeCount; t++)
+      {
+        if (_eventTypes[t].channelIndex == i)
+        {
+          StreamRef->print(_eventTypes[t].text);
+          StreamRef->write((byte)0);
+        }
+      }
+    }
+
+    StreamRef->write("/BLAECK>");
+    StreamRef->write("\r\n");
+    StreamRef->flush();
+  }
+}
+
+void BlaeckSerial::writeEvent(const char *channelName, const __FlashStringHelper *eventType)
+{
+  this->writeEvent(channelName, eventType, _eventMsgId++);
+}
+
+void BlaeckSerial::writeEvent(const char *channelName, const __FlashStringHelper *eventType, unsigned long messageID)
+{
+  // 0x85 "Event" frame: one occurrence on a declared channel, device -> host.
+  //   channelIndex(1)  eventIndex(1)
+  // Both indices refer to the 0x80 catalog, so that frame must be received
+  // first. Channels are never removed, only cleared as a whole, so the slot
+  // index and the catalog position cannot drift apart.
+  // No CRC (like the 0x95/0xA0/0xA5 frames). The event carries no text and no
+  // timestamp: the host supplies its own receipt time.
+  if (StreamRef == nullptr)
+    return;
+
+  int channelIndex = _findEventChannel(channelName);
+  if (channelIndex < 0)
+  {
+    if (_debugStream != nullptr)
+    {
+      _debugStream->print(F("Event dropped, channel not declared with addEventChannel(): "));
+      _debugStream->println(channelName != nullptr ? channelName : "");
+    }
+    return;
+  }
+
+  int eventIndex = _findEventType((byte)channelIndex, eventType);
+  if (eventIndex < 0)
+  {
+    if (_debugStream != nullptr)
+    {
+      _debugStream->print(F("Event dropped, type not declared with addEventType() on channel: "));
+      _debugStream->println(channelName);
+    }
+    return;
+  }
+
+  if (_bufferedWrites && _frameBuf)
+  {
+    _bufReset();
+    _bufHeader(0x85, messageID);
+    _bufByte((byte)channelIndex);
+    _bufByte((byte)eventIndex);
+    _bufFooter();
+    _bufSend();
+  }
+  else
+  {
+    StreamRef->write("<BLAECK:");
+    byte msg_key = 0x85;
+    StreamRef->write(msg_key);
+    StreamRef->write(":");
+    ulngCvt.val = messageID;
+    StreamRef->write(ulngCvt.bval, 4);
+    StreamRef->write(":");
+
+    StreamRef->write((byte)channelIndex);
+    StreamRef->write((byte)eventIndex);
+
+    StreamRef->write("/BLAECK>");
+    StreamRef->write("\r\n");
+    StreamRef->flush();
+  }
+}
+#else
+// BLAECK_ENABLE_EVENTS=0: the API stays so sketches still build, but nothing
+// is stored. The catalog still answers, with an empty list (see _writeEmptyFrame).
+bool BlaeckSerial::addEventChannel(const char *) { return false; }
+bool BlaeckSerial::addEventChannel(const char *, const __FlashStringHelper *) { return false; }
+bool BlaeckSerial::addEventChannel(const char *, const __FlashStringHelper *, bool) { return false; }
+bool BlaeckSerial::addEventType(const char *, const __FlashStringHelper *) { return false; }
+void BlaeckSerial::clearAllEventChannels() {}
+void BlaeckSerial::writeEventChannels() { this->writeEventChannels(1); }
+void BlaeckSerial::writeEventChannels(unsigned long msg_id) { this->_writeEmptyFrame(0x80, msg_id); }
+void BlaeckSerial::writeEvent(const char *, const __FlashStringHelper *) {}
+void BlaeckSerial::writeEvent(const char *, const __FlashStringHelper *, unsigned long) {}
 #endif
 
 #if BLAECK_ENABLE_COMMAND_META
@@ -1483,7 +1871,7 @@ byte BlaeckSerial::_validateTypedCommand(byte handlerIndex)
   else if (e.kind == BLAECK_CMD_TEXT)
   {
     // Percent-decode in place (SELECT-style param normalization) so the handler
-    // receives raw UTF-8. The 0xF0 ack still hashes the encoded receivedChars,
+    // receives raw UTF-8. The 0xA5 ack still hashes the encoded receivedChars,
     // so it keeps matching the host's hash of what it sent.
     char *decoded = (char *)_parsedParamPtrs[0];
     _percentDecodeInPlace(decoded);
@@ -1594,7 +1982,42 @@ void BlaeckSerial::writeCommands(unsigned long msg_id)
 {
   this->writeCommandsFrame(msg_id);
 }
+#else
+// BLAECK_ENABLE_COMMAND_META=0: commands still run, they just carry no
+// discovery metadata. The catalog answers with an empty list so a polling
+// host learns that immediately (see _writeEmptyFrame).
+void BlaeckSerial::writeCommands() { this->writeCommands(1); }
+void BlaeckSerial::writeCommands(unsigned long msg_id) { this->_writeEmptyFrame(0xA0, msg_id); }
 #endif
+
+// Header + footer with no payload. Every catalog frame shares this envelope,
+// and an empty body is already the legal "nothing declared" case, so a host
+// needs no special handling: it simply announces no entities.
+void BlaeckSerial::_writeEmptyFrame(byte msgKey, unsigned long msg_id)
+{
+  if (StreamRef == nullptr)
+    return;
+
+  if (_bufferedWrites && _frameBuf)
+  {
+    _bufReset();
+    _bufHeader(msgKey, msg_id);
+    _bufFooter();
+    _bufSend();
+  }
+  else
+  {
+    StreamRef->write("<BLAECK:");
+    StreamRef->write(msgKey);
+    StreamRef->write(":");
+    ulngCvt.val = msg_id;
+    StreamRef->write(ulngCvt.bval, 4);
+    StreamRef->write(":");
+    StreamRef->write("/BLAECK>");
+    StreamRef->write("\r\n");
+    StreamRef->flush();
+  }
+}
 
 void BlaeckSerial::write(String signalName, bool value)
 {
@@ -2705,7 +3128,7 @@ void BlaeckSerial::writeSymbolsFrame(unsigned long msg_id)
 #if BLAECK_ENABLE_COMMAND_META
 void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
 {
-  // 0xE0 "Command List" frame. Per discovered command entry:
+  // 0xA0 "Command List" frame. Per discovered command entry:
   //   reserved(1) reserved(1) name\0 kind(1) flags(1)
   //   [min(4) max(4) step(4)]  if flags.hasRange   (LE float)
   //   [unit\0]                 if flags.hasUnit
@@ -2720,7 +3143,7 @@ void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
   if (_bufferedWrites && _frameBuf)
   {
     _bufReset();
-    _bufHeader(0xE0, msg_id);
+    _bufHeader(0xA0, msg_id);
 
     for (byte i = 0; i < MAX_COMMAND_HANDLERS; i++)
     {
@@ -2776,7 +3199,7 @@ void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
   else
   {
     StreamRef->write("<BLAECK:");
-    byte msg_key = 0xE0;
+    byte msg_key = 0xA0;
     StreamRef->write(msg_key);
     StreamRef->write(":");
     ulngCvt.val = msg_id;

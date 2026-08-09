@@ -213,7 +213,7 @@ void onLED(const char *command, const char *const *params, byte paramCount)
 /* Typed button. Carries no value, so there is nothing to parse.
 
    A button has no state signal, so writeMessage() is how it reports back: it
-   pushes a line to a named 0x90 message channel, which a host can surface as
+   pushes a line to a named 0x95 message channel, which a host can surface as
    a text sensor. Serial.println() would only reach the Serial Monitor - a
    Blaeck host skips anything that is not a frame.
 

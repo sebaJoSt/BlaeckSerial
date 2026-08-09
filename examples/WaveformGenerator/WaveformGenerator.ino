@@ -3,33 +3,33 @@
 
   A dashboard-friendly demo for the BlaeckSerial -> Loggbok -> MQTT bridge.
 
-  It generates one fully controllable waveform. Frequency, amplitude, offset and waveform
-  shape are all set over MQTT commands. The commands are registered with typed helpers
-  (onNumberCommand / onSelectCommand / onSwitchCommand / onTextCommand / onButtonCommand) so the device is
-  self-describing: it advertises range, unit, options and the mirrored signal in a 0xE0
-  "Command List" frame, which Loggbok turns into Home Assistant MQTT Discovery entities.
-  Out-of-range values are rejected by the library (and reported on the debug stream); each
-  accepted value is written back to its signal, so a dashboard always shows the value the
-  device actually applied. A read-only string signal (WaveName) mirrors the selected shape
-  as human-readable text, and a writable free-text command (SET_LABEL / DeviceLabel) round-trips
-  an arbitrary string as a Home Assistant text entity via onTextCommand. Two 0x90 message
-  channels ("status" heartbeat and "status_ondemand" on the STATUS button) surface as
-  Home Assistant text sensors via writeMessage.
+  One fully controllable waveform, driven entirely over MQTT. Commands are registered with
+  the typed helpers (onNumberCommand / onSelectCommand / onSwitchCommand / onTextCommand /
+  onButtonCommand), so the device is self-describing: it advertises range, unit, options and
+  the mirrored signal, which Loggbok turns into Home Assistant MQTT Discovery entities. Every
+  accepted value is written back to its signal, so a dashboard always shows what the device
+  actually applied.
+
+  Signals, messages and events are three different jobs:
+    signal   a value that is sampled and logged  -> Output, Frequency, ...
+    message  a line of free text, not logged     -> "running Sine @ 1.00 Hz"
+    event    a discrete occurrence, no text      -> idle_warning, resumed
 
   Author: Sebastian Strobl, https://github.com/sebaJoSt/BlaeckSerial
 
   --- DASHBOARD MAPPING (Loggbok topic prefix: "loggbok" table name: "wave") ---
-    Topic                       Widget          Meaning
-    loggbok/wave/Output         chart           live generated sample
-    loggbok/wave/Frequency      number          wave frequency [Hz]   (0..2)
-    loggbok/wave/Amplitude      number          peak amplitude        (0..100)
-    loggbok/wave/Offset         number          DC offset             (-100..100)
-    loggbok/wave/Waveform       select          0=Sine 1=Square 2=Triangle 3=Sawtooth
-    loggbok/wave/Enabled        switch          output on/off (off -> Output = Offset)
-    loggbok/wave/WaveName       text sensor     current waveform shape name (mirrors Waveform)
-    loggbok/wave/DeviceLabel    text            free-text label (set via SET_LABEL)
-    loggbok/wave/msg/status         text sensor  status heartbeat (0x90 message, every 10 s)
-    loggbok/wave/msg/status_ondemand text sensor status on STATUS button press (0x90 message)
+    Topic                             Widget           Meaning
+    loggbok/wave/Output               chart           live generated sample
+    loggbok/wave/Frequency            number          wave frequency [Hz]   (0..2)
+    loggbok/wave/Amplitude            number          peak amplitude        (0..100)
+    loggbok/wave/Offset               number          DC offset             (-100..100)
+    loggbok/wave/Waveform             select          0=Sine 1=Square 2=Triangle 3=Sawtooth
+    loggbok/wave/Enabled              switch          output on/off (off -> Output = Offset)
+    loggbok/wave/WaveName             text sensor     current waveform shape name (mirrors Waveform)
+    loggbok/wave/DeviceLabel          text            free-text label (set via SET_LABEL)
+    loggbok/wave/msg/Status           text sensor     status heartbeat, every 10 s
+    loggbok/wave/msg/StatusOnDemand   text sensor     status on STATUS button press
+    loggbok/wave/evt/Output           event           idle_warning / resumed
 
   --- COMMANDS (publish to loggbok/<table>/_cmd/<NAME>, or loggbok/_all/_cmd/<NAME>) ---
     SET_FREQ    <0..2>      frequency [Hz]            -> Frequency  (HA number, step 0.01)
@@ -38,7 +38,7 @@
     SET_WAVE    <0..3>      Sine/Square/Triangle/Saw  -> Waveform   (HA select; name or index)
     SET_ENABLE  <0|1>       output on/off             -> Enabled    (HA switch)
     SET_LABEL   <text>      free-text device label    -> DeviceLabel (HA text, max 32)
-    STATUS                  push status to status_ondemand channel  (HA button)
+    STATUS                  push status to StatusOnDemand channel   (HA button)
 
   Loggbok CLI (log fast enough to resolve the wave, e.g. 20 ms):
     lgbk log --port COM24 --table wave --signals * --interval 20 \
@@ -60,20 +60,9 @@ float Offset = 0.0;
 byte Waveform = 0; // 0=Sine, 1=Square, 2=Triangle, 3=Sawtooth
 bool Enabled = true;
 char DeviceLabel[33] = "wave-gen"; // free-text label set via SET_LABEL
-// Human-readable shape names for the WaveName string signal (-> HA text sensor).
-// Single source for the sensor text; keep in sync with the SET_WAVE options CSV in setup().
+// Human-readable shape names for the WaveName signal; keep in sync with the
+// SET_WAVE options CSV in setup().
 const char *const WAVE_NAMES[] = {"Sine", "Square", "Triangle", "Sawtooth"};
-
-//---COMMAND HANDLERS
-void onSetFreq(const char *command, const char *const *params, byte paramCount);
-void onSetAmp(const char *command, const char *const *params, byte paramCount);
-void onSetOffset(const char *command, const char *const *params, byte paramCount);
-void onSetWave(const char *command, const char *const *params, byte paramCount);
-void onSetEnable(const char *command, const char *const *params, byte paramCount);
-void onSetLabel(const char *command, const char *const *params, byte paramCount);
-void onStatus(const char *command, const char *const *params, byte paramCount);
-void WriteStatus(const char *channel);
-void SendStatusMessage();
 
 //---GENERATOR STATE
 double phase = 0.0; // normalized phase 0..1
@@ -84,7 +73,7 @@ void setup()
   Serial.begin(115200);
   BlaeckSerial.begin(&Serial, 8);
 
-  BlaeckSerial.DeviceName = "Waveform Generator Demo Serial Discovery";
+  BlaeckSerial.DeviceName = "Waveform Generator Demo";
   BlaeckSerial.DeviceHWVersion = "Arduino Mega 2560 Rev3";
   BlaeckSerial.DeviceFWVersion = ExampleVersion;
 
@@ -102,15 +91,19 @@ void setup()
   BlaeckSerial.onNumberCommand("SET_OFFSET", onSetOffset, F("Offset"), -100.0f, 100.0f, 0.1f);
   BlaeckSerial.onSelectCommand("SET_WAVE", onSetWave, F("Waveform"), F("Sine,Square,Triangle,Sawtooth"));
   BlaeckSerial.onSwitchCommand("SET_ENABLE", onSetEnable, F("Enabled"));
-  // HA text: closed-loop, mirrored to the "DeviceLabel" string signal. The host
-  // percent-encodes the value; the device decodes it and enforces the 32-byte max.
+  // Host percent-encodes the value; the device decodes it and enforces the 32-byte max.
   BlaeckSerial.onTextCommand("SET_LABEL", onSetLabel, F("DeviceLabel"), 32);
   BlaeckSerial.onButtonCommand("STATUS", onStatus);
 
-  // Message channels are declared up-front so the host can announce one text
-  // sensor per channel before the first line is written.
-  BlaeckSerial.addMessageChannel("status", F("mdi:pulse"));
-  BlaeckSerial.addMessageChannel("status_ondemand", F("mdi:message-text"));
+  // Declared up-front so the host can announce one text sensor per channel before
+  // the first line is written.
+  BlaeckSerial.addMessageChannel("Status", F("mdi:pulse"));
+  BlaeckSerial.addMessageChannel("StatusOnDemand", F("mdi:message-text"));
+
+  // Each event channel declares up-front the closed set of events it can report.
+  BlaeckSerial.addEventChannel("Output", F("mdi:sine-wave"));
+  BlaeckSerial.addEventType("Output", F("idle_warning"));
+  BlaeckSerial.addEventType("Output", F("resumed"));
 
   lastMicros = micros();
 }
@@ -120,42 +113,58 @@ void loop()
   UpdateWaveform();
   BlaeckSerial.tick();
   SendStatusMessage();
+  CheckOutputIdle();
 }
 
-// Demonstrates the 0x90 message frame: a fire-and-forget, named free-text status/log channel.
-// Unlike signals, messages are NOT logged/stored by the host - a host such as Loggbok surfaces
-// each channel as its own Home Assistant text sensor.
-//
-// The same status line is produced two ways, both via WriteStatus(), on SEPARATE channels so
-// each drives its own Home Assistant sensor:
-//   - SendStatusMessage(): a periodic 10 s heartbeat on "status"          ("Status (live)")
-//   - onStatus():          the STATUS button handler on "status_ondemand" ("Get Status")
-void WriteStatus(const char *channel)
+//Warns once per idle stretch (>=5s -> "idle_warning"), and only reports "resumed" if a warning was raised.
+void CheckOutputIdle()
 {
-  const char *shape;
-  switch (Waveform)
+  static unsigned long idleSinceMs = 0;
+  static bool warned = false;
+
+  if (!Enabled)
   {
-  case 1: shape = "Square"; break;
-  case 2: shape = "Triangle"; break;
-  case 3: shape = "Sawtooth"; break;
-  default: shape = "Sine"; break;
+    if (idleSinceMs == 0)
+      idleSinceMs = millis();
+
+    if (!warned && (millis() - idleSinceMs) >= 5000UL)
+    {
+      BlaeckSerial.writeEvent("Output", F("idle_warning"));
+      warned = true;
+    }
+    return;
   }
 
-  // Format frequency to 2 decimals without snprintf's %f: AVR (e.g. Mega 2560) does not link
-  // float printf by default, so %f would print blank. Frequency is always >= 0 here.
+  if (warned)
+    BlaeckSerial.writeEvent("Output", F("resumed"));
+
+  idleSinceMs = 0;
+  warned = false;
+}
+
+// The same status line on two channels, each driving its own Home Assistant sensor:
+// a 10 s heartbeat on "Status", and the STATUS button on "StatusOnDemand".
+void WriteStatus(const char *channel)
+{
+  // Format frequency to 2 decimals without snprintf's %f: AVR does not link float
+  // printf by default, so %f would print blank. Frequency is always >= 0 here.
   int hz100 = (int)(Frequency * 100.0 + 0.5);
   char text[80];
-  snprintf(text, sizeof(text), "%s %s @ %d.%02d Hz", Enabled ? "running" : "stopped", shape, hz100 / 100, hz100 % 100);
+  snprintf(text, sizeof(text), "%s %s @ %d.%02d Hz", Enabled ? "running" : "stopped", WAVE_NAMES[Waveform], hz100 / 100, hz100 % 100);
   BlaeckSerial.writeMessage(channel, text);
 }
 
 void SendStatusMessage()
 {
   static unsigned long lastStatusMs = 0;
-  if (millis() - lastStatusMs < 10000UL)
+  static bool first = true;
+
+  if (!first && millis() - lastStatusMs < 10000UL)
     return;
+
+  first = false;
   lastStatusMs = millis();
-  WriteStatus("status");
+  WriteStatus("Status");
 }
 
 void UpdateWaveform()
@@ -258,7 +267,6 @@ void onSetLabel(const char *command, const char *const *params, byte paramCount)
 
 void onStatus(const char *command, const char *const *params, byte paramCount)
 {
-  // On-demand: push a fresh status line to the dedicated "status_ondemand" channel so its HA
-  // sensor updates only on button press (independent of the 10 s "status" heartbeat).
-  WriteStatus("status_ondemand");
+  // Updates only on button press, independent of the 10 s "Status" heartbeat.
+  WriteStatus("StatusOnDemand");
 }
