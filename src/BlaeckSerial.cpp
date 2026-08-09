@@ -780,6 +780,81 @@ bool BlaeckSerial::onTextCommand(const char *command, BlaeckCommandHandler handl
   return ok;
 }
 
+byte BlaeckSerial::_flashCsvOptionCount(const __FlashStringHelper *csv)
+{
+  if (csv == nullptr)
+    return 0;
+  PGM_P p = reinterpret_cast<PGM_P>(csv);
+  byte count = 1;
+  bool any = false;
+  byte c;
+  while ((c = pgm_read_byte(p++)) != 0)
+  {
+    any = true;
+    if (c == ',')
+      count++;
+  }
+  return any ? count : 0;
+}
+
+bool BlaeckSerial::getSelectOption(const char *command, byte index, char *out, byte outSize) const
+{
+  if (out == nullptr || outSize == 0)
+    return false;
+  out[0] = '\0';
+  if (command == nullptr)
+    return false;
+
+#if !BLAECK_ENABLE_COMMAND_META
+  // No metadata is stored, so there is no option list to read back. Reported as a
+  // failure with an empty result, the same as an unknown command.
+  (void)index;
+  return false;
+#else
+  for (byte i = 0; i < MAX_COMMAND_HANDLERS; i++)
+  {
+    const CommandHandlerEntry &e = _commandHandlers[i];
+    if (!e.inUse || e.kind != BLAECK_CMD_SELECT || e.options == nullptr)
+      continue;
+    if (strcmp(e.command, command) != 0)
+      continue;
+
+    // Walk past `index` commas, then copy up to the next one. Same field-walk the 0x80
+    // catalog does over an event type list, on the options CSV instead.
+    PGM_P p = reinterpret_cast<PGM_P>(e.options);
+    byte seen = 0;
+    unsigned int at = 0;
+    while (seen < index)
+    {
+      byte c = pgm_read_byte(p + at);
+      if (c == 0)
+        return false; // fewer options than the index asked for
+      if (c == ',')
+        seen++;
+      at++;
+    }
+
+    byte len = 0;
+    byte c;
+    while ((c = pgm_read_byte(p + at + len)) != 0 && c != ',')
+    {
+      // Truncating would produce a name no host can match against the declared
+      // options, so report failure rather than hand back half of one.
+      if ((unsigned int)len + 1 >= outSize)
+      {
+        out[0] = '\0';
+        return false;
+      }
+      out[len] = (char)c;
+      len++;
+    }
+    out[len] = '\0';
+    return len > 0;
+  }
+  return false;
+#endif
+}
+
 #if BLAECK_ENABLE_COMMAND_META
 void BlaeckSerial::_annotateCommand(const char *command, uint8_t kind,
                                     const __FlashStringHelper *stateSignal,
@@ -805,23 +880,6 @@ void BlaeckSerial::_annotateCommand(const char *command, uint8_t kind,
       return;
     }
   }
-}
-
-byte BlaeckSerial::_flashCsvOptionCount(const __FlashStringHelper *csv)
-{
-  if (csv == nullptr)
-    return 0;
-  PGM_P p = reinterpret_cast<PGM_P>(csv);
-  byte count = 1;
-  bool any = false;
-  byte c;
-  while ((c = pgm_read_byte(p++)) != 0)
-  {
-    any = true;
-    if (c == ',')
-      count++;
-  }
-  return any ? count : 0;
 }
 
 long BlaeckSerial::_flashCsvIndexOf(const __FlashStringHelper *csv, const char *value)

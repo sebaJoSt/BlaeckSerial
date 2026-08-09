@@ -649,6 +649,13 @@ public:
                        BlaeckStateSource stateSource = BLAECK_STATE_SIGNAL);
   bool onButtonCommand(const char *command, BlaeckCommandHandler handler,
                        BlaeckEntityCategory category = BLAECK_CAT_NONE);
+  // Copies option `index` of a select command's declared list into `out`, so a sketch can
+  // render the option it just selected without keeping a second copy of the names. The
+  // list already lives in flash; this is the only way to read it back.
+  // Returns false and leaves `out` empty if the command is not a declared select, the
+  // index is past the end, or the option would not fit - a truncated name is no use,
+  // since a host matches state against the declared options exactly.
+  bool getSelectOption(const char *command, byte index, char *out, byte outSize) const;
   // HA text entity: the host sends the value percent-encoded (so commas and other
   // delimiters survive the frame); the device percent-decodes it in place before
   // the handler runs, so the handler receives the raw UTF-8 text. maxLength is the
@@ -722,9 +729,12 @@ private:
                         uint8_t stateSource);
   byte _validateTypedCommand(byte handlerIndex);
   static void _percentDecodeInPlace(char *s);
-  static byte _flashCsvOptionCount(const __FlashStringHelper *csv);
   static long _flashCsvIndexOf(const __FlashStringHelper *csv, const char *value);
 #endif
+  // Number of comma-separated fields in a flash CSV. Deliberately outside the
+  // command-metadata guard: it counts a select command's options and an event
+  // channel's type list, and those features are enabled independently.
+  static byte _flashCsvOptionCount(const __FlashStringHelper *csv);
 #if BLAECK_ENABLE_MESSAGES
   void writeMessageChannelsFrame(unsigned long MessageID);
   // Index of a declared channel, or -1 when the name was never declared.
