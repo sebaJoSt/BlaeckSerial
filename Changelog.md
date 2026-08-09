@@ -25,8 +25,9 @@ what a sketch declares to make that work.
   together with what it accepts — range, step, unit, options, text length — so the
   device describes its own controls. Values outside the declared range, bad select
   indices and over-long text are rejected before the handler runs, and every dispatch
-  is acknowledged with an accept/reject status and reason code. `stateSignal` names what mirrors the command's value: a signal, or a
-  message channel with a trailing `BLAECK_STATE_MESSAGE`. A trailing
+  is acknowledged with an accept/reject status and reason code. `stateSignal` names
+  what mirrors the command's value: a signal, or a message channel with a trailing
+  `BLAECK_STATE_MESSAGE`. A trailing
   `BLAECK_CAT_CONFIG` or `BLAECK_CAT_DIAGNOSTIC` moves the entity off Home
   Assistant's auto-generated dashboards. Requires `BLAECK_ENABLE_COMMAND_META`.
 - **Message channels (`0x90` / `0x95`).** `addMessageChannel(channelName[, icon[,
@@ -46,8 +47,8 @@ what a sketch declares to make that work.
   fixed at compile time — use a message channel for anything with a runtime value.
   Events on undeclared channels or types are dropped. Set `BLAECK_ENABLE_EVENTS` to
   `0` to compile the feature out; size the tables with
-  `BLAECK_EVENT_MAX_CHANNELS_DEFAULT`,
-  `BLAECK_EVENT_MAX_NAME_CHARS_DEFAULT` and `BLAECK_EVENT_MAX_TYPES_DEFAULT` (types
+  `BLAECK_EVENT_MAX_CHANNELS_DEFAULT`, `BLAECK_EVENT_MAX_NAME_CHARS_DEFAULT` and
+  `BLAECK_EVENT_MAX_TYPES_DEFAULT` (types
   share one pool across channels, so no channel needs sizing for the worst case).
 - **String signals (`addSignal(name, char *value)`).** New `Blaeck_string` data type
   for textual values (labels, states, small JSON). The value lives in a user-owned
