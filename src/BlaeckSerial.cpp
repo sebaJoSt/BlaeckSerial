@@ -223,7 +223,7 @@ void BlaeckSerial::addSignal(String signalName, double *value)
   _schemaHash = _computeSchemaHash();
 }
 
-void BlaeckSerial::addSignal(String signalName, char *value)
+void BlaeckSerial::addSignal(String signalName, const char *value)
 {
   if (Signals == nullptr || static_cast<unsigned int>(_signalIndex) >= _signalCapacity)
   {
@@ -233,7 +233,8 @@ void BlaeckSerial::addSignal(String signalName, char *value)
   }
   setSignalName(_signalIndex, signalName);
   Signals[_signalIndex].DataType = Blaeck_string;
-  Signals[_signalIndex].Address = value;
+  // Address is void* for every datatype; a string address is only ever read from.
+  Signals[_signalIndex].Address = const_cast<char *>(value);
   _signalIndex++;
   SignalCount = _signalIndex;
   _schemaHash = _computeSchemaHash();
@@ -2468,15 +2469,15 @@ void BlaeckSerial::write(int signalIndex, double value, unsigned long messageID,
   }
 }
 
-void BlaeckSerial::write(String signalName, char *value)
+void BlaeckSerial::write(String signalName, const char *value)
 {
   this->write(signalName, value, 1);
 }
-void BlaeckSerial::write(String signalName, char *value, unsigned long messageID)
+void BlaeckSerial::write(String signalName, const char *value, unsigned long messageID)
 {
   this->write(signalName, value, messageID, getTimeStamp());
 }
-void BlaeckSerial::write(String signalName, char *value, unsigned long messageID, unsigned long long timestamp)
+void BlaeckSerial::write(String signalName, const char *value, unsigned long messageID, unsigned long long timestamp)
 {
   int index = findSignalIndex(signalName);
   if (index >= 0)
@@ -2484,22 +2485,22 @@ void BlaeckSerial::write(String signalName, char *value, unsigned long messageID
     this->write(index, value, messageID, timestamp);
   }
 }
-void BlaeckSerial::write(int signalIndex, char *value)
+void BlaeckSerial::write(int signalIndex, const char *value)
 {
   this->write(signalIndex, value, 1);
 }
-void BlaeckSerial::write(int signalIndex, char *value, unsigned long messageID)
+void BlaeckSerial::write(int signalIndex, const char *value, unsigned long messageID)
 {
   this->write(signalIndex, value, messageID, getTimeStamp());
 }
-void BlaeckSerial::write(int signalIndex, char *value, unsigned long messageID, unsigned long long timestamp)
+void BlaeckSerial::write(int signalIndex, const char *value, unsigned long messageID, unsigned long long timestamp)
 {
   if (signalIndex >= 0 && signalIndex < _signalIndex)
   {
     if (Signals[signalIndex].DataType == Blaeck_string)
     {
-      // String values live in a user-owned buffer; repoint Address like addSignal(char*).
-      Signals[signalIndex].Address = value;
+      // String values live in a user-owned buffer; repoint Address like addSignal(const char*).
+      Signals[signalIndex].Address = const_cast<char *>(value);
       this->writeDataFrame(messageID, signalIndex, signalIndex, false, timestamp);
     }
   }

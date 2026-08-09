@@ -88,7 +88,7 @@ void setup()
   // instead, declared below.
   BlaeckSerial.addSignal("Waveform", &Waveform);
   BlaeckSerial.addSignal("Enabled", &Enabled);
-  BlaeckSerial.addSignal("WaveName", (char *)WAVE_NAMES[Waveform]);
+  BlaeckSerial.addSignal("WaveName", WAVE_NAMES[Waveform]);
   BlaeckSerial.addSignal("DeviceLabel", DeviceLabel);
 
   BlaeckSerial.onNumberCommand("SET_FREQ", onSetFreq, F("Frequency"), 0.0f, 2.0f, 0.01f, F("Hz"));
@@ -292,7 +292,7 @@ void onSetWave(const char *command, const char *const *params, byte paramCount)
   {
     Waveform = (byte)atoi(params[0]);
     BlaeckSerial.write("Waveform", Waveform);
-    BlaeckSerial.write("WaveName", (char *)WAVE_NAMES[Waveform]);
+    BlaeckSerial.write("WaveName", WAVE_NAMES[Waveform]);
   }
 }
 
