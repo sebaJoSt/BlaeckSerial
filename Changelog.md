@@ -6,18 +6,18 @@ All notable changes to this project will be documented in this file.
 
 This release makes a device self-describing. A board declares its commands, message
 channels and event channels, and a host (e.g. Loggbok) turns those catalogs into Home
-Assistant MQTT auto-discovery — a control per command, a sensor per channel, an entity
-per event — without being configured for that board in advance. The features below are
-what a sketch declares to make that work.
+Assistant MQTT auto-discovery — a control per command, a sensor per signal, an entity
+per event — without being configured for that board in advance. 
 
 ### Breaking
-- **Client compatibility:** string signals introduce a new signal value type
-  (`0xA`) in the binary data frame. Clients must support this variable-length
-  type to decode any frame containing a string signal. Depending on their
-  implementation, clients without support may lose sync, drop data, or fail on
-  such frames. Devices using only numeric signals remain compatible.
-- **I2C master/slave removal**, detailed under Removed below. Together with the
-  new client requirement above, this is why 7.0.0 is a major release.
+-- **I2C master/slave support removed.** All I2C master/slave functionality
+  has been removed: `beginMaster(...)` / `beginSlave(...)`, the `MasterSlaveConfig`
+  modes, slave discovery/scanning, per-signal `prefixSlaveID`, the `@<slaveID>:`
+  command-routing prefix, master-side command-catalog aggregation, and the
+  `<Wire.h>` dependency. BlaeckSerial is now single-board only.
+  The on-the-wire frame layout is unchanged — the per-record master/slave-config
+  and slave-ID bytes are still emitted (always `0`), so existing Blaeck hosts
+  (e.g. Loggbok) need no changes.
 
 ### Added
 - **Typed commands (`0xA0` / `0xA5`).** `onNumberCommand`, `onSwitchCommand`,
@@ -25,31 +25,28 @@ what a sketch declares to make that work.
   together with what it accepts — range, step, unit, options, text length — so the
   device describes its own controls. Values outside the declared range, bad select
   indices and over-long text are rejected before the handler runs, and every dispatch
-  is acknowledged with an accept/reject status and reason code. `stateSignal` names
-  what mirrors the command's value: a signal, or a message channel with a trailing
-  `BLAECK_STATE_MESSAGE`. A trailing
-  `BLAECK_CAT_CONFIG` or `BLAECK_CAT_DIAGNOSTIC` moves the entity off Home
-  Assistant's auto-generated dashboards. Requires `BLAECK_ENABLE_COMMAND_META`.
+  is acknowledged with an accept/reject status and reason code. `stateSignal` names 
+  what mirrors the command's value: a signal, or a message channel. 
+  Requires `BLAECK_ENABLE_COMMAND_META`.
 - **Message channels (`0x90` / `0x95`).** `addMessageChannel(channelName[, icon[,
   diagnostic[, getStateText]]])` declares a free-text status/log channel and
   `writeMessage(channelName, text[, messageID])` sends a line on it. Channels are
   declared up-front; messages on undeclared channels are dropped, and a message is
   never stored as signal data. The optional `getStateText` makes a channel report a
   current value, which the library fetches whenever a host polls the catalog — so a
-  control backed by that channel is right without anything having been pushed. Set
-  `BLAECK_ENABLE_MESSAGES` to `0` to compile the feature out (the API remains as
-  no-ops); size the tables with `BLAECK_MESSAGE_MAX_CHANNELS_DEFAULT` and
-  `BLAECK_MESSAGE_MAX_NAME_CHARS_DEFAULT`.
+  control backed by that channel is right without anything having been pushed. Size the 
+  tables with `BLAECK_MESSAGE_MAX_CHANNELS_DEFAULT` and `BLAECK_MESSAGE_MAX_NAME_CHARS_DEFAULT`.
+  Requires `BLAECK_ENABLE_MESSAGES`.
 - **Event channels (`0x80` / `0x85`).** `addEventChannel(channelName[, icon[,
   diagnostic]])` declares a channel and `addEventType(channelName, F("..."))` its
   closed set of events, call order defining each index; `writeEvent(channelName,
   F("..."))` reports one occurrence. An event carries no text, so its wording is
   fixed at compile time — use a message channel for anything with a runtime value.
-  Events on undeclared channels or types are dropped. Set `BLAECK_ENABLE_EVENTS` to
-  `0` to compile the feature out; size the tables with
-  `BLAECK_EVENT_MAX_CHANNELS_DEFAULT`, `BLAECK_EVENT_MAX_NAME_CHARS_DEFAULT` and
-  `BLAECK_EVENT_MAX_TYPES_DEFAULT` (types
-  share one pool across channels, so no channel needs sizing for the worst case).
+  Events on undeclared channels or types are dropped. Size the tables with
+  `BLAECK_EVENT_MAX_CHANNELS_DEFAULT`, `BLAECK_EVENT_MAX_NAME_CHARS_DEFAULT` and 
+  `BLAECK_EVENT_MAX_TYPES_DEFAULT` (types share one pool across channels, 
+  so no channel needs sizing for the worst case).
+  Requires `BLAECK_ENABLE_EVENTS`.
 - **String signals (`addSignal(name, char *value)`).** New `Blaeck_string` data type
   for textual values (labels, states, small JSON). The value lives in a user-owned
   buffer read live on each transmit: `write(name/index, char *value)` repoints the
@@ -76,13 +73,7 @@ what a sketch declares to make that work.
   is never found under the Arduino IDE or arduino-cli, because the sketch folder is
   not on the compiler's include path. Anyone who set overrides that way on 6.x was
   silently running the built-in defaults. PlatformIO `build_flags` always worked.
-  README.md now documents three routes that do work (arduino-cli
-  `--build-property`, a config inside the library's `src/`, or
-  `platform.local.txt`), and warns that an override must reach every translation
-  unit — one seen by the sketch but not by `BlaeckSerial.cpp` gives
-  `class BlaeckSerial` two layouts (an ODR violation). This is an Arduino
-  build-system limitation: see arduino/arduino-builder#15 and
-  arduino/arduino-cli#501.
+  README.md now documents three routes that do work. 
 
 ### Removed
 - **`setCommandCallback(...)` (breaking).** Deprecated since 6.0.0 and warned about
@@ -91,14 +82,7 @@ what a sketch declares to make that work.
   from `(char *command, int *parameter, char *string01)` to
   `(const char *command, const char *const *params, byte paramCount)`. Frees roughly
   167 bytes of flash per sketch on AVR.
-- **I2C master/slave support (breaking).** All I2C master/slave functionality
-  has been removed: `beginMaster(...)` / `beginSlave(...)`, the `MasterSlaveConfig`
-  modes, slave discovery/scanning, per-signal `prefixSlaveID`, the `@<slaveID>:`
-  command-routing prefix, master-side command-catalog aggregation, and the
-  `<Wire.h>` dependency. BlaeckSerial is now single-board only.
-  The on-the-wire frame layout is unchanged — the per-record master/slave-config
-  and slave-ID bytes are still emitted (always `0`), so existing Blaeck hosts
-  (e.g. Loggbok) need no changes.
+
 
 ## [6.0.1] - 2026-04-27
 
