@@ -297,8 +297,14 @@ void onSetWave(const char *command, const char *const *params, byte paramCount)
 
 void onSetEnable(const char *command, const char *const *params, byte paramCount)
 {
-  Enabled = paramCount >= 1 && atoi(params[0]) == 1;
-  BlaeckSerial.write("Enabled", Enabled);
+  // Guard first, then assign: folding the check into the assignment would make a
+  // command that supplied no value read as 0 and switch the output off.
+  // The library has already rejected anything that is not 0 or 1.
+  if (paramCount >= 1 && params[0][0] != '\0')
+  {
+    Enabled = atoi(params[0]) == 1;
+    BlaeckSerial.write("Enabled", Enabled);
+  }
 }
 
 void onSetLabel(const char *command, const char *const *params, byte paramCount)
