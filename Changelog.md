@@ -55,8 +55,16 @@ All notable changes to this project will be documented in this file.
   (the API remains as no-ops); the table sizes are tunable via
   `BLAECK_EVENT_MAX_CHANNELS_DEFAULT`, `BLAECK_EVENT_MAX_NAME_CHARS_DEFAULT` and
   `BLAECK_EVENT_MAX_TYPES_DEFAULT`.
-- **Disabled catalogs now answer with an empty list.** With
-  `BLAECK_ENABLE_EVENTS`, `BLAECK_ENABLE_MESSAGES` or `BLAECK_ENABLE_COMMAND_META`
+- **Home Assistant entity category on commands.** The typed command helpers take
+  an optional trailing `BLAECK_CAT_CONFIG` or `BLAECK_CAT_DIAGNOSTIC`, carried in
+  bits 5-6 of the `0xA0` command flags. A host maps it to Home Assistant's
+  `entity_category`, which moves the entity off auto-generated dashboards and
+  groups it under *Configuration* or *Diagnostic* on the device page. Use it for
+  controls that set up the board rather than operate it; the default,
+  `BLAECK_CAT_NONE`, leaves the command a primary control. Message and event
+  channels keep their existing `diagnostic` flag: they are read-only, and Home
+  Assistant reserves `config` for entities the user can change.
+- **Disabled catalogs now answer with an empty list.** With  `BLAECK_ENABLE_EVENTS`, `BLAECK_ENABLE_MESSAGES` or `BLAECK_ENABLE_COMMAND_META`
   set to `0`, the matching poll (`BLAECK.WRITE_EVENT_CHANNELS`,
   `BLAECK.WRITE_MESSAGE_CHANNELS`, `BLAECK.WRITE_COMMANDS`) still replies, with a
   frame containing no entries, instead of staying silent. A host gates these polls

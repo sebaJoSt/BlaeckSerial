@@ -275,6 +275,18 @@ enum BlaeckCommandKind
   BLAECK_CMD_TEXT = 5    // HA text     (free text, percent-encoded on the wire)
 };
 
+// Home Assistant entity category for a command's entity (0xA0 CommandFlags bits 5-6).
+// NONE leaves the entity a primary control. CONFIG marks a device setting rather than
+// a primary function; DIAGNOSTIC is meant for read-only entities, so on a command it
+// only fits a button that triggers an identify/self-test mechanism. Both non-NONE
+// values move the entity out of Home Assistant's auto-generated dashboards.
+enum BlaeckEntityCategory
+{
+  BLAECK_CAT_NONE = 0,      // primary control (default)
+  BLAECK_CAT_CONFIG = 1,    // HA entity_category "config"
+  BLAECK_CAT_DIAGNOSTIC = 2 // HA entity_category "diagnostic"
+};
+
 // Acknowledgement reason for the 0xA5 Command Ack frame. Sent back to the
 // serial host after a command is dispatched so a host (e.g. Loggbok) can confirm
 // the command was applied and surface accept/reject feedback.
@@ -569,16 +581,23 @@ public:
   // Number values outside [min,max], bad select indices and non-0/1 switch
   // values are rejected (handler skipped) and reported on DebugRef.
   // step is HA display resolution only; the firmware does not round.
+  // category (optional): Home Assistant entity_category. Leave at BLAECK_CAT_NONE for a
+  // primary control; BLAECK_CAT_CONFIG marks a device setting, which Home Assistant then
+  // keeps off its auto-generated dashboards.
   bool onNumberCommand(const char *command, BlaeckCommandHandler handler,
                        const __FlashStringHelper *stateSignal,
                        float min, float max, float step,
-                       const __FlashStringHelper *unit = nullptr);
+                       const __FlashStringHelper *unit = nullptr,
+                       BlaeckEntityCategory category = BLAECK_CAT_NONE);
   bool onSwitchCommand(const char *command, BlaeckCommandHandler handler,
-                       const __FlashStringHelper *stateSignal);
+                       const __FlashStringHelper *stateSignal,
+                       BlaeckEntityCategory category = BLAECK_CAT_NONE);
   bool onSelectCommand(const char *command, BlaeckCommandHandler handler,
                        const __FlashStringHelper *stateSignal,
-                       const __FlashStringHelper *optionsCsv);
-  bool onButtonCommand(const char *command, BlaeckCommandHandler handler);
+                       const __FlashStringHelper *optionsCsv,
+                       BlaeckEntityCategory category = BLAECK_CAT_NONE);
+  bool onButtonCommand(const char *command, BlaeckCommandHandler handler,
+                       BlaeckEntityCategory category = BLAECK_CAT_NONE);
   // HA text entity: the host sends the value percent-encoded (so commas and other
   // delimiters survive the frame); the device percent-decodes it in place before
   // the handler runs, so the handler receives the raw UTF-8 text. maxLength is the
@@ -586,7 +605,8 @@ public:
   // is rejected (BLAECK_ACK_TOO_LONG).
   bool onTextCommand(const char *command, BlaeckCommandHandler handler,
                      const __FlashStringHelper *stateSignal = nullptr,
-                     unsigned int maxLength = 255);
+                     unsigned int maxLength = 255,
+                     BlaeckEntityCategory category = BLAECK_CAT_NONE);
 
   // ----- Before data write callback  -----
   // Called just before signal data is sent, in normal loop context
@@ -645,7 +665,8 @@ private:
                         const __FlashStringHelper *stateSignal,
                         float mn, float mx, float st,
                         const __FlashStringHelper *unit,
-                        const __FlashStringHelper *options);
+                        const __FlashStringHelper *options,
+                        uint8_t category);
   byte _validateTypedCommand(byte handlerIndex);
   static void _percentDecodeInPlace(char *s);
   static byte _flashCsvOptionCount(const __FlashStringHelper *csv);
@@ -834,6 +855,7 @@ private:
     const __FlashStringHelper *unit = nullptr;
     const __FlashStringHelper *options = nullptr;
     const __FlashStringHelper *stateSignal = nullptr;
+    uint8_t category = BLAECK_CAT_NONE;
 #endif
   };
   CommandHandlerEntry _commandHandlers[MAX_COMMAND_HANDLERS];

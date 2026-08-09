@@ -697,67 +697,75 @@ void BlaeckSerial::clearAllCommandHandlers()
 bool BlaeckSerial::onNumberCommand(const char *command, BlaeckCommandHandler handler,
                                    const __FlashStringHelper *stateSignal,
                                    float min, float max, float step,
-                                   const __FlashStringHelper *unit)
+                                   const __FlashStringHelper *unit,
+                                   BlaeckEntityCategory category)
 {
   bool ok = onCommand(command, handler);
 #if BLAECK_ENABLE_COMMAND_META
   if (ok)
-    _annotateCommand(command, BLAECK_CMD_NUMBER, stateSignal, min, max, step, unit, nullptr);
+    _annotateCommand(command, BLAECK_CMD_NUMBER, stateSignal, min, max, step, unit, nullptr, (uint8_t)category);
 #else
-  (void)stateSignal; (void)min; (void)max; (void)step; (void)unit;
+  (void)stateSignal; (void)min; (void)max; (void)step; (void)unit; (void)category;
 #endif
   return ok;
 }
 
 bool BlaeckSerial::onSwitchCommand(const char *command, BlaeckCommandHandler handler,
-                                   const __FlashStringHelper *stateSignal)
+                                   const __FlashStringHelper *stateSignal,
+                                   BlaeckEntityCategory category)
 {
   bool ok = onCommand(command, handler);
 #if BLAECK_ENABLE_COMMAND_META
   if (ok)
-    _annotateCommand(command, BLAECK_CMD_SWITCH, stateSignal, 0.0f, 0.0f, 0.0f, nullptr, nullptr);
+    _annotateCommand(command, BLAECK_CMD_SWITCH, stateSignal, 0.0f, 0.0f, 0.0f, nullptr, nullptr, (uint8_t)category);
 #else
-  (void)stateSignal;
+  (void)stateSignal; (void)category;
 #endif
   return ok;
 }
 
 bool BlaeckSerial::onSelectCommand(const char *command, BlaeckCommandHandler handler,
                                    const __FlashStringHelper *stateSignal,
-                                   const __FlashStringHelper *optionsCsv)
+                                   const __FlashStringHelper *optionsCsv,
+                                   BlaeckEntityCategory category)
 {
   bool ok = onCommand(command, handler);
 #if BLAECK_ENABLE_COMMAND_META
   if (ok)
-    _annotateCommand(command, BLAECK_CMD_SELECT, stateSignal, 0.0f, 0.0f, 0.0f, nullptr, optionsCsv);
+    _annotateCommand(command, BLAECK_CMD_SELECT, stateSignal, 0.0f, 0.0f, 0.0f, nullptr, optionsCsv, (uint8_t)category);
 #else
-  (void)stateSignal; (void)optionsCsv;
+  (void)stateSignal; (void)optionsCsv; (void)category;
 #endif
   return ok;
 }
 
-bool BlaeckSerial::onButtonCommand(const char *command, BlaeckCommandHandler handler)
+bool BlaeckSerial::onButtonCommand(const char *command, BlaeckCommandHandler handler,
+                                   BlaeckEntityCategory category)
 {
   bool ok = onCommand(command, handler);
 #if BLAECK_ENABLE_COMMAND_META
   if (ok)
-    _annotateCommand(command, BLAECK_CMD_BUTTON, nullptr, 0.0f, 0.0f, 0.0f, nullptr, nullptr);
+    _annotateCommand(command, BLAECK_CMD_BUTTON, nullptr, 0.0f, 0.0f, 0.0f, nullptr, nullptr, (uint8_t)category);
+#else
+  (void)category;
 #endif
   return ok;
 }
 
 bool BlaeckSerial::onTextCommand(const char *command, BlaeckCommandHandler handler,
                                  const __FlashStringHelper *stateSignal,
-                                 unsigned int maxLength)
+                                 unsigned int maxLength,
+                                 BlaeckEntityCategory category)
 {
   bool ok = onCommand(command, handler);
 #if BLAECK_ENABLE_COMMAND_META
   if (ok)
     // maxLength is stored in meta_max (reused as the text length limit).
-    _annotateCommand(command, BLAECK_CMD_TEXT, stateSignal, 0.0f, (float)maxLength, 0.0f, nullptr, nullptr);
+    _annotateCommand(command, BLAECK_CMD_TEXT, stateSignal, 0.0f, (float)maxLength, 0.0f, nullptr, nullptr, (uint8_t)category);
 #else
   (void)stateSignal;
   (void)maxLength;
+  (void)category;
 #endif
   return ok;
 }
@@ -767,7 +775,8 @@ void BlaeckSerial::_annotateCommand(const char *command, uint8_t kind,
                                     const __FlashStringHelper *stateSignal,
                                     float mn, float mx, float st,
                                     const __FlashStringHelper *unit,
-                                    const __FlashStringHelper *options)
+                                    const __FlashStringHelper *options,
+                                    uint8_t category)
 {
   for (byte i = 0; i < MAX_COMMAND_HANDLERS; i++)
   {
@@ -780,6 +789,7 @@ void BlaeckSerial::_annotateCommand(const char *command, uint8_t kind,
       _commandHandlers[i].unit = unit;
       _commandHandlers[i].options = options;
       _commandHandlers[i].stateSignal = stateSignal;
+      _commandHandlers[i].category = category;
       return;
     }
   }
@@ -3162,6 +3172,8 @@ void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
         flags |= 0x08;
       if (e.kind == BLAECK_CMD_TEXT)
         flags |= 0x10;
+      // Entity category in bits 5-6, so it needs no trailing payload.
+      flags |= (byte)((e.category & 0x03) << 5);
 
       _bufByte((byte)0);
       _bufByte((byte)0);
@@ -3223,6 +3235,8 @@ void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
         flags |= 0x08;
       if (e.kind == BLAECK_CMD_TEXT)
         flags |= 0x10;
+      // Entity category in bits 5-6, so it needs no trailing payload.
+      flags |= (byte)((e.category & 0x03) << 5);
 
       StreamRef->write((byte)0);
       StreamRef->write((byte)0);
