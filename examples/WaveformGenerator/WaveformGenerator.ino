@@ -64,8 +64,9 @@ float Offset = 0.0;
 // Offset is the one control whose state travels on a message channel instead of a
 // signal (see setup()), so it needs its value as text. addMessageChannel() borrows
 // this buffer and reads it whenever the channel catalog is built, so it must be a
-// global - never a local.
-char OffsetText[12] = "0.0";
+// global - never a local. Left empty here and filled by FormatOffset() in setup(),
+// so the text is only ever derived from Offset and the two cannot disagree.
+char OffsetText[12];
 byte Waveform = 0; // 0=Sine, 1=Square, 2=Triangle, 3=Sawtooth
 bool Enabled = true;
 char DeviceLabel[33] = "wave-gen"; // free-text label set via SET_LABEL
