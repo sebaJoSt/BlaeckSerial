@@ -9,8 +9,7 @@ All notable changes to this project will be documented in this file.
   (`0xA`) in the binary data frame. Clients must support this variable-length
   type to decode any frame containing a string signal. Depending on their
   implementation, clients without support may lose sync, drop data, or fail on
-  such frames. Devices using only numeric signals remain compatible. This
-  matches BlaeckTCP 7.0.0, which carries the identical requirement.
+  such frames. Devices using only numeric signals remain compatible.
 - **I2C master/slave removal**, detailed under Removed below. Together with the
   new client requirement above, this is why 7.0.0 is a major release.
 
@@ -84,10 +83,10 @@ All notable changes to this project will be documented in this file.
 - **String signals (`addSignal(name, char *value)`).** New signal data type
   `Blaeck_string` (symbol code `0xA`) for reporting textual values (labels,
   states, small JSON, etc.). On the wire the value is length-prefixed: a
-  1-byte length followed by that many UTF-8 bytes. Like a `char*` signal in
-  BlaeckTCP 7.0.0, the value lives in a user-owned buffer and is read live on
-  each transmit. Matching `write(name/index, char *value)` setters repoint the
-  buffer and transmit that one signal; you may also update the buffer in place
+  1-byte length followed by that many UTF-8 bytes. The value lives in a
+  user-owned buffer and is read live on each transmit. Matching
+  `write(name/index, char *value)` setters repoint the buffer and transmit
+  that one signal; you may also update the buffer in place
   and let the periodic transmit pick it up. A string is transmitted up to 255
   bytes.
 - Added the `WaveformGenerator` example, registered with the typed command
@@ -102,10 +101,10 @@ All notable changes to this project will be documented in this file.
   as `WaveformGenerator` to register their full command set without custom
   compile-time overrides.
 - `BlaeckSerial.h` now includes the `CRC.h` umbrella header instead of
-  `<CRC32.h>` and `<CRC16.h>` individually, matching BlaeckTCP, which switched
-  in 6.0.1 after the individual headers collided with core headers on
-  ArduinoCore-mbed. Preventive here — the collision does not reproduce on
-  `arduino:mbed_giga` 4.6.0 with CRC 1.0.4 — and there is no functional change;
+  `<CRC32.h>` and `<CRC16.h>` individually, after the individual headers were
+  seen to collide with core headers on ArduinoCore-mbed. Preventive here — the
+  collision does not reproduce on `arduino:mbed_giga` 4.6.0 with CRC 1.0.4 —
+  and there is no functional change;
   flash is byte-identical, since the unused CRC variants are declarations only.
 
 ### Fixed
