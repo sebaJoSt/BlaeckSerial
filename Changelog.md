@@ -51,9 +51,6 @@ All notable changes to this project will be documented in this file.
   buffer read live on each transmit: `write(name/index, char *value)` repoints the
   buffer and transmits that one signal, or update the buffer in place and let the
   periodic transmit pick it up. Up to 255 bytes.
-- A disabled catalog still answers its poll, with an empty frame rather than silence,
-  so a host gating on library version does not wait out its timeout on every setup.
-  Costs roughly 330 bytes of flash and 28 bytes of SRAM per disabled feature.
 - Added the `WaveformGenerator` example, registered with the typed command
   helpers (`onNumberCommand` / `onSelectCommand` / `onSwitchCommand` /
   `onTextCommand` / `onButtonCommand`) so the device is self-describing for
