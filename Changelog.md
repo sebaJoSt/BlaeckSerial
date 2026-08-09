@@ -5,9 +5,9 @@ All notable changes to this project will be documented in this file.
 ## [7.0.0] - 2026-08-08
 
 This release makes a device self-describing. Alongside the signals it always declared,
-a board now declares its commands, message channels and event channels, so a host
-(e.g. Loggbok) can turn the lot into Home Assistant MQTT auto-discovery — a sensor per
-signal, a control per command, a text sensor per channel, an entity per event —
+a board now declares its commands, plus message and event channels (both new), so a
+host (e.g. Loggbok) can turn the lot into Home Assistant MQTT auto-discovery — a sensor
+per signal, a control per command, a text sensor per channel, an entity per event —
 without being configured for that board in advance.
 
 ### Breaking
