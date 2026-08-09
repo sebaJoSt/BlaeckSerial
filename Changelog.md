@@ -106,6 +106,7 @@ without being configured for that board in advance.
   - `wireSlaveReceive(int numBytes)` now drains potential extra incoming bytes after reading the mode byte, keeping the Wire RX path clean for malformed multi-byte writes.
   - Added explicit signed/unsigned comparison handling in `addSignal(...)` capacity checks to avoid repeated signedness warnings.
 
+
 ## [6.0.0] - 2026-04-21
 
 ### Added
