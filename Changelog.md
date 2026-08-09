@@ -14,60 +14,46 @@ All notable changes to this project will be documented in this file.
   new client requirement above, this is why 7.0.0 is a major release.
 
 ### Added
-- **Command acknowledgement (`0xA5`).** After dispatching an inbound command the
-  device replies with an accept/reject status and reason code, so a host (e.g.
-  Loggbok) can confirm the command was applied.
-- **Message frames (`0x90` / `0x95`).** `addMessageChannel(channelName[, icon[,
-  diagnostic[, getStateText]]])` declares a free-text status/log channel, and
-  `writeMessage(channelName, text[, messageID])` sends a line on it. Channels are
-  declared up-front so a host can announce one Home Assistant text sensor per
-  channel before the first line arrives; messages on undeclared channels are
-  dropped, and a message is never stored as signal data. Set
+- **Typed commands (`0xA0` / `0xA5`).** `onNumberCommand`, `onSwitchCommand`,
+  `onSelectCommand`, `onTextCommand` and `onButtonCommand` register a command
+  together with what it accepts — range, step, unit, options, text length — so the
+  device describes its own controls and a host can build one Home Assistant entity
+  per command without being told about the board in advance. Values outside the
+  declared range, bad select indices and over-long text are rejected before the
+  handler runs, and every dispatch is acknowledged with an accept/reject status and
+  reason code. `stateSignal` names what mirrors the command's value: a signal, or a
+  message channel with a trailing `BLAECK_STATE_MESSAGE`. A trailing
+  `BLAECK_CAT_CONFIG` or `BLAECK_CAT_DIAGNOSTIC` moves the entity off Home
+  Assistant's auto-generated dashboards. Requires `BLAECK_ENABLE_COMMAND_META`.
+- **Message channels (`0x90` / `0x95`).** `addMessageChannel(channelName[, icon[,
+  diagnostic[, getStateText]]])` declares a free-text status/log channel and
+  `writeMessage(channelName, text[, messageID])` sends a line on it, giving a host
+  one Home Assistant text sensor per channel. Channels are declared up-front;
+  messages on undeclared channels are dropped, and a message is never stored as
+  signal data. The optional `getStateText` makes a channel report a current value,
+  which the library fetches whenever a host polls the catalog — so a control backed
+  by that channel is right without anything having been pushed. Set
   `BLAECK_ENABLE_MESSAGES` to `0` to compile the feature out (the API remains as
   no-ops); size the tables with `BLAECK_MESSAGE_MAX_CHANNELS_DEFAULT` and
   `BLAECK_MESSAGE_MAX_NAME_CHARS_DEFAULT`.
-- **Event frames (`0x80` / `0x85`).** `addEventChannel(channelName[, icon[,
-  diagnostic]])` declares an event channel and `addEventType(channelName,
-  F("..."))` gives it the closed set of events it may report, call order defining
-  each index; `writeEvent(channelName, F("..."))` reports one occurrence. An event
-  carries no text, so its wording is fixed at compile time - use a message channel
-  for anything with a runtime value. Events on undeclared channels or types are
-  dropped. Set `BLAECK_ENABLE_EVENTS` to `0` to compile the feature out; size the
-  tables with `BLAECK_EVENT_MAX_CHANNELS_DEFAULT`,
+- **Event channels (`0x80` / `0x85`).** `addEventChannel(channelName[, icon[,
+  diagnostic]])` declares a channel and `addEventType(channelName, F("..."))` its
+  closed set of events, call order defining each index; `writeEvent(channelName,
+  F("..."))` reports one occurrence, giving a host one Home Assistant event entity
+  per channel. An event carries no text, so its wording is fixed at compile time —
+  use a message channel for anything with a runtime value. Events on undeclared
+  channels or types are dropped. Set `BLAECK_ENABLE_EVENTS` to `0` to compile the
+  feature out; size the tables with `BLAECK_EVENT_MAX_CHANNELS_DEFAULT`,
   `BLAECK_EVENT_MAX_NAME_CHARS_DEFAULT` and `BLAECK_EVENT_MAX_TYPES_DEFAULT` (types
   share one pool across channels, so no channel needs sizing for the worst case).
-- **Home Assistant entity category on commands.** The typed command helpers take an
-  optional trailing `BLAECK_CAT_CONFIG` or `BLAECK_CAT_DIAGNOSTIC`, which moves the
-  entity off Home Assistant's auto-generated dashboards. Use it for controls that set
-  up the board rather than operate it; the default `BLAECK_CAT_NONE` leaves the
-  command a primary control. Message and event channels keep their own `diagnostic`
-  flag.
-- **A message channel can be a command's state source.** The typed command helpers
-  take an optional trailing `BLAECK_STATE_MESSAGE`, saying that `stateSignal` names a
-  channel rather than a signal; the default `BLAECK_STATE_SIGNAL` leaves existing
-  declarations unchanged. A message channel is independent of the signal table, so a
-  device that adds no signals can still report what its controls are set to.
-  Paired with it, `addMessageChannel()` takes an optional `getStateText`, a function
-  returning the channel's value as text that the library calls whenever a host polls
-  the catalog - fetched rather than stored, so it cannot go stale. Format and return;
-  it runs while a frame is being built. A host that already holds a catalog will not
-  re-read it, so also call `writeMessage()` in `setup()` to cover a device restart.
-  `WaveformGenerator` shows the pattern.
-- **A disabled catalog answers with an empty list.** With `BLAECK_ENABLE_EVENTS`,
-  `BLAECK_ENABLE_MESSAGES` or `BLAECK_ENABLE_COMMAND_META` set to `0`, the matching
-  poll still replies with an empty frame rather than staying silent, so a host gating
-  on library version does not wait out its timeout on every setup. Costs roughly 330
-  bytes of flash and 28 bytes of SRAM per disabled feature.
-- **Text command (`onTextCommand`).** `onTextCommand(command, handler, stateSignal =
-  nullptr, maxLength = 255)` for a Home Assistant text entity. The value arrives
-  percent-encoded and is decoded before the handler runs; anything longer than
-  `maxLength` is rejected (`0xA5` reason `TOO_LONG`). Requires
-  `BLAECK_ENABLE_COMMAND_META`.
 - **String signals (`addSignal(name, char *value)`).** New `Blaeck_string` data type
   for textual values (labels, states, small JSON). The value lives in a user-owned
   buffer read live on each transmit: `write(name/index, char *value)` repoints the
   buffer and transmits that one signal, or update the buffer in place and let the
   periodic transmit pick it up. Up to 255 bytes.
+- A disabled catalog still answers its poll, with an empty frame rather than silence,
+  so a host gating on library version does not wait out its timeout on every setup.
+  Costs roughly 330 bytes of flash and 28 bytes of SRAM per disabled feature.
 - Added the `WaveformGenerator` example, registered with the typed command
   helpers (`onNumberCommand` / `onSelectCommand` / `onSwitchCommand` /
   `onTextCommand` / `onButtonCommand`) so the device is self-describing for
