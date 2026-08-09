@@ -7,10 +7,10 @@ All notable changes to this project will be documented in this file.
 This release makes a device self-describing. A board declares its commands, message
 channels and event channels, and a host (e.g. Loggbok) turns those catalogs into Home
 Assistant MQTT auto-discovery — a control per command, a sensor per signal, an entity
-per event — without being configured for that board in advance. 
+per event — without being configured for that board in advance.
 
 ### Breaking
--- **I2C master/slave support removed.** All I2C master/slave functionality
+- **I2C master/slave support removed.** All I2C master/slave functionality
   has been removed: `beginMaster(...)` / `beginSlave(...)`, the `MasterSlaveConfig`
   modes, slave discovery/scanning, per-signal `prefixSlaveID`, the `@<slaveID>:`
   command-routing prefix, master-side command-catalog aggregation, and the
@@ -25,8 +25,8 @@ per event — without being configured for that board in advance.
   together with what it accepts — range, step, unit, options, text length — so the
   device describes its own controls. Values outside the declared range, bad select
   indices and over-long text are rejected before the handler runs, and every dispatch
-  is acknowledged with an accept/reject status and reason code. `stateSignal` names 
-  what mirrors the command's value: a signal, or a message channel. 
+  is acknowledged with an accept/reject status and reason code. `stateSignal` names
+  what mirrors the command's value: a signal, or a message channel.
   Requires `BLAECK_ENABLE_COMMAND_META`.
 - **Message channels (`0x90` / `0x95`).** `addMessageChannel(channelName[, icon[,
   diagnostic[, getStateText]]])` declares a free-text status/log channel and
@@ -34,7 +34,7 @@ per event — without being configured for that board in advance.
   declared up-front; messages on undeclared channels are dropped, and a message is
   never stored as signal data. The optional `getStateText` makes a channel report a
   current value, which the library fetches whenever a host polls the catalog — so a
-  control backed by that channel is right without anything having been pushed. Size the 
+  control backed by that channel is right without anything having been pushed. Size the
   tables with `BLAECK_MESSAGE_MAX_CHANNELS_DEFAULT` and `BLAECK_MESSAGE_MAX_NAME_CHARS_DEFAULT`.
   Requires `BLAECK_ENABLE_MESSAGES`.
 - **Event channels (`0x80` / `0x85`).** `addEventChannel(channelName[, icon[,
@@ -43,8 +43,8 @@ per event — without being configured for that board in advance.
   F("..."))` reports one occurrence. An event carries no text, so its wording is
   fixed at compile time — use a message channel for anything with a runtime value.
   Events on undeclared channels or types are dropped. Size the tables with
-  `BLAECK_EVENT_MAX_CHANNELS_DEFAULT`, `BLAECK_EVENT_MAX_NAME_CHARS_DEFAULT` and 
-  `BLAECK_EVENT_MAX_TYPES_DEFAULT` (types share one pool across channels, 
+  `BLAECK_EVENT_MAX_CHANNELS_DEFAULT`, `BLAECK_EVENT_MAX_NAME_CHARS_DEFAULT` and
+  `BLAECK_EVENT_MAX_TYPES_DEFAULT` (types share one pool across channels,
   so no channel needs sizing for the worst case).
   Requires `BLAECK_ENABLE_EVENTS`.
 - **String signals (`addSignal(name, char *value)`).** New `Blaeck_string` data type
@@ -73,7 +73,7 @@ per event — without being configured for that board in advance.
   is never found under the Arduino IDE or arduino-cli, because the sketch folder is
   not on the compiler's include path. Anyone who set overrides that way on 6.x was
   silently running the built-in defaults. PlatformIO `build_flags` always worked.
-  README.md now documents three routes that do work. 
+  README.md now documents three routes that do work.
 
 ### Removed
 - **`setCommandCallback(...)` (breaking).** Deprecated since 6.0.0 and warned about
@@ -308,14 +308,14 @@ This is a major rewrite, not all changes are listed here.
 ## [2.0.1] - 2021-11-15
 
 ### Changed
-- `BLAECKSERIAL_VERSION` fixed 
+- `BLAECKSERIAL_VERSION` fixed
 
 
 ## [2.0.0] - 2021-11-15
 
 ### Changed
-- `<BLAECK.WRITE_SYMBOLS>` responds with 
-`<MasterSlaveConfig><SlaveID><SymbolName><DTYPE>` 
+- `<BLAECK.WRITE_SYMBOLS>` responds with
+`<MasterSlaveConfig><SlaveID><SymbolName><DTYPE>`
 - Slave prefix is now an optional argument (default: true) of addSignal
 - Improved slave handling when no signal is added to a slave
 - Examples updated
