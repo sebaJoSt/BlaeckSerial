@@ -73,16 +73,15 @@ All notable changes to this project will be documented in this file.
   channel. A host that already holds a catalog will not re-read it, so also call
   `writeMessage()` in `setup()` to cover a device restart - `WaveformGenerator` shows
   the pattern.
-- **Disabled catalogs now answer with an empty list.** With `BLAECK_ENABLE_EVENTS`,
-  `BLAECK_ENABLE_MESSAGES` or `BLAECK_ENABLE_COMMAND_META`
-  set to `0`, the matching poll (`BLAECK.WRITE_EVENT_CHANNELS`,
-  `BLAECK.WRITE_MESSAGE_CHANNELS`, `BLAECK.WRITE_COMMANDS`) still replies, with a
-  frame containing no entries, instead of staying silent. A host gates these polls
-  on the library version and cannot see the build flags, so a silent device used
-  to make it wait out its full timeout on every setup. An empty catalog is already
-  the legal "nothing declared" case, so hosts need no special handling. Costs
-  roughly 330 bytes of flash and 28 bytes of SRAM per disabled feature; builds
-  with the features enabled are unaffected.
+- **A disabled catalog answers with an empty list.** With `BLAECK_ENABLE_EVENTS`,
+  `BLAECK_ENABLE_MESSAGES` or `BLAECK_ENABLE_COMMAND_META` set to `0`, the matching
+  poll (`BLAECK.WRITE_EVENT_CHANNELS`, `BLAECK.WRITE_MESSAGE_CHANNELS`,
+  `BLAECK.WRITE_COMMANDS`) still replies, with a frame containing no entries, rather
+  than staying silent. A host gates these polls on the library version and cannot see
+  the build flags, so a silent device would make it wait out its full timeout on every
+  setup. An empty catalog is the legal "nothing declared" case, so hosts need no
+  special handling. Costs roughly 330 bytes of flash and 28 bytes of SRAM per disabled
+  feature; builds with the features enabled are unaffected.
 - **Text command (`onTextCommand`).** New typed command helper
   `onTextCommand(command, handler, stateSignal = nullptr, maxLength = 255)` for
   a Home Assistant text entity. The host sends the value percent-encoded (so
@@ -133,9 +132,6 @@ All notable changes to this project will be documented in this file.
   `BlaeckSerial.cpp` gives `class BlaeckSerial` two layouts (an ODR
   violation). This is an Arduino build-system limitation, not a library one:
   see arduino/arduino-builder#15 (closed) and arduino/arduino-cli#501 (open).
-- `writeMessage()`'s length cap no longer trips `-Wtype-limits` on AVR, where
-  `size_t` is 16-bit and the comparison could never be true. No behaviour
-  change; `strlen` could not exceed the cap there in any case.
 
 ### Removed
 - **`setCommandCallback(...)` (breaking).** Deprecated since 6.0.0 in favour of
