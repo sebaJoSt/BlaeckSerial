@@ -127,9 +127,8 @@ void setup()
   BlaeckSerial.writeMessage("Offset", OffsetState());
 
   // Each event channel declares up-front the closed set of events it can report.
-  BlaeckSerial.addEventChannel("Output", F("mdi:sine-wave"));
-  BlaeckSerial.addEventType("Output", F("idle_warning"));
-  BlaeckSerial.addEventType("Output", F("resumed"));
+  // addEventType() does the same one name at a time, for a list built conditionally.
+  BlaeckSerial.addEventChannel("Output", F("mdi:sine-wave"), false, F("idle_warning,resumed"));
 
   lastMicros = micros();
 }

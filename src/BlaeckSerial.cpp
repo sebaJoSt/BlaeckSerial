@@ -1515,6 +1515,105 @@ bool BlaeckSerial::addEventChannel(const char *channelName, const __FlashStringH
   return false;
 }
 
+void BlaeckSerial::_eventTypeExtent(const EventTypeEntry &e, unsigned int &start, unsigned int &len)
+{
+  start = 0;
+  len = 0;
+  if (e.text == nullptr)
+    return;
+
+  PGM_P p = reinterpret_cast<PGM_P>(e.text);
+  if (e.field == WHOLE_STRING)
+  {
+    while (pgm_read_byte(p + len) != 0)
+      len++;
+    return;
+  }
+
+  // Walk past `field` commas, then measure to the next comma or the terminator.
+  byte seen = 0;
+  unsigned int i = 0;
+  while (seen < e.field)
+  {
+    byte c = pgm_read_byte(p + i);
+    if (c == 0)
+      return; // fewer fields than expected: empty extent
+    if (c == ',')
+      seen++;
+    i++;
+  }
+  start = i;
+  byte c;
+  while ((c = pgm_read_byte(p + start + len)) != 0 && c != ',')
+    len++;
+}
+
+void BlaeckSerial::_bufEventType0(const EventTypeEntry &e)
+{
+  unsigned int start, len;
+  _eventTypeExtent(e, start, len);
+  PGM_P p = reinterpret_cast<PGM_P>(e.text) + start;
+  for (unsigned int i = 0; i < len; i++)
+    _bufByte(pgm_read_byte(p++));
+  _bufByte(0);
+}
+
+bool BlaeckSerial::_eventTypeEquals(const EventTypeEntry &e, const __FlashStringHelper *eventType)
+{
+  if (e.text == nullptr || eventType == nullptr)
+    return false;
+
+  unsigned int start, len;
+  _eventTypeExtent(e, start, len);
+
+  PGM_P a = reinterpret_cast<PGM_P>(e.text) + start;
+  PGM_P b = reinterpret_cast<PGM_P>(eventType);
+  for (unsigned int i = 0; i < len; i++)
+  {
+    byte bc = pgm_read_byte(b + i);
+    if (bc == 0 || pgm_read_byte(a + i) != bc)
+      return false;
+  }
+  // Equal only if eventType ends exactly where the extent does.
+  return pgm_read_byte(b + len) == 0;
+}
+
+bool BlaeckSerial::addEventChannel(const char *channelName, const __FlashStringHelper *icon, bool diagnostic,
+                                   const __FlashStringHelper *eventTypes)
+{
+  if (!this->addEventChannel(channelName, icon, diagnostic))
+    return false;
+
+  if (eventTypes == nullptr)
+    return true;
+
+  int channelIndex = _findEventChannel(channelName);
+  if (channelIndex < 0)
+    return false;
+
+  // One pool entry per field, all pointing at the same flash string. Appended in
+  // order, so a field's position is its wire index - the same rule call order gives
+  // addEventType().
+  byte fieldCount = _flashCsvOptionCount(eventTypes);
+  for (byte f = 0; f < fieldCount; f++)
+  {
+    if (_eventTypeCount >= MAX_EVENT_TYPES)
+    {
+      if (_debugStream != nullptr)
+      {
+        _debugStream->print(F("Event type pool full for channel: "));
+        _debugStream->println(channelName);
+      }
+      break;
+    }
+    _eventTypes[_eventTypeCount].channelIndex = (byte)channelIndex;
+    _eventTypes[_eventTypeCount].text = eventTypes;
+    _eventTypes[_eventTypeCount].field = f;
+    _eventTypeCount++;
+  }
+  return true;
+}
+
 bool BlaeckSerial::addEventType(const char *channelName, const __FlashStringHelper *eventType)
 {
   if (eventType == nullptr)
@@ -1555,6 +1654,7 @@ bool BlaeckSerial::addEventType(const char *channelName, const __FlashStringHelp
 
   _eventTypes[_eventTypeCount].channelIndex = (byte)channelIndex;
   _eventTypes[_eventTypeCount].text = eventType;
+  _eventTypes[_eventTypeCount].field = WHOLE_STRING;
   _eventTypeCount++;
   return true;
 }
@@ -1602,7 +1702,7 @@ int BlaeckSerial::_findEventType(byte channelIndex, const __FlashStringHelper *e
     if (_eventTypes[i].channelIndex != channelIndex)
       continue;
 
-    if (_flashStringEquals(eventType, _eventTypes[i].text))
+    if (_eventTypeEquals(_eventTypes[i], eventType))
       return (int)index;
 
     index++;
@@ -1696,7 +1796,7 @@ void BlaeckSerial::writeEventChannelsFrame(unsigned long msg_id)
       for (byte t = 0; t < _eventTypeCount; t++)
       {
         if (_eventTypes[t].channelIndex == i)
-          _bufFlashStr0(_eventTypes[t].text);
+          _bufEventType0(_eventTypes[t]);
       }
     }
 
@@ -1749,7 +1849,11 @@ void BlaeckSerial::writeEventChannelsFrame(unsigned long msg_id)
       {
         if (_eventTypes[t].channelIndex == i)
         {
-          StreamRef->print(_eventTypes[t].text);
+          unsigned int start, len;
+          _eventTypeExtent(_eventTypes[t], start, len);
+          PGM_P p = reinterpret_cast<PGM_P>(_eventTypes[t].text) + start;
+          for (unsigned int c = 0; c < len; c++)
+            StreamRef->write(pgm_read_byte(p++));
           StreamRef->write((byte)0);
         }
       }
@@ -1833,6 +1937,7 @@ void BlaeckSerial::writeEvent(const char *channelName, const __FlashStringHelper
 bool BlaeckSerial::addEventChannel(const char *) { return false; }
 bool BlaeckSerial::addEventChannel(const char *, const __FlashStringHelper *) { return false; }
 bool BlaeckSerial::addEventChannel(const char *, const __FlashStringHelper *, bool) { return false; }
+bool BlaeckSerial::addEventChannel(const char *, const __FlashStringHelper *, bool, const __FlashStringHelper *) { return false; }
 bool BlaeckSerial::addEventType(const char *, const __FlashStringHelper *) { return false; }
 void BlaeckSerial::clearAllEventChannels() {}
 void BlaeckSerial::writeEventChannels() { this->writeEventChannels(1); }

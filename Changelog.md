@@ -40,9 +40,10 @@ without being configured for that board in advance.
   tables with `BLAECK_MESSAGE_MAX_CHANNELS_DEFAULT` and `BLAECK_MESSAGE_MAX_NAME_CHARS_DEFAULT`.
   Requires `BLAECK_ENABLE_MESSAGES`.
 - **Event channels (`0x80` / `0x85`).** `addEventChannel(channelName[, icon[,
-  diagnostic]])` declares a channel and `addEventType(channelName, F("..."))` its
-  closed set of events, call order defining each index; `writeEvent(channelName,
-  F("..."))` reports one occurrence. An event carries no text, so its wording is
+  diagnostic[, eventTypes]]])` declares a channel and the closed set of events it may
+  report — `F("idle_warning,resumed")`, position defining each index — or
+  `addEventType(channelName, F("..."))` adds them one at a time, for a list built
+  conditionally; `writeEvent(channelName, F("..."))` reports one occurrence. An event carries no text, so its wording is
   fixed at compile time — use a message channel for anything with a runtime value.
   Events on undeclared channels or types are dropped. Size the tables with
   `BLAECK_EVENT_MAX_CHANNELS_DEFAULT`, `BLAECK_EVENT_MAX_NAME_CHARS_DEFAULT` and

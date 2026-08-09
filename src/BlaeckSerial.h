@@ -433,6 +433,15 @@ public:
   bool addEventChannel(const char *channelName, const __FlashStringHelper *icon);
   // `diagnostic` groups the entity under the HA device's diagnostic section.
   bool addEventChannel(const char *channelName, const __FlashStringHelper *icon, bool diagnostic);
+  // Declares the channel and its event types in one call: `eventTypes` is a
+  // comma-separated list, F("started,stopped"), read left to right so position defines
+  // each type's index exactly as call order does with addEventType(). Equivalent to
+  // calling addEventType() once per name, and mixable with it - use this for a set
+  // known at compile time, addEventType() when the list is built conditionally.
+  // Returns false if the channel could not be declared; individual types that do not
+  // fit the pool are dropped and reported on DebugRef, as with addEventType().
+  bool addEventChannel(const char *channelName, const __FlashStringHelper *icon, bool diagnostic,
+                       const __FlashStringHelper *eventTypes);
 
   // Append an event type to a declared channel. Call order defines the index
   // used on the wire: the first type added to a channel is index 0, the next 1.
@@ -930,8 +939,24 @@ private:
   struct EventTypeEntry
   {
     byte channelIndex = 0;
+    // Either a whole flash string, or one comma-separated field of one: addEventType()
+    // stores its literal with field = WHOLE_STRING, while the CSV form of
+    // addEventChannel() appends one entry per field, all sharing the same pointer. The
+    // pool is walked identically either way, so nothing downstream has to know which.
     const __FlashStringHelper *text = nullptr;
+    byte field = WHOLE_STRING;
   };
+  static const byte WHOLE_STRING = 0xFF;
+
+  // Where this entry's name starts in its flash string, and how long it is. The whole
+  // string for a WHOLE_STRING entry, else the field'th comma-separated field.
+  static void _eventTypeExtent(const EventTypeEntry &e, unsigned int &start, unsigned int &len);
+  // Whether the entry's name equals eventType. Both live in flash, so neither strcmp()
+  // nor strcmp_P() applies - the same reason _findEventType reads with pgm_read_byte().
+  static bool _eventTypeEquals(const EventTypeEntry &e, const __FlashStringHelper *eventType);
+  // The entry's name, NUL-terminated, into the frame buffer. Declared here rather than
+  // beside the other _buf helpers because it needs EventTypeEntry, declared just above.
+  void _bufEventType0(const EventTypeEntry &e);
   EventTypeEntry _eventTypes[MAX_EVENT_TYPES];
   byte _eventTypeCount = 0;
 #endif
