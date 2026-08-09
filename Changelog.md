@@ -70,16 +70,20 @@ All notable changes to this project will be documented in this file.
   `BLAECK_STATE_SIGNAL`, leaves existing declarations unchanged. A message channel
   is independent of the signal table, so a device that adds no signals at all can
   still report what its controls are set to.
-  Paired with it, `addMessageChannel()` takes an optional `stateText`: a pointer to
-  the sketch's own buffer holding the channel's current value, read live when the
-  `0x90` catalog is built (the same borrowed-buffer arrangement as string signals)
-  and carried in it under channel flag bit 2. A host polling the catalog therefore
-  reads the value as it is at that moment rather than waiting for the next `0x95`,
-  and the sketch never has to re-send it. The buffer must outlive the channel, as
-  `icon` must; pass nothing for a plain log channel, which then carries no value.
-  The catalog is pull-based, so a host holding one keeps the value it read until it
-  asks again - across a device restart included, where the sketch's variables are back
-  at their startup values. Call `writeMessage()` once in `setup()` to announce that
+  Paired with it, `addMessageChannel()` takes an optional `getStateText`: a function
+  returning the channel's current value as text, which the library calls while building
+  the `0x90` catalog and carries in it under channel flag bit 2. A host polling the
+  catalog therefore reads the value as it is at that moment rather than waiting for the
+  next `0x95`, and the sketch never has to push it just to keep the host in step.
+  Fetching rather than storing is what makes it reliable: there is no copy to go stale,
+  so a change made anywhere in the sketch is reported correctly without remembering to
+  refresh anything, and building the text in a function-local static leaves no lifetime
+  question. The getter runs while a frame is being built - in unbuffered mode, while
+  that frame is going out - so it should format and return, not sample slow hardware.
+  Return `nullptr`, or register none, for a plain log channel, which then carries no
+  value. The catalog is pull-based, so a host holding one keeps the value it read until
+  it asks again - across a device restart included, where the sketch's variables are
+  back at their startup values. Call `writeMessage()` once in `setup()` to announce that
   too; `WaveformGenerator` shows the pattern.
 - **Disabled catalogs now answer with an empty list.** With  `BLAECK_ENABLE_EVENTS`, `BLAECK_ENABLE_MESSAGES` or `BLAECK_ENABLE_COMMAND_META`
   set to `0`, the matching poll (`BLAECK.WRITE_EVENT_CHANNELS`,

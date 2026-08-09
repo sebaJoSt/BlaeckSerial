@@ -264,6 +264,12 @@ enum BlaeckIntervalMode
 typedef void (*BlaeckCommandHandler)(const char *command, const char *const *params, byte paramCount);
 typedef void (*BlaeckAnyCommandHandler)(const char *command, const char *const *params, byte paramCount);
 
+// Supplies a message channel's current value on demand. Called while the 0x90 catalog frame is
+// being built, so it must return promptly and must not block. The returned text is copied into
+// the frame immediately, so a function-local static is the natural place to build it. Returning
+// nullptr means "no value right now" and leaves the channel's value out of the catalog.
+typedef const char *(*BlaeckStateTextGetter)();
+
 // Command kind for Home Assistant discovery (0xA0 Command List frame).
 enum BlaeckCommandKind
 {
@@ -384,19 +390,19 @@ public:
   bool addMessageChannel(const char *channelName, const __FlashStringHelper *icon);
   // `diagnostic` groups the sensor under the HA device's diagnostic section.
   bool addMessageChannel(const char *channelName, const __FlashStringHelper *icon, bool diagnostic);
-  // `stateText` registers the sketch's own buffer as this channel's current value.
-  // The pointer is stored, never copied, and is read each time the 0x90 catalog is
-  // built - so a host that polls the catalog reads the value as it is at that moment,
-  // not as it was at declaration, and the sketch need not re-send it.
-  // The buffer must outlive the channel, exactly like `icon`; point it at a global
-  // or static, never at a local in setup(). Pass nullptr for a plain log channel,
-  // which then carries no value in the catalog.
+  // `getStateText` makes this channel report a current value: the library calls it
+  // while building the 0x90 catalog, so a host that polls learns the value as it is
+  // at that moment and the sketch never has to push it just to keep the host in step.
+  // Because the value is fetched rather than stored, it cannot go stale - a change
+  // made anywhere in the sketch is reported correctly without remembering to update
+  // anything. Build the text in a function-local static and return it. Pass nullptr
+  // for a plain log channel, which then carries no value in the catalog.
   // The catalog is read when the host asks for it, so a host that already holds one
   // keeps the value it read - across a device restart included, where the sketch's
   // variables are back at their startup values. Call writeMessage() once in setup()
   // to announce that too.
   bool addMessageChannel(const char *channelName, const __FlashStringHelper *icon, bool diagnostic,
-                         const char *stateText);
+                         BlaeckStateTextGetter getStateText);
   void clearAllMessageChannels();
 
   // Send the 0x90 "Message Channel List" frame (the declared-channel catalog).
@@ -898,10 +904,10 @@ private:
   {
     char name[MAX_MESSAGE_NAME_COUNT];
     const __FlashStringHelper *icon = nullptr;
-    // Borrowed pointer to the sketch's own buffer, read when the 0x90 catalog is
-    // built - never copied, so the catalog always reports the value as it is now
-    // rather than a snapshot taken at declaration time.
-    const char *stateText = nullptr;
+    // Asked for the channel's value while the 0x90 catalog is built, so what the
+    // catalog reports cannot lag behind the sketch - there is no stored copy to
+    // go stale, and nothing the sketch has to remember to refresh.
+    BlaeckStateTextGetter getStateText = nullptr;
     bool diagnostic = false;
     bool inUse = false;
   };

@@ -1183,7 +1183,7 @@ bool BlaeckSerial::addMessageChannel(const char *channelName, const __FlashStrin
 }
 
 bool BlaeckSerial::addMessageChannel(const char *channelName, const __FlashStringHelper *icon, bool diagnostic,
-                                     const char *stateText)
+                                     BlaeckStateTextGetter getStateText)
 {
   if (channelName == nullptr || channelName[0] == '\0')
     return false;
@@ -1204,7 +1204,7 @@ bool BlaeckSerial::addMessageChannel(const char *channelName, const __FlashStrin
   {
     _messageChannels[existing].icon = icon;
     _messageChannels[existing].diagnostic = diagnostic;
-    _messageChannels[existing].stateText = stateText;
+    _messageChannels[existing].getStateText = getStateText;
     return true;
   }
 
@@ -1216,7 +1216,7 @@ bool BlaeckSerial::addMessageChannel(const char *channelName, const __FlashStrin
       _messageChannels[i].name[MAX_MESSAGE_NAME_COUNT - 1] = '\0';
       _messageChannels[i].icon = icon;
       _messageChannels[i].diagnostic = diagnostic;
-      _messageChannels[i].stateText = stateText;
+      _messageChannels[i].getStateText = getStateText;
       _messageChannels[i].inUse = true;
       return true;
     }
@@ -1341,9 +1341,10 @@ void BlaeckSerial::writeMessageChannelsFrame(unsigned long msg_id)
   //   [icon\0]                 if flags.hasIcon
   //   [stateText\0]            if flags.hasStateText
   // flags bits: 0=hasIcon 1=isDiagnostic 2=hasStateText
-  // stateText is read from the sketch's buffer as the frame is built, so the catalog
-  // reports each channel's value as of that moment rather than as of declaration.
-  // A channel that registered no buffer carries no value.
+  // stateText is fetched from the channel's getter as the frame is built, so the catalog
+  // reports each channel's value as of that moment and there is no stored copy to go
+  // stale. A channel that registered no getter, or whose getter returns nullptr, carries
+  // no value.
   // The two leading bytes are always zero. They keep the entry byte-shape
   // identical to a 0xA0 command entry (where they carried the now-removed I2C
   // masterSlaveConfig/slaveID), so a host parses both frames the same way:
@@ -1364,12 +1365,16 @@ void BlaeckSerial::writeMessageChannelsFrame(unsigned long msg_id)
       if (!e.inUse)
         continue;
 
+      // Fetched once, before the flag is decided: the getter may return nullptr, and
+      // calling it twice could hand the two uses different text.
+      const char *stateText = (e.getStateText != nullptr) ? e.getStateText() : nullptr;
+
       byte flags = 0;
       if (e.icon != nullptr)
         flags |= 0x01;
       if (e.diagnostic)
         flags |= 0x02;
-      if (e.stateText != nullptr)
+      if (stateText != nullptr)
         flags |= 0x04;
 
       _bufByte((byte)0);
@@ -1380,7 +1385,7 @@ void BlaeckSerial::writeMessageChannelsFrame(unsigned long msg_id)
       if (flags & 0x01)
         _bufFlashStr0(e.icon);
       if (flags & 0x04)
-        _bufStr0(e.stateText);
+        _bufStr0(stateText);
     }
 
     _bufFooter();
@@ -1402,12 +1407,17 @@ void BlaeckSerial::writeMessageChannelsFrame(unsigned long msg_id)
       if (!e.inUse)
         continue;
 
+      // Fetched before any of this entry's bytes go out: in this unbuffered path the frame
+      // is streamed as it is built, so the getter runs mid-transmission and a slow one
+      // stalls a half-sent frame.
+      const char *stateText = (e.getStateText != nullptr) ? e.getStateText() : nullptr;
+
       byte flags = 0;
       if (e.icon != nullptr)
         flags |= 0x01;
       if (e.diagnostic)
         flags |= 0x02;
-      if (e.stateText != nullptr)
+      if (stateText != nullptr)
         flags |= 0x04;
 
       StreamRef->write((byte)0);
@@ -1423,7 +1433,7 @@ void BlaeckSerial::writeMessageChannelsFrame(unsigned long msg_id)
       }
       if (flags & 0x04)
       {
-        StreamRef->print(e.stateText);
+        StreamRef->print(stateText);
         StreamRef->write((byte)0);
       }
     }
@@ -1439,7 +1449,7 @@ void BlaeckSerial::writeMessageChannelsFrame(unsigned long msg_id)
 bool BlaeckSerial::addMessageChannel(const char *) { return false; }
 bool BlaeckSerial::addMessageChannel(const char *, const __FlashStringHelper *) { return false; }
 bool BlaeckSerial::addMessageChannel(const char *, const __FlashStringHelper *, bool) { return false; }
-bool BlaeckSerial::addMessageChannel(const char *, const __FlashStringHelper *, bool, const char *) { return false; }
+bool BlaeckSerial::addMessageChannel(const char *, const __FlashStringHelper *, bool, BlaeckStateTextGetter) { return false; }
 void BlaeckSerial::clearAllMessageChannels() {}
 void BlaeckSerial::writeMessageChannels() { this->writeMessageChannels(1); }
 void BlaeckSerial::writeMessageChannels(unsigned long msg_id) { this->_writeEmptyFrame(0x90, msg_id); }

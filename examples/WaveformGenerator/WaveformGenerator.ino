@@ -61,12 +61,6 @@ float Output = 0.0;
 float Frequency = 1.0; // [Hz]
 float Amplitude = 1.0;
 float Offset = 0.0;
-// Offset is the one control whose state travels on a message channel instead of a
-// signal (see setup()), so it needs its value as text. addMessageChannel() borrows
-// this buffer and reads it whenever the channel catalog is built, so it must be a
-// global - never a local. Left empty here and filled by FormatOffset() in setup(),
-// so the text is only ever derived from Offset and the two cannot disagree.
-char OffsetText[12];
 byte Waveform = 0; // 0=Sine, 1=Square, 2=Triangle, 3=Sawtooth
 bool Enabled = true;
 char DeviceLabel[33] = "wave-gen"; // free-text label set via SET_LABEL
@@ -121,17 +115,16 @@ void setup()
   BlaeckSerial.addMessageChannel("Status", F("mdi:pulse"), true);
   BlaeckSerial.addMessageChannel("StatusOnDemand", F("mdi:message-text"), true);
   // Backs the SET_OFFSET control, so it is a normal entity rather than a diagnostic one.
-  // The fourth argument registers OffsetText as this channel's current value: the catalog
-  // reads it live, so the value is right from the first poll without the sketch re-sending
-  // anything. FormatOffset() runs first so the buffer is never blank.
-  FormatOffset();
-  BlaeckSerial.addMessageChannel("Offset", F("mdi:arrow-up-down"), false, OffsetText);
+  // The fourth argument hands the channel a getter instead of a value: the library asks for the
+  // current text whenever a host polls the catalog, so the control is right from the first poll
+  // without the sketch pushing anything.
+  BlaeckSerial.addMessageChannel("Offset", F("mdi:arrow-up-down"), false, OffsetState);
   // Announce the value once at boot as well. The catalog covers a host that connects or polls
   // afterwards, but a host already connected when the board resets keeps the value from before
   // the reset - it has no reason to re-read a catalog it already has, and Offset is back to 0.
   // Dropped harmlessly if no host has the catalog yet, which is the cold-start case the poll
   // already handles.
-  BlaeckSerial.writeMessage("Offset", OffsetText);
+  BlaeckSerial.writeMessage("Offset", OffsetState());
 
   // Each event channel declares up-front the closed set of events it can report.
   BlaeckSerial.addEventChannel("Output", F("mdi:sine-wave"));
@@ -175,17 +168,23 @@ void CheckOutputIdle()
   warned = false;
 }
 
-// Offset as text for its message channel, to one decimal (SET_OFFSET's step). Same integer
-// trick as WriteStatus - AVR does not link float printf, so %f would print blank - except
-// Offset is signed, so the sign is written separately: integer division of a negative value
-// would otherwise strand a minus in the fractional part.
+// Offset as text for its message channel, to one decimal (SET_OFFSET's step). Registered with
+// the channel, so the library calls it whenever it builds the catalog: the value is fetched at
+// that moment rather than stored, and no path that changes Offset can leave a stale copy behind.
+// Formatting only - it runs while a frame is being built, and in unbuffered mode while that
+// frame is going out, so anything slow would stall it. Sample slow sources in loop() instead.
+// Same integer trick as WriteStatus - AVR does not link float printf, so %f would print blank -
+// except Offset is signed, so the sign is written separately: integer division of a negative
+// value would otherwise strand a minus in the fractional part.
 // A Home Assistant number reads its state as a bare numeric, so the text carries no unit.
-void FormatOffset()
+const char *OffsetState()
 {
+  static char text[12];
   long tenths = (long)(Offset * 10.0 + (Offset >= 0 ? 0.5 : -0.5));
   long magnitude = tenths < 0 ? -tenths : tenths;
-  snprintf(OffsetText, sizeof(OffsetText), "%s%ld.%ld",
+  snprintf(text, sizeof(text), "%s%ld.%ld",
            tenths < 0 ? "-" : "", magnitude / 10, magnitude % 10);
+  return text;
 }
 
 // The same status line on two channels, each driving its own Home Assistant sensor:
@@ -281,9 +280,9 @@ void onSetOffset(const char *command, const char *const *params, byte paramCount
   {
     Offset = roundToDecimals((float)atof(params[0]), 4);
     // The other handlers write their signal back; this one pushes a message instead,
-    // because SET_OFFSET declares the channel as its state source.
-    FormatOffset();
-    BlaeckSerial.writeMessage("Offset", OffsetText);
+    // because SET_OFFSET declares the channel as its state source. Pushing is what makes
+    // the change visible immediately - the getter alone would only be read at the next poll.
+    BlaeckSerial.writeMessage("Offset", OffsetState());
   }
 }
 
