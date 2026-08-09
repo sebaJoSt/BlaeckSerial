@@ -621,7 +621,12 @@ public:
   // program lifetime (stored as pointers, never copied).
   // Number values outside [min,max], bad select indices and non-0/1 switch
   // values are rejected (handler skipped) and reported on DebugRef.
-  // step is HA display resolution only; the firmware does not round.
+  // step is HA display resolution only; the firmware does not round. It is the one number
+  // that can be left unspecified: pass 0 and the host omits it, letting Home Assistant apply
+  // its own default. min and max have no such escape - they are the range the firmware itself
+  // validates against, so every number command must state them.
+  // Home Assistant refuses a step below 0.001, so a finer resolution than that cannot be
+  // shown; the host raises it to 0.001 rather than let the whole entity be rejected.
   // category (optional): Home Assistant entity_category. Leave at BLAECK_CAT_NONE for a
   // primary control; BLAECK_CAT_CONFIG marks a device setting, which Home Assistant then
   // keeps off its auto-generated dashboards.
