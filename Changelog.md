@@ -54,10 +54,8 @@ without being configured for that board in advance.
   buffer read live on each transmit: `write(name/index, char *value)` repoints the
   buffer and transmits that one signal, or update the buffer in place and let the
   periodic transmit pick it up. Up to 255 bytes.
-- Added the `WaveformGenerator` example, registered with the typed command
-  helpers (`onNumberCommand` / `onSelectCommand` / `onSwitchCommand` /
-  `onTextCommand` / `onButtonCommand`) so the device is self-describing for
-  Loggbok / Home Assistant MQTT auto-discovery.
+- New `WaveformGenerator` example: one fully controllable waveform, exercising
+  typed commands, message channels, event channels and string signals together.
 
 ### Changed
 - Increased the default AVR command-handler limit on larger-SRAM AVR boards
