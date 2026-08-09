@@ -26,9 +26,8 @@
     loggbok/wave/Output               chart           live generated sample
     loggbok/wave/Frequency            number          wave frequency [Hz]   (0..2)
     loggbok/wave/Amplitude            number          peak amplitude        (0..100)
-    loggbok/wave/Waveform             select          0=Sine 1=Square 2=Triangle 3=Sawtooth
     loggbok/wave/Enabled              switch          output on/off (off -> Output = Offset)
-    loggbok/wave/WaveName             text sensor     current waveform shape name (mirrors Waveform)
+    loggbok/wave/WaveName             select          Sine/Square/Triangle/Sawtooth (also a text sensor)
     loggbok/wave/DeviceLabel          text            free-text label (set via SET_LABEL)
     loggbok/wave/msg/Offset           number          DC offset             (-100..100)
     loggbok/wave/msg/Status           text sensor     status heartbeat, every 10 s
@@ -39,7 +38,7 @@
     SET_FREQ    <0..2>      frequency [Hz]            -> Frequency  (HA number, step 0.01)
     SET_AMP     <0..100>    peak amplitude            -> Amplitude  (HA number, step 0.1)
     SET_OFFSET  <-100..100> DC offset                 -> msg/Offset (HA number, step 0.1)
-    SET_WAVE    <0..3>      Sine/Square/Triangle/Saw  -> Waveform   (HA select; name or index)
+    SET_WAVE    <0..3>      Sine/Square/Triangle/Saw  -> WaveName   (HA select; name or index)
     SET_ENABLE  <0|1>       output on/off             -> Enabled    (HA switch)
     SET_LABEL   <text>      free-text device label    -> DeviceLabel (HA text, max 32, config)
     STATUS                  push status to StatusOnDemand channel   (HA button)
@@ -64,9 +63,10 @@ float Offset = 0.0;
 byte Waveform = 0; // 0=Sine, 1=Square, 2=Triangle, 3=Sawtooth
 bool Enabled = true;
 char DeviceLabel[33] = "wave-gen"; // free-text label set via SET_LABEL
-// Human-readable shape names for the WaveName signal; keep in sync with the
-// SET_WAVE options CSV in setup().
-const char *const WAVE_NAMES[] = {"Sine", "Square", "Triangle", "Sawtooth"};
+// Current shape as text, refreshed by RefreshWaveName() from the option list SET_WAVE
+// declares - so the names exist once, in flash, instead of being repeated here and kept
+// in step by hand.
+char WaveName[12];
 
 //---GENERATOR STATE
 double phase = 0.0; // normalized phase 0..1
@@ -86,9 +86,10 @@ void setup()
   BlaeckSerial.addSignal("Amplitude", &Amplitude);
   // No "Offset" signal on purpose: its control reports state from a message channel
   // instead, declared below.
-  BlaeckSerial.addSignal("Waveform", &Waveform);
+  // No "Waveform" index signal: SET_WAVE reports its state as the option name, so the
+  // index is only a local variable here and never needs to reach the host.
   BlaeckSerial.addSignal("Enabled", &Enabled);
-  BlaeckSerial.addSignal("WaveName", WAVE_NAMES[Waveform]);
+  BlaeckSerial.addSignal("WaveName", WaveName);
   BlaeckSerial.addSignal("DeviceLabel", DeviceLabel);
 
   BlaeckSerial.onNumberCommand("SET_FREQ", onSetFreq, F("Frequency"), 0.0f, 2.0f, 0.01f, F("Hz"));
@@ -102,13 +103,19 @@ void setup()
   // number straight away.
   BlaeckSerial.onNumberCommand("SET_OFFSET", onSetOffset, F("Offset"), -100.0f, 100.0f, 0.1f,
                                nullptr, BLAECK_CAT_NONE, BLAECK_STATE_MESSAGE);
-  BlaeckSerial.onSelectCommand("SET_WAVE", onSetWave, F("Waveform"), F("Sine,Square,Triangle,Sawtooth"));
+  // State comes from the WaveName string signal, not an index: the host matches the option
+  // name straight against the list below, so nothing has to carry the index.
+  BlaeckSerial.onSelectCommand("SET_WAVE", onSetWave, F("WaveName"), F("Sine,Square,Triangle,Sawtooth"));
   BlaeckSerial.onSwitchCommand("SET_ENABLE", onSetEnable, F("Enabled"));
   // Host percent-encodes the value; the device decodes it and enforces the 32-byte max.
   // Config category: a device label is a setting, not a control, so Home Assistant keeps
   // it off the auto-generated dashboards.
   BlaeckSerial.onTextCommand("SET_LABEL", onSetLabel, F("DeviceLabel"), 32, BLAECK_CAT_CONFIG);
   BlaeckSerial.onButtonCommand("STATUS", onStatus);
+
+  // After the commands, because it reads SET_WAVE's option list. addSignal() above only
+  // stored the buffer's address, so filling it now is in time for the first transmit.
+  RefreshWaveName();
 
   // Declared up-front so the host can announce one text sensor per channel before
   // the first line is written.
@@ -167,6 +174,16 @@ void CheckOutputIdle()
   warned = false;
 }
 
+// The current shape's name, read back from the option list SET_WAVE declared, so those
+// names live in flash once instead of being repeated in the sketch. Must run after
+// onSelectCommand() has registered SET_WAVE; the index is written instead if the lookup
+// fails, which at least shows on the dashboard as a value that is not one of the options.
+void RefreshWaveName()
+{
+  if (!BlaeckSerial.getSelectOption("SET_WAVE", Waveform, WaveName, sizeof(WaveName)))
+    snprintf(WaveName, sizeof(WaveName), "%u", (unsigned)Waveform);
+}
+
 // Offset as text for its message channel, to one decimal (SET_OFFSET's step). Registered with
 // the channel, so the library calls it whenever it builds the catalog: the value is fetched at
 // that moment rather than stored, and no path that changes Offset can leave a stale copy behind.
@@ -194,7 +211,7 @@ void WriteStatus(const char *channel)
   // printf by default, so %f would print blank. Frequency is always >= 0 here.
   int hz100 = (int)(Frequency * 100.0 + 0.5);
   char text[80];
-  snprintf(text, sizeof(text), "%s %s @ %d.%02d Hz", Enabled ? "running" : "stopped", WAVE_NAMES[Waveform], hz100 / 100, hz100 % 100);
+  snprintf(text, sizeof(text), "%s %s @ %d.%02d Hz", Enabled ? "running" : "stopped", WaveName, hz100 / 100, hz100 % 100);
   BlaeckSerial.writeMessage(channel, text);
 }
 
@@ -290,8 +307,8 @@ void onSetWave(const char *command, const char *const *params, byte paramCount)
   if (paramCount >= 1 && params[0][0] != '\0')
   {
     Waveform = (byte)atoi(params[0]);
-    BlaeckSerial.write("Waveform", Waveform);
-    BlaeckSerial.write("WaveName", WAVE_NAMES[Waveform]);
+    RefreshWaveName();
+    BlaeckSerial.write("WaveName", WaveName);
   }
 }
 
