@@ -75,7 +75,10 @@ without being configured for that board in advance.
   is never found under the Arduino IDE or arduino-cli, because the sketch folder is
   not on the compiler's include path. Anyone who set overrides that way on 6.x was
   silently running the built-in defaults. PlatformIO `build_flags` always worked.
-  README.md now documents three routes that do work.
+  README.md now documents three routes that do work, and warns that an override must
+  reach every translation unit — one seen by the sketch but not by `BlaeckSerial.cpp`
+  gives `class BlaeckSerial` two layouts (an ODR violation), which shows up as
+  corrupted state rather than a compiler error.
 
 ### Removed
 - **`setCommandCallback(...)` (breaking).** Deprecated since 6.0.0 and warned about
