@@ -20,7 +20,7 @@ All notable changes to this project will be documented in this file.
   can confirm the command was applied. Like `0xA0`, the frame carries no CRC;
   hosts that don't recognize the key ignore it.
 - **Message frames (`0x90` / `0x95`).** New `addMessageChannel(channelName[, icon[,
-  diagnostic]])` declares a free-text status/log channel, and
+  diagnostic[, stateText]]])` declares a free-text status/log channel, and
   `writeMessage(channelName, text[, messageID])` sends a line on it. Declared
   channels are advertised in a `0x90` "Message
   Channel List" frame in response to `BLAECK.WRITE_MESSAGE_CHANNELS`, so a host
@@ -63,6 +63,20 @@ All notable changes to this project will be documented in this file.
   `BLAECK_CAT_NONE`, leaves the command a primary control. Message and event
   channels keep their existing `diagnostic` flag: they are read-only, and Home
   Assistant reserves `config` for entities the user can change.
+- **A message channel can be a command's state source.** The typed command helpers
+  take an optional trailing `BLAECK_STATE_MESSAGE`, saying that `stateSignal` names
+  a channel declared with `addMessageChannel()` rather than a signal; the `0xA0`
+  entry carries it as one byte after the state signal name. The default,
+  `BLAECK_STATE_SIGNAL`, leaves existing declarations unchanged. A message channel
+  is independent of the signal table, so a device that adds no signals at all can
+  still report what its controls are set to.
+  Paired with it, `addMessageChannel()` takes an optional `stateText`: a pointer to
+  the sketch's own buffer holding the channel's current value, read live when the
+  `0x90` catalog is built (the same borrowed-buffer arrangement as string signals)
+  and carried in it under channel flag bit 2. A host polling the catalog therefore
+  reads the value as it is at that moment rather than waiting for the next `0x95`,
+  and the sketch never has to re-send it. The buffer must outlive the channel, as
+  `icon` must; pass nothing for a plain log channel, which then carries no value.
 - **Disabled catalogs now answer with an empty list.** With  `BLAECK_ENABLE_EVENTS`, `BLAECK_ENABLE_MESSAGES` or `BLAECK_ENABLE_COMMAND_META`
   set to `0`, the matching poll (`BLAECK.WRITE_EVENT_CHANNELS`,
   `BLAECK.WRITE_MESSAGE_CHANNELS`, `BLAECK.WRITE_COMMANDS`) still replies, with a

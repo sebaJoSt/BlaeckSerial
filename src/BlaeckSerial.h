@@ -287,6 +287,19 @@ enum BlaeckEntityCategory
   BLAECK_CAT_DIAGNOSTIC = 2 // HA entity_category "diagnostic"
 };
 
+// What kind of thing a typed command's stateSignal names (0xA0, one byte after the
+// stateSignal string). SIGNAL is a signal added with addSignal(); MESSAGE is a channel
+// declared with addMessageChannel(), whose value the sketch pushes with writeMessage().
+//
+// A message channel is independent of the signal table, so a device that adds no signals
+// at all can still report what its controls are set to. Only meaningful when stateSignal
+// is set.
+enum BlaeckStateSource
+{
+  BLAECK_STATE_SIGNAL = 0, // stateSignal names an addSignal() signal (default)
+  BLAECK_STATE_MESSAGE = 1 // stateSignal names an addMessageChannel() channel
+};
+
 // Acknowledgement reason for the 0xA5 Command Ack frame. Sent back to the
 // serial host after a command is dispatched so a host (e.g. Loggbok) can confirm
 // the command was applied and surface accept/reject feedback.
@@ -371,6 +384,15 @@ public:
   bool addMessageChannel(const char *channelName, const __FlashStringHelper *icon);
   // `diagnostic` groups the sensor under the HA device's diagnostic section.
   bool addMessageChannel(const char *channelName, const __FlashStringHelper *icon, bool diagnostic);
+  // `stateText` registers the sketch's own buffer as this channel's current value.
+  // The pointer is stored, never copied, and is read each time the 0x90 catalog is
+  // built - so a host that polls the catalog reads the value as it is at that moment,
+  // not as it was at declaration, and the sketch need not re-send it.
+  // The buffer must outlive the channel, exactly like `icon`; point it at a global
+  // or static, never at a local in setup(). Pass nullptr for a plain log channel,
+  // which then carries no value in the catalog.
+  bool addMessageChannel(const char *channelName, const __FlashStringHelper *icon, bool diagnostic,
+                         const char *stateText);
   void clearAllMessageChannels();
 
   // Send the 0x90 "Message Channel List" frame (the declared-channel catalog).
@@ -584,18 +606,23 @@ public:
   // category (optional): Home Assistant entity_category. Leave at BLAECK_CAT_NONE for a
   // primary control; BLAECK_CAT_CONFIG marks a device setting, which Home Assistant then
   // keeps off its auto-generated dashboards.
+  // stateSource (optional): whether stateSignal names a signal (default) or a message
+  // channel - see BlaeckStateSource. Only meaningful when stateSignal is set.
   bool onNumberCommand(const char *command, BlaeckCommandHandler handler,
                        const __FlashStringHelper *stateSignal,
                        float min, float max, float step,
                        const __FlashStringHelper *unit = nullptr,
-                       BlaeckEntityCategory category = BLAECK_CAT_NONE);
+                       BlaeckEntityCategory category = BLAECK_CAT_NONE,
+                       BlaeckStateSource stateSource = BLAECK_STATE_SIGNAL);
   bool onSwitchCommand(const char *command, BlaeckCommandHandler handler,
                        const __FlashStringHelper *stateSignal,
-                       BlaeckEntityCategory category = BLAECK_CAT_NONE);
+                       BlaeckEntityCategory category = BLAECK_CAT_NONE,
+                       BlaeckStateSource stateSource = BLAECK_STATE_SIGNAL);
   bool onSelectCommand(const char *command, BlaeckCommandHandler handler,
                        const __FlashStringHelper *stateSignal,
                        const __FlashStringHelper *optionsCsv,
-                       BlaeckEntityCategory category = BLAECK_CAT_NONE);
+                       BlaeckEntityCategory category = BLAECK_CAT_NONE,
+                       BlaeckStateSource stateSource = BLAECK_STATE_SIGNAL);
   bool onButtonCommand(const char *command, BlaeckCommandHandler handler,
                        BlaeckEntityCategory category = BLAECK_CAT_NONE);
   // HA text entity: the host sends the value percent-encoded (so commas and other
@@ -606,7 +633,8 @@ public:
   bool onTextCommand(const char *command, BlaeckCommandHandler handler,
                      const __FlashStringHelper *stateSignal = nullptr,
                      unsigned int maxLength = 255,
-                     BlaeckEntityCategory category = BLAECK_CAT_NONE);
+                     BlaeckEntityCategory category = BLAECK_CAT_NONE,
+                     BlaeckStateSource stateSource = BLAECK_STATE_SIGNAL);
 
   // ----- Before data write callback  -----
   // Called just before signal data is sent, in normal loop context
@@ -666,7 +694,8 @@ private:
                         float mn, float mx, float st,
                         const __FlashStringHelper *unit,
                         const __FlashStringHelper *options,
-                        uint8_t category);
+                        uint8_t category,
+                        uint8_t stateSource);
   byte _validateTypedCommand(byte handlerIndex);
   static void _percentDecodeInPlace(char *s);
   static byte _flashCsvOptionCount(const __FlashStringHelper *csv);
@@ -855,6 +884,7 @@ private:
     const __FlashStringHelper *unit = nullptr;
     const __FlashStringHelper *options = nullptr;
     const __FlashStringHelper *stateSignal = nullptr;
+    uint8_t stateSource = BLAECK_STATE_SIGNAL;
     uint8_t category = BLAECK_CAT_NONE;
 #endif
   };
@@ -864,6 +894,10 @@ private:
   {
     char name[MAX_MESSAGE_NAME_COUNT];
     const __FlashStringHelper *icon = nullptr;
+    // Borrowed pointer to the sketch's own buffer, read when the 0x90 catalog is
+    // built - never copied, so the catalog always reports the value as it is now
+    // rather than a snapshot taken at declaration time.
+    const char *stateText = nullptr;
     bool diagnostic = false;
     bool inUse = false;
   };

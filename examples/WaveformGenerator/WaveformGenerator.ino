@@ -15,6 +15,10 @@
     message  a line of free text, not logged     -> "running Sine @ 1.00 Hz"
     event    a discrete occurrence, no text      -> idle_warning, resumed
 
+  A control's state can come from either of the first two, and SET_OFFSET shows the second
+  route: its state lives on a message channel rather than a signal, so Offset is never
+  logged, yet the control still shows the value the device applied.
+
   Author: Sebastian Strobl, https://github.com/sebaJoSt/BlaeckSerial
 
   --- DASHBOARD MAPPING (Loggbok topic prefix: "loggbok" table name: "wave") ---
@@ -22,11 +26,11 @@
     loggbok/wave/Output               chart           live generated sample
     loggbok/wave/Frequency            number          wave frequency [Hz]   (0..2)
     loggbok/wave/Amplitude            number          peak amplitude        (0..100)
-    loggbok/wave/Offset               number          DC offset             (-100..100)
     loggbok/wave/Waveform             select          0=Sine 1=Square 2=Triangle 3=Sawtooth
     loggbok/wave/Enabled              switch          output on/off (off -> Output = Offset)
     loggbok/wave/WaveName             text sensor     current waveform shape name (mirrors Waveform)
     loggbok/wave/DeviceLabel          text            free-text label (set via SET_LABEL)
+    loggbok/wave/msg/Offset           number          DC offset             (-100..100)
     loggbok/wave/msg/Status           text sensor     status heartbeat, every 10 s
     loggbok/wave/msg/StatusOnDemand   text sensor     status on STATUS button press
     loggbok/wave/evt/Output           event           idle_warning / resumed
@@ -34,7 +38,7 @@
   --- COMMANDS (publish to loggbok/<table>/_cmd/<NAME>, or loggbok/_all/_cmd/<NAME>) ---
     SET_FREQ    <0..2>      frequency [Hz]            -> Frequency  (HA number, step 0.01)
     SET_AMP     <0..100>    peak amplitude            -> Amplitude  (HA number, step 0.1)
-    SET_OFFSET  <-100..100> DC offset                 -> Offset     (HA number, step 0.1)
+    SET_OFFSET  <-100..100> DC offset                 -> msg/Offset (HA number, step 0.1)
     SET_WAVE    <0..3>      Sine/Square/Triangle/Saw  -> Waveform   (HA select; name or index)
     SET_ENABLE  <0|1>       output on/off             -> Enabled    (HA switch)
     SET_LABEL   <text>      free-text device label    -> DeviceLabel (HA text, max 32, config)
@@ -57,6 +61,11 @@ float Output = 0.0;
 float Frequency = 1.0; // [Hz]
 float Amplitude = 1.0;
 float Offset = 0.0;
+// Offset is the one control whose state travels on a message channel instead of a
+// signal (see setup()), so it needs its value as text. addMessageChannel() borrows
+// this buffer and reads it whenever the channel catalog is built, so it must be a
+// global - never a local.
+char OffsetText[12] = "0.0";
 byte Waveform = 0; // 0=Sine, 1=Square, 2=Triangle, 3=Sawtooth
 bool Enabled = true;
 char DeviceLabel[33] = "wave-gen"; // free-text label set via SET_LABEL
@@ -80,7 +89,8 @@ void setup()
   BlaeckSerial.addSignal("Output", &Output);
   BlaeckSerial.addSignal("Frequency", &Frequency);
   BlaeckSerial.addSignal("Amplitude", &Amplitude);
-  BlaeckSerial.addSignal("Offset", &Offset);
+  // No "Offset" signal on purpose: its control reports state from a message channel
+  // instead, declared below.
   BlaeckSerial.addSignal("Waveform", &Waveform);
   BlaeckSerial.addSignal("Enabled", &Enabled);
   BlaeckSerial.addSignal("WaveName", (char *)WAVE_NAMES[Waveform]);
@@ -88,7 +98,15 @@ void setup()
 
   BlaeckSerial.onNumberCommand("SET_FREQ", onSetFreq, F("Frequency"), 0.0f, 2.0f, 0.01f, F("Hz"));
   BlaeckSerial.onNumberCommand("SET_AMP", onSetAmp, F("Amplitude"), 0.0f, 100.0f, 0.1f);
-  BlaeckSerial.onNumberCommand("SET_OFFSET", onSetOffset, F("Offset"), -100.0f, 100.0f, 0.1f);
+  // Offset reports its state from the "Offset" MESSAGE CHANNEL, not a signal - the one
+  // control in this sketch wired that way, so both routes can be compared side by side.
+  // A message channel is independent of the signal table and of whatever the host's user
+  // selects for logging, so this control keeps showing state either way. onSetOffset
+  // pushes each new value with writeMessage(), and the channel also hands the catalog its
+  // current value (see addMessageChannel below), so a host that reconnects reads the right
+  // number straight away.
+  BlaeckSerial.onNumberCommand("SET_OFFSET", onSetOffset, F("Offset"), -100.0f, 100.0f, 0.1f,
+                               nullptr, BLAECK_CAT_NONE, BLAECK_STATE_MESSAGE);
   BlaeckSerial.onSelectCommand("SET_WAVE", onSetWave, F("Waveform"), F("Sine,Square,Triangle,Sawtooth"));
   BlaeckSerial.onSwitchCommand("SET_ENABLE", onSetEnable, F("Enabled"));
   // Host percent-encodes the value; the device decodes it and enforces the 32-byte max.
@@ -101,6 +119,12 @@ void setup()
   // the first line is written.
   BlaeckSerial.addMessageChannel("Status", F("mdi:pulse"), true);
   BlaeckSerial.addMessageChannel("StatusOnDemand", F("mdi:message-text"), true);
+  // Backs the SET_OFFSET control, so it is a normal entity rather than a diagnostic one.
+  // The fourth argument registers OffsetText as this channel's current value: the catalog
+  // reads it live, so the value is right from the first poll without the sketch re-sending
+  // anything. FormatOffset() runs first so the buffer is never blank.
+  FormatOffset();
+  BlaeckSerial.addMessageChannel("Offset", F("mdi:arrow-up-down"), false, OffsetText);
 
   // Each event channel declares up-front the closed set of events it can report.
   BlaeckSerial.addEventChannel("Output", F("mdi:sine-wave"));
@@ -142,6 +166,19 @@ void CheckOutputIdle()
 
   idleSinceMs = 0;
   warned = false;
+}
+
+// Offset as text for its message channel, to one decimal (SET_OFFSET's step). Same integer
+// trick as WriteStatus - AVR does not link float printf, so %f would print blank - except
+// Offset is signed, so the sign is written separately: integer division of a negative value
+// would otherwise strand a minus in the fractional part.
+// A Home Assistant number reads its state as a bare numeric, so the text carries no unit.
+void FormatOffset()
+{
+  long tenths = (long)(Offset * 10.0 + (Offset >= 0 ? 0.5 : -0.5));
+  long magnitude = tenths < 0 ? -tenths : tenths;
+  snprintf(OffsetText, sizeof(OffsetText), "%s%ld.%ld",
+           tenths < 0 ? "-" : "", magnitude / 10, magnitude % 10);
 }
 
 // The same status line on two channels, each driving its own Home Assistant sensor:
@@ -236,7 +273,10 @@ void onSetOffset(const char *command, const char *const *params, byte paramCount
   if (paramCount >= 1 && params[0][0] != '\0')
   {
     Offset = roundToDecimals((float)atof(params[0]), 4);
-    BlaeckSerial.write("Offset", Offset);
+    // The other handlers write their signal back; this one pushes a message instead,
+    // because SET_OFFSET declares the channel as its state source.
+    FormatOffset();
+    BlaeckSerial.writeMessage("Offset", OffsetText);
   }
 }
 
