@@ -64,27 +64,21 @@ All notable changes to this project will be documented in this file.
   channels keep their existing `diagnostic` flag: they are read-only, and Home
   Assistant reserves `config` for entities the user can change.
 - **A message channel can be a command's state source.** The typed command helpers
-  take an optional trailing `BLAECK_STATE_MESSAGE`, saying that `stateSignal` names
-  a channel declared with `addMessageChannel()` rather than a signal; the `0xA0`
-  entry carries it as one byte after the state signal name. The default,
-  `BLAECK_STATE_SIGNAL`, leaves existing declarations unchanged. A message channel
-  is independent of the signal table, so a device that adds no signals at all can
-  still report what its controls are set to.
+  take an optional trailing `BLAECK_STATE_MESSAGE`, saying that `stateSignal` names a
+  channel declared with `addMessageChannel()` rather than a signal; the `0xA0` entry
+  carries it as one byte after the state signal name. The default,
+  `BLAECK_STATE_SIGNAL`, leaves existing declarations unchanged. A message channel is
+  independent of the signal table, so a device that adds no signals can still report
+  what its controls are set to.
   Paired with it, `addMessageChannel()` takes an optional `getStateText`: a function
-  returning the channel's current value as text, which the library calls while building
-  the `0x90` catalog and carries in it under channel flag bit 2. A host polling the
-  catalog therefore reads the value as it is at that moment rather than waiting for the
-  next `0x95`, and the sketch never has to push it just to keep the host in step.
-  Fetching rather than storing is what makes it reliable: there is no copy to go stale,
-  so a change made anywhere in the sketch is reported correctly without remembering to
-  refresh anything, and building the text in a function-local static leaves no lifetime
-  question. The getter runs while a frame is being built - in unbuffered mode, while
-  that frame is going out - so it should format and return, not sample slow hardware.
-  Return `nullptr`, or register none, for a plain log channel, which then carries no
-  value. The catalog is pull-based, so a host holding one keeps the value it read until
-  it asks again - across a device restart included, where the sketch's variables are
-  back at their startup values. Call `writeMessage()` once in `setup()` to announce that
-  too; `WaveformGenerator` shows the pattern.
+  returning the channel's value as text, called while the `0x90` catalog is built and
+  carried in it under channel flag bit 2. A host learns the value by polling, so
+  nothing has to be pushed to keep it in step, and there is no stored copy to go stale.
+  It runs mid-frame, so format and return rather than sampling slow hardware; build the
+  text in a function-local static. Register none, or return `nullptr`, for a plain log
+  channel. A host that already holds a catalog will not re-read it, so also call
+  `writeMessage()` in `setup()` to cover a device restart - `WaveformGenerator` shows
+  the pattern.
 - **Disabled catalogs now answer with an empty list.** With  `BLAECK_ENABLE_EVENTS`, `BLAECK_ENABLE_MESSAGES` or `BLAECK_ENABLE_COMMAND_META`
   set to `0`, the matching poll (`BLAECK.WRITE_EVENT_CHANNELS`,
   `BLAECK.WRITE_MESSAGE_CHANNELS`, `BLAECK.WRITE_COMMANDS`) still replies, with a
