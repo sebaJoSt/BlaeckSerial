@@ -10,6 +10,10 @@
   accepted value is written back to its signal, so a dashboard always shows what the device
   actually applied.
 
+  Registers 7 commands. Small AVRs (Uno/Nano) default to 6, and the seventh is dropped with
+  no sign of it beyond a control that never appears: raise BLAECK_COMMAND_MAX_HANDLERS_DEFAULT
+  or drop one.
+
   Log fast enough to resolve the wave: at the default 1 Hz, a 20 ms interval gives 50 points
   per cycle. Sample slower than that and Output aliases into a shape the device never made.
 
