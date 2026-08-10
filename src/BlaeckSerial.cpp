@@ -2206,9 +2206,19 @@ byte BlaeckSerial::_validateTypedCommand(byte handlerIndex)
   if (e.kind == BLAECK_CMD_PLAIN || e.kind == BLAECK_CMD_BUTTON)
     return BLAECK_ACK_OK;
 
-  // No value supplied -> let the handler decide (e.g. query/toggle usage).
-  if (_parsedParamCount < 1 || _parsedParamPtrs[0] == nullptr || _parsedParamPtrs[0][0] == '\0')
+  // No value supplied -> let the handler decide (e.g. query/toggle usage). Text is
+  // exempt: there an absent value means "clear the field", which is a value, so it is
+  // normalized below instead of reaching the handler as no parameter at all.
+  if (e.kind != BLAECK_CMD_TEXT &&
+      (_parsedParamCount < 1 || _parsedParamPtrs[0] == nullptr || _parsedParamPtrs[0][0] == '\0'))
     return BLAECK_ACK_OK;
+
+  if (e.kind == BLAECK_CMD_TEXT && (_parsedParamCount < 1 || _parsedParamPtrs[0] == nullptr))
+  {
+    _emptyTextScratch[0] = '\0';
+    _parsedParamPtrs[0] = _emptyTextScratch;
+    _parsedParamCount = 1;
+  }
 
   const char *v = _parsedParamPtrs[0];
 

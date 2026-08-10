@@ -714,7 +714,9 @@ public:
   // delimiters survive the frame); the device percent-decodes it in place before
   // the handler runs, so the handler receives the raw UTF-8 text. maxLength is the
   // advertised limit (in decoded bytes) enforced before dispatch; a longer value
-  // is rejected (BLAECK_ACK_TOO_LONG).
+  // is rejected (BLAECK_ACK_TOO_LONG). The handler always receives exactly one
+  // parameter: an empty value is a value (it clears the field), and a host sending
+  // no parameter at all is normalized to an empty string before dispatch.
   bool onTextCommand(const char *command, BlaeckCommandHandler handler,
                      BlaeckCommandState state = BlaeckCommandState(),
                      unsigned int maxLength = 255,
@@ -1066,6 +1068,9 @@ private:
   // name payload (e.g. from a Home Assistant select) is handed to index-based
   // handlers as its numeric index.
   char _selectIndexScratch[8] = {0};
+  // Stands in for a text command's absent value. Must be writable: the text branch
+  // percent-decodes params[0] in place, which a string literal could not survive.
+  char _emptyTextScratch[1] = {0};
 #endif
   bool recvWithStartEndMarkers();
   void parseData();

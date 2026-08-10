@@ -286,13 +286,11 @@ void onSetEnable(const char *command, const char *const *params, byte paramCount
 
 void onSetLabel(const char *command, const char *const *params, byte paramCount)
 {
-  // params[0] is already percent-decoded and length-checked by the library.
-  if (paramCount >= 1 && params[0] != nullptr)
-  {
-    strncpy(DeviceLabel, params[0], sizeof(DeviceLabel) - 1);
-    DeviceLabel[sizeof(DeviceLabel) - 1] = '\0';
-    BlaeckSerial.write("DeviceLabel", DeviceLabel);
-  }
+  // params[0] is always present, already percent-decoded and length-checked by the
+  // library. An empty one clears the label.
+  strncpy(DeviceLabel, params[0], sizeof(DeviceLabel) - 1);
+  DeviceLabel[sizeof(DeviceLabel) - 1] = '\0';
+  BlaeckSerial.write("DeviceLabel", DeviceLabel);
 }
 
 void onStatus(const char *command, const char *const *params, byte paramCount)
