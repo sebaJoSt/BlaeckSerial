@@ -236,19 +236,11 @@ void UpdateWaveform()
   Output = Offset + Amplitude * w;
 }
 
-// Rounds to a fixed number of decimal places, cleaning up tiny float rounding noise from atof()
-// (e.g. "0.15" -> 0.14999999...).
-float roundToDecimals(float value, byte decimals)
-{
-  float scale = pow(10, decimals);
-  return roundf(value * scale) / scale;
-}
-
 void onSetFreq(const char *command, const char *const *params, byte paramCount)
 {
   if (paramCount >= 1 && params[0][0] != '\0')
   {
-    Frequency = roundToDecimals((float)atof(params[0]), 4);
+    Frequency = (float)atof(params[0]);
     BlaeckSerial.write("Frequency", Frequency);
   }
 }
@@ -257,7 +249,7 @@ void onSetAmp(const char *command, const char *const *params, byte paramCount)
 {
   if (paramCount >= 1 && params[0][0] != '\0')
   {
-    Amplitude = roundToDecimals((float)atof(params[0]), 4);
+    Amplitude = (float)atof(params[0]);
     BlaeckSerial.write("Amplitude", Amplitude);
   }
 }
@@ -266,7 +258,7 @@ void onSetOffset(const char *command, const char *const *params, byte paramCount
 {
   if (paramCount >= 1 && params[0][0] != '\0')
   {
-    Offset = roundToDecimals((float)atof(params[0]), 4);
+    Offset = (float)atof(params[0]);
     // The others write their signal back; this one publishes the command's own state. Pushing
     // is what makes it visible at once - the getter is only read when a host polls the catalog.
     BlaeckSerial.writeCommandState(command);
