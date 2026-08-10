@@ -125,6 +125,66 @@ void loop()
   CheckActivity();
 }
 
+void UpdateWaveform()
+{
+  unsigned long now = micros();
+  double dt = (now - lastMicros) * 1e-6; // [s]
+  lastMicros = now;
+
+  if (!Enabled)
+  {
+    Output = Offset;
+    return;
+  }
+
+  // Advance and wrap the normalized phase (0..1).
+  phase += (double)Frequency * dt;
+  phase -= floor(phase);
+
+  double w = 0.0;
+  switch (waveIndex)
+  {
+  case 1: // Square
+    w = (phase < 0.5) ? 1.0 : -1.0;
+    break;
+  case 2: // Triangle: +1 at phase 0, -1 at phase 0.5
+    w = 1.0 - 4.0 * fabs(phase - 0.5);
+    break;
+  case 3: // Sawtooth: -1 .. +1 ramp
+    w = 2.0 * phase - 1.0;
+    break;
+  default: // Sine
+    w = sin(2.0 * PI * phase);
+    break;
+  }
+
+  Output = Offset + Amplitude * w;
+}
+
+void SendStatusMessage()
+{
+  static unsigned long lastStatusMs = 0;
+  static bool first = true;
+
+  if (!first && millis() - lastStatusMs < 10000UL)
+    return;
+
+  first = false;
+  lastStatusMs = millis();
+  WriteStatus("Status");
+}
+
+// The same status line on two channels, each driving its own Home Assistant sensor:
+// a 10 s heartbeat on "Status", and the STATUS button on "StatusOnDemand".
+void WriteStatus(const char *channel)
+{
+  char hz[10];
+  dtostrf(Frequency, 0, 2, hz);
+  char text[80];
+  snprintf(text, sizeof(text), "%s %s @ %s Hz", Enabled ? "running" : "stopped", WaveName, hz);
+  BlaeckSerial.writeMessage(channel, text);
+}
+
 // Warns once per idle stretch (>=5s -> "idle_warning"), and only reports "resumed" if a warning
 // was raised. Idle means SET_ENABLE is off.
 void CheckActivity()
@@ -171,65 +231,6 @@ const char *OffsetState()
   return text;
 }
 
-// The same status line on two channels, each driving its own Home Assistant sensor:
-// a 10 s heartbeat on "Status", and the STATUS button on "StatusOnDemand".
-void WriteStatus(const char *channel)
-{
-  char hz[10];
-  dtostrf(Frequency, 0, 2, hz);
-  char text[80];
-  snprintf(text, sizeof(text), "%s %s @ %s Hz", Enabled ? "running" : "stopped", WaveName, hz);
-  BlaeckSerial.writeMessage(channel, text);
-}
-
-void SendStatusMessage()
-{
-  static unsigned long lastStatusMs = 0;
-  static bool first = true;
-
-  if (!first && millis() - lastStatusMs < 10000UL)
-    return;
-
-  first = false;
-  lastStatusMs = millis();
-  WriteStatus("Status");
-}
-
-void UpdateWaveform()
-{
-  unsigned long now = micros();
-  double dt = (now - lastMicros) * 1e-6; // [s]
-  lastMicros = now;
-
-  if (!Enabled)
-  {
-    Output = Offset;
-    return;
-  }
-
-  // Advance and wrap the normalized phase (0..1).
-  phase += (double)Frequency * dt;
-  phase -= floor(phase);
-
-  double w = 0.0;
-  switch (waveIndex)
-  {
-  case 1: // Square
-    w = (phase < 0.5) ? 1.0 : -1.0;
-    break;
-  case 2: // Triangle: +1 at phase 0, -1 at phase 0.5
-    w = 1.0 - 4.0 * fabs(phase - 0.5);
-    break;
-  case 3: // Sawtooth: -1 .. +1 ramp
-    w = 2.0 * phase - 1.0;
-    break;
-  default: // Sine
-    w = sin(2.0 * PI * phase);
-    break;
-  }
-
-  Output = Offset + Amplitude * w;
-}
 
 void onSetFreq(const char *command, const char *const *params, byte paramCount)
 {
