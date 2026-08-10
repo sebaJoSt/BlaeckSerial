@@ -564,6 +564,11 @@ public:
   void write(String signalName, double value, unsigned long messageID, unsigned long long timestamp);
   void write(String signalName, const char *value, unsigned long messageID, unsigned long long timestamp);
 
+  // Index of a registered signal, or -1 if there is none by that name. Resolve once in setup()
+  // and use the by-index calls below on anything that runs often: the by-name calls build a
+  // temporary String from their argument on every call, which is a heap allocation per write.
+  int findSignalIndex(String signalName);
+
   // Update value and write directly - by index
   void write(int signalIndex, bool value);
   void write(int signalIndex, byte value);
@@ -748,7 +753,6 @@ public:
 
 private:
   unsigned long long getTimeStamp();
-  int findSignalIndex(String signalName);
   void setSignalName(int signalIndex, String signalName);
   void _setTimedDataState(bool timedActivated, unsigned long timedInterval_ms);
   void _parseCommandTokens(const char *raw);

@@ -30,6 +30,11 @@ without being configured for that board in advance.
   Hand-typed frames like `<SET_ENABLE, 1>` are now rejected rather than silently accepted.
 
 ### Added
+- **`findSignalIndex()` is public.** The by-index `write()` and `update()` calls were
+  reachable but their indices were not: the lookup that produces one was private. Resolve
+  an index once in `setup()` and use the by-index calls on anything that runs often — the
+  by-name calls build a temporary `String` from their argument on every call, which is a
+  heap allocation per write. Returns `-1` when no signal has that name.
 - **The command catalog states how long a command may be.** `0xA0` opens with
   `CommandPayloadMax`: the characters a device can receive between the delimiters. One
   receive buffer serves every command, so a host subtracts the name and its comma to get
