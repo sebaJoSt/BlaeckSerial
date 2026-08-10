@@ -1085,7 +1085,11 @@ bool BlaeckSerial::recvWithStartEndMarkers()
         ndx++;
         if (ndx >= MAXIMUM_CHAR_COUNT)
         {
+          // Full: this character and every one after it overwrites the last slot and is lost.
+          // Recorded here because it is the only point at which the loss is visible - by the
+          // time the frame is parsed it looks like a complete, shorter command.
           ndx = MAXIMUM_CHAR_COUNT - 1;
+          _receiveOverflowed = true;
         }
       }
       else
@@ -1100,6 +1104,7 @@ bool BlaeckSerial::recvWithStartEndMarkers()
     else if (rc == startMarker)
     {
       recvInProgress = true;
+      _receiveOverflowed = false;
     }
   }
 
@@ -1183,7 +1188,10 @@ void BlaeckSerial::_parseCommandTokens(const char *raw)
 {
   _parsedCommand[0] = '\0';
   _parsedParamCount = 0;
-  _parsedTruncated = false;
+  // Characters were dropped while the frame was being received, so whatever follows is a
+  // fragment however complete it looks. Reset here with the rest of the parse state rather
+  // than after the empty-frame check, or an empty frame would inherit the previous verdict.
+  _parsedTruncated = _receiveOverflowed;
   for (byte i = 0; i < MAX_COMMAND_PARAM_COUNT; i++)
   {
     _parsedParamPtrs[i] = nullptr;
@@ -1193,11 +1201,6 @@ void BlaeckSerial::_parseCommandTokens(const char *raw)
   {
     return;
   }
-
-  // Longer than the receive buffer: strncpy is about to shorten it, so say so rather than
-  // parse the remains as though they were the whole command.
-  if (strlen(raw) > sizeof(_parsedTokenBuffer) - 1)
-    _parsedTruncated = true;
 
   strncpy(_parsedTokenBuffer, raw, sizeof(_parsedTokenBuffer) - 1);
   _parsedTokenBuffer[sizeof(_parsedTokenBuffer) - 1] = '\0';

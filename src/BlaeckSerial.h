@@ -1062,6 +1062,9 @@ private:
   // Set when the frame did not fit: strncpy shortened it, or the argument list hit the cap.
   // What was parsed is then not what was sent, so no handler may act on it.
   bool _parsedTruncated = false;
+  // Set while a frame is being received, once its characters no longer fit and are being
+  // dropped. The receive loop is the only place that can see it happen.
+  bool _receiveOverflowed = false;
   // Monotonic message id stamped into the 0xA5 Command Ack frame header.
   unsigned long _commandAckMsgId = 0;
 #if BLAECK_ENABLE_MESSAGES
