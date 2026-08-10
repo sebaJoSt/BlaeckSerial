@@ -167,15 +167,10 @@ void RefreshWaveName()
     snprintf(WaveName, sizeof(WaveName), "%u", (unsigned)waveIndex);
 }
 
-// Offset as text for its message channel, to one decimal (SET_OFFSET's step). Registered with
-// the channel, so the library calls it whenever it builds the catalog: the value is fetched at
-// that moment rather than stored, and no path that changes Offset can leave a stale copy behind.
-// Formatting only - it runs while a frame is being built, and in unbuffered mode while that
-// frame is going out, so anything slow would stall it. Sample slow sources in loop() instead.
-// Same integer trick as WriteStatus - AVR does not link float printf, so %f would print blank -
-// except Offset is signed, so the sign is written separately: integer division of a negative
-// value would otherwise strand a minus in the fractional part.
-// A Home Assistant number reads its state as a bare numeric, so the text carries no unit.
+// Offset as text for its message channel: one decimal (SET_OFFSET's step) and no unit, since a
+// Home Assistant number reads its state as a bare numeric. AVR does not link float printf, so
+// the digits come from integers - the sign separately, or dividing a negative value would
+// strand the minus in the fractional part.
 const char *OffsetState()
 {
   static char text[12];
