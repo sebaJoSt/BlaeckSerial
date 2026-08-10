@@ -34,19 +34,19 @@
     event         --                             wave/evt/Activity        idle_warning / resumed
 
   --- HOW A CONTROL GETS ITS VALUE BACK ---
-  A control shows what the device applied, not what you typed:
 
-   Home Assistant            MQTT broker             Loggbok            this sketch
-          |                       |                     |                    |
-          |  wave/_cmd/SET_FREQ   |       "1.5"         |  <SET_FREQ,1.5>    |
-          |---------------------->|-------------------->|------------------->|  onSetFreq()
-          |                       |                     |                    |    Frequency = 1.5
-          |    wave/Frequency     |       "1.5"         |   signal frame     |
-          |<----------------------|<--------------------|<-------------------|  tick()
+   Home Assistant          MQTT broker           Loggbok         this sketch
+          |                     |                   |                 |
+          | wave/_cmd/SET_FREQ  |      "1.5"        | <SET_FREQ,1.5>  |
+  command |-------------------->|------------------>|---------------->|  onSetFreq()
+          |                     |                   |                 |    Frequency = 1.5
+          |   wave/Frequency    |      "1.5"        |  signal frame   |
+    state |<--------------------|<------------------|<----------------|  write("Frequency", Frequency)
 
-  The way back differs per control: a signal rides the next data frame, so it needs a running
-  log. SET_OFFSET instead carries its own state, which writeCommandState() sends the moment
-  the handler runs - logging or not.
+  Sending a value is a request, not a fact: it can be clamped, rejected, lost on the way, or
+  replaced by the device on its next boot. So every control reports its state back, and what a
+  dashboard shows is the device's value rather than its own guess. SET_OFFSET makes the same
+  trip from a message channel instead of a signal.
 
   Loggbok CLI (log fast enough to resolve the wave, e.g. 20 ms):
     lgbk log --port COM24 --table wave --signals * --interval 20 \
