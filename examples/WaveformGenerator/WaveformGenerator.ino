@@ -50,8 +50,7 @@
 BlaeckSerial BlaeckSerial;
 
 //---PUBLISHED AS SIGNALS (fixed set -> safe to control while logging)
-// TitleCase throughout: each name is the signal name a host sees, so the variable and the
-// topic read the same. addSignal() keeps a pointer to these, so they must be globals.
+// addSignal() keeps a pointer to these, so they have to be globals.
 float Output = 0.0;
 float Frequency = 1.0; // [Hz]
 float Amplitude = 1.0;
@@ -64,7 +63,6 @@ char WaveName[12];
 
 //---PUBLISHED AS A COMMAND'S OWN STATE
 // Not a signal and not logged: SET_OFFSET carries this itself, rendered by OffsetState().
-// Still TitleCase, because "Offset" is the name that reaches the host.
 float Offset = 0.0;
 
 //---GENERATOR STATE (never leaves the sketch)
