@@ -20,9 +20,6 @@ without being configured for that board in advance.
   and slave-ID bytes are still emitted (always `0`), so existing Blaeck hosts
   (e.g. Loggbok) need no changes.
 
-- **A typed command now requires its value.** A frame without one is rejected
-  (`BLAECK_ACK_MISSING_VALUE`) instead of reaching the handler. Valueless usage — query,
-  toggle — belongs on `onCommand`.
 - **Command parameters are no longer trimmed.** A leading space is part of the value:
   `<SET_LABEL, hi>` sets `" hi"`, and `<SET_ENABLE, 1>` is rejected.
 
@@ -33,9 +30,6 @@ without being configured for that board in advance.
 - **`findSignalIndex()` is public.** Resolve an index once in `setup()` and use the by-index
   `write()` / `update()` calls on anything that runs often — the by-name ones build a temporary
   `String` per call. Returns `-1` when no signal has that name.
-- **`CommandPayloadMax` in the `0xA0` catalog:** the characters a device can receive between
-  the delimiters. A host subtracts the command name and its comma to get the room left for
-  parameters, and refuses an over-long value rather than letting the device drop it on arrival.
 - **Typed commands (`0xA0` / `0xA5`).** `onNumberCommand`, `onSwitchCommand`,
   `onSelectCommand`, `onTextCommand` and `onButtonCommand` register a command
   together with what it accepts — range, step, unit, options, text length — so the
@@ -43,7 +37,8 @@ without being configured for that board in advance.
   6.0.0, which stay for commands that carry no metadata. Values outside the declared
   range, bad select indices, over-long text and a missing value are rejected before the
   handler runs, and a frame that did not fit — too many parameters, or longer than the receive
-  buffer — is rejected for every command, `onCommand` included. Every dispatch is acknowledged
+  buffer, which `CommandPayloadMax` in the catalog lets a host check first — is rejected for
+  every command, `onCommand` included. Every dispatch is acknowledged
   with an accept/reject status, a reason code, and two hashes: one over the command as received,
   one over its name alone, so an ack still names its command when the bytes differ.
   The state a control shows is named as a bare `F("Frequency")` — the signal that
