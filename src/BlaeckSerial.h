@@ -293,18 +293,57 @@ enum BlaeckEntityCategory
   BLAECK_CAT_DIAGNOSTIC = 2 // HA entity_category "diagnostic"
 };
 
-// What kind of thing a typed command's stateSignal names (0xA0, one byte after the
-// stateSignal string). SIGNAL is a signal added with addSignal(); MESSAGE is a channel
-// declared with addMessageChannel(), whose value the sketch pushes with writeMessage().
-//
-// A message channel is independent of the signal table, so a device that adds no signals
-// at all can still report what its controls are set to. Only meaningful when stateSignal
-// is set.
+// What a typed command's state name refers to, carried in the 0xA0 entry as one byte after
+// that name. The library sets it from how the command was declared; a sketch does not pass
+// it. Kept public because it is part of the frame's vocabulary.
 enum BlaeckStateSource
 {
-  BLAECK_STATE_SIGNAL = 0, // stateSignal names an addSignal() signal (default)
-  BLAECK_STATE_MESSAGE = 1 // stateSignal names an addMessageChannel() channel
+  BLAECK_STATE_SIGNAL = 0, // an addSignal() signal
+  BLAECK_STATE_MESSAGE = 1 // a message channel the command owns (see BlaeckOwnState)
 };
+
+// Where a typed command's state comes from. Constructed implicitly from a name, so the
+// common case needs no extra syntax and reads exactly as it always did:
+//
+//   onNumberCommand("SET_FREQ", onSetFreq, F("Frequency"), 0.0f, 2.0f, 0.01f);  // a signal
+//   onTextCommand("SET_LABEL", onSetLabel, nullptr, 32);                        // no state
+//
+// The other form is spelled out, because it does more than name something:
+//
+//   onNumberCommand("SET_OFFSET", onSetOffset,
+//                   BlaeckOwnState(F("Offset"), OffsetState), -100.0f, 100.0f, 0.1f);
+//
+// which makes the command carry its own state rather than mirror a signal.
+struct BlaeckCommandState
+{
+  const __FlashStringHelper *name = nullptr;
+  BlaeckStateTextGetter getStateText = nullptr;
+  uint8_t source = BLAECK_STATE_SIGNAL;
+
+  // Deliberately not explicit: a bare F("Frequency") or nullptr has to keep working.
+  BlaeckCommandState(const __FlashStringHelper *signalName = nullptr)
+      : name(signalName) {}
+
+  BlaeckCommandState(const __FlashStringHelper *channelName, BlaeckStateTextGetter getter, uint8_t src)
+      : name(channelName), getStateText(getter), source(src) {}
+};
+
+// State the command carries itself: it declares a message channel of that name, asks the
+// getter for the value whenever a host polls the channel catalog, and announces it once at
+// registration - so a host already connected when the board resets is corrected.
+//
+// The channel belongs to the command and cannot be reached from the sketch: addMessageChannel()
+// and writeMessage() both refuse that name. Its value comes from the getter and nowhere else,
+// which is what makes the catalog and the pushes agree. Push a change with
+// writeCommandState(); see BlaeckStateTextGetter for what the getter may do.
+//
+// Independent of the signal table, so a device that adds no signals can still report what its
+// controls are set to. Requires BLAECK_ENABLE_COMMAND_META - without it the typed helpers keep
+// no metadata, so no channel is declared and no state is published.
+inline BlaeckCommandState BlaeckOwnState(const __FlashStringHelper *name, BlaeckStateTextGetter getStateText)
+{
+  return BlaeckCommandState(name, getStateText, BLAECK_STATE_MESSAGE);
+}
 
 // Acknowledgement reason for the 0xA5 Command Ack frame. Sent back to the
 // serial host after a command is dispatched so a host (e.g. Loggbok) can confirm
@@ -419,6 +458,20 @@ public:
   // passed to addMessageChannel() are dropped.
   void writeMessage(const char *channelName, const char *text);
   void writeMessage(const char *channelName, const char *text, unsigned long messageID);
+
+  // Publish a command's own state now: asks the getter it was registered with and sends the
+  // value on the channel the command owns. The push is what makes a change visible at once -
+  // the catalog only reports on demand, when a host asks for it.
+  //
+  // Pass the handler's own `command` parameter and there is no literal to keep in step:
+  //
+  //   void onSetOffset(const char *command, const char *const *params, byte paramCount)
+  //   { Offset = ...; BlaeckSerial.writeCommandState(command); }
+  //
+  // Does nothing for a command with no state of its own, or one whose state is a signal -
+  // there the signal's own write is what reports it.
+  void writeCommandState(const char *command);
+  void writeCommandState(const char *command, unsigned long messageID);
 
   // ----- Events (Home Assistant event entities, 0x85) -----
   // With BLAECK_ENABLE_EVENTS=0 these still compile but do nothing.
@@ -630,23 +683,21 @@ public:
   // category (optional): Home Assistant entity_category. Leave at BLAECK_CAT_NONE for a
   // primary control; BLAECK_CAT_CONFIG marks a device setting, which Home Assistant then
   // keeps off its auto-generated dashboards.
-  // stateSource (optional): whether stateSignal names a signal (default) or a message
-  // channel - see BlaeckStateSource. Only meaningful when stateSignal is set.
+  // state: the signal that mirrors this command's value, given as a bare F("Name") - or
+  // BlaeckOwnState(F("Name"), getter) to have the command carry its own state instead.
+  // nullptr for an optimistic / open-loop control. See BlaeckCommandState.
   bool onNumberCommand(const char *command, BlaeckCommandHandler handler,
-                       const __FlashStringHelper *stateSignal,
+                       BlaeckCommandState state,
                        float min, float max, float step,
                        const __FlashStringHelper *unit = nullptr,
-                       BlaeckEntityCategory category = BLAECK_CAT_NONE,
-                       BlaeckStateSource stateSource = BLAECK_STATE_SIGNAL);
+                       BlaeckEntityCategory category = BLAECK_CAT_NONE);
   bool onSwitchCommand(const char *command, BlaeckCommandHandler handler,
-                       const __FlashStringHelper *stateSignal,
-                       BlaeckEntityCategory category = BLAECK_CAT_NONE,
-                       BlaeckStateSource stateSource = BLAECK_STATE_SIGNAL);
+                       BlaeckCommandState state,
+                       BlaeckEntityCategory category = BLAECK_CAT_NONE);
   bool onSelectCommand(const char *command, BlaeckCommandHandler handler,
-                       const __FlashStringHelper *stateSignal,
+                       BlaeckCommandState state,
                        const __FlashStringHelper *optionsCsv,
-                       BlaeckEntityCategory category = BLAECK_CAT_NONE,
-                       BlaeckStateSource stateSource = BLAECK_STATE_SIGNAL);
+                       BlaeckEntityCategory category = BLAECK_CAT_NONE);
   bool onButtonCommand(const char *command, BlaeckCommandHandler handler,
                        BlaeckEntityCategory category = BLAECK_CAT_NONE);
   // Copies option `index` of a select command's declared list into `out`, so a sketch can
@@ -662,10 +713,9 @@ public:
   // advertised limit (in decoded bytes) enforced before dispatch; a longer value
   // is rejected (BLAECK_ACK_TOO_LONG).
   bool onTextCommand(const char *command, BlaeckCommandHandler handler,
-                     const __FlashStringHelper *stateSignal = nullptr,
+                     BlaeckCommandState state = BlaeckCommandState(),
                      unsigned int maxLength = 255,
-                     BlaeckEntityCategory category = BLAECK_CAT_NONE,
-                     BlaeckStateSource stateSource = BLAECK_STATE_SIGNAL);
+                     BlaeckEntityCategory category = BLAECK_CAT_NONE);
 
   // ----- Before data write callback  -----
   // Called just before signal data is sent, in normal loop context
@@ -728,6 +778,13 @@ private:
                         uint8_t category,
                         uint8_t stateSource);
   byte _validateTypedCommand(byte handlerIndex);
+  // Declares the channel a typed command owns. Separate from addMessageChannel() so that one
+  // can refuse an owned name outright rather than needing a "unless it is mine" exception.
+  bool _addOwnedMessageChannel(const __FlashStringHelper *channelName, BlaeckStateTextGetter getStateText);
+  // Declares and announces the channel for a command registered with BlaeckOwnState. A no-op
+  // for any other kind of state, so every typed helper can call it unconditionally.
+  void _declareOwnState(const char *command, const BlaeckCommandState &state);
+
   static void _percentDecodeInPlace(char *s);
   static long _flashCsvIndexOf(const __FlashStringHelper *csv, const char *value);
 #endif
@@ -932,10 +989,21 @@ private:
     // catalog reports cannot lag behind the sketch - there is no stored copy to
     // go stale, and nothing the sketch has to remember to refresh.
     BlaeckStateTextGetter getStateText = nullptr;
+    // Declared by a typed command through BlaeckOwnState, which makes the channel that
+    // command's alone: addMessageChannel() and writeMessage() both refuse the name, so the
+    // value on its topic can only ever come from the getter above.
+    bool ownedByCommand = false;
     bool diagnostic = false;
     bool inUse = false;
   };
   MessageChannelEntry _messageChannels[MAX_MESSAGE_CHANNELS];
+
+  // Equality between a flash string and a RAM one. strcmp_P reads its FIRST argument from RAM,
+  // which is the wrong way round here, so the flash side is read with pgm_read_byte.
+  static bool _flashStringEqualsName(const __FlashStringHelper *flashName, const char *name);
+  // The 0x95 frame itself, by channel index. Reached by writeMessage() after its guards and by
+  // writeCommandState() for a channel those guards deliberately refuse.
+  void _writeMessageFrame(int channelIndex, const char *text, unsigned long messageID);
 #endif
 #if BLAECK_ENABLE_EVENTS
   struct EventChannelEntry

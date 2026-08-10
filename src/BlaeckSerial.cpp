@@ -698,50 +698,187 @@ void BlaeckSerial::clearAllCommandHandlers()
   _anyCommandHandler = nullptr;
 }
 
+void BlaeckSerial::writeCommandState(const char *command)
+{
+  this->writeCommandState(command, 1);
+}
+
+void BlaeckSerial::writeCommandState(const char *command, unsigned long messageID)
+{
+#if !BLAECK_ENABLE_COMMAND_META || !BLAECK_ENABLE_MESSAGES
+  (void)command;
+  (void)messageID;
+#else
+  if (command == nullptr)
+    return;
+
+  for (byte i = 0; i < MAX_COMMAND_HANDLERS; i++)
+  {
+    const CommandHandlerEntry &e = _commandHandlers[i];
+    if (!e.inUse || e.stateSource != BLAECK_STATE_MESSAGE || e.stateSignal == nullptr)
+      continue;
+    if (strcmp(e.command, command) != 0)
+      continue;
+
+    // The channel was declared from this same name at registration, so it exists unless the
+    // table was full - in which case there is nothing to publish to and the warning was
+    // already given there.
+    for (byte c = 0; c < MAX_MESSAGE_CHANNELS; c++)
+    {
+      if (!_messageChannels[c].inUse || !_messageChannels[c].ownedByCommand)
+        continue;
+      if (!_flashStringEqualsName(e.stateSignal, _messageChannels[c].name))
+        continue;
+
+      BlaeckStateTextGetter getter = _messageChannels[c].getStateText;
+      _writeMessageFrame(c, getter != nullptr ? getter() : nullptr, messageID);
+      return;
+    }
+    return;
+  }
+#endif
+}
+
+#if BLAECK_ENABLE_COMMAND_META
+// Copies a flash name into `out` and declares the channel as owned by a command. Kept apart
+// from addMessageChannel() so that one can refuse an owned name outright, with no exception
+// for "unless the caller is me".
+bool BlaeckSerial::_addOwnedMessageChannel(const __FlashStringHelper *channelName, BlaeckStateTextGetter getStateText)
+{
+#if !BLAECK_ENABLE_MESSAGES
+  (void)channelName;
+  (void)getStateText;
+  return false;
+#else
+  if (channelName == nullptr)
+    return false;
+
+  char name[MAX_MESSAGE_NAME_COUNT];
+  PGM_P p = reinterpret_cast<PGM_P>(channelName);
+  byte len = 0;
+  byte c;
+  while ((c = pgm_read_byte(p + len)) != 0 && len + 1 < MAX_MESSAGE_NAME_COUNT)
+  {
+    name[len] = (char)c;
+    len++;
+  }
+  name[len] = '\0';
+  if (len == 0)
+    return false;
+
+  int existing = _findMessageChannel(name);
+  if (existing >= 0 && !_messageChannels[existing].ownedByCommand)
+  {
+    // The sketch declared this name itself. The command takes it, because its state has to
+    // come from one place - but say so, since the addMessageChannel() line is now dead.
+    if (_debugStream != nullptr)
+    {
+      _debugStream->print(F("Channel taken over by a command's own state; drop the addMessageChannel() for: "));
+      _debugStream->println(name);
+    }
+  }
+
+  if (existing >= 0)
+  {
+    _messageChannels[existing].icon = nullptr;
+    _messageChannels[existing].diagnostic = true;
+    _messageChannels[existing].getStateText = getStateText;
+    _messageChannels[existing].ownedByCommand = true;
+    return true;
+  }
+
+  for (byte i = 0; i < MAX_MESSAGE_CHANNELS; i++)
+  {
+    if (_messageChannels[i].inUse)
+      continue;
+    strncpy(_messageChannels[i].name, name, MAX_MESSAGE_NAME_COUNT - 1);
+    _messageChannels[i].name[MAX_MESSAGE_NAME_COUNT - 1] = '\0';
+    _messageChannels[i].icon = nullptr;
+    // Diagnostic on principle: a host that announces a sensor for it anyway should file it
+    // away, since the control already shows this value.
+    _messageChannels[i].diagnostic = true;
+    _messageChannels[i].getStateText = getStateText;
+    _messageChannels[i].ownedByCommand = true;
+    _messageChannels[i].inUse = true;
+    return true;
+  }
+
+  if (_debugStream != nullptr)
+  {
+    _debugStream->print(F("Message channel table full for a command's own state: "));
+    _debugStream->println(name);
+  }
+  return false;
+#endif
+}
+
+void BlaeckSerial::_declareOwnState(const char *command, const BlaeckCommandState &state)
+{
+  if (state.source != BLAECK_STATE_MESSAGE || state.getStateText == nullptr)
+    return;
+
+  if (!_addOwnedMessageChannel(state.name, state.getStateText))
+    return;
+
+  // Announce once, here. A host connecting later reads the value from the channel catalog,
+  // but one already connected when the board reset has no reason to re-read a catalog it
+  // already holds - and the sketch's variables are back at their startup values. Dropped
+  // harmlessly when no host holds the catalog yet, which is the cold-start case the poll
+  // covers.
+  writeCommandState(command);
+}
+#endif
+
 bool BlaeckSerial::onNumberCommand(const char *command, BlaeckCommandHandler handler,
-                                   const __FlashStringHelper *stateSignal,
+                                   BlaeckCommandState state,
                                    float min, float max, float step,
                                    const __FlashStringHelper *unit,
-                                   BlaeckEntityCategory category,
-                                   BlaeckStateSource stateSource)
+                                   BlaeckEntityCategory category)
 {
   bool ok = onCommand(command, handler);
 #if BLAECK_ENABLE_COMMAND_META
   if (ok)
-    _annotateCommand(command, BLAECK_CMD_NUMBER, stateSignal, min, max, step, unit, nullptr, (uint8_t)category, (uint8_t)stateSource);
+  {
+    _annotateCommand(command, BLAECK_CMD_NUMBER, state.name, min, max, step, unit, nullptr, (uint8_t)category, state.source);
+    _declareOwnState(command, state);
+  }
 #else
-  (void)stateSignal; (void)min; (void)max; (void)step; (void)unit; (void)category; (void)stateSource;
+  (void)state; (void)min; (void)max; (void)step; (void)unit; (void)category;
 #endif
   return ok;
 }
 
 bool BlaeckSerial::onSwitchCommand(const char *command, BlaeckCommandHandler handler,
-                                   const __FlashStringHelper *stateSignal,
-                                   BlaeckEntityCategory category,
-                                   BlaeckStateSource stateSource)
+                                   BlaeckCommandState state,
+                                   BlaeckEntityCategory category)
 {
   bool ok = onCommand(command, handler);
 #if BLAECK_ENABLE_COMMAND_META
   if (ok)
-    _annotateCommand(command, BLAECK_CMD_SWITCH, stateSignal, 0.0f, 0.0f, 0.0f, nullptr, nullptr, (uint8_t)category, (uint8_t)stateSource);
+  {
+    _annotateCommand(command, BLAECK_CMD_SWITCH, state.name, 0.0f, 0.0f, 0.0f, nullptr, nullptr, (uint8_t)category, state.source);
+    _declareOwnState(command, state);
+  }
 #else
-  (void)stateSignal; (void)category; (void)stateSource;
+  (void)state; (void)category;
 #endif
   return ok;
 }
 
 bool BlaeckSerial::onSelectCommand(const char *command, BlaeckCommandHandler handler,
-                                   const __FlashStringHelper *stateSignal,
+                                   BlaeckCommandState state,
                                    const __FlashStringHelper *optionsCsv,
-                                   BlaeckEntityCategory category,
-                                   BlaeckStateSource stateSource)
+                                   BlaeckEntityCategory category)
 {
   bool ok = onCommand(command, handler);
 #if BLAECK_ENABLE_COMMAND_META
   if (ok)
-    _annotateCommand(command, BLAECK_CMD_SELECT, stateSignal, 0.0f, 0.0f, 0.0f, nullptr, optionsCsv, (uint8_t)category, (uint8_t)stateSource);
+  {
+    _annotateCommand(command, BLAECK_CMD_SELECT, state.name, 0.0f, 0.0f, 0.0f, nullptr, optionsCsv, (uint8_t)category, state.source);
+    _declareOwnState(command, state);
+  }
 #else
-  (void)stateSignal; (void)optionsCsv; (void)category; (void)stateSource;
+  (void)state; (void)optionsCsv; (void)category;
 #endif
   return ok;
 }
@@ -761,21 +898,22 @@ bool BlaeckSerial::onButtonCommand(const char *command, BlaeckCommandHandler han
 }
 
 bool BlaeckSerial::onTextCommand(const char *command, BlaeckCommandHandler handler,
-                                 const __FlashStringHelper *stateSignal,
+                                 BlaeckCommandState state,
                                  unsigned int maxLength,
-                                 BlaeckEntityCategory category,
-                                 BlaeckStateSource stateSource)
+                                 BlaeckEntityCategory category)
 {
   bool ok = onCommand(command, handler);
 #if BLAECK_ENABLE_COMMAND_META
   if (ok)
+  {
     // maxLength is stored in meta_max (reused as the text length limit).
-    _annotateCommand(command, BLAECK_CMD_TEXT, stateSignal, 0.0f, (float)maxLength, 0.0f, nullptr, nullptr, (uint8_t)category, (uint8_t)stateSource);
+    _annotateCommand(command, BLAECK_CMD_TEXT, state.name, 0.0f, (float)maxLength, 0.0f, nullptr, nullptr, (uint8_t)category, state.source);
+    _declareOwnState(command, state);
+  }
 #else
-  (void)stateSignal;
+  (void)state;
   (void)maxLength;
   (void)category;
-  (void)stateSource;
 #endif
   return ok;
 }
@@ -1241,11 +1379,42 @@ bool BlaeckSerial::addMessageChannel(const char *channelName, const __FlashStrin
   return this->addMessageChannel(channelName, icon, diagnostic, nullptr);
 }
 
+bool BlaeckSerial::_flashStringEqualsName(const __FlashStringHelper *flashName, const char *name)
+{
+  if (flashName == nullptr || name == nullptr)
+    return false;
+
+  PGM_P p = reinterpret_cast<PGM_P>(flashName);
+  unsigned int i = 0;
+  for (;; i++)
+  {
+    byte a = pgm_read_byte(p + i);
+    char b = name[i];
+    if (a != (byte)b)
+      return false;
+    if (a == 0)
+      return true;
+  }
+}
+
 bool BlaeckSerial::addMessageChannel(const char *channelName, const __FlashStringHelper *icon, bool diagnostic,
                                      BlaeckStateTextGetter getStateText)
 {
   if (channelName == nullptr || channelName[0] == '\0')
     return false;
+
+  // A channel a command owns is that command's alone: its value comes from the getter it was
+  // registered with, and nowhere else.
+  int owned = _findMessageChannel(channelName);
+  if (owned >= 0 && _messageChannels[owned].ownedByCommand)
+  {
+    if (_debugStream != nullptr)
+    {
+      _debugStream->print(F("Channel belongs to a command's own state and cannot be redeclared: "));
+      _debugStream->println(channelName);
+    }
+    return false;
+  }
 
   if (strlen(channelName) >= MAX_MESSAGE_NAME_COUNT)
   {
@@ -1339,6 +1508,30 @@ void BlaeckSerial::writeMessage(const char *channelName, const char *text, unsig
     }
     return;
   }
+
+  // A channel a command owns reports what its getter says and nothing else. A line pushed
+  // here would show until the next catalog poll and then be silently replaced, which is worse
+  // than refusing it. Use writeCommandState() to publish the getter's value.
+  if (_messageChannels[channelIndex].ownedByCommand)
+  {
+    if (_debugStream != nullptr)
+    {
+      _debugStream->print(F("Message dropped, channel belongs to a command's own state; use writeCommandState() for: "));
+      _debugStream->println(channelName);
+    }
+    return;
+  }
+
+  _writeMessageFrame(channelIndex, text, messageID);
+}
+
+// The 0x95 frame itself. Split out because writeCommandState() has to reach it for a channel
+// writeMessage() deliberately refuses - the guard is about who may choose the text, not about
+// how it is sent.
+void BlaeckSerial::_writeMessageFrame(int channelIndex, const char *text, unsigned long messageID)
+{
+  if (StreamRef == nullptr)
+    return;
 
   if (text == nullptr)
     text = "";

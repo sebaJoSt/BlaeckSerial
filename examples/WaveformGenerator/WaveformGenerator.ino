@@ -94,15 +94,15 @@ void setup()
 
   BlaeckSerial.onNumberCommand("SET_FREQ", onSetFreq, F("Frequency"), 0.0f, 2.0f, 0.01f, F("Hz"));
   BlaeckSerial.onNumberCommand("SET_AMP", onSetAmp, F("Amplitude"), 0.0f, 100.0f, 0.1f);
-  // Offset reports its state from the "Offset" MESSAGE CHANNEL, not a signal - the one
-  // control in this sketch wired that way, so both routes can be compared side by side.
-  // A message channel is independent of the signal table and of whatever the host's user
-  // selects for logging, so this control keeps showing state either way. onSetOffset
-  // pushes each new value with writeMessage(), and the channel also hands the catalog its
-  // current value (see addMessageChannel below), so a host that reconnects reads the right
-  // number straight away.
-  BlaeckSerial.onNumberCommand("SET_OFFSET", onSetOffset, F("Offset"), -100.0f, 100.0f, 0.1f,
-                               nullptr, BLAECK_CAT_NONE, BLAECK_STATE_MESSAGE);
+  // The one control here that carries its OWN state instead of mirroring a signal, so both
+  // routes can be compared side by side. BlaeckOwnState declares a channel called "Offset",
+  // asks OffsetState for the value whenever a host polls the channel catalog, and announces it
+  // once now - so a host already connected when the board resets is corrected. That state is
+  // independent of the signal table and of what the host's user selects for logging, and no
+  // separate sensor appears for it: the control is where you read the offset.
+  BlaeckSerial.onNumberCommand("SET_OFFSET", onSetOffset,
+                               BlaeckOwnState(F("Offset"), OffsetState),
+                               -100.0f, 100.0f, 0.1f);
   // State comes from the WaveName string signal, not an index: the host matches the option
   // name straight against the list below, so nothing has to carry the index.
   BlaeckSerial.onSelectCommand("SET_WAVE", onSetWave, F("WaveName"), F("Sine,Square,Triangle,Sawtooth"));
@@ -121,19 +121,6 @@ void setup()
   // the first line is written.
   BlaeckSerial.addMessageChannel("Status", F("mdi:pulse"), true);
   BlaeckSerial.addMessageChannel("StatusOnDemand", F("mdi:message-text"), true);
-  // Marked diagnostic even though a host that knows this channel backs SET_OFFSET will give
-  // it no text sensor at all - the control already shows the value. The flag is the device's
-  // statement about the channel, so it still does its job on a host that announces one anyway.
-  // The fourth argument hands the channel a getter instead of a value: the library asks for the
-  // current text whenever a host polls the catalog, so the control is right from the first poll
-  // without the sketch pushing anything.
-  BlaeckSerial.addMessageChannel("Offset", F("mdi:arrow-up-down"), true, OffsetState);
-  // Announce the value once at boot as well. The catalog covers a host that connects or polls
-  // afterwards, but a host already connected when the board resets keeps the value from before
-  // the reset - it has no reason to re-read a catalog it already has, and Offset is back to 0.
-  // Dropped harmlessly if no host has the catalog yet, which is the cold-start case the poll
-  // already handles.
-  BlaeckSerial.writeMessage("Offset", OffsetState());
 
   // Each event channel declares up-front the closed set of events it can report.
   // addEventType() does the same one name at a time, for a list built conditionally.
@@ -297,10 +284,11 @@ void onSetOffset(const char *command, const char *const *params, byte paramCount
   if (paramCount >= 1 && params[0][0] != '\0')
   {
     Offset = roundToDecimals((float)atof(params[0]), 4);
-    // The other handlers write their signal back; this one pushes a message instead,
-    // because SET_OFFSET declares the channel as its state source. Pushing is what makes
-    // the change visible immediately - the getter alone would only be read at the next poll.
-    BlaeckSerial.writeMessage("Offset", OffsetState());
+    // The other handlers write their signal back; this one publishes the command's own state.
+    // Pushing is what makes the change visible at once - the getter alone is only read when a
+    // host polls the catalog. `command` is this handler's own parameter, so there is no name
+    // here to keep in step with setup().
+    BlaeckSerial.writeCommandState(command);
   }
 }
 
