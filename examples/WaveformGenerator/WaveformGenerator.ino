@@ -11,11 +11,9 @@
   actually applied.
 
   Signals, messages and events are three different jobs:
-    signal   a value that is sampled and logged  -> Output, Frequency, ...
-    message  a line of free text, not logged     -> "running Sine @ 1.00 Hz"
-    event    a discrete occurrence, no text      -> idle_warning, resumed
-
-  Author: Sebastian Strobl, https://github.com/sebaJoSt/BlaeckSerial
+    signal   a value that is sampled and logged       -> Output, Frequency, ...
+    message  a line of free text, not logged          -> "running Sine @ 1.00 Hz"
+    event    a discrete event from a fixed list       -> idle_warning, resumed
 
   --- WHAT YOU GET (Loggbok topic prefix "loggbok", table name "wave") ---
   Commands are published to loggbok/wave/_cmd/<NAME>, or loggbok/_all/_cmd/<NAME>.
@@ -48,29 +46,24 @@
   dashboard shows is the device's value rather than its own guess. SET_OFFSET makes the same
   trip from a message channel instead of a signal.
 
-  Loggbok CLI (log fast enough to resolve the wave, e.g. 20 ms):
-    lgbk log --port COM24 --table wave --signals * --interval 20 \
-      --mqtt --mqtt-endpoint mqtt://127.0.0.1:1884
+  Author: Sebastian Strobl, https://github.com/sebaJoSt/BlaeckSerial
 */
 
 #include "Arduino.h"
 #include "BlaeckSerial.h"
 
-#define ExampleVersion "1.0"
-
 BlaeckSerial BlaeckSerial;
 
-//---PUBLISHED AS SIGNALS (fixed set -> safe to control while logging)
+//---PUBLISHED AS SIGNALS
 // addSignal() keeps a pointer to these, so they have to be globals.
 float Output = 0.0;
 float Frequency = 1.0; // [Hz]
 float Amplitude = 1.0;
 bool Enabled = true;
 char DeviceLabel[33] = "wave-gen"; // free-text label set via SET_LABEL
-// Current shape as text, refreshed by RefreshWaveName() from the option list SET_WAVE
-// declares - so the names exist once, in flash, instead of being repeated here and kept
-// in step by hand.
-char WaveName[12];
+// Current shape as text. Starts on option 0 of SET_WAVE's list, so the control has a state
+// before the first command; RefreshWaveName() keeps it in step from then on.
+char WaveName[12] = "Sine";
 
 //---PUBLISHED AS A COMMAND'S OWN STATE
 // Not a signal and not logged: SET_OFFSET carries this itself, rendered by OffsetState().
@@ -84,19 +77,16 @@ byte waveIndex = 0;        // 0=Sine, 1=Square, 2=Triangle, 3=Sawtooth; WaveName
 void setup()
 {
   Serial.begin(115200);
+
   BlaeckSerial.begin(&Serial, 8);
 
   BlaeckSerial.DeviceName = "Waveform Generator Demo";
   BlaeckSerial.DeviceHWVersion = "Arduino Mega 2560 Rev3";
-  BlaeckSerial.DeviceFWVersion = ExampleVersion;
+  BlaeckSerial.DeviceFWVersion = "1.0";
 
   BlaeckSerial.addSignal("Output", &Output);
   BlaeckSerial.addSignal("Frequency", &Frequency);
   BlaeckSerial.addSignal("Amplitude", &Amplitude);
-  // No "Offset" signal on purpose: its control reports state from a message channel
-  // instead, declared below.
-  // No index signal: SET_WAVE reports its state as the option name, so waveIndex stays a
-  // plain variable and never reaches the host.
   BlaeckSerial.addSignal("Enabled", &Enabled);
   BlaeckSerial.addSignal("WaveName", WaveName);
   BlaeckSerial.addSignal("DeviceLabel", DeviceLabel);
@@ -112,19 +102,11 @@ void setup()
   BlaeckSerial.onNumberCommand("SET_OFFSET", onSetOffset,
                                BlaeckOwnState(F("Offset"), OffsetState),
                                -100.0f, 100.0f, 0.1f);
-  // State comes from the WaveName string signal, not an index: the host matches the option
-  // name straight against the list below, so nothing has to carry the index.
   BlaeckSerial.onSelectCommand("SET_WAVE", onSetWave, F("WaveName"), F("Sine,Square,Triangle,Sawtooth"));
   BlaeckSerial.onSwitchCommand("SET_ENABLE", onSetEnable, F("Enabled"));
   // Host percent-encodes the value; the device decodes it and enforces the 32-byte max.
-  // Config category: a device label is a setting, not a control, so Home Assistant keeps
-  // it off the auto-generated dashboards.
   BlaeckSerial.onTextCommand("SET_LABEL", onSetLabel, F("DeviceLabel"), 32, BLAECK_CAT_CONFIG);
   BlaeckSerial.onButtonCommand("STATUS", onStatus);
-
-  // After the commands, because it reads SET_WAVE's option list. addSignal() above only
-  // stored the buffer's address, so filling it now is in time for the first transmit.
-  RefreshWaveName();
 
   // Declared up-front so the host can announce one text sensor per channel before
   // the first line is written.
