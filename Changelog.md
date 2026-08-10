@@ -30,6 +30,13 @@ without being configured for that board in advance.
   Hand-typed frames like `<SET_ENABLE, 1>` are now rejected rather than silently accepted.
 
 ### Added
+- **The command catalog states how long a command may be.** `0xA0` opens with
+  `CommandPayloadMax`: the characters a device can receive between the delimiters. One
+  receive buffer serves every command, so a host subtracts the name and its comma to get
+  what is left for parameters, and can refuse an over-long value instead of watching the
+  device drop it on arrival. This matters most for text: a value is percent-encoded before
+  it is framed, so a non-ASCII character costs three characters or more per byte, and an
+  advertised `maxLength` in bytes can be unreachable well before it is met.
 - **Typed commands (`0xA0` / `0xA5`).** `onNumberCommand`, `onSwitchCommand`,
   `onSelectCommand`, `onTextCommand` and `onButtonCommand` register a command
   together with what it accepts — range, step, unit, options, text length — so the

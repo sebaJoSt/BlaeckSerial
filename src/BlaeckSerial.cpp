@@ -3594,6 +3594,14 @@ void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
     _bufReset();
     _bufHeader(0xA0, msg_id);
 
+    // How long a command this device can receive: characters between the delimiters, terminator
+    // excluded. Sent once, because one buffer serves every command - a host subtracts the name
+    // and its comma to get what is left for parameters. Anything longer is dropped on arrival,
+    // which the sender cannot otherwise know.
+    uint16_t payloadMax = (uint16_t)(MAXIMUM_CHAR_COUNT - 1);
+    _bufByte((byte)(payloadMax & 0xFF));
+    _bufByte((byte)((payloadMax >> 8) & 0xFF));
+
     for (byte i = 0; i < MAX_COMMAND_HANDLERS; i++)
     {
       CommandHandlerEntry &e = _commandHandlers[i];
@@ -3659,6 +3667,14 @@ void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
     ulngCvt.val = msg_id;
     StreamRef->write(ulngCvt.bval, 4);
     StreamRef->write(":");
+
+    // How long a command this device can receive: characters between the delimiters, terminator
+    // excluded. Sent once, because one buffer serves every command - a host subtracts the name
+    // and its comma to get what is left for parameters. Anything longer is dropped on arrival,
+    // which the sender cannot otherwise know.
+    uint16_t payloadMax = (uint16_t)(MAXIMUM_CHAR_COUNT - 1);
+    StreamRef->write((byte)(payloadMax & 0xFF));
+    StreamRef->write((byte)((payloadMax >> 8) & 0xFF));
 
     for (byte i = 0; i < MAX_COMMAND_HANDLERS; i++)
     {
