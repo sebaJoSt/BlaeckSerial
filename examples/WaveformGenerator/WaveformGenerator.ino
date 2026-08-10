@@ -96,12 +96,6 @@ void setup()
 
   BlaeckSerial.onNumberCommand("SET_FREQ", onSetFreq, F("Frequency"), 0.0f, 2.0f, 0.01f, F("Hz"));
   BlaeckSerial.onNumberCommand("SET_AMP", onSetAmp, F("Amplitude"), 0.0f, 100.0f, 0.1f);
-  // The one control here that carries its OWN state instead of mirroring a signal, so both
-  // routes can be compared side by side. BlaeckOwnState declares a channel called "Offset",
-  // asks OffsetState for the value whenever a host polls the channel catalog, and announces it
-  // once now - so a host already connected when the board resets is corrected. That state is
-  // independent of the signal table and of what the host's user selects for logging, and no
-  // separate sensor appears for it: the control is where you read the offset.
   BlaeckSerial.onNumberCommand("SET_OFFSET", onSetOffset,
                                BlaeckOwnState(F("Offset"), OffsetState),
                                -100.0f, 100.0f, 0.1f);

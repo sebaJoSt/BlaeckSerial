@@ -313,7 +313,10 @@ enum BlaeckStateSource
 //   onNumberCommand("SET_OFFSET", onSetOffset,
 //                   BlaeckOwnState(F("Offset"), OffsetState), -100.0f, 100.0f, 0.1f);
 //
-// which makes the command carry its own state rather than mirror a signal.
+// which makes the command carry its own state rather than mirror a signal. Registering it
+// announces the value once, so a host that was already connected when the board reset sees the
+// state the device came up with. The channel belongs to the command and is not offered as a
+// sensor of its own: the control is where that value is read.
 struct BlaeckCommandState
 {
   const __FlashStringHelper *name = nullptr;
