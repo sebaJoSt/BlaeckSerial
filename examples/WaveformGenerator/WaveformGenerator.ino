@@ -21,27 +21,21 @@
 
   Author: Sebastian Strobl, https://github.com/sebaJoSt/BlaeckSerial
 
-  --- DASHBOARD MAPPING (Loggbok topic prefix: "loggbok" table name: "wave") ---
-    Topic                             Widget           Meaning
-    loggbok/wave/Output               chart           live generated sample
-    loggbok/wave/Frequency            number          wave frequency [Hz]   (0..2)
-    loggbok/wave/Amplitude            number          peak amplitude        (0..100)
-    loggbok/wave/Enabled              switch          output on/off (off -> Output = Offset)
-    loggbok/wave/WaveName             select          Sine/Square/Triangle/Sawtooth (also a text sensor)
-    loggbok/wave/DeviceLabel          text            free-text label (set via SET_LABEL)
-    loggbok/wave/msg/Offset           number          DC offset             (-100..100)
-    loggbok/wave/msg/Status           text sensor     status heartbeat, every 10 s
-    loggbok/wave/msg/StatusOnDemand   text sensor     status on STATUS button press
-    loggbok/wave/evt/Output           event           idle_warning / resumed
+  --- WHAT YOU GET (Loggbok topic prefix "loggbok", table name "wave") ---
+  Commands are published to loggbok/wave/_cmd/<NAME>, or loggbok/_all/_cmd/<NAME>.
 
-  --- COMMANDS (publish to loggbok/<table>/_cmd/<NAME>, or loggbok/_all/_cmd/<NAME>) ---
-    SET_FREQ    <0..2>      frequency [Hz]            -> Frequency  (HA number, step 0.01)
-    SET_AMP     <0..100>    peak amplitude            -> Amplitude  (HA number, step 0.1)
-    SET_OFFSET  <-100..100> DC offset                 -> msg/Offset (HA number, step 0.1)
-    SET_WAVE    <0..3>      Sine/Square/Triangle/Saw  -> WaveName   (HA select; name or index)
-    SET_ENABLE  <0|1>       output on/off             -> Enabled    (HA switch)
-    SET_LABEL   <text>      free-text device label    -> DeviceLabel (HA text, max 32, config)
-    STATUS                  push status to StatusOnDemand channel   (HA button)
+    HA entity     set with                     topic
+    number        SET_FREQ    <0..2>           wave/Frequency        [Hz], step 0.01
+    number        SET_AMP     <0..100>         wave/Amplitude        step 0.1
+    number        SET_OFFSET  <-100..100>      wave/msg/Offset       step 0.1
+    select        SET_WAVE    <0..3>           wave/WaveName         name or index
+    switch        SET_ENABLE  <0|1>            wave/Enabled          off -> Output = Offset
+    text          SET_LABEL   <text>           wave/DeviceLabel      max 32, config category
+    button        STATUS                       --                    stateless; fills the sensor below
+    sensor        --                           wave/Output           live sample, with statistics
+    sensor        --                           wave/msg/Status       text: heartbeat, every 10 s
+    sensor        --                           wave/msg/StatusOnDemand  text: on STATUS press
+    event         --                           wave/evt/Activity     idle_warning / resumed
 
   Loggbok CLI (log fast enough to resolve the wave, e.g. 20 ms):
     lgbk log --port COM24 --table wave --signals * --interval 20 \
@@ -124,7 +118,7 @@ void setup()
 
   // Each event channel declares up-front the closed set of events it can report.
   // addEventType() does the same one name at a time, for a list built conditionally.
-  BlaeckSerial.addEventChannel("Output", F("mdi:sine-wave"), false, F("idle_warning,resumed"));
+  BlaeckSerial.addEventChannel("Activity", F("mdi:sine-wave"), false, F("idle_warning,resumed"));
 
   lastMicros = micros();
 }
@@ -150,14 +144,14 @@ void CheckOutputIdle()
 
     if (!warned && (millis() - idleSinceMs) >= 5000UL)
     {
-      BlaeckSerial.writeEvent("Output", F("idle_warning"));
+      BlaeckSerial.writeEvent("Activity", F("idle_warning"));
       warned = true;
     }
     return;
   }
 
   if (warned)
-    BlaeckSerial.writeEvent("Output", F("resumed"));
+    BlaeckSerial.writeEvent("Activity", F("resumed"));
 
   idleSinceMs = 0;
   warned = false;
@@ -284,10 +278,8 @@ void onSetOffset(const char *command, const char *const *params, byte paramCount
   if (paramCount >= 1 && params[0][0] != '\0')
   {
     Offset = roundToDecimals((float)atof(params[0]), 4);
-    // The other handlers write their signal back; this one publishes the command's own state.
-    // Pushing is what makes the change visible at once - the getter alone is only read when a
-    // host polls the catalog. `command` is this handler's own parameter, so there is no name
-    // here to keep in step with setup().
+    // The others write their signal back; this one publishes the command's own state. Pushing
+    // is what makes it visible at once - the getter is only read when a host polls the catalog.
     BlaeckSerial.writeCommandState(command);
   }
 }
