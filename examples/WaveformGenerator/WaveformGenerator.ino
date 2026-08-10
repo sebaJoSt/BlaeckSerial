@@ -132,10 +132,7 @@ void loop()
 }
 
 // Warns once per idle stretch (>=5s -> "idle_warning"), and only reports "resumed" if a warning
-// was raised. Idle means SET_ENABLE is off rather than Output having gone flat: flatness needs a
-// tolerance, and a square wave at 0.01 Hz holds its level for fifty seconds while working
-// exactly as told. Watching the switch keeps the example about event channels, not about
-// deciding when a waveform counts as stopped.
+// was raised. Idle means SET_ENABLE is off.
 void CheckActivity()
 {
   static unsigned long idleSinceMs = 0;
