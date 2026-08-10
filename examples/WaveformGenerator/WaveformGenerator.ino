@@ -49,12 +49,12 @@
 
 BlaeckSerial BlaeckSerial;
 
-//---SIGNALS (fixed set -> safe to control while logging)
+//---PUBLISHED AS SIGNALS (fixed set -> safe to control while logging)
+// TitleCase throughout: each name is the signal name a host sees, so the variable and the
+// topic read the same. addSignal() keeps a pointer to these, so they must be globals.
 float Output = 0.0;
 float Frequency = 1.0; // [Hz]
 float Amplitude = 1.0;
-float Offset = 0.0;
-byte Waveform = 0; // 0=Sine, 1=Square, 2=Triangle, 3=Sawtooth
 bool Enabled = true;
 char DeviceLabel[33] = "wave-gen"; // free-text label set via SET_LABEL
 // Current shape as text, refreshed by RefreshWaveName() from the option list SET_WAVE
@@ -62,9 +62,15 @@ char DeviceLabel[33] = "wave-gen"; // free-text label set via SET_LABEL
 // in step by hand.
 char WaveName[12];
 
-//---GENERATOR STATE
-double phase = 0.0; // normalized phase 0..1
+//---PUBLISHED AS A COMMAND'S OWN STATE
+// Not a signal and not logged: SET_OFFSET carries this itself, rendered by OffsetState().
+// Still TitleCase, because "Offset" is the name that reaches the host.
+float Offset = 0.0;
+
+//---GENERATOR STATE (never leaves the sketch)
+double phase = 0.0;        // normalized phase 0..1
 unsigned long lastMicros = 0;
+byte waveIndex = 0;        // 0=Sine, 1=Square, 2=Triangle, 3=Sawtooth; WaveName is what ships
 
 void setup()
 {
@@ -80,8 +86,8 @@ void setup()
   BlaeckSerial.addSignal("Amplitude", &Amplitude);
   // No "Offset" signal on purpose: its control reports state from a message channel
   // instead, declared below.
-  // No "Waveform" index signal: SET_WAVE reports its state as the option name, so the
-  // index is only a local variable here and never needs to reach the host.
+  // No index signal: SET_WAVE reports its state as the option name, so waveIndex stays a
+  // plain variable and never reaches the host.
   BlaeckSerial.addSignal("Enabled", &Enabled);
   BlaeckSerial.addSignal("WaveName", WaveName);
   BlaeckSerial.addSignal("DeviceLabel", DeviceLabel);
@@ -163,8 +169,8 @@ void CheckOutputIdle()
 // fails, which at least shows on the dashboard as a value that is not one of the options.
 void RefreshWaveName()
 {
-  if (!BlaeckSerial.getSelectOption("SET_WAVE", Waveform, WaveName, sizeof(WaveName)))
-    snprintf(WaveName, sizeof(WaveName), "%u", (unsigned)Waveform);
+  if (!BlaeckSerial.getSelectOption("SET_WAVE", waveIndex, WaveName, sizeof(WaveName)))
+    snprintf(WaveName, sizeof(WaveName), "%u", (unsigned)waveIndex);
 }
 
 // Offset as text for its message channel, to one decimal (SET_OFFSET's step). Registered with
@@ -228,7 +234,7 @@ void UpdateWaveform()
   phase -= floor(phase);
 
   double w = 0.0;
-  switch (Waveform)
+  switch (waveIndex)
   {
   case 1: // Square
     w = (phase < 0.5) ? 1.0 : -1.0;
@@ -290,7 +296,7 @@ void onSetWave(const char *command, const char *const *params, byte paramCount)
   {
     // atoi even though Home Assistant sends the option NAME: the library resolves it against
     // the list declared above and rewrites the parameter to that index before calling this.
-    Waveform = (byte)atoi(params[0]);
+    waveIndex = (byte)atoi(params[0]);
     RefreshWaveName();
     BlaeckSerial.write("WaveName", WaveName);
   }
