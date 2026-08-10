@@ -1183,6 +1183,7 @@ void BlaeckSerial::_parseCommandTokens(const char *raw)
 {
   _parsedCommand[0] = '\0';
   _parsedParamCount = 0;
+  _parsedTruncated = false;
   for (byte i = 0; i < MAX_COMMAND_PARAM_COUNT; i++)
   {
     _parsedParamPtrs[i] = nullptr;
@@ -1192,6 +1193,11 @@ void BlaeckSerial::_parseCommandTokens(const char *raw)
   {
     return;
   }
+
+  // Longer than the receive buffer: strncpy is about to shorten it, so say so rather than
+  // parse the remains as though they were the whole command.
+  if (strlen(raw) > sizeof(_parsedTokenBuffer) - 1)
+    _parsedTruncated = true;
 
   strncpy(_parsedTokenBuffer, raw, sizeof(_parsedTokenBuffer) - 1);
   _parsedTokenBuffer[sizeof(_parsedTokenBuffer) - 1] = '\0';
@@ -1209,8 +1215,6 @@ void BlaeckSerial::_parseCommandTokens(const char *raw)
     *p = '\0';
     p++;
   }
-  while (*tokenStart == ' ')
-    tokenStart++;
   if (tokenStart[0] == '\0')
   {
     return;
@@ -1237,11 +1241,13 @@ void BlaeckSerial::_parseCommandTokens(const char *raw)
     {
       moreParams = false;
     }
-    while (*tokenStart == ' ')
-      tokenStart++;
     _parsedParamPtrs[_parsedParamCount] = tokenStart;
     _parsedParamCount++;
   }
+
+  // Out of parameter slots with commas still to come: the argument list was cut short.
+  if (moreParams)
+    _parsedTruncated = true;
 }
 
 void BlaeckSerial::_dispatchRegisteredHandlers(bool sendAck)
@@ -1249,6 +1255,15 @@ void BlaeckSerial::_dispatchRegisteredHandlers(bool sendAck)
   _parseCommandTokens(receivedChars);
   if (_parsedCommand[0] == '\0')
   {
+    return;
+  }
+
+  // Frame level, so it covers plain commands and the any-handler as well: what was parsed is
+  // not what was sent, and nothing should act on the remains.
+  if (_parsedTruncated)
+  {
+    if (sendAck && strncmp(_parsedCommand, "BLAECK.", 7) != 0)
+      _writeCommandAck(receivedChars, 1, BLAECK_ACK_TRUNCATED);
     return;
   }
 
@@ -2206,21 +2221,18 @@ byte BlaeckSerial::_validateTypedCommand(byte handlerIndex)
   if (e.kind == BLAECK_CMD_PLAIN || e.kind == BLAECK_CMD_BUTTON)
     return BLAECK_ACK_OK;
 
-  // No value supplied -> let the handler decide (e.g. query/toggle usage). Text is
-  // exempt: there an absent value means "clear the field", which is a value, so it is
-  // normalized below instead of reaching the handler as no parameter at all.
-  if (e.kind != BLAECK_CMD_TEXT &&
-      (_parsedParamCount < 1 || _parsedParamPtrs[0] == nullptr || _parsedParamPtrs[0][0] == '\0'))
-    return BLAECK_ACK_OK;
-
-  if (e.kind == BLAECK_CMD_TEXT && (_parsedParamCount < 1 || _parsedParamPtrs[0] == nullptr))
-  {
-    _emptyTextScratch[0] = '\0';
-    _parsedParamPtrs[0] = _emptyTextScratch;
-    _parsedParamCount = 1;
-  }
+  // Every typed command declared that it takes a value, so an absent one is a rejection rather
+  // than something to pass on. Answering OK to a command the handler then ignores is the one
+  // outcome a host cannot recover from.
+  if (_parsedParamCount < 1 || _parsedParamPtrs[0] == nullptr)
+    return BLAECK_ACK_MISSING_VALUE;
 
   const char *v = _parsedParamPtrs[0];
+
+  // An empty parameter is a value only for text, where it clears the field. Elsewhere it would
+  // read as 0 or as no option at all, so report it as the missing value it is.
+  if (v[0] == '\0' && e.kind != BLAECK_CMD_TEXT)
+    return BLAECK_ACK_MISSING_VALUE;
 
   if (e.kind == BLAECK_CMD_NUMBER)
   {

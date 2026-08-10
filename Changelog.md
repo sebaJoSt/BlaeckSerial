@@ -20,14 +20,25 @@ without being configured for that board in advance.
   and slave-ID bytes are still emitted (always `0`), so existing Blaeck hosts
   (e.g. Loggbok) need no changes.
 
+- **A typed command now requires its value.** A frame without one is rejected
+  (`BLAECK_ACK_MISSING_VALUE`) instead of reaching the handler, which previously
+  acknowledged the command as accepted and then ignored it. Valueless usage — query,
+  toggle — belongs on `onCommand`, which declares no contract and is passed through
+  untouched.
+- **Command parameters are no longer trimmed.** The tokenizer splits on commas and does
+  nothing else, so a leading space is part of the value: `<SET_LABEL, hi>` sets `" hi"`.
+  Hand-typed frames like `<SET_ENABLE, 1>` are now rejected rather than silently accepted.
+
 ### Added
 - **Typed commands (`0xA0` / `0xA5`).** `onNumberCommand`, `onSwitchCommand`,
   `onSelectCommand`, `onTextCommand` and `onButtonCommand` register a command
   together with what it accepts — range, step, unit, options, text length — so the
   device describes its own controls. They join `onCommand` / `onAnyCommand` from
   6.0.0, which stay for commands that carry no metadata. Values outside the declared
-  range, bad select indices and over-long text are rejected before the handler runs,
-  and every dispatch is acknowledged with an accept/reject status and reason code.
+  range, bad select indices, over-long text and a missing value are rejected before the
+  handler runs, and a frame that did not fit — more parameters than the device accepts, or
+  longer than its receive buffer — is rejected for every command, `onCommand` included.
+  Every dispatch is acknowledged with an accept/reject status and reason code.
   The state a control shows is named as a bare `F("Frequency")` — the signal that
   mirrors it — or as `BlaeckOwnState(F("Offset"), OffsetState)`, which makes the command
   carry its own state instead: it declares a message channel of that name, asks the getter

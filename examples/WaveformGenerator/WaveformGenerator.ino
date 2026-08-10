@@ -233,55 +233,38 @@ void UpdateWaveform()
 
 void onSetFreq(const char *command, const char *const *params, byte paramCount)
 {
-  if (paramCount >= 1 && params[0][0] != '\0')
-  {
-    Frequency = (float)atof(params[0]);
-    BlaeckSerial.write("Frequency", Frequency);
-  }
+  Frequency = (float)atof(params[0]);
+  BlaeckSerial.write("Frequency", Frequency);
 }
 
 void onSetAmp(const char *command, const char *const *params, byte paramCount)
 {
-  if (paramCount >= 1 && params[0][0] != '\0')
-  {
-    Amplitude = (float)atof(params[0]);
-    BlaeckSerial.write("Amplitude", Amplitude);
-  }
+  Amplitude = (float)atof(params[0]);
+  BlaeckSerial.write("Amplitude", Amplitude);
 }
 
 void onSetOffset(const char *command, const char *const *params, byte paramCount)
 {
-  if (paramCount >= 1 && params[0][0] != '\0')
-  {
-    Offset = (float)atof(params[0]);
-    // The others write their signal back; this one publishes the command's own state. Pushing
-    // is what makes it visible at once - the getter is only read when a host polls the catalog.
-    BlaeckSerial.writeCommandState(command);
-  }
+  Offset = (float)atof(params[0]);
+  // The others write their signal back; this one publishes the command's own state. Pushing
+  // is what makes it visible at once - the getter is only read when a host polls the catalog.
+  BlaeckSerial.writeCommandState(command);
 }
 
 void onSetWave(const char *command, const char *const *params, byte paramCount)
 {
-  if (paramCount >= 1 && params[0][0] != '\0')
-  {
-    // atoi even though Home Assistant sends the option NAME: the library resolves it against
-    // the list declared above and rewrites the parameter to that index before calling this.
-    waveIndex = (byte)atoi(params[0]);
-    RefreshWaveName();
-    BlaeckSerial.write("WaveName", WaveName);
-  }
+  // atoi even though Home Assistant sends the option NAME: the library resolves it against
+  // the list declared above and rewrites the parameter to that index before calling this.
+  waveIndex = (byte)atoi(params[0]);
+  RefreshWaveName();
+  BlaeckSerial.write("WaveName", WaveName);
 }
 
 void onSetEnable(const char *command, const char *const *params, byte paramCount)
 {
-  // Guard first, then assign: folding the check into the assignment would make a
-  // command that supplied no value read as 0 and switch the output off.
   // The library has already rejected anything that is not 0 or 1.
-  if (paramCount >= 1 && params[0][0] != '\0')
-  {
-    Enabled = atoi(params[0]) == 1;
-    BlaeckSerial.write("Enabled", Enabled);
-  }
+  Enabled = atoi(params[0]) == 1;
+  BlaeckSerial.write("Enabled", Enabled);
 }
 
 void onSetLabel(const char *command, const char *const *params, byte paramCount)

@@ -261,10 +261,10 @@ enum BlaeckIntervalMode
   BLAECK_INTERVAL_OFF = -2
 };
 
-// paramCount is whatever the frame carried, so it can be 0: for number, switch and select an
-// absent value is left to the handler, which is what makes query and toggle usage possible.
-// Text is the exception - an empty value is a value there (it clears the field), so a text
-// handler always receives exactly one parameter.
+// paramCount is 0 only for a plain onCommand or a button. Every typed command declared that it
+// takes a value, so a frame without one is rejected before dispatch and never reaches a handler
+// - query or toggle semantics belong on a plain command, which declares no contract and is
+// passed through untouched.
 typedef void (*BlaeckCommandHandler)(const char *command, const char *const *params, byte paramCount);
 typedef void (*BlaeckAnyCommandHandler)(const char *command, const char *const *params, byte paramCount);
 
@@ -363,7 +363,9 @@ enum BlaeckCommandAckReason
   BLAECK_ACK_OUT_OF_RANGE = 2, // rejected: number outside [min, max]
   BLAECK_ACK_BAD_SWITCH = 3,   // rejected: switch value not 0/1
   BLAECK_ACK_BAD_SELECT = 4,   // rejected: select value not a valid index/option
-  BLAECK_ACK_TOO_LONG = 5      // rejected: text value longer than the advertised max length
+  BLAECK_ACK_TOO_LONG = 5,      // rejected: text value longer than the advertised max length
+  BLAECK_ACK_MISSING_VALUE = 6, // rejected: a typed command arrived without its value
+  BLAECK_ACK_TRUNCATED = 7      // rejected: frame did not fit - too many parameters, or longer than the receive buffer
 };
 
 class BlaeckSerial
@@ -718,9 +720,9 @@ public:
   // delimiters survive the frame); the device percent-decodes it in place before
   // the handler runs, so the handler receives the raw UTF-8 text. maxLength is the
   // advertised limit (in decoded bytes) enforced before dispatch; a longer value
-  // is rejected (BLAECK_ACK_TOO_LONG). The handler always receives exactly one
-  // parameter: an empty value is a value (it clears the field), and a host sending
-  // no parameter at all is normalized to an empty string before dispatch.
+  // is rejected (BLAECK_ACK_TOO_LONG). Text is the one kind where an empty value is a value:
+  // it clears the field, and arrives as an empty params[0]. A frame carrying no parameter at
+  // all is a missing value, not an empty one, and is rejected like any other kind.
   bool onTextCommand(const char *command, BlaeckCommandHandler handler,
                      BlaeckCommandState state = BlaeckCommandState(),
                      unsigned int maxLength = 255,
@@ -1057,6 +1059,9 @@ private:
   char _parsedCommand[MAX_COMMAND_NAME_COUNT] = {0};
   const char *_parsedParamPtrs[MAX_COMMAND_PARAM_COUNT] = {0};
   byte _parsedParamCount = 0;
+  // Set when the frame did not fit: strncpy shortened it, or the argument list hit the cap.
+  // What was parsed is then not what was sent, so no handler may act on it.
+  bool _parsedTruncated = false;
   // Monotonic message id stamped into the 0xA5 Command Ack frame header.
   unsigned long _commandAckMsgId = 0;
 #if BLAECK_ENABLE_MESSAGES
@@ -1072,9 +1077,6 @@ private:
   // name payload (e.g. from a Home Assistant select) is handed to index-based
   // handlers as its numeric index.
   char _selectIndexScratch[8] = {0};
-  // Stands in for a text command's absent value. Must be writable: the text branch
-  // percent-decodes params[0] in place, which a string literal could not survive.
-  char _emptyTextScratch[1] = {0};
 #endif
   bool recvWithStartEndMarkers();
   void parseData();
