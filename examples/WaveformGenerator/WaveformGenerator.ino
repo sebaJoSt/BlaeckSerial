@@ -28,7 +28,7 @@
     number        SET_FREQ    <0..2>           wave/Frequency        [Hz], step 0.01
     number        SET_AMP     <0..100>         wave/Amplitude        step 0.1
     number        SET_OFFSET  <-100..100>      wave/msg/Offset       step 0.1
-    select        SET_WAVE    <0..3>           wave/WaveName         name or index
+    select        SET_WAVE    <Sine|Square|...>  wave/WaveName       or an index, 0..3
     switch        SET_ENABLE  <0|1>            wave/Enabled          off -> Output = Offset
     text          SET_LABEL   <text>           wave/DeviceLabel      max 32, config category
     button        STATUS                       --                    stateless; fills the sensor below
@@ -288,6 +288,8 @@ void onSetWave(const char *command, const char *const *params, byte paramCount)
 {
   if (paramCount >= 1 && params[0][0] != '\0')
   {
+    // atoi even though Home Assistant sends the option NAME: the library resolves it against
+    // the list declared above and rewrites the parameter to that index before calling this.
     Waveform = (byte)atoi(params[0]);
     RefreshWaveName();
     BlaeckSerial.write("WaveName", WaveName);
