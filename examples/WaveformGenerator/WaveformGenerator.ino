@@ -168,16 +168,12 @@ void RefreshWaveName()
 }
 
 // Offset as text for its message channel: one decimal (SET_OFFSET's step) and no unit, since a
-// Home Assistant number reads its state as a bare numeric. AVR does not link float printf, so
-// the digits come from integers - the sign separately, or dividing a negative value would
-// strand the minus in the fractional part.
+// Home Assistant number reads its state as a bare numeric. dtostrf, not snprintf's %f - AVR
+// does not link float printf, so %f would print blank.
 const char *OffsetState()
 {
   static char text[12];
-  long tenths = (long)(Offset * 10.0 + (Offset >= 0 ? 0.5 : -0.5));
-  long magnitude = tenths < 0 ? -tenths : tenths;
-  snprintf(text, sizeof(text), "%s%ld.%ld",
-           tenths < 0 ? "-" : "", magnitude / 10, magnitude % 10);
+  dtostrf(Offset, 0, 1, text);
   return text;
 }
 
@@ -185,11 +181,10 @@ const char *OffsetState()
 // a 10 s heartbeat on "Status", and the STATUS button on "StatusOnDemand".
 void WriteStatus(const char *channel)
 {
-  // Format frequency to 2 decimals without snprintf's %f: AVR does not link float
-  // printf by default, so %f would print blank. Frequency is always >= 0 here.
-  int hz100 = (int)(Frequency * 100.0 + 0.5);
+  char hz[10];
+  dtostrf(Frequency, 0, 2, hz);
   char text[80];
-  snprintf(text, sizeof(text), "%s %s @ %d.%02d Hz", Enabled ? "running" : "stopped", WaveName, hz100 / 100, hz100 % 100);
+  snprintf(text, sizeof(text), "%s %s @ %s Hz", Enabled ? "running" : "stopped", WaveName, hz);
   BlaeckSerial.writeMessage(channel, text);
 }
 
