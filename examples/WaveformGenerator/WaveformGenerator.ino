@@ -131,7 +131,9 @@ void loop()
   CheckActivity();
 }
 
-// Warns once per idle stretch (>=5s -> "idle_warning"), and only reports "resumed" if a warning was raised.
+// Warns once per idle stretch (>=5s -> "idle_warning"), and only reports "resumed" if a warning
+// was raised. Idle means SET_ENABLE is off rather than Output having gone flat, so the event
+// channel can be exercised from a dashboard: flip the switch, wait five seconds, watch it arrive.
 void CheckActivity()
 {
   static unsigned long idleSinceMs = 0;
