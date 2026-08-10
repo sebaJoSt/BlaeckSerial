@@ -157,10 +157,10 @@ void CheckActivity()
   warned = false;
 }
 
-// The current shape's name, read back from the option list SET_WAVE declared, so those
-// names live in flash once instead of being repeated in the sketch. Must run after
-// onSelectCommand() has registered SET_WAVE; the index is written instead if the lookup
-// fails, which at least shows on the dashboard as a value that is not one of the options.
+// The current shape's name, read back from the option list SET_WAVE declared, so those names
+// live in flash once instead of being repeated in the sketch. A failed lookup writes the bare
+// index: Home Assistant ignores a state that is not one of its options and goes on showing the
+// previous one, so the evidence lands in the logged signal rather than on the dashboard.
 void RefreshWaveName()
 {
   if (!BlaeckSerial.getSelectOption("SET_WAVE", waveIndex, WaveName, sizeof(WaveName)))
