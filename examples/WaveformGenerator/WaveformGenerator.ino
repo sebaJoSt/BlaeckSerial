@@ -168,8 +168,7 @@ void RefreshWaveName()
 }
 
 // Offset as text for its message channel: one decimal (SET_OFFSET's step) and no unit, since a
-// Home Assistant number reads its state as a bare numeric. dtostrf, not snprintf's %f - AVR
-// does not link float printf, so %f would print blank.
+// Home Assistant number reads its state as a bare numeric.
 const char *OffsetState()
 {
   static char text[12];
