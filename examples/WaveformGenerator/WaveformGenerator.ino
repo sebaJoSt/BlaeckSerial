@@ -24,18 +24,18 @@
   --- WHAT YOU GET (Loggbok topic prefix "loggbok", table name "wave") ---
   Commands are published to loggbok/wave/_cmd/<NAME>, or loggbok/_all/_cmd/<NAME>.
 
-    HA entity     set with                     topic
-    number        SET_FREQ    <0..2>           wave/Frequency        [Hz], step 0.01
-    number        SET_AMP     <0..100>         wave/Amplitude        step 0.1
-    number        SET_OFFSET  <-100..100>      wave/msg/Offset       step 0.1
-    select        SET_WAVE    <Sine|Square|...>  wave/WaveName       or an index, 0..3
-    switch        SET_ENABLE  <0|1>            wave/Enabled          off -> Output = Offset
-    text          SET_LABEL   <text>           wave/DeviceLabel      max 32, config category
-    button        STATUS                       --                    stateless; fills the sensor below
-    sensor        --                           wave/Output           live sample, with statistics
-    sensor        --                           wave/msg/Status       text: heartbeat, every 10 s
-    sensor        --                           wave/msg/StatusOnDemand  text: on STATUS press
-    event         --                           wave/evt/Activity     idle_warning / resumed
+    HA entity     set with                       topic
+    number        SET_FREQ    <0..2>             wave/Frequency           [Hz], step 0.01
+    number        SET_AMP     <0..100>           wave/Amplitude           step 0.1
+    number        SET_OFFSET  <-100..100>        wave/msg/Offset          step 0.1
+    select        SET_WAVE    <Sine|Square|...>  wave/WaveName            or an index, 0..3
+    switch        SET_ENABLE  <0|1>              wave/Enabled             off -> Output = Offset
+    text          SET_LABEL   <text>             wave/DeviceLabel         max 32, config category
+    button        STATUS                         --                       stateless; fills the sensor below
+    sensor        --                             wave/Output              live sample, with statistics
+    sensor        --                             wave/msg/Status          text: heartbeat, every 10 s
+    sensor        --                             wave/msg/StatusOnDemand  text: on STATUS press
+    event         --                             wave/evt/Activity        idle_warning / resumed
 
   Loggbok CLI (log fast enough to resolve the wave, e.g. 20 ms):
     lgbk log --port COM24 --table wave --signals * --interval 20 \
@@ -132,11 +132,11 @@ void loop()
   UpdateWaveform();
   BlaeckSerial.tick();
   SendStatusMessage();
-  CheckOutputIdle();
+  CheckActivity();
 }
 
 // Warns once per idle stretch (>=5s -> "idle_warning"), and only reports "resumed" if a warning was raised.
-void CheckOutputIdle()
+void CheckActivity()
 {
   static unsigned long idleSinceMs = 0;
   static bool warned = false;
