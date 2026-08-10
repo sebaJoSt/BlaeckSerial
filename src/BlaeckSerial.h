@@ -261,6 +261,10 @@ enum BlaeckIntervalMode
   BLAECK_INTERVAL_OFF = -2
 };
 
+// paramCount is whatever the frame carried, so it can be 0: for number, switch and select an
+// absent value is left to the handler, which is what makes query and toggle usage possible.
+// Text is the exception - an empty value is a value there (it clears the field), so a text
+// handler always receives exactly one parameter.
 typedef void (*BlaeckCommandHandler)(const char *command, const char *const *params, byte paramCount);
 typedef void (*BlaeckAnyCommandHandler)(const char *command, const char *const *params, byte paramCount);
 
