@@ -88,10 +88,21 @@
 #endif
 
 #ifndef BLAECK_COMMAND_MAX_CHARS_DEFAULT
+  // 128 is the smallest buffer that puts a 32-byte text command within reach of any input: a
+  // byte costs up to three characters once percent-encoded, so 3*32 plus a command name and its
+  // delimiters. Below it the frame runs out before the advertised length does, and a value the
+  // device would have accepted cannot reach it at all.
+  //
+  // Scaled with SRAM like the handler table below, since three buffers are this size: small AVRs
+  // keep 48, where 128 would cost an eighth of their memory for a command kind many never use.
   #if defined(__AVR__)
-    #define BLAECK_COMMAND_MAX_CHARS_DEFAULT 48
+    #if defined(RAMEND) && (RAMEND >= 0x10FF)
+      #define BLAECK_COMMAND_MAX_CHARS_DEFAULT 128
+    #else
+      #define BLAECK_COMMAND_MAX_CHARS_DEFAULT 48
+    #endif
   #else
-    #define BLAECK_COMMAND_MAX_CHARS_DEFAULT 96
+    #define BLAECK_COMMAND_MAX_CHARS_DEFAULT 128
   #endif
 #endif
 

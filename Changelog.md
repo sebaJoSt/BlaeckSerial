@@ -30,6 +30,9 @@ without being configured for that board in advance.
   Hand-typed frames like `<SET_ENABLE, 1>` are now rejected rather than silently accepted.
 
 ### Added
+- **`BLAECK_COMMAND_MAX_CHARS_DEFAULT` is 128** on large AVRs and non-AVR boards (was 48 and
+  96), still 48 on Uno/Nano. Below 128 a percent-encoded 32-byte text value cannot fit its own
+  frame. Costs ~240 bytes of SRAM.
 - **`findSignalIndex()` is public.** The by-index `write()` and `update()` calls were
   reachable but their indices were not: the lookup that produces one was private. Resolve
   an index once in `setup()` and use the by-index calls on anything that runs often — the
