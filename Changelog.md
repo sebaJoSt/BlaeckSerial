@@ -24,34 +24,12 @@ without being configured for that board in advance.
   `<SET_LABEL, hi>` sets `" hi"`, and `<SET_ENABLE, 1>` is rejected.
 
 ### Added
-- **`BLAECK_COMMAND_MAX_CHARS_DEFAULT` is 128** on large AVRs and non-AVR boards (was 48 and
-  96), still 48 on Uno/Nano. Below 128 a percent-encoded 32-byte text value cannot fit its own
-  frame. Costs ~240 bytes of SRAM.
-- **`findSignalIndex()` is public.** Resolve an index once in `setup()` and use the by-index
-  `write()` / `update()` calls on anything that runs often — the by-name ones build a temporary
-  `String` per call. Returns `-1` when no signal has that name.
 - **Typed commands (`0xA0` / `0xA5`).** `onNumberCommand`, `onSwitchCommand`,
   `onSelectCommand`, `onTextCommand` and `onButtonCommand` register a command
   together with what it accepts — range, step, unit, options, text length — so the
   device describes its own controls. They join `onCommand` / `onAnyCommand` from
-  6.0.0, which stay for commands that carry no metadata. Values outside the declared
-  range, bad select indices, over-long text and a missing value are rejected before the
-  handler runs, and a frame that did not fit — too many parameters, or longer than the receive
-  buffer, which `CommandPayloadMax` in the catalog lets a host check first — is rejected for
-  every command, `onCommand` included. Every dispatch is acknowledged
-  with an accept/reject status, a reason code, and two hashes: one over the command as received,
-  one over its name alone, so an ack still names its command when the bytes differ.
-  The state a control shows is named as a bare `F("Frequency")` — the signal that
-  mirrors it — or as `BlaeckOwnState(F("Offset"), OffsetState)`, which makes the command
-  carry its own state instead: it declares a message channel of that name, asks the getter
-  for the value whenever a host polls the channel catalog, and announces it once at
-  registration, so a host already connected when the board resets is corrected. Push a
-  change with `writeCommandState(command)` — the handler's own parameter, so no name has to
-  be kept in step. That channel belongs to the command: `addMessageChannel()` and
-  `writeMessage()` refuse its name, so its value comes from the getter and nowhere else, and
-  a host that knows it backs a control announces no separate sensor for it. Independent of
-  the signal table, so a device that adds no signals at all can still report what its
-  controls are set to. Requires `BLAECK_ENABLE_COMMAND_META`.
+  6.0.0, which stay for commands that carry no metadata. 
+  Requires `BLAECK_ENABLE_COMMAND_META`.
 - **Message channels (`0x90` / `0x95`).** `addMessageChannel(channelName[, icon[,
   diagnostic[, getStateText]]])` declares a free-text status/log channel and
   `writeMessage(channelName, text[, messageID])` sends a line on it. Channels are
@@ -65,8 +43,8 @@ without being configured for that board in advance.
   diagnostic[, eventTypes]]])` declares a channel and the closed set of events it may
   report — `F("idle_warning,resumed")`, position defining each index — or
   `addEventType(channelName, F("..."))` adds them one at a time, for a list built
-  conditionally; `writeEvent(channelName, F("..."))` reports one occurrence. An event carries no text, so its wording is
-  fixed at compile time — use a message channel for anything with a runtime value.
+  conditionally; `writeEvent(channelName, F("..."))` reports one occurrence. An event carries no text, 
+  so its wording is fixed at compile time — use a message channel for anything with a runtime value.
   Events on undeclared channels or types are dropped. Size the tables with
   `BLAECK_EVENT_MAX_CHANNELS_DEFAULT`, `BLAECK_EVENT_MAX_NAME_CHARS_DEFAULT` and
   `BLAECK_EVENT_MAX_TYPES_DEFAULT` (types share one pool across channels,
@@ -89,6 +67,12 @@ without being configured for that board in advance.
 - `BlaeckSerial.h` includes the `CRC.h` umbrella header instead of `<CRC32.h>` and
   `<CRC16.h>` individually, preventing a collision with core headers seen on
   ArduinoCore-mbed. No functional change; flash is byte-identical.
+- **`BLAECK_COMMAND_MAX_CHARS_DEFAULT` is 128** on large AVRs and non-AVR boards (was 48 and
+  96), still 48 on Uno/Nano. Below 128 a percent-encoded 32-byte text value cannot fit its own
+  frame. Costs ~240 bytes of SRAM.
+- **`findSignalIndex()` is public.** Resolve an index once in `setup()` and use the by-index
+  `write()` / `update()` calls on anything that runs often — the by-name ones build a temporary
+  `String` per call. Returns `-1` when no signal has that name.
 
 ### Fixed
 - **Compile-time configuration now has a documented, working route.** A
