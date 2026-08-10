@@ -38,7 +38,11 @@ without being configured for that board in advance.
   range, bad select indices, over-long text and a missing value are rejected before the
   handler runs, and a frame that did not fit — more parameters than the device accepts, or
   longer than its receive buffer — is rejected for every command, `onCommand` included.
-  Every dispatch is acknowledged with an accept/reject status and reason code.
+  Every dispatch is acknowledged with an accept/reject status and reason code, plus two hashes:
+  one over the command as received, one over its name alone. A sender that matches the first knows
+  the device got exactly what it wrote; one that matches only the second knows which command was
+  acknowledged even though the bytes differed - which is the only way a frame the device could not
+  take in whole gets reported rather than acknowledged into silence.
   The state a control shows is named as a bare `F("Frequency")` — the signal that
   mirrors it — or as `BlaeckOwnState(F("Offset"), OffsetState)`, which makes the command
   carry its own state instead: it declares a message channel of that name, asks the getter

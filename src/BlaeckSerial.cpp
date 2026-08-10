@@ -1338,12 +1338,19 @@ void BlaeckSerial::_writeCommandAck(const char *rawCommand, byte status, byte re
   if (StreamRef == nullptr)
     return;
 
+  // The name hash covers _parsedCommand, which precedes the first comma and so survives a frame
+  // the device could not take in whole. It is what still identifies the command when the byte
+  // hash cannot, because the bytes are not the ones the sender wrote.
+  uint32_t nameHash = (_parsedCommand[0] == '\0') ? 0UL : _fnv1a32(_parsedCommand);
+
   if (_bufferedWrites && _frameBuf)
   {
     _bufReset();
     _bufHeader(0xA5, _commandAckMsgId++);
-    // Payload: command hash (4 bytes, little-endian) + status (1) + reason (1).
+    // Payload: command hash (4 bytes, little-endian) + name hash (4) + status (1) + reason (1).
     ulngCvt.val = _fnv1a32(rawCommand);
+    _bufBytes(ulngCvt.bval, 4);
+    ulngCvt.val = nameHash;
     _bufBytes(ulngCvt.bval, 4);
     _bufByte(status);
     _bufByte(reasonCode);
@@ -1360,8 +1367,10 @@ void BlaeckSerial::_writeCommandAck(const char *rawCommand, byte status, byte re
     StreamRef->write(ulngCvt.bval, 4);
     StreamRef->write(":");
 
-    // Payload: command hash (4 bytes, little-endian) + status (1) + reason (1).
+    // Payload: command hash (4 bytes, little-endian) + name hash (4) + status (1) + reason (1).
     ulngCvt.val = _fnv1a32(rawCommand);
+    StreamRef->write(ulngCvt.bval, 4);
+    ulngCvt.val = nameHash;
     StreamRef->write(ulngCvt.bval, 4);
     StreamRef->write(status);
     StreamRef->write(reasonCode);
