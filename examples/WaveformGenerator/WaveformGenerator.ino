@@ -73,7 +73,7 @@ char WaveName[12] = "Sine"; // fits the longest option, "Triangle"
 float Offset = 0.0;
 
 //---GENERATOR STATE (never leaves the sketch)
-double phase = 0.0;        // normalized phase 0..1
+float phase = 0.0f;        // normalized phase 0..1
 unsigned long lastMicros = 0;
 byte waveIndex = 0;        // 0=Sine, 1=Square, 2=Triangle, 3=Sawtooth; WaveName is what ships
 
@@ -128,7 +128,7 @@ void loop()
 void UpdateWaveform()
 {
   unsigned long now = micros();
-  double dt = (now - lastMicros) * 1e-6; // [s]
+  float dt = (now - lastMicros) * 1e-6f; // [s]
   lastMicros = now;
 
   if (!Enabled)
@@ -138,23 +138,23 @@ void UpdateWaveform()
   }
 
   // Advance and wrap the normalized phase (0..1).
-  phase += (double)Frequency * dt;
-  phase -= floor(phase);
+  phase += Frequency * dt;
+  phase -= floorf(phase);
 
-  double w = 0.0;
+  float w = 0.0f;
   switch (waveIndex)
   {
   case 1: // Square
-    w = (phase < 0.5) ? 1.0 : -1.0;
+    w = (phase < 0.5f) ? 1.0f : -1.0f;
     break;
   case 2: // Triangle: +1 at phase 0, -1 at phase 0.5
-    w = 1.0 - 4.0 * fabs(phase - 0.5);
+    w = 1.0f - 4.0f * fabsf(phase - 0.5f);
     break;
   case 3: // Sawtooth: -1 .. +1 ramp
-    w = 2.0 * phase - 1.0;
+    w = 2.0f * phase - 1.0f;
     break;
   default: // Sine
-    w = sin(2.0 * PI * phase);
+    w = sinf((float)TWO_PI * phase);
     break;
   }
 
