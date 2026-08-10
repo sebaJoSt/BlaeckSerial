@@ -66,7 +66,7 @@ bool Enabled = true;
 char DeviceLabel[33] = "wave-gen"; // free-text label set via SET_LABEL
 // Current shape as text. Starts on option 0 of SET_WAVE's list, so the control has a state
 // before the first command; RefreshWaveName() keeps it in step from then on.
-char WaveName[12] = "Sine";
+char WaveName[12] = "Sine"; // fits the longest option, "Triangle"
 
 //---PUBLISHED AS A COMMAND'S OWN STATE
 // Not a signal and not logged: SET_OFFSET carries this itself, rendered by OffsetState().
@@ -178,9 +178,9 @@ void SendStatusMessage()
 // a 10 s heartbeat on "Status", and the STATUS button on "StatusOnDemand".
 void WriteStatus(const char *channel)
 {
-  char hz[10];
+  char hz[10]; // fits "2.00"
   dtostrf(Frequency, 0, 2, hz);
-  char text[80];
+  char text[80]; // fits "stopped Triangle @ 2.00 Hz"
   snprintf(text, sizeof(text), "%s %s @ %s Hz", Enabled ? "running" : "stopped", WaveName, hz);
   BlaeckSerial.writeMessage(channel, text);
 }
@@ -226,7 +226,7 @@ void RefreshWaveName()
 // Home Assistant number reads its state as a bare numeric.
 const char *OffsetState()
 {
-  static char text[12];
+  static char text[12]; // fits "-100.0"
   dtostrf(Offset, 0, 1, text);
   return text;
 }
