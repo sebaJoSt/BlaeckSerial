@@ -15,10 +15,6 @@
     message  a line of free text, not logged     -> "running Sine @ 1.00 Hz"
     event    a discrete occurrence, no text      -> idle_warning, resumed
 
-  A control's state can come from either of the first two, and SET_OFFSET shows the second
-  route: its state lives on a message channel rather than a signal, so Offset is never
-  logged, yet the control still shows the value the device applied.
-
   Author: Sebastian Strobl, https://github.com/sebaJoSt/BlaeckSerial
 
   --- WHAT YOU GET (Loggbok topic prefix "loggbok", table name "wave") ---
@@ -36,6 +32,21 @@
     sensor        --                             wave/msg/Status          text: heartbeat, every 10 s
     sensor        --                             wave/msg/StatusOnDemand  text: on STATUS press
     event         --                             wave/evt/Activity        idle_warning / resumed
+
+  --- HOW A CONTROL GETS ITS VALUE BACK ---
+  A control shows what the device applied, not what you typed:
+
+   Home Assistant            MQTT broker             Loggbok            this sketch
+          |                       |                     |                    |
+          |  wave/_cmd/SET_FREQ   |       "1.5"         |  <SET_FREQ,1.5>    |
+          |---------------------->|-------------------->|------------------->|  onSetFreq()
+          |                       |                     |                    |    Frequency = 1.5
+          |    wave/Frequency     |       "1.5"         |   signal frame     |
+          |<----------------------|<--------------------|<-------------------|  tick()
+
+  The way back differs per control: a signal rides the next data frame, so it needs a running
+  log. SET_OFFSET instead carries its own state, which writeCommandState() sends the moment
+  the handler runs - logging or not.
 
   Loggbok CLI (log fast enough to resolve the wave, e.g. 20 ms):
     lgbk log --port COM24 --table wave --signals * --interval 20 \
