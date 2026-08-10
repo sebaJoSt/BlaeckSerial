@@ -3594,14 +3594,6 @@ void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
     _bufReset();
     _bufHeader(0xA0, msg_id);
 
-    // How long a command this device can receive: characters between the delimiters, terminator
-    // excluded. Sent once, because one buffer serves every command - a host subtracts the name
-    // and its comma to get what is left for parameters. Anything longer is dropped on arrival,
-    // which the sender cannot otherwise know.
-    uint16_t payloadMax = (uint16_t)(MAXIMUM_CHAR_COUNT - 1);
-    _bufByte((byte)(payloadMax & 0xFF));
-    _bufByte((byte)((payloadMax >> 8) & 0xFF));
-
     for (byte i = 0; i < MAX_COMMAND_HANDLERS; i++)
     {
       CommandHandlerEntry &e = _commandHandlers[i];
@@ -3622,8 +3614,16 @@ void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
       // Entity category in bits 5-6, so it needs no trailing payload.
       flags |= (byte)((e.category & 0x03) << 5);
 
+      // How long a command this device can receive: characters between the delimiters, terminator
+      // excluded. The same on every entry - one buffer serves them all - but carried here so each
+      // entry keeps the shape every catalog frame uses. A host subtracts the name and its comma
+      // for the room left for parameters; anything longer is dropped on arrival, which the sender
+      // cannot otherwise know.
+      uint16_t payloadMax = (uint16_t)(MAXIMUM_CHAR_COUNT - 1);
       _bufByte((byte)0);
       _bufByte((byte)0);
+      _bufByte((byte)(payloadMax & 0xFF));
+      _bufByte((byte)((payloadMax >> 8) & 0xFF));
       _bufStr0(e.command);
       _bufByte(e.kind);
       _bufByte(flags);
@@ -3668,14 +3668,6 @@ void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
     StreamRef->write(ulngCvt.bval, 4);
     StreamRef->write(":");
 
-    // How long a command this device can receive: characters between the delimiters, terminator
-    // excluded. Sent once, because one buffer serves every command - a host subtracts the name
-    // and its comma to get what is left for parameters. Anything longer is dropped on arrival,
-    // which the sender cannot otherwise know.
-    uint16_t payloadMax = (uint16_t)(MAXIMUM_CHAR_COUNT - 1);
-    StreamRef->write((byte)(payloadMax & 0xFF));
-    StreamRef->write((byte)((payloadMax >> 8) & 0xFF));
-
     for (byte i = 0; i < MAX_COMMAND_HANDLERS; i++)
     {
       CommandHandlerEntry &e = _commandHandlers[i];
@@ -3696,8 +3688,16 @@ void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
       // Entity category in bits 5-6, so it needs no trailing payload.
       flags |= (byte)((e.category & 0x03) << 5);
 
+      // How long a command this device can receive: characters between the delimiters, terminator
+      // excluded. The same on every entry - one buffer serves them all - but carried here so each
+      // entry keeps the shape every catalog frame uses. A host subtracts the name and its comma
+      // for the room left for parameters; anything longer is dropped on arrival, which the sender
+      // cannot otherwise know.
+      uint16_t payloadMax = (uint16_t)(MAXIMUM_CHAR_COUNT - 1);
       StreamRef->write((byte)0);
       StreamRef->write((byte)0);
+      StreamRef->write((byte)(payloadMax & 0xFF));
+      StreamRef->write((byte)((payloadMax >> 8) & 0xFF));
       StreamRef->print(e.command);
       StreamRef->write((byte)0);
       StreamRef->write(e.kind);
