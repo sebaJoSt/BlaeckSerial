@@ -121,9 +121,9 @@ void setup()
   // the first line is written.
   BlaeckSerial.addMessageChannel("Status", F("mdi:pulse"), true);
   BlaeckSerial.addMessageChannel("StatusOnDemand", F("mdi:message-text"), true);
-  // Diagnostic precisely because it backs SET_OFFSET: the control is what you read the
-  // offset from, so this channel's own text sensor is a duplicate of it and belongs off
-  // the dashboard rather than beside it.
+  // Marked diagnostic even though a host that knows this channel backs SET_OFFSET will give
+  // it no text sensor at all - the control already shows the value. The flag is the device's
+  // statement about the channel, so it still does its job on a host that announces one anyway.
   // The fourth argument hands the channel a getter instead of a value: the library asks for the
   // current text whenever a host polls the catalog, so the control is right from the first poll
   // without the sketch pushing anything.
