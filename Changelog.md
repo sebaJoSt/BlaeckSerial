@@ -28,8 +28,17 @@ without being configured for that board in advance.
   6.0.0, which stay for commands that carry no metadata. Values outside the declared
   range, bad select indices and over-long text are rejected before the handler runs,
   and every dispatch is acknowledged with an accept/reject status and reason code.
-  `stateSignal` names what mirrors the command's value: a signal, or a message
-  channel. Requires `BLAECK_ENABLE_COMMAND_META`.
+  The state a control shows is named as a bare `F("Frequency")` — the signal that
+  mirrors it — or as `BlaeckOwnState(F("Offset"), OffsetState)`, which makes the command
+  carry its own state instead: it declares a message channel of that name, asks the getter
+  for the value whenever a host polls the channel catalog, and announces it once at
+  registration, so a host already connected when the board resets is corrected. Push a
+  change with `writeCommandState(command)` — the handler's own parameter, so no name has to
+  be kept in step. That channel belongs to the command: `addMessageChannel()` and
+  `writeMessage()` refuse its name, so its value comes from the getter and nowhere else, and
+  a host that knows it backs a control announces no separate sensor for it. Independent of
+  the signal table, so a device that adds no signals at all can still report what its
+  controls are set to. Requires `BLAECK_ENABLE_COMMAND_META`.
 - **Message channels (`0x90` / `0x95`).** `addMessageChannel(channelName[, icon[,
   diagnostic[, getStateText]]])` declares a free-text status/log channel and
   `writeMessage(channelName, text[, messageID])` sends a line on it. Channels are
