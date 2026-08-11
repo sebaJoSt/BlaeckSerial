@@ -81,7 +81,12 @@ void setup()
   BlaeckSerial.DeviceHWVersion = "Arduino Mega 2560 Rev3";
   BlaeckSerial.DeviceFWVersion = "1.0";
 
-  BlaeckSerial.addSignal("Output", &Output);
+  // addSignal() returns a handle describing how a host shows the signal. Every call is
+  // optional; the five signals below declare nothing and are left out of the 0xF0 frame.
+  BlaeckSerial.addSignal("Output", &Output)
+      .withStateClass(BLAECK_STATE_CLASS_MEASUREMENT)
+      .withDisplayPrecision(3)
+      .withIcon(F("mdi:sine-wave"));
   BlaeckSerial.addSignal("Frequency", &Frequency);
   BlaeckSerial.addSignal("Amplitude", &Amplitude);
   BlaeckSerial.addSignal("Enabled", &Enabled);
