@@ -151,7 +151,7 @@ void UpdateWaveform()
   case 1: // Square
     w = (phase < 0.5f) ? 1.0f : -1.0f;
     break;
-  case 2: // Triangle: +1 at phase 0, -1 at phase 0.5
+  case 2: // Triangle: -1 at phase 0, +1 at phase 0.5
     w = 1.0f - 4.0f * fabsf(phase - 0.5f);
     break;
   case 3: // Sawtooth: -1 .. +1 ramp
