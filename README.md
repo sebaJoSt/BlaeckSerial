@@ -51,6 +51,38 @@ if (BlaeckSerial.hasSignalOverflow()) {
 }
 ```
 
+### Describe how a signal is shown
+
+`addSignal()` returns a handle carrying optional presentation metadata, which a host
+reads from the `0xF0` Signal Config frame:
+
+```CPP
+ BlaeckSerial.addSignal("Temperature", &Temperature)
+     .withUnit(F("\xC2\xB0" "C"))
+     .withDeviceClass(F("temperature"))
+     .withStateClass(BLAECK_STATE_CLASS_MEASUREMENT)
+     .withDisplayPrecision(1);
+```
+
+Every call is optional and the order does not matter. A signal that describes nothing
+gets no entry in the frame and costs nothing on the wire.
+
+| Method | |
+|--------|--|
+| `withUnit(F("Hz"))` | Symbol shown after the value. Non-ASCII must be UTF-8 |
+| `withDeviceClass(F("temperature"))` | What the value measures |
+| `withIcon(F("mdi:sine-wave"))` | Material Design Icons name |
+| `withStateClass(...)` | `BLAECK_STATE_CLASS_MEASUREMENT`, `_TOTAL` or `_TOTAL_INCREASING` |
+| `withDisplayPrecision(1)` | Decimal places. `0` means show it as an integer |
+| `diagnostic()` | Describes the device rather than what it measures |
+| `disabledByDefault()` | Registered, but switched off until someone enables it |
+| `forceUpdate()` | Report every reading, even one identical to the last |
+
+The three booleans take an argument, so `diagnostic(isDebugBuild)` works as well.
+
+Metadata costs about 9 bytes of SRAM per signal. Set `BLAECK_ENABLE_SIGNAL_META` to `0`
+to drop it: the methods still compile and store nothing, so no `#ifdef` is needed.
+
 ### Update your variables and don't forget to `tick()`!
 ```CPP
 void loop()
@@ -141,7 +173,7 @@ Serial.println(BlaeckSerial.isBufferedWrites() ? "ON" : "OFF");
 ## Configuration
 
 Compile-time settings (buffer sizes, command parser limits, message channel
-limits, `BLAECK_ENABLE_COMMAND_META`, `BLAECK_ENABLE_MESSAGES`)
+limits, `BLAECK_ENABLE_COMMAND_META`, `BLAECK_ENABLE_SIGNAL_META`, `BLAECK_ENABLE_MESSAGES`)
 are plain `#define`s with `#ifndef` guards, so any value you define first wins.
 
 > [!IMPORTANT]

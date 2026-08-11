@@ -49,195 +49,94 @@ void BlaeckSerial::begin(Stream *Ref, unsigned int size, Stream *DebugRef)
     _bufAllocate();
 }
 
-void BlaeckSerial::addSignal(String signalName, bool *value)
+BlaeckSignalRef BlaeckSerial::_registerSignal(const String &signalName, dataType type, void *address)
 {
   if (Signals == nullptr || static_cast<unsigned int>(_signalIndex) >= _signalCapacity)
   {
     _signalOverflowOccurred = true;
     _signalOverflowCount++;
-    return;
+    // Dead handle: the chain that follows compiles and runs and stores nothing.
+    return BlaeckSignalRef(this, -1);
   }
   setSignalName(_signalIndex, signalName);
-  Signals[_signalIndex].DataType = Blaeck_bool;
-  Signals[_signalIndex].Address = value;
-  _signalIndex++;
-  SignalCount = _signalIndex;
-  _schemaHash = _computeSchemaHash();
-}
-
-void BlaeckSerial::addSignal(String signalName, byte *value)
-{
-  if (Signals == nullptr || static_cast<unsigned int>(_signalIndex) >= _signalCapacity)
-  {
-    _signalOverflowOccurred = true;
-    _signalOverflowCount++;
-    return;
-  }
-  setSignalName(_signalIndex, signalName);
-  Signals[_signalIndex].DataType = Blaeck_byte;
-  Signals[_signalIndex].Address = value;
-  _signalIndex++;
-  SignalCount = _signalIndex;
-  _schemaHash = _computeSchemaHash();
-}
-
-void BlaeckSerial::addSignal(String signalName, short *value)
-{
-  if (Signals == nullptr || static_cast<unsigned int>(_signalIndex) >= _signalCapacity)
-  {
-    _signalOverflowOccurred = true;
-    _signalOverflowCount++;
-    return;
-  }
-  setSignalName(_signalIndex, signalName);
-  Signals[_signalIndex].DataType = Blaeck_short;
-  Signals[_signalIndex].Address = value;
-  _signalIndex++;
-  SignalCount = _signalIndex;
-  _schemaHash = _computeSchemaHash();
-}
-
-void BlaeckSerial::addSignal(String signalName, unsigned short *value)
-{
-  if (Signals == nullptr || static_cast<unsigned int>(_signalIndex) >= _signalCapacity)
-  {
-    _signalOverflowOccurred = true;
-    _signalOverflowCount++;
-    return;
-  }
-  setSignalName(_signalIndex, signalName);
-  Signals[_signalIndex].DataType = Blaeck_ushort;
-  Signals[_signalIndex].Address = value;
-  _signalIndex++;
-  SignalCount = _signalIndex;
-  _schemaHash = _computeSchemaHash();
-}
-
-void BlaeckSerial::addSignal(String signalName, int *value)
-{
-  if (Signals == nullptr || static_cast<unsigned int>(_signalIndex) >= _signalCapacity)
-  {
-    _signalOverflowOccurred = true;
-    _signalOverflowCount++;
-    return;
-  }
-  setSignalName(_signalIndex, signalName);
-#ifdef __AVR__
-  Signals[_signalIndex].DataType = Blaeck_int; // 2 bytes
-#else
-  Signals[_signalIndex].DataType = Blaeck_long; // Treat as 4-byte long
+  Signals[_signalIndex].DataType = type;
+  Signals[_signalIndex].Address = address;
+#if BLAECK_ENABLE_SIGNAL_META
+  // deleteSignals() only rewinds the index, so a slot can be written twice.
+  // Cleared on registration rather than on deletion, which covers both.
+  Signals[_signalIndex].Unit = nullptr;
+  Signals[_signalIndex].DeviceClass = nullptr;
+  Signals[_signalIndex].Icon = nullptr;
+  Signals[_signalIndex].MetaFlags = 0;
+  Signals[_signalIndex].DisplayPrecision = 0;
 #endif
-  Signals[_signalIndex].Address = value;
+  int16_t added = (int16_t)_signalIndex;
   _signalIndex++;
   SignalCount = _signalIndex;
   _schemaHash = _computeSchemaHash();
+  return BlaeckSignalRef(this, added);
 }
 
-void BlaeckSerial::addSignal(String signalName, unsigned int *value)
+BlaeckSignalRef BlaeckSerial::addSignal(String signalName, bool *value)
 {
-  if (Signals == nullptr || static_cast<unsigned int>(_signalIndex) >= _signalCapacity)
-  {
-    _signalOverflowOccurred = true;
-    _signalOverflowCount++;
-    return;
-  }
-  setSignalName(_signalIndex, signalName);
-#ifdef __AVR__
-  Signals[_signalIndex].DataType = Blaeck_uint; // 2 bytes
-#else
-  Signals[_signalIndex].DataType = Blaeck_ulong; // Treat as 4-byte unsigned long
-#endif
-  Signals[_signalIndex].Address = value;
-  _signalIndex++;
-  SignalCount = _signalIndex;
-  _schemaHash = _computeSchemaHash();
+  return _registerSignal(signalName, Blaeck_bool, value);
 }
 
-void BlaeckSerial::addSignal(String signalName, long *value)
+BlaeckSignalRef BlaeckSerial::addSignal(String signalName, byte *value)
 {
-  if (Signals == nullptr || static_cast<unsigned int>(_signalIndex) >= _signalCapacity)
-  {
-    _signalOverflowOccurred = true;
-    _signalOverflowCount++;
-    return;
-  }
-  setSignalName(_signalIndex, signalName);
-  Signals[_signalIndex].DataType = Blaeck_long;
-  Signals[_signalIndex].Address = value;
-  _signalIndex++;
-  SignalCount = _signalIndex;
-  _schemaHash = _computeSchemaHash();
+  return _registerSignal(signalName, Blaeck_byte, value);
 }
 
-void BlaeckSerial::addSignal(String signalName, unsigned long *value)
+BlaeckSignalRef BlaeckSerial::addSignal(String signalName, short *value)
 {
-  if (Signals == nullptr || static_cast<unsigned int>(_signalIndex) >= _signalCapacity)
-  {
-    _signalOverflowOccurred = true;
-    _signalOverflowCount++;
-    return;
-  }
-  setSignalName(_signalIndex, signalName);
-  Signals[_signalIndex].DataType = Blaeck_ulong;
-  Signals[_signalIndex].Address = value;
-  _signalIndex++;
-  SignalCount = _signalIndex;
-  _schemaHash = _computeSchemaHash();
+  return _registerSignal(signalName, Blaeck_short, value);
 }
 
-void BlaeckSerial::addSignal(String signalName, float *value)
+BlaeckSignalRef BlaeckSerial::addSignal(String signalName, unsigned short *value)
 {
-  if (Signals == nullptr || static_cast<unsigned int>(_signalIndex) >= _signalCapacity)
-  {
-    _signalOverflowOccurred = true;
-    _signalOverflowCount++;
-    return;
-  }
-  setSignalName(_signalIndex, signalName);
-  Signals[_signalIndex].DataType = Blaeck_float;
-  Signals[_signalIndex].Address = value;
-  _signalIndex++;
-  SignalCount = _signalIndex;
-  _schemaHash = _computeSchemaHash();
+  return _registerSignal(signalName, Blaeck_ushort, value);
 }
 
-void BlaeckSerial::addSignal(String signalName, double *value)
+BlaeckSignalRef BlaeckSerial::addSignal(String signalName, int *value)
 {
-  if (Signals == nullptr || static_cast<unsigned int>(_signalIndex) >= _signalCapacity)
-  {
-    _signalOverflowOccurred = true;
-    _signalOverflowCount++;
-    return;
-  }
-  setSignalName(_signalIndex, signalName);
+  return _registerSignal(signalName, Blaeck_int, value);
+}
+
+BlaeckSignalRef BlaeckSerial::addSignal(String signalName, unsigned int *value)
+{
+  return _registerSignal(signalName, Blaeck_uint, value);
+}
+
+BlaeckSignalRef BlaeckSerial::addSignal(String signalName, long *value)
+{
+  return _registerSignal(signalName, Blaeck_long, value);
+}
+
+BlaeckSignalRef BlaeckSerial::addSignal(String signalName, unsigned long *value)
+{
+  return _registerSignal(signalName, Blaeck_ulong, value);
+}
+
+BlaeckSignalRef BlaeckSerial::addSignal(String signalName, float *value)
+{
+  return _registerSignal(signalName, Blaeck_float, value);
+}
+
+BlaeckSignalRef BlaeckSerial::addSignal(String signalName, double *value)
+{
 #ifdef __AVR__
   /*On the Uno and other ATMEGA based boards, the double implementation occupies 4 bytes
   and is exactly the same as the float, with no gain in precision.*/
-  Signals[_signalIndex].DataType = Blaeck_float;
+  return _registerSignal(signalName, Blaeck_float, value);
 #else
-  Signals[_signalIndex].DataType = Blaeck_double;
+  return _registerSignal(signalName, Blaeck_double, value);
 #endif
-  Signals[_signalIndex].Address = value;
-  _signalIndex++;
-  SignalCount = _signalIndex;
-  _schemaHash = _computeSchemaHash();
 }
 
-void BlaeckSerial::addSignal(String signalName, const char *value)
+BlaeckSignalRef BlaeckSerial::addSignal(String signalName, const char *value)
 {
-  if (Signals == nullptr || static_cast<unsigned int>(_signalIndex) >= _signalCapacity)
-  {
-    _signalOverflowOccurred = true;
-    _signalOverflowCount++;
-    return;
-  }
-  setSignalName(_signalIndex, signalName);
-  Signals[_signalIndex].DataType = Blaeck_string;
   // Address is void* for every datatype; a string address is only ever read from.
-  Signals[_signalIndex].Address = const_cast<char *>(value);
-  _signalIndex++;
-  SignalCount = _signalIndex;
-  _schemaHash = _computeSchemaHash();
+  return _registerSignal(signalName, Blaeck_string, const_cast<char *>(value));
 }
 
 void BlaeckSerial::deleteSignals()
@@ -560,6 +459,12 @@ void BlaeckSerial::read()
       unsigned long msg_id = ((unsigned long)PARAMETER[3] << 24) | ((unsigned long)PARAMETER[2] << 16) | ((unsigned long)PARAMETER[1] << 8) | ((unsigned long)PARAMETER[0]);
 
       this->writeSymbols(msg_id);
+    }
+    else if (strcmp(COMMAND, "BLAECK.WRITE_SIGNAL_CONFIG") == 0)
+    {
+      unsigned long msg_id = ((unsigned long)PARAMETER[3] << 24) | ((unsigned long)PARAMETER[2] << 16) | ((unsigned long)PARAMETER[1] << 8) | ((unsigned long)PARAMETER[0]);
+
+      this->writeSignalConfig(msg_id);
     }
     else if (strcmp(COMMAND, "BLAECK.WRITE_DATA") == 0)
     {
@@ -2419,6 +2324,23 @@ void BlaeckSerial::writeSymbols(unsigned long msg_id)
   this->writeSymbolsFrame(msg_id);
 }
 
+#if BLAECK_ENABLE_SIGNAL_META
+void BlaeckSerial::writeSignalConfig()
+{
+  this->writeSignalConfig(1);
+}
+void BlaeckSerial::writeSignalConfig(unsigned long msg_id)
+{
+  this->writeSignalConfigFrame(msg_id);
+}
+#else
+// BLAECK_ENABLE_SIGNAL_META=0: signals still stream, they just carry no
+// presentation metadata. The catalog answers with an empty list so a polling
+// host learns that immediately (see _writeEmptyFrame).
+void BlaeckSerial::writeSignalConfig() { this->writeSignalConfig(1); }
+void BlaeckSerial::writeSignalConfig(unsigned long msg_id) { this->_writeEmptyFrame(0xF0, msg_id); }
+#endif
+
 #if BLAECK_ENABLE_COMMAND_META
 void BlaeckSerial::writeCommands()
 {
@@ -3570,6 +3492,100 @@ void BlaeckSerial::writeSymbolsFrame(unsigned long msg_id)
 
   }
 }
+
+#if BLAECK_ENABLE_SIGNAL_META
+void BlaeckSerial::writeSignalConfigFrame(unsigned long msg_id)
+{
+  // 0xF0 "Signal Config" frame. Per signal that declares something:
+  //   symbolId(2) flags(2)                          (LE uint16)
+  //   [unit\0]                 if flags bit 0
+  //   [deviceClass\0]          if flags bit 1
+  //   [icon\0]                 if flags bit 2
+  //   [displayPrecision(1)]    if flags bit 8
+  // flags bits: 0=hasUnit 1=hasDeviceClass 2=hasIcon 3-4=stateClass
+  //             5=isDiagnostic 6=disabledByDefault 7=forceUpdate
+  //             8=hasDisplayPrecision
+  // Signals that declare nothing are skipped entirely, so a frame with no
+  // entries is the ordinary case and not an error. The signal is named by its
+  // index in the 0xB0 Symbol List, which already says which device it belongs
+  // to - so unlike the other catalogs this frame carries no device fields.
+  if (_bufferedWrites && _frameBuf)
+  {
+    _bufReset();
+    _bufHeader(0xF0, msg_id);
+
+    for (int i = 0; i < _signalIndex; i++)
+    {
+      Signal &s = Signals[i];
+      if (s.MetaFlags == 0)
+        continue;
+
+      uint16_t symbolId = (uint16_t)i;
+      _bufByte((byte)(symbolId & 0xFF));
+      _bufByte((byte)((symbolId >> 8) & 0xFF));
+      _bufByte((byte)(s.MetaFlags & 0xFF));
+      _bufByte((byte)((s.MetaFlags >> 8) & 0xFF));
+
+      if (s.MetaFlags & BLAECK_SIG_HAS_UNIT)
+        _bufFlashStr0(s.Unit);
+      if (s.MetaFlags & BLAECK_SIG_HAS_DEVICE_CLASS)
+        _bufFlashStr0(s.DeviceClass);
+      if (s.MetaFlags & BLAECK_SIG_HAS_ICON)
+        _bufFlashStr0(s.Icon);
+      if (s.MetaFlags & BLAECK_SIG_HAS_DISPLAY_PRECISION)
+        _bufByte(s.DisplayPrecision);
+    }
+
+    _bufFooter();
+    _bufSend();
+  }
+  else
+  {
+    StreamRef->write("<BLAECK:");
+    byte msg_key = 0xF0;
+    StreamRef->write(msg_key);
+    StreamRef->write(":");
+    ulngCvt.val = msg_id;
+    StreamRef->write(ulngCvt.bval, 4);
+    StreamRef->write(":");
+
+    for (int i = 0; i < _signalIndex; i++)
+    {
+      Signal &s = Signals[i];
+      if (s.MetaFlags == 0)
+        continue;
+
+      uint16_t symbolId = (uint16_t)i;
+      StreamRef->write((byte)(symbolId & 0xFF));
+      StreamRef->write((byte)((symbolId >> 8) & 0xFF));
+      StreamRef->write((byte)(s.MetaFlags & 0xFF));
+      StreamRef->write((byte)((s.MetaFlags >> 8) & 0xFF));
+
+      if (s.MetaFlags & BLAECK_SIG_HAS_UNIT)
+      {
+        StreamRef->print(s.Unit);
+        StreamRef->print('\0');
+      }
+      if (s.MetaFlags & BLAECK_SIG_HAS_DEVICE_CLASS)
+      {
+        StreamRef->print(s.DeviceClass);
+        StreamRef->print('\0');
+      }
+      if (s.MetaFlags & BLAECK_SIG_HAS_ICON)
+      {
+        StreamRef->print(s.Icon);
+        StreamRef->print('\0');
+      }
+      if (s.MetaFlags & BLAECK_SIG_HAS_DISPLAY_PRECISION)
+        StreamRef->write(s.DisplayPrecision);
+    }
+
+    StreamRef->write("/BLAECK>");
+    StreamRef->write("\r\n");
+    StreamRef->flush();
+  }
+}
+#endif
 
 #if BLAECK_ENABLE_COMMAND_META
 void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
