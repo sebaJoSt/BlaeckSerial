@@ -173,7 +173,7 @@ void SendStatusMessage()
 void WriteStatus(const char *channel)
 {
   char hz[10]; // fits "2.00"
-  dtostrf(Frequency, 0, 2, hz);
+  String(Frequency, 2).toCharArray(hz, sizeof(hz));
   char text[80]; // fits "stopped Triangle @ 2.00 Hz"
   snprintf(text, sizeof(text), "%s %s @ %s Hz", Enabled ? "running" : "stopped", WaveName, hz);
   BlaeckSerial.writeMessage(channel, text);
@@ -221,7 +221,7 @@ void RefreshWaveName()
 const char *OffsetState()
 {
   static char text[12]; // fits "-100.0"
-  dtostrf(Offset, 0, 1, text);
+  String(Offset, 1).toCharArray(text, sizeof(text));
   return text;
 }
 
