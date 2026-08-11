@@ -22,21 +22,14 @@
     message  a line of free text, not logged          -> "running Sine @ 1.00 Hz"
     event    a discrete event from a fixed list       -> idle_warning, resumed
 
-  --- WHAT YOU GET (Loggbok topic prefix "loggbok", table name "wave") ---
-  Commands are published to loggbok/wave/_cmd/<NAME>, or loggbok/_all/_cmd/<NAME>.
-
-    HA entity     set with                       topic
-    number        SET_FREQ    <0..2>             wave/Frequency           [Hz], step 0.01
-    number        SET_AMP     <0..100>           wave/Amplitude           step 0.1
-    number        SET_OFFSET  <-100..100>        wave/msg/Offset          step 0.1
-    select        SET_WAVE    <Sine|Square|...>  wave/WaveName            or an index, 0..3
-    switch        SET_ENABLE  <0|1>              wave/Enabled             off -> Output = Offset
-    text          SET_LABEL   <text>             wave/DeviceLabel         max 32, config category
-    button        STATUS                         --                       stateless; fills the sensor below
-    sensor        --                             wave/Output              live sample, with statistics
-    sensor        --                             wave/msg/Status          text: heartbeat, every 10 s
-    sensor        --                             wave/msg/StatusOnDemand  text: on STATUS press
-    event         --                             wave/evt/Activity        idle_warning / resumed
+  Controls:
+    SET_FREQ    number  0..2 Hz, step 0.01              state: Frequency signal
+    SET_AMP     number  0..100, step 0.1                state: Amplitude signal
+    SET_OFFSET  number  -100..100, step 0.1             state: its own message channel
+    SET_WAVE    select  Sine/Square/Triangle/Sawtooth   state: WaveName signal
+    SET_ENABLE  switch  off -> Output = Offset          state: Enabled signal
+    SET_LABEL   text    max 32 bytes, config category   state: DeviceLabel signal
+    STATUS      button  writes the StatusOnDemand channel
 
   --- HOW A CONTROL GETS ITS VALUE BACK ---
 
