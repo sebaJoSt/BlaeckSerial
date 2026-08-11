@@ -3501,10 +3501,10 @@ void BlaeckSerial::writeSignalConfigFrame(unsigned long msg_id)
   //   [unit\0]                 if flags bit 0
   //   [deviceClass\0]          if flags bit 1
   //   [icon\0]                 if flags bit 2
-  //   [displayPrecision(1)]    if flags bit 8
-  // flags bits: 0=hasUnit 1=hasDeviceClass 2=hasIcon 3-4=stateClass
-  //             5=isDiagnostic 6=disabledByDefault 7=forceUpdate
-  //             8=hasDisplayPrecision
+  //   [displayPrecision(1)]    if flags bit 9
+  // flags bits: 0=hasUnit 1=hasDeviceClass 2=hasIcon 3-5=stateClass
+  //             6=isDiagnostic 7=disabledByDefault 8=forceUpdate
+  //             9=hasDisplayPrecision
   // Signals that declare nothing are skipped entirely, so a frame with no
   // entries is the ordinary case and not an error. The signal is named by its
   // index in the 0xB0 Symbol List, which already says which device it belongs

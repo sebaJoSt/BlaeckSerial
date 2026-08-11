@@ -265,15 +265,22 @@ typedef enum DataType
 } dataType;
 
 // How a signal's value accumulates over time, for Home Assistant statistics
-// (0xF0 SignalMetaFlags bits 3-4). MEASUREMENT is a value that goes up and down
+// (0xF0 SignalMetaFlags bits 3-5). MEASUREMENT is a value that goes up and down
 // and is meaningful at any instant; TOTAL and TOTAL_INCREASING are running sums,
 // the latter one that only ever grows and may reset to zero.
+//
+// UNSPECIFIED and NONE are not the same. UNSPECIFIED is what a signal that never
+// called withStateClass() carries, and leaves the host to apply whatever default
+// it uses for devices that cannot describe themselves at all. NONE says the
+// sketch decided: keep no statistics on this value - right for a status code or
+// an index, where a running average means nothing.
 enum BlaeckStateClass
 {
-  BLAECK_STATE_CLASS_NONE = 0,
-  BLAECK_STATE_CLASS_MEASUREMENT = 1,
-  BLAECK_STATE_CLASS_TOTAL = 2,
-  BLAECK_STATE_CLASS_TOTAL_INCREASING = 3
+  BLAECK_STATE_CLASS_UNSPECIFIED = 0,
+  BLAECK_STATE_CLASS_NONE = 1,
+  BLAECK_STATE_CLASS_MEASUREMENT = 2,
+  BLAECK_STATE_CLASS_TOTAL = 3,
+  BLAECK_STATE_CLASS_TOTAL_INCREASING = 4
 };
 
 // 0xF0 SignalMetaFlags. The stored word is the wire value: a with*/adjective call
@@ -285,11 +292,11 @@ enum BlaeckSignalMetaFlag
   BLAECK_SIG_HAS_UNIT = 0x0001,
   BLAECK_SIG_HAS_DEVICE_CLASS = 0x0002,
   BLAECK_SIG_HAS_ICON = 0x0004,
-  BLAECK_SIG_STATE_CLASS_MASK = 0x0018, // bits 3-4
-  BLAECK_SIG_DIAGNOSTIC = 0x0020,
-  BLAECK_SIG_DISABLED_BY_DEFAULT = 0x0040,
-  BLAECK_SIG_FORCE_UPDATE = 0x0080,
-  BLAECK_SIG_HAS_DISPLAY_PRECISION = 0x0100
+  BLAECK_SIG_STATE_CLASS_MASK = 0x0038, // bits 3-5
+  BLAECK_SIG_DIAGNOSTIC = 0x0040,
+  BLAECK_SIG_DISABLED_BY_DEFAULT = 0x0080,
+  BLAECK_SIG_FORCE_UPDATE = 0x0100,
+  BLAECK_SIG_HAS_DISPLAY_PRECISION = 0x0200
 };
 static const byte BLAECK_SIG_STATE_CLASS_SHIFT = 3;
 

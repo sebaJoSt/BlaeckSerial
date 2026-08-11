@@ -72,7 +72,7 @@ gets no entry in the frame and costs nothing on the wire.
 | `withUnit(F("Hz"))` | Symbol shown after the value. Non-ASCII must be UTF-8 |
 | `withDeviceClass(F("temperature"))` | What the value measures |
 | `withIcon(F("mdi:sine-wave"))` | Material Design Icons name |
-| `withStateClass(...)` | `BLAECK_STATE_CLASS_MEASUREMENT`, `_TOTAL` or `_TOTAL_INCREASING` |
+| `withStateClass(...)` | `BLAECK_STATE_CLASS_MEASUREMENT`, `_TOTAL`, `_TOTAL_INCREASING`, or `_NONE` to say a value should carry no statistics at all |
 | `withDisplayPrecision(1)` | Decimal places. `0` means show it as an integer |
 | `diagnostic()` | Describes the device rather than what it measures |
 | `disabledByDefault()` | Registered, but switched off until someone enables it |
