@@ -1,18 +1,15 @@
 /*
   WaveformGenerator.ino
 
-  A dashboard-friendly demo for the BlaeckSerial -> Loggbok -> MQTT bridge.
+  A dashboard-friendly demo: BlaeckSerial -> Loggbok (MQTT bridge) -> Home Assistant (MQTT Discovery).
 
   One fully controllable waveform, driven entirely over MQTT. Commands are registered with
   the typed helpers (onNumberCommand / onSelectCommand / onSwitchCommand / onTextCommand /
   onButtonCommand), so the device is self-describing: it advertises range, unit, options and
-  the mirrored signal, which Loggbok turns into Home Assistant MQTT Discovery entities. Every
-  accepted value is written back to its signal, so a dashboard always shows what the device
-  actually applied.
+  the mirrored signal, which Loggbok turns into Home Assistant MQTT Discovery entities.
 
-  Registers 7 commands. Small AVRs (Uno/Nano) default to 6, and the seventh is dropped with
-  no sign of it beyond a control that never appears: raise BLAECK_COMMAND_MAX_HANDLERS_DEFAULT
-  or drop one.
+  Registers 7 commands. Small AVRs (Uno/Nano) default to 6 (raise BLAECK_COMMAND_MAX_HANDLERS_DEFAULT
+  or drop one).
 
   Log fast enough to resolve the wave: at the default 1 Hz, a 20 ms interval gives 50 points
   per cycle. Sample slower than that and Output aliases into a shape the device never made.
@@ -35,10 +32,10 @@
 
    Home Assistant          MQTT broker           Loggbok         this sketch
           |                     |                   |                 |
-          | wave/_cmd/SET_FREQ  |      "1.5"        | <SET_FREQ,1.5>  |
+          | .../_cmd/SET_FREQ   |      "1.5"        | <SET_FREQ,1.5>  |
   command |-------------------->|------------------>|---------------->|  onSetFreq()
           |                     |                   |                 |    Frequency = 1.5
-          |   wave/Frequency    |      "1.5"        |  signal frame   |
+          |   ../Frequency      |      "1.5"        |  signal frame   |
     state |<--------------------|<------------------|<----------------|  write("Frequency", Frequency)
 
   Sending a value is a request, not a fact: it can be clamped, rejected, lost on the way, or
@@ -70,15 +67,15 @@ char WaveName[12] = "Sine"; // fits the longest option, "Triangle"
 float Offset = 0.0;
 
 //---GENERATOR STATE (never leaves the sketch)
-float phase = 0.0f;        // normalized phase 0..1
+float phase = 0.0f; // normalized phase 0..1
 unsigned long lastMicros = 0;
-byte waveIndex = 0;        // 0=Sine, 1=Square, 2=Triangle, 3=Sawtooth; WaveName is what ships
+byte waveIndex = 0; // 0=Sine, 1=Square, 2=Triangle, 3=Sawtooth; WaveName is what ships
 
 void setup()
 {
   Serial.begin(115200);
 
-  BlaeckSerial.begin(&Serial, 8);
+  BlaeckSerial.begin(&Serial, 6); // signal capacity: exactly the six added below
 
   BlaeckSerial.DeviceName = "Waveform Generator Demo";
   BlaeckSerial.DeviceHWVersion = "Arduino Mega 2560 Rev3";
@@ -99,7 +96,7 @@ void setup()
   BlaeckSerial.onSelectCommand("SET_WAVE", onSetWave, F("WaveName"), F("Sine,Square,Triangle,Sawtooth"));
   BlaeckSerial.onSwitchCommand("SET_ENABLE", onSetEnable, F("Enabled"));
   // Host percent-encodes the value; the device decodes it and enforces the 32-byte max.
-  BlaeckSerial.onTextCommand("SET_LABEL", onSetLabel, F("DeviceLabel"), 32, BLAECK_CAT_CONFIG);
+  BlaeckSerial.onTextCommand("SET_LABEL", onSetLabel, F("DeviceLabel"), sizeof(DeviceLabel) - 1, BLAECK_CAT_CONFIG);
   BlaeckSerial.onButtonCommand("STATUS", onStatus);
 
   // Declared up-front so the host can announce one text sensor per channel before
@@ -227,7 +224,6 @@ const char *OffsetState()
   dtostrf(Offset, 0, 1, text);
   return text;
 }
-
 
 void onSetFreq(const char *command, const char *const *params, byte paramCount)
 {
