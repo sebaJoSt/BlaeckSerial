@@ -51,6 +51,9 @@ if (BlaeckSerial.hasRejectedSignals()) {
 }
 ```
 
+Commands and channels answer the same question the same way, with
+`hasRejectedCommands()` and `hasRejectedChannels()`.
+
 ### Describe how a signal is shown
 
 `addSignal()` returns a handle carrying optional presentation metadata, which a host
@@ -195,13 +198,6 @@ device holds rather than what was last sent. `withOwnState` has the command carr
 instead, on a message channel it owns — for a control with no signal behind it.
 
 All metadata strings must be `F()` literals: they are stored as pointers, never copied.
-
-```CPP
-if (BlaeckSerial.hasRejectedCommands()) {
-  Serial.print("Commands not registered: ");
-  Serial.println(BlaeckSerial.getRejectedCommandCount());
-}
-```
 
 Set `BLAECK_ENABLE_COMMAND_META` to `0` to drop the metadata: the modifiers still compile and
 store nothing, so the typed helpers behave exactly like `onCommand(...)`.
