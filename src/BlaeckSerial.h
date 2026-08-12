@@ -174,9 +174,9 @@
   #define BLAECK_ENABLE_MESSAGES 1
 #endif
 
-// Every channel the device declares takes one slot, from either source:
-//   addMessageChannel("Status")               declared by the sketch
-//   onNumberCommand(...).withOwnState(...)    declared by a command
+// Two things create a message channel, and both spend a slot here: addMessageChannel(), and a
+// typed command's withOwnState(), which gives that command a channel of its own to carry its
+// value on.
 #ifndef BLAECK_MESSAGE_MAX_CHANNELS_DEFAULT
   #if defined(__AVR__)
     // Each entry costs BLAECK_MESSAGE_MAX_NAME_CHARS_DEFAULT + ~3 bytes of SRAM.
