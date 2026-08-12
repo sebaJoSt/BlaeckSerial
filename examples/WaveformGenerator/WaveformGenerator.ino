@@ -27,6 +27,7 @@
 
   Signals that describe themselves (the other five declare nothing, and cost nothing):
     Output      measurement, 3 decimals, mdi:sine-wave
+    Uptime      seconds since boot, which a host may show in minutes or hours instead
 
   --- HOW A CONTROL GETS ITS VALUE BACK ---
 
@@ -66,6 +67,9 @@ char WaveName[12] = "Sine"; // fits the longest option, "Triangle"
 // Not a signal and not logged: SET_OFFSET carries this itself, rendered by OffsetState().
 float Offset = 0.0;
 
+//---PUBLISHED AS A SIGNAL, BUT ABOUT THE BOARD RATHER THAN THE WAVE
+unsigned long Uptime = 0; // [s]
+
 //---GENERATOR STATE (never leaves the sketch)
 float phase = 0.0f; // normalized phase 0..1
 unsigned long lastMicros = 0;
@@ -75,7 +79,7 @@ void setup()
 {
   Serial.begin(115200);
 
-  BlaeckSerial.begin(&Serial, 6); // signal capacity: exactly the six added below
+  BlaeckSerial.begin(&Serial, 7); // signal capacity: exactly the seven added below
 
   BlaeckSerial.DeviceName = "Waveform Generator Demo";
   BlaeckSerial.DeviceHWVersion = "Arduino Mega 2560 Rev3";
@@ -91,6 +95,14 @@ void setup()
   BlaeckSerial.addSignal("Enabled", &Enabled);
   BlaeckSerial.addSignal("WaveName", WaveName);
   BlaeckSerial.addSignal("DeviceLabel", DeviceLabel);
+
+  // Describes the board rather than the waveform, so it is filed as diagnostic. The device
+  // class is what lets a host offer minutes or hours - without one the unit is only a label.
+  BlaeckSerial.addSignal("Uptime", &Uptime)
+      .withUnit(F("s"))
+      .withDeviceClass(F("duration"))
+      .withStateClass(BLAECK_STATE_CLASS_MEASUREMENT)
+      .diagnostic();
 
   if (BlaeckSerial.hasRejectedSignals())
   {
@@ -145,6 +157,7 @@ void setup()
 
 void loop()
 {
+  Uptime = millis() / 1000;
   UpdateWaveform();
   BlaeckSerial.tick();
   SendStatusMessage();
