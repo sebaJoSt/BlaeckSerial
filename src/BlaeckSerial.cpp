@@ -3600,13 +3600,15 @@ void BlaeckSerial::writeSignalConfigFrame(unsigned long msg_id)
 void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
 {
   // 0xA0 "Command List" frame. Per discovered command entry:
-  //   reserved(1) reserved(1) name\0 kind(1) flags(1)
+  //   reserved(1) reserved(1) name\0 kind(1) flags(2, LE uint16)
   //   [min(4) max(4) step(4)]  if flags.hasRange   (LE float)
   //   [unit\0]                 if flags.hasUnit
   //   [optionsCsv\0]           if flags.hasOptions
   //   [stateSignal\0 src(1)]   if flags.hasStateSignal
   //   [maxLen(2)]              if flags.isText     (LE uint16)
   // flags bits: 0=hasRange 1=hasUnit 2=hasOptions 3=hasStateSignal 4=isText
+  //             5-6=entity category. Bits 7-15 reserved - two bytes rather than one,
+  //             so the catalog has room to grow without taking a new message key.
   // src says what stateSignal names: 0 an addSignal() signal, 1 an
   // addMessageChannel() channel (BlaeckStateSource). It rides with the name rather
   // than taking a flags bit, so the last free bit (0x80) stays available.
@@ -3625,19 +3627,19 @@ void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
       if (!e.inUse)
         continue;
 
-      byte flags = 0;
+      uint16_t flags = 0;
       if (e.kind == BLAECK_CMD_NUMBER)
-        flags |= 0x01;
+        flags |= 0x0001;
       if (e.unit != nullptr)
-        flags |= 0x02;
+        flags |= 0x0002;
       if (e.kind == BLAECK_CMD_SELECT && e.options != nullptr)
-        flags |= 0x04;
+        flags |= 0x0004;
       if (e.stateSignal != nullptr)
-        flags |= 0x08;
+        flags |= 0x0008;
       if (e.kind == BLAECK_CMD_TEXT)
-        flags |= 0x10;
+        flags |= 0x0010;
       // Entity category in bits 5-6, so it needs no trailing payload.
-      flags |= (byte)((e.category & 0x03) << 5);
+      flags |= (uint16_t)((e.category & 0x03) << 5);
 
       // How long a command this device can receive: characters between the delimiters, terminator
       // excluded. The same on every entry - one buffer serves them all - but carried here so each
@@ -3651,9 +3653,10 @@ void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
       _bufByte((byte)((payloadMax >> 8) & 0xFF));
       _bufStr0(e.command);
       _bufByte(e.kind);
-      _bufByte(flags);
+      _bufByte((byte)(flags & 0xFF));
+      _bufByte((byte)((flags >> 8) & 0xFF));
 
-      if (flags & 0x01)
+      if (flags & 0x0001)
       {
         fltCvt.val = e.meta_min;
         _bufBytes(fltCvt.bval, 4);
@@ -3662,16 +3665,16 @@ void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
         fltCvt.val = e.meta_step;
         _bufBytes(fltCvt.bval, 4);
       }
-      if (flags & 0x02)
+      if (flags & 0x0002)
         _bufFlashStr0(e.unit);
-      if (flags & 0x04)
+      if (flags & 0x0004)
         _bufFlashStr0(e.options);
-      if (flags & 0x08)
+      if (flags & 0x0008)
       {
         _bufFlashStr0(e.stateSignal);
         _bufByte(e.stateSource);
       }
-      if (flags & 0x10)
+      if (flags & 0x0010)
       {
         uint16_t maxLen = (uint16_t)e.meta_max;
         _bufByte((byte)(maxLen & 0xFF));
@@ -3699,19 +3702,19 @@ void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
       if (!e.inUse)
         continue;
 
-      byte flags = 0;
+      uint16_t flags = 0;
       if (e.kind == BLAECK_CMD_NUMBER)
-        flags |= 0x01;
+        flags |= 0x0001;
       if (e.unit != nullptr)
-        flags |= 0x02;
+        flags |= 0x0002;
       if (e.kind == BLAECK_CMD_SELECT && e.options != nullptr)
-        flags |= 0x04;
+        flags |= 0x0004;
       if (e.stateSignal != nullptr)
-        flags |= 0x08;
+        flags |= 0x0008;
       if (e.kind == BLAECK_CMD_TEXT)
-        flags |= 0x10;
+        flags |= 0x0010;
       // Entity category in bits 5-6, so it needs no trailing payload.
-      flags |= (byte)((e.category & 0x03) << 5);
+      flags |= (uint16_t)((e.category & 0x03) << 5);
 
       // How long a command this device can receive: characters between the delimiters, terminator
       // excluded. The same on every entry - one buffer serves them all - but carried here so each
@@ -3726,9 +3729,10 @@ void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
       StreamRef->print(e.command);
       StreamRef->write((byte)0);
       StreamRef->write(e.kind);
-      StreamRef->write(flags);
+      StreamRef->write((byte)(flags & 0xFF));
+      StreamRef->write((byte)((flags >> 8) & 0xFF));
 
-      if (flags & 0x01)
+      if (flags & 0x0001)
       {
         fltCvt.val = e.meta_min;
         StreamRef->write(fltCvt.bval, 4);
@@ -3737,23 +3741,23 @@ void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
         fltCvt.val = e.meta_step;
         StreamRef->write(fltCvt.bval, 4);
       }
-      if (flags & 0x02)
+      if (flags & 0x0002)
       {
         StreamRef->print(e.unit);
         StreamRef->write((byte)0);
       }
-      if (flags & 0x04)
+      if (flags & 0x0004)
       {
         StreamRef->print(e.options);
         StreamRef->write((byte)0);
       }
-      if (flags & 0x08)
+      if (flags & 0x0008)
       {
         StreamRef->print(e.stateSignal);
         StreamRef->write((byte)0);
         StreamRef->write(e.stateSource);
       }
-      if (flags & 0x10)
+      if (flags & 0x0010)
       {
         uint16_t maxLen = (uint16_t)e.meta_max;
         StreamRef->write((byte)(maxLen & 0xFF));
