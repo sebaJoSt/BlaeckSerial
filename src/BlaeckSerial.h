@@ -275,18 +275,6 @@ typedef enum DataType
 // NONE is what a signal that never called withStateClass() carries, and a host
 // keeps no statistics on it. Nothing is assumed on a signal's behalf: a value
 // that should be graphed over time has to say so.
-// What an event channel reports, for Home Assistant (0x80 ChannelFlags bits 2-4). A closed
-// list of three, which Home Assistant validates strictly - an unrecognised value fails
-// discovery and the entity is never created - so it is carried as a number a sketch cannot
-// misspell rather than as a string.
-enum BlaeckEventDeviceClass
-{
-  BLAECK_EVENT_CLASS_NONE = 0,
-  BLAECK_EVENT_CLASS_BUTTON = 1,
-  BLAECK_EVENT_CLASS_DOORBELL = 2,
-  BLAECK_EVENT_CLASS_MOTION = 3
-};
-
 enum BlaeckStateClass
 {
   BLAECK_STATE_CLASS_NONE = 0,
@@ -1094,7 +1082,7 @@ private:
   {
     char name[MAX_EVENT_NAME_COUNT];
     const __FlashStringHelper *icon = nullptr;
-    uint8_t deviceClass = BLAECK_EVENT_CLASS_NONE;
+    const __FlashStringHelper *deviceClass = nullptr;
     bool diagnostic = false;
     bool disabledByDefault = false;
     bool inUse = false;
@@ -1732,14 +1720,15 @@ public:
     return *this;
   }
 
-  // What the channel reports, e.g. BLAECK_EVENT_CLASS_DOORBELL. A number rather than a string
-  // because Home Assistant's list is three values and it validates them: a name it does not
-  // recognise fails discovery and the entity never appears.
-  BlaeckEventChannelRef &withDeviceClass(BlaeckEventDeviceClass deviceClass)
+  // What the channel reports: F("button"), F("doorbell") or F("motion"). Home Assistant's
+  // vocabulary, carried as written - this library does not hold the list, for the same reason
+  // signals do not. It does validate it, so a name it does not know fails discovery and the
+  // entity never appears.
+  BlaeckEventChannelRef &withDeviceClass(const __FlashStringHelper *deviceClass)
   {
 #if BLAECK_ENABLE_EVENTS
     if (_index >= 0 && _owner != nullptr)
-      _owner->_eventChannels[_index].deviceClass = (uint8_t)deviceClass;
+      _owner->_eventChannels[_index].deviceClass = deviceClass;
 #else
     (void)deviceClass;
 #endif

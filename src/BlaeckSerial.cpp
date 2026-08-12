@@ -1608,7 +1608,7 @@ int BlaeckSerial::_registerEventChannel(const char *channelName, const __FlashSt
   if (existing >= 0)
   {
     _eventChannels[existing].icon = nullptr;
-    _eventChannels[existing].deviceClass = BLAECK_EVENT_CLASS_NONE;
+    _eventChannels[existing].deviceClass = nullptr;
     _eventChannels[existing].diagnostic = false;
     _eventChannels[existing].disabledByDefault = false;
     return existing;
@@ -1621,7 +1621,7 @@ int BlaeckSerial::_registerEventChannel(const char *channelName, const __FlashSt
       strncpy(_eventChannels[i].name, channelName, MAX_EVENT_NAME_COUNT - 1);
       _eventChannels[i].name[MAX_EVENT_NAME_COUNT - 1] = '\0';
       _eventChannels[i].icon = nullptr;
-      _eventChannels[i].deviceClass = BLAECK_EVENT_CLASS_NONE;
+      _eventChannels[i].deviceClass = nullptr;
       _eventChannels[i].diagnostic = false;
       _eventChannels[i].disabledByDefault = false;
       _eventChannels[i].inUse = true;
@@ -1897,11 +1897,10 @@ void BlaeckSerial::writeEventChannelsFrame(unsigned long msg_id)
         flags |= 0x01;
       if (e.diagnostic)
         flags |= 0x02;
-      // Device class in bits 2-4, so it needs no trailing payload and no name a sketch could
-      // misspell - Home Assistant validates the three it knows and drops the entity otherwise.
-      flags |= (byte)((e.deviceClass & 0x07) << 2);
+      if (e.deviceClass != nullptr)
+        flags |= 0x04;
       if (e.disabledByDefault)
-        flags |= 0x20;
+        flags |= 0x08;
 
       _bufByte((byte)0);
       _bufByte((byte)0);
@@ -1910,6 +1909,8 @@ void BlaeckSerial::writeEventChannelsFrame(unsigned long msg_id)
 
       if (flags & 0x01)
         _bufFlashStr0(e.icon);
+      if (flags & 0x04)
+        _bufFlashStr0(e.deviceClass);
 
       byte typeCount = 0;
       for (byte t = 0; t < _eventTypeCount; t++)
@@ -1950,11 +1951,10 @@ void BlaeckSerial::writeEventChannelsFrame(unsigned long msg_id)
         flags |= 0x01;
       if (e.diagnostic)
         flags |= 0x02;
-      // Device class in bits 2-4, so it needs no trailing payload and no name a sketch could
-      // misspell - Home Assistant validates the three it knows and drops the entity otherwise.
-      flags |= (byte)((e.deviceClass & 0x07) << 2);
+      if (e.deviceClass != nullptr)
+        flags |= 0x04;
       if (e.disabledByDefault)
-        flags |= 0x20;
+        flags |= 0x08;
 
       StreamRef->write((byte)0);
       StreamRef->write((byte)0);
@@ -1965,6 +1965,11 @@ void BlaeckSerial::writeEventChannelsFrame(unsigned long msg_id)
       if (flags & 0x01)
       {
         StreamRef->print(e.icon);
+        StreamRef->write((byte)0);
+      }
+      if (flags & 0x04)
+      {
+        StreamRef->print(e.deviceClass);
         StreamRef->write((byte)0);
       }
 
