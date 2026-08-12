@@ -239,9 +239,9 @@ void CheckActivity()
 }
 
 // The current shape's name, read back from the option list SET_WAVE declared, so those names
-// live in flash once instead of being repeated in the sketch. A failed lookup writes the bare
-// index: Home Assistant ignores a state that is not one of its options and goes on showing the
-// previous one, so the evidence lands in the logged signal rather than on the dashboard.
+// live in flash once instead of being repeated in the sketch. The lookup fails if the command
+// was never registered or its metadata is compiled out; the bare index then at least says which
+// shape was asked for, where a stale name would say nothing.
 void RefreshWaveName()
 {
   if (!BlaeckSerial.getSelectOption("SET_WAVE", waveIndex, WaveName, sizeof(WaveName)))
