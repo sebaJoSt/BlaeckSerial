@@ -51,9 +51,6 @@ if (BlaeckSerial.hasRejectedSignals()) {
 }
 ```
 
-Commands and channels answer the same question the same way, with `hasRejectedCommands()`,
-`hasRejectedMessageChannels()` and `hasRejectedEventChannels()` — one per table, so the answer
-says which limit to raise.
 
 ### Describe how a signal is shown
 
