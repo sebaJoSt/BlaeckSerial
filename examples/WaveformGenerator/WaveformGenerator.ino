@@ -92,8 +92,6 @@ void setup()
   BlaeckSerial.addSignal("WaveName", WaveName);
   BlaeckSerial.addSignal("DeviceLabel", DeviceLabel);
 
-  // One look covers every addSignal() above: anything past the capacity begin() was given is
-  // dropped, as is everything if the board had no RAM for the table at all.
   if (BlaeckSerial.hasSignalOverflow())
   {
     Serial.print(F("Signals not added: "));
@@ -122,8 +120,6 @@ void setup()
       .config();
   BlaeckSerial.onButtonCommand("STATUS", onStatus);
 
-  // One look covers every registration above. Raise BLAECK_COMMAND_MAX_HANDLERS_DEFAULT if it
-  // fires - a small AVR has fewer slots than this sketch registers commands.
   if (BlaeckSerial.hasRejectedCommands())
   {
     Serial.print(F("Commands not registered: "));
@@ -134,12 +130,14 @@ void setup()
 
   // Declared up-front so the host can announce one text sensor per channel before
   // the first line is written.
-  BlaeckSerial.addMessageChannel("Status", F("mdi:pulse"), true);
-  BlaeckSerial.addMessageChannel("StatusOnDemand", F("mdi:message-text"), true);
+  BlaeckSerial.addMessageChannel("Status").withIcon(F("mdi:pulse")).diagnostic();
+  BlaeckSerial.addMessageChannel("StatusOnDemand").withIcon(F("mdi:message-text")).diagnostic();
 
   // Each event channel declares up-front the closed set of events it can report.
   // addEventType() does the same one name at a time, for a list built conditionally.
-  BlaeckSerial.addEventChannel("Activity", F("mdi:sine-wave"), false, F("idle_warning,resumed"));
+  BlaeckSerial.addEventChannel("Activity")
+      .withIcon(F("mdi:sine-wave"))
+      .withTypes(F("idle_warning,resumed"));
 
   lastMicros = micros();
 }

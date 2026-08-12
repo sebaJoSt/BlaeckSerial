@@ -149,7 +149,7 @@ void setup()
 
   // Message channels are declared up-front so the host can announce a text
   // sensor for "Status" before the first line is written.
-  BlaeckSerial.addMessageChannel("Status", F("mdi:message-text"));
+  BlaeckSerial.addMessageChannel("Status").withIcon(F("mdi:message-text"));
 }
 
 void loop()
