@@ -1569,10 +1569,23 @@ void BlaeckSerial::writeMessage(const char *, const char *, unsigned long) {}
 #endif
 
 #if BLAECK_ENABLE_EVENTS
-int BlaeckSerial::_registerEventChannel(const char *channelName)
+int BlaeckSerial::_registerEventChannel(const char *channelName, const __FlashStringHelper *eventTypes)
 {
   if (channelName == nullptr || channelName[0] == '\0')
   {
+    _rejectedEventChannelCount++;
+    return -1;
+  }
+
+  // A channel with no types can neither emit - writeEvent() resolves against this list - nor be
+  // announced, since a host has nothing to declare the entity with. Refused rather than stored.
+  if (eventTypes == nullptr || _flashCsvOptionCount(eventTypes) == 0)
+  {
+    if (_debugStream != nullptr)
+    {
+      _debugStream->print(F("Event channel needs at least one event type: "));
+      _debugStream->println(channelName);
+    }
     _rejectedEventChannelCount++;
     return -1;
   }
@@ -1595,7 +1608,9 @@ int BlaeckSerial::_registerEventChannel(const char *channelName)
   if (existing >= 0)
   {
     _eventChannels[existing].icon = nullptr;
+    _eventChannels[existing].deviceClass = BLAECK_EVENT_CLASS_NONE;
     _eventChannels[existing].diagnostic = false;
+    _eventChannels[existing].disabledByDefault = false;
     return existing;
   }
 
@@ -1606,8 +1621,11 @@ int BlaeckSerial::_registerEventChannel(const char *channelName)
       strncpy(_eventChannels[i].name, channelName, MAX_EVENT_NAME_COUNT - 1);
       _eventChannels[i].name[MAX_EVENT_NAME_COUNT - 1] = '\0';
       _eventChannels[i].icon = nullptr;
+      _eventChannels[i].deviceClass = BLAECK_EVENT_CLASS_NONE;
       _eventChannels[i].diagnostic = false;
+      _eventChannels[i].disabledByDefault = false;
       _eventChannels[i].inUse = true;
+      _addEventTypesCsv(i, eventTypes);
       return (int)i;
     }
   }
@@ -1621,9 +1639,9 @@ int BlaeckSerial::_registerEventChannel(const char *channelName)
   return -1;
 }
 
-BlaeckEventChannelRef BlaeckSerial::addEventChannel(const char *channelName)
+BlaeckEventChannelRef BlaeckSerial::addEventChannel(const char *channelName, const __FlashStringHelper *eventTypes)
 {
-  return BlaeckEventChannelRef(this, (int16_t)_registerEventChannel(channelName));
+  return BlaeckEventChannelRef(this, (int16_t)_registerEventChannel(channelName, eventTypes));
 }
 
 void BlaeckSerial::_addEventTypesCsv(byte channelIndex, const __FlashStringHelper *eventTypes)
@@ -1879,6 +1897,11 @@ void BlaeckSerial::writeEventChannelsFrame(unsigned long msg_id)
         flags |= 0x01;
       if (e.diagnostic)
         flags |= 0x02;
+      // Device class in bits 2-4, so it needs no trailing payload and no name a sketch could
+      // misspell - Home Assistant validates the three it knows and drops the entity otherwise.
+      flags |= (byte)((e.deviceClass & 0x07) << 2);
+      if (e.disabledByDefault)
+        flags |= 0x20;
 
       _bufByte((byte)0);
       _bufByte((byte)0);
@@ -1927,6 +1950,11 @@ void BlaeckSerial::writeEventChannelsFrame(unsigned long msg_id)
         flags |= 0x01;
       if (e.diagnostic)
         flags |= 0x02;
+      // Device class in bits 2-4, so it needs no trailing payload and no name a sketch could
+      // misspell - Home Assistant validates the three it knows and drops the entity otherwise.
+      flags |= (byte)((e.deviceClass & 0x07) << 2);
+      if (e.disabledByDefault)
+        flags |= 0x20;
 
       StreamRef->write((byte)0);
       StreamRef->write((byte)0);
@@ -2037,7 +2065,7 @@ void BlaeckSerial::writeEvent(const char *channelName, const __FlashStringHelper
 #else
 // BLAECK_ENABLE_EVENTS=0: the API stays so sketches still build, but nothing
 // is stored. The catalog still answers, with an empty list (see _writeEmptyFrame).
-BlaeckEventChannelRef BlaeckSerial::addEventChannel(const char *) { return BlaeckEventChannelRef(this, -1); }
+BlaeckEventChannelRef BlaeckSerial::addEventChannel(const char *, const __FlashStringHelper *) { return BlaeckEventChannelRef(this, -1); }
 bool BlaeckSerial::addEventType(const char *, const __FlashStringHelper *) { return false; }
 void BlaeckSerial::clearAllEventChannels() {}
 void BlaeckSerial::writeEventChannels() { this->writeEventChannels(1); }

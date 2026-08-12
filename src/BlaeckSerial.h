@@ -275,6 +275,18 @@ typedef enum DataType
 // NONE is what a signal that never called withStateClass() carries, and a host
 // keeps no statistics on it. Nothing is assumed on a signal's behalf: a value
 // that should be graphed over time has to say so.
+// What an event channel reports, for Home Assistant (0x80 ChannelFlags bits 2-4). A closed
+// list of three, which Home Assistant validates strictly - an unrecognised value fails
+// discovery and the entity is never created - so it is carried as a number a sketch cannot
+// misspell rather than as a string.
+enum BlaeckEventDeviceClass
+{
+  BLAECK_EVENT_CLASS_NONE = 0,
+  BLAECK_EVENT_CLASS_BUTTON = 1,
+  BLAECK_EVENT_CLASS_DOORBELL = 2,
+  BLAECK_EVENT_CLASS_MOTION = 3
+};
+
 enum BlaeckStateClass
 {
   BLAECK_STATE_CLASS_NONE = 0,
@@ -534,11 +546,15 @@ public:
   // `channelName` is copied; `icon` must outlive the call (use a string literal
   // or F("mdi:...")). Returns false if the name is empty/too long or the table
   // is full.
-  BlaeckEventChannelRef addEventChannel(const char *channelName);
+  // eventTypes is the closed set this channel may report, comma-separated and read left to
+  // right, so position defines each type's index. It is not optional: writeEvent() resolves
+  // against this list, and a host needs it to announce the entity at all, so a channel without
+  // one could neither emit nor be shown. Use addEventType() to append more conditionally.
+  BlaeckEventChannelRef addEventChannel(const char *channelName, const __FlashStringHelper *eventTypes);
 
   // Append an event type to a declared channel. Call order defines the index used on the wire:
-  // the first type added to a channel is index 0, the next 1. Use withTypes() for a list known
-  // at compile time and this when it is built conditionally; the two are mixable. `eventType`
+  // the first type added to a channel is index 0, the next 1. addEventChannel() declares the set
+  // known at compile time; use this to append to it conditionally. `eventType`
   // must outlive the call (use F("...")). Types are held in one pool shared by all channels.
   // A type that does not fit, names an undeclared channel, or duplicates one the channel
   // already has is dropped, reported on DebugRef, and counted by hasRejectedEventChannels().
@@ -833,7 +849,7 @@ private:
   // existing slot with the metadata cleared, so what a previous declaration said cannot linger.
   // An event channel keeps its already-declared types and their indices.
   int _registerMessageChannel(const char *channelName);
-  int _registerEventChannel(const char *channelName);
+  int _registerEventChannel(const char *channelName, const __FlashStringHelper *eventTypes);
   // Appends one pool entry per field of a comma-separated list, in order, so a field's position
   // is its wire index - the same rule call order gives addEventType().
   void _addEventTypesCsv(byte channelIndex, const __FlashStringHelper *eventTypes);
@@ -1078,7 +1094,9 @@ private:
   {
     char name[MAX_EVENT_NAME_COUNT];
     const __FlashStringHelper *icon = nullptr;
+    uint8_t deviceClass = BLAECK_EVENT_CLASS_NONE;
     bool diagnostic = false;
+    bool disabledByDefault = false;
     bool inUse = false;
   };
   EventChannelEntry _eventChannels[MAX_EVENT_CHANNELS];
@@ -1714,16 +1732,28 @@ public:
     return *this;
   }
 
-  // The closed set this channel can report, comma-separated and read left to right, so position
-  // defines each type's index exactly as call order does with addEventType(). Use this for a set
-  // known at compile time and addEventType() when the list is built conditionally; they mix.
-  BlaeckEventChannelRef &withTypes(const __FlashStringHelper *eventTypes)
+  // What the channel reports, e.g. BLAECK_EVENT_CLASS_DOORBELL. A number rather than a string
+  // because Home Assistant's list is three values and it validates them: a name it does not
+  // recognise fails discovery and the entity never appears.
+  BlaeckEventChannelRef &withDeviceClass(BlaeckEventDeviceClass deviceClass)
   {
 #if BLAECK_ENABLE_EVENTS
-    if (_index >= 0 && _owner != nullptr && eventTypes != nullptr)
-      _owner->_addEventTypesCsv((byte)_index, eventTypes);
+    if (_index >= 0 && _owner != nullptr)
+      _owner->_eventChannels[_index].deviceClass = (uint8_t)deviceClass;
 #else
-    (void)eventTypes;
+    (void)deviceClass;
+#endif
+    return *this;
+  }
+
+  // Registers the entity but leaves it switched off until someone enables it.
+  BlaeckEventChannelRef &disabledByDefault(bool on = true)
+  {
+#if BLAECK_ENABLE_EVENTS
+    if (_index >= 0 && _owner != nullptr)
+      _owner->_eventChannels[_index].disabledByDefault = on;
+#else
+    (void)on;
 #endif
     return *this;
   }

@@ -135,9 +135,8 @@ void setup()
 
   // Each event channel declares up-front the closed set of events it can report.
   // addEventType() does the same one name at a time, for a list built conditionally.
-  BlaeckSerial.addEventChannel("Activity")
-      .withIcon(F("mdi:sine-wave"))
-      .withTypes(F("idle_warning,resumed"));
+  BlaeckSerial.addEventChannel("Activity", F("idle_warning,resumed"))
+      .withIcon(F("mdi:sine-wave"));
 
   lastMicros = micros();
 }
