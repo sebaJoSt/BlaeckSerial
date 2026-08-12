@@ -1652,7 +1652,8 @@ public:
   // The closed set of values this signal reports, comma-separated. Text only: the list is a set
   // of names, which is what Home Assistant's enum device class describes - a number has no such
   // set, and a bool becomes a binary sensor, which has no options at all. Home Assistant needs
-  // withDeviceClass(F("enum")) alongside it, and rejects the list without one.
+  // withDeviceClass(F("enum")) alongside it, rejects the list without one, and refuses it
+  // together with a unit.
   BlaeckTextSignalRef &withOptions(const __FlashStringHelper *optionsCsv)
   {
     _setOptions(optionsCsv);
@@ -1720,7 +1721,8 @@ public:
   }
 
   // The closed set of values this channel reports, comma-separated. Home Assistant needs
-  // withDeviceClass(F("enum")) alongside it, and rejects the list without one.
+  // withDeviceClass(F("enum")) alongside it, rejects the list without one, and refuses it
+  // together with a unit.
   BlaeckMessageChannelRef &withOptions(const __FlashStringHelper *optionsCsv)
   {
 #if BLAECK_ENABLE_MESSAGES
