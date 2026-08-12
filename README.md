@@ -176,10 +176,9 @@ with a length limit:
      .config();
 ```
 
-The kind is the helper's name because it decides the entity; every modifier is optional, so a
-command that declares nothing reads exactly like `onCommand(...)`. Each helper returns the handle
-for its own kind, so `.withRange(...)` on a text command does not compile rather than quietly
-doing nothing.
+The kind is the helper's name because it decides the entity; every modifier is optional. Each
+helper returns the handle for its own kind, so `.withRange(...)` on a text command does not
+compile rather than quietly doing nothing.
 
 | | Number | Switch | Select | Button | Text |
 |---|:-:|:-:|:-:|:-:|:-:|
@@ -196,9 +195,6 @@ device holds rather than what was last sent. `withOwnState` has the command carr
 instead, on a message channel it owns — for a control with no signal behind it.
 
 All metadata strings must be `F()` literals: they are stored as pointers, never copied.
-
-No registration returns a value to check. One look afterwards covers every command, whichever
-helper declared it:
 
 ```CPP
 if (BlaeckSerial.hasRejectedCommands()) {
