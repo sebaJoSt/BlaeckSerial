@@ -92,6 +92,14 @@ void setup()
   BlaeckSerial.addSignal("WaveName", WaveName);
   BlaeckSerial.addSignal("DeviceLabel", DeviceLabel);
 
+  // One look covers every addSignal() above: anything past the capacity begin() was given is
+  // dropped, as is everything if the board had no RAM for the table at all.
+  if (BlaeckSerial.hasSignalOverflow())
+  {
+    Serial.print(F("Signals not added: "));
+    Serial.println(BlaeckSerial.getSignalOverflowCount());
+  }
+
   BlaeckSerial.onNumberCommand("SET_FREQ", onSetFreq)
       .withRange(0.0f, 2.0f, 0.01f)
       .withUnit(F("Hz"))
