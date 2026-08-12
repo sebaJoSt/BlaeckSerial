@@ -174,8 +174,8 @@
   #define BLAECK_ENABLE_MESSAGES 1
 #endif
 
-// Count the channels a command declares as well: withOwnState() takes a slot here, so a device
-// with two addMessageChannel() calls and two own-state commands needs four.
+// Count the channels commands declare as well: a typed command's withOwnState() modifier takes
+// a slot here, so a device with two addMessageChannel() calls and two such commands needs four.
 #ifndef BLAECK_MESSAGE_MAX_CHANNELS_DEFAULT
   #if defined(__AVR__)
     // Each entry costs BLAECK_MESSAGE_MAX_NAME_CHARS_DEFAULT + ~3 bytes of SRAM.
