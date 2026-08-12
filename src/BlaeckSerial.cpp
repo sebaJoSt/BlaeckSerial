@@ -1457,11 +1457,14 @@ void BlaeckSerial::writeMessageChannels(unsigned long msg_id)
 void BlaeckSerial::writeMessageChannelsFrame(unsigned long msg_id)
 {
   // 0x90 "Message Channel List" frame. Per declared channel entry:
-  //   reserved(1) reserved(1) name\0 flags(1)
+  //   reserved(1) reserved(1) name\0 flags(2, LE uint16)
   //   [icon\0]                 if flags.hasIcon
   //   [stateText\0]            if flags.hasStateText
+  //   [deviceClass\0]          if flags.hasDeviceClass
+  //   [unit\0]                 if flags.hasUnit
   // flags bits: 0=hasIcon 1=isDiagnostic 2=hasStateText 3=hasDeviceClass 4=disabledByDefault
-  //             5=forceUpdate 6=hasUnit
+  //             5=forceUpdate 6=hasUnit. Bits 7-15 reserved - two bytes rather than one,
+  //             so the catalog has room to grow without taking a new message key.
   // stateText is fetched from the channel's getter as the frame is built, so the catalog
   // reports each channel's value as of that moment and there is no stored copy to go
   // stale. A channel that registered no getter, or whose getter returns nullptr, carries
@@ -1490,34 +1493,35 @@ void BlaeckSerial::writeMessageChannelsFrame(unsigned long msg_id)
       // calling it twice could hand the two uses different text.
       const char *stateText = (e.getStateText != nullptr) ? e.getStateText() : nullptr;
 
-      byte flags = 0;
+      uint16_t flags = 0;
       if (e.icon != nullptr)
-        flags |= 0x01;
+        flags |= 0x0001;
       if (e.diagnostic)
-        flags |= 0x02;
+        flags |= 0x0002;
       if (e.deviceClass != nullptr)
-        flags |= 0x08;
+        flags |= 0x0008;
       if (e.disabledByDefault)
-        flags |= 0x10;
+        flags |= 0x0010;
       if (e.forceUpdate)
-        flags |= 0x20;
+        flags |= 0x0020;
       if (e.unit != nullptr)
-        flags |= 0x40;
+        flags |= 0x0040;
       if (stateText != nullptr)
-        flags |= 0x04;
+        flags |= 0x0004;
 
       _bufByte((byte)0);
       _bufByte((byte)0);
       _bufStr0(e.name);
-      _bufByte(flags);
+      _bufByte((byte)(flags & 0xFF));
+      _bufByte((byte)((flags >> 8) & 0xFF));
 
-      if (flags & 0x01)
+      if (flags & 0x0001)
         _bufFlashStr0(e.icon);
-      if (flags & 0x04)
+      if (flags & 0x0004)
         _bufStr0(stateText);
-      if (flags & 0x08)
+      if (flags & 0x0008)
         _bufFlashStr0(e.deviceClass);
-      if (flags & 0x40)
+      if (flags & 0x0040)
         _bufFlashStr0(e.unit);
     }
 
@@ -1545,44 +1549,45 @@ void BlaeckSerial::writeMessageChannelsFrame(unsigned long msg_id)
       // stalls a half-sent frame.
       const char *stateText = (e.getStateText != nullptr) ? e.getStateText() : nullptr;
 
-      byte flags = 0;
+      uint16_t flags = 0;
       if (e.icon != nullptr)
-        flags |= 0x01;
+        flags |= 0x0001;
       if (e.diagnostic)
-        flags |= 0x02;
+        flags |= 0x0002;
       if (e.deviceClass != nullptr)
-        flags |= 0x08;
+        flags |= 0x0008;
       if (e.disabledByDefault)
-        flags |= 0x10;
+        flags |= 0x0010;
       if (e.forceUpdate)
-        flags |= 0x20;
+        flags |= 0x0020;
       if (e.unit != nullptr)
-        flags |= 0x40;
+        flags |= 0x0040;
       if (stateText != nullptr)
-        flags |= 0x04;
+        flags |= 0x0004;
 
       StreamRef->write((byte)0);
       StreamRef->write((byte)0);
       StreamRef->print(e.name);
       StreamRef->write((byte)0);
-      StreamRef->write(flags);
+      StreamRef->write((byte)(flags & 0xFF));
+      StreamRef->write((byte)((flags >> 8) & 0xFF));
 
-      if (flags & 0x01)
+      if (flags & 0x0001)
       {
         StreamRef->print(e.icon);
         StreamRef->write((byte)0);
       }
-      if (flags & 0x04)
+      if (flags & 0x0004)
       {
         StreamRef->print(stateText);
         StreamRef->write((byte)0);
       }
-      if (flags & 0x08)
+      if (flags & 0x0008)
       {
         StreamRef->print(e.deviceClass);
         StreamRef->write((byte)0);
       }
-      if (flags & 0x40)
+      if (flags & 0x0040)
       {
         StreamRef->print(e.unit);
         StreamRef->write((byte)0);
