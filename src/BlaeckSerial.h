@@ -296,7 +296,8 @@ enum BlaeckSignalMetaFlag
   BLAECK_SIG_DIAGNOSTIC = 0x0020,
   BLAECK_SIG_DISABLED_BY_DEFAULT = 0x0040,
   BLAECK_SIG_FORCE_UPDATE = 0x0080,
-  BLAECK_SIG_HAS_DISPLAY_PRECISION = 0x0100
+  BLAECK_SIG_HAS_DISPLAY_PRECISION = 0x0100,
+  BLAECK_SIG_HAS_OPTIONS = 0x0200
 };
 static const byte BLAECK_SIG_STATE_CLASS_SHIFT = 3;
 
@@ -311,6 +312,7 @@ struct Signal
   const __FlashStringHelper *Unit = nullptr;
   const __FlashStringHelper *DeviceClass = nullptr;
   const __FlashStringHelper *Icon = nullptr;
+  const __FlashStringHelper *Options = nullptr;
   uint16_t MetaFlags = 0;
   uint8_t DisplayPrecision = 0;
 #endif
@@ -1066,6 +1068,7 @@ private:
     // value on its topic can only ever come from the getter above.
     const __FlashStringHelper *deviceClass = nullptr;
     const __FlashStringHelper *unit = nullptr;
+    const __FlashStringHelper *options = nullptr;
     bool ownedByCommand = false;
     bool diagnostic = false;
     bool disabledByDefault = false;
@@ -1534,6 +1537,22 @@ protected:
 #endif
   }
 
+  void _setOptions(const __FlashStringHelper *optionsCsv)
+  {
+#if BLAECK_ENABLE_SIGNAL_META
+    if (Signal *s = _signal())
+    {
+      s->Options = optionsCsv;
+      if (optionsCsv != nullptr)
+        s->MetaFlags |= BLAECK_SIG_HAS_OPTIONS;
+      else
+        s->MetaFlags &= (uint16_t)~BLAECK_SIG_HAS_OPTIONS;
+    }
+#else
+    (void)optionsCsv;
+#endif
+  }
+
   void _setDisplayPrecision(uint8_t decimals)
   {
 #if BLAECK_ENABLE_SIGNAL_META
@@ -1581,6 +1600,13 @@ protected:
   TYPE &forceUpdate(bool on = true)                                                       \
   {                                                                                       \
     _setBit(BLAECK_SIG_FORCE_UPDATE, on);                                                 \
+    return *this;                                                                         \
+  }                                                                                       \
+  /* The closed set of values this signal reports, comma-separated. Home Assistant needs */ \
+  /* withDeviceClass(F("enum")) alongside it, and rejects the list without one. */        \
+  TYPE &withOptions(const __FlashStringHelper *optionsCsv)                                \
+  {                                                                                       \
+    _setOptions(optionsCsv);                                                              \
     return *this;                                                                         \
   }
 
@@ -1686,6 +1712,19 @@ public:
       _owner->_messageChannels[_index].getStateText = getStateText;
 #else
     (void)getStateText;
+#endif
+    return *this;
+  }
+
+  // The closed set of values this channel reports, comma-separated. Home Assistant needs
+  // withDeviceClass(F("enum")) alongside it, and rejects the list without one.
+  BlaeckMessageChannelRef &withOptions(const __FlashStringHelper *optionsCsv)
+  {
+#if BLAECK_ENABLE_MESSAGES
+    if (_index >= 0 && _owner != nullptr)
+      _owner->_messageChannels[_index].options = optionsCsv;
+#else
+    (void)optionsCsv;
 #endif
     return *this;
   }

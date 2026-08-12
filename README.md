@@ -78,6 +78,7 @@ gets no entry in the frame and costs nothing on the wire.
 | `diagnostic()` | Describes the device rather than what it measures | ● | ● | ● |
 | `disabledByDefault()` | Registered, but switched off until someone enables it | ● | ● | ● |
 | `forceUpdate()` | Report every reading, even one identical to the last | ● | ● | ● |
+| `withOptions(F("a,b,c"))` | The closed set of values reported. Home Assistant needs `withDeviceClass(F("enum"))` alongside it | ● | ● | ● |
 
 The three booleans take an argument, so `diagnostic(isDebugBuild)` works as well.
 

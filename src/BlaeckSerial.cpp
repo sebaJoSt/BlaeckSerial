@@ -67,6 +67,7 @@ int BlaeckSerial::_registerSignal(const String &signalName, dataType type, void 
   Signals[_signalIndex].Unit = nullptr;
   Signals[_signalIndex].DeviceClass = nullptr;
   Signals[_signalIndex].Icon = nullptr;
+  Signals[_signalIndex].Options = nullptr;
   Signals[_signalIndex].MetaFlags = 0;
   Signals[_signalIndex].DisplayPrecision = 0;
 #endif
@@ -1270,6 +1271,7 @@ int BlaeckSerial::_registerMessageChannel(const char *channelName)
     _messageChannels[existing].diagnostic = false;
     _messageChannels[existing].deviceClass = nullptr;
     _messageChannels[existing].unit = nullptr;
+    _messageChannels[existing].options = nullptr;
     _messageChannels[existing].disabledByDefault = false;
     _messageChannels[existing].forceUpdate = false;
     _messageChannels[existing].getStateText = nullptr;
@@ -1286,6 +1288,7 @@ int BlaeckSerial::_registerMessageChannel(const char *channelName)
       _messageChannels[i].diagnostic = false;
       _messageChannels[i].deviceClass = nullptr;
       _messageChannels[i].unit = nullptr;
+      _messageChannels[i].options = nullptr;
       _messageChannels[i].disabledByDefault = false;
       _messageChannels[i].forceUpdate = false;
       _messageChannels[i].getStateText = nullptr;
@@ -1506,6 +1509,8 @@ void BlaeckSerial::writeMessageChannelsFrame(unsigned long msg_id)
         flags |= 0x0020;
       if (e.unit != nullptr)
         flags |= 0x0040;
+      if (e.options != nullptr)
+        flags |= 0x0080;
       if (stateText != nullptr)
         flags |= 0x0004;
 
@@ -1523,6 +1528,8 @@ void BlaeckSerial::writeMessageChannelsFrame(unsigned long msg_id)
         _bufFlashStr0(e.deviceClass);
       if (flags & 0x0040)
         _bufFlashStr0(e.unit);
+      if (flags & 0x0080)
+        _bufFlashStr0(e.options);
     }
 
     _bufFooter();
@@ -1562,6 +1569,8 @@ void BlaeckSerial::writeMessageChannelsFrame(unsigned long msg_id)
         flags |= 0x0020;
       if (e.unit != nullptr)
         flags |= 0x0040;
+      if (e.options != nullptr)
+        flags |= 0x0080;
       if (stateText != nullptr)
         flags |= 0x0004;
 
@@ -1590,6 +1599,11 @@ void BlaeckSerial::writeMessageChannelsFrame(unsigned long msg_id)
       if (flags & 0x0040)
       {
         StreamRef->print(e.unit);
+        StreamRef->write((byte)0);
+      }
+      if (flags & 0x0080)
+      {
+        StreamRef->print(e.options);
         StreamRef->write((byte)0);
       }
     }
@@ -3531,6 +3545,8 @@ void BlaeckSerial::writeSignalConfigFrame(unsigned long msg_id)
         _bufFlashStr0(s.DeviceClass);
       if (s.MetaFlags & BLAECK_SIG_HAS_ICON)
         _bufFlashStr0(s.Icon);
+      if (s.MetaFlags & BLAECK_SIG_HAS_OPTIONS)
+        _bufFlashStr0(s.Options);
       if (s.MetaFlags & BLAECK_SIG_HAS_DISPLAY_PRECISION)
         _bufByte(s.DisplayPrecision);
     }
@@ -3573,6 +3589,11 @@ void BlaeckSerial::writeSignalConfigFrame(unsigned long msg_id)
       if (s.MetaFlags & BLAECK_SIG_HAS_ICON)
       {
         StreamRef->print(s.Icon);
+        StreamRef->print('\0');
+      }
+      if (s.MetaFlags & BLAECK_SIG_HAS_OPTIONS)
+      {
+        StreamRef->print(s.Options);
         StreamRef->print('\0');
       }
       if (s.MetaFlags & BLAECK_SIG_HAS_DISPLAY_PRECISION)
