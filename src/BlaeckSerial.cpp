@@ -732,18 +732,19 @@ bool BlaeckSerial::_addOwnedMessageChannel(const __FlashStringHelper *channelNam
     _debugStream->print(F("Message channel table full for a command's own state: "));
     _debugStream->println(name);
   }
+  _rejectedChannelCount++;
   return false;
 #endif
 }
 
-void BlaeckSerial::_declareOwnState(byte handlerIndex, const __FlashStringHelper *channelName,
+bool BlaeckSerial::_declareOwnState(byte handlerIndex, const __FlashStringHelper *channelName,
                                    BlaeckStateTextGetter getStateText)
 {
   if (channelName == nullptr || getStateText == nullptr)
-    return;
+    return false;
 
   if (!_addOwnedMessageChannel(channelName, getStateText))
-    return;
+    return false;
 
   // Announce once, here. A host connecting later reads the value from the channel catalog,
   // but one already connected when the board reset has no reason to re-read a catalog it
@@ -751,6 +752,7 @@ void BlaeckSerial::_declareOwnState(byte handlerIndex, const __FlashStringHelper
   // harmlessly when no host holds the catalog yet, which is the cold-start case the poll
   // covers.
   writeCommandState(_commandHandlers[handlerIndex].command);
+  return true;
 }
 #endif
 
@@ -1226,19 +1228,76 @@ void BlaeckSerial::writeMessage(const char *channelName, const char *text)
   this->writeMessage(channelName, text, _messageMsgId++);
 }
 
-bool BlaeckSerial::addMessageChannel(const char *channelName)
+int BlaeckSerial::_registerMessageChannel(const char *channelName)
 {
-  return this->addMessageChannel(channelName, nullptr, false);
+  if (channelName == nullptr || channelName[0] == '\0')
+  {
+    _rejectedChannelCount++;
+    return -1;
+  }
+
+  // A channel a command owns is that command's alone: its value comes from the getter it was
+  // registered with, and nowhere else.
+  int owned = _findMessageChannel(channelName);
+  if (owned >= 0 && _messageChannels[owned].ownedByCommand)
+  {
+    if (_debugStream != nullptr)
+    {
+      _debugStream->print(F("Channel belongs to a command's own state and cannot be redeclared: "));
+      _debugStream->println(channelName);
+    }
+    _rejectedChannelCount++;
+    return -1;
+  }
+
+  if (strlen(channelName) >= MAX_MESSAGE_NAME_COUNT)
+  {
+    if (_debugStream != nullptr)
+    {
+      _debugStream->print(F("Channel name too long for message channel table: "));
+      _debugStream->println(channelName);
+    }
+    _rejectedChannelCount++;
+    return -1;
+  }
+
+  // Re-declaring a channel updates it rather than consuming a slot, so the metadata starts
+  // empty: what the previous declaration said must not survive a chain that says less.
+  int existing = _findMessageChannel(channelName);
+  if (existing >= 0)
+  {
+    _messageChannels[existing].icon = nullptr;
+    _messageChannels[existing].diagnostic = false;
+    _messageChannels[existing].getStateText = nullptr;
+    return existing;
+  }
+
+  for (byte i = 0; i < MAX_MESSAGE_CHANNELS; i++)
+  {
+    if (!_messageChannels[i].inUse)
+    {
+      strncpy(_messageChannels[i].name, channelName, MAX_MESSAGE_NAME_COUNT - 1);
+      _messageChannels[i].name[MAX_MESSAGE_NAME_COUNT - 1] = '\0';
+      _messageChannels[i].icon = nullptr;
+      _messageChannels[i].diagnostic = false;
+      _messageChannels[i].getStateText = nullptr;
+      _messageChannels[i].inUse = true;
+      return (int)i;
+    }
+  }
+
+  if (_debugStream != nullptr)
+  {
+    _debugStream->print(F("Message channel table full for: "));
+    _debugStream->println(channelName);
+  }
+  _rejectedChannelCount++;
+  return -1;
 }
 
-bool BlaeckSerial::addMessageChannel(const char *channelName, const __FlashStringHelper *icon)
+BlaeckMessageChannelRef BlaeckSerial::addMessageChannel(const char *channelName)
 {
-  return this->addMessageChannel(channelName, icon, false);
-}
-
-bool BlaeckSerial::addMessageChannel(const char *channelName, const __FlashStringHelper *icon, bool diagnostic)
-{
-  return this->addMessageChannel(channelName, icon, diagnostic, nullptr);
+  return BlaeckMessageChannelRef(this, (int16_t)_registerMessageChannel(channelName));
 }
 
 bool BlaeckSerial::_flashStringEqualsName(const __FlashStringHelper *flashName, const char *name)
@@ -1257,67 +1316,6 @@ bool BlaeckSerial::_flashStringEqualsName(const __FlashStringHelper *flashName, 
     if (a == 0)
       return true;
   }
-}
-
-bool BlaeckSerial::addMessageChannel(const char *channelName, const __FlashStringHelper *icon, bool diagnostic,
-                                     BlaeckStateTextGetter getStateText)
-{
-  if (channelName == nullptr || channelName[0] == '\0')
-    return false;
-
-  // A channel a command owns is that command's alone: its value comes from the getter it was
-  // registered with, and nowhere else.
-  int owned = _findMessageChannel(channelName);
-  if (owned >= 0 && _messageChannels[owned].ownedByCommand)
-  {
-    if (_debugStream != nullptr)
-    {
-      _debugStream->print(F("Channel belongs to a command's own state and cannot be redeclared: "));
-      _debugStream->println(channelName);
-    }
-    return false;
-  }
-
-  if (strlen(channelName) >= MAX_MESSAGE_NAME_COUNT)
-  {
-    if (_debugStream != nullptr)
-    {
-      _debugStream->print(F("Channel name too long for message channel table: "));
-      _debugStream->println(channelName);
-    }
-    return false;
-  }
-
-  // Re-declaring a channel updates its metadata rather than consuming a slot.
-  int existing = _findMessageChannel(channelName);
-  if (existing >= 0)
-  {
-    _messageChannels[existing].icon = icon;
-    _messageChannels[existing].diagnostic = diagnostic;
-    _messageChannels[existing].getStateText = getStateText;
-    return true;
-  }
-
-  for (byte i = 0; i < MAX_MESSAGE_CHANNELS; i++)
-  {
-    if (!_messageChannels[i].inUse)
-    {
-      strncpy(_messageChannels[i].name, channelName, MAX_MESSAGE_NAME_COUNT - 1);
-      _messageChannels[i].name[MAX_MESSAGE_NAME_COUNT - 1] = '\0';
-      _messageChannels[i].icon = icon;
-      _messageChannels[i].diagnostic = diagnostic;
-      _messageChannels[i].getStateText = getStateText;
-      _messageChannels[i].inUse = true;
-      return true;
-    }
-  }
-
-  if (_debugStream != nullptr)
-  {
-    _debugStream->print(F("Message channel table full for: "));
-    _debugStream->println(channelName);
-  }
-  return false;
 }
 
 void BlaeckSerial::clearAllMessageChannels()
@@ -1560,10 +1558,9 @@ void BlaeckSerial::writeMessageChannelsFrame(unsigned long msg_id)
 #else
 // BLAECK_ENABLE_MESSAGES=0: the API stays so sketches still build, but nothing
 // is stored. The catalog still answers, with an empty list (see _writeEmptyFrame).
-bool BlaeckSerial::addMessageChannel(const char *) { return false; }
-bool BlaeckSerial::addMessageChannel(const char *, const __FlashStringHelper *) { return false; }
-bool BlaeckSerial::addMessageChannel(const char *, const __FlashStringHelper *, bool) { return false; }
-bool BlaeckSerial::addMessageChannel(const char *, const __FlashStringHelper *, bool, BlaeckStateTextGetter) { return false; }
+// The handle's modifiers compile and store nothing, so a sketch declaring channels needs no
+// #ifdef. Nothing is counted as rejected: the feature is off, not failing.
+BlaeckMessageChannelRef BlaeckSerial::addMessageChannel(const char *) { return BlaeckMessageChannelRef(this, -1); }
 void BlaeckSerial::clearAllMessageChannels() {}
 void BlaeckSerial::writeMessageChannels() { this->writeMessageChannels(1); }
 void BlaeckSerial::writeMessageChannels(unsigned long msg_id) { this->_writeEmptyFrame(0x90, msg_id); }
@@ -1572,20 +1569,13 @@ void BlaeckSerial::writeMessage(const char *, const char *, unsigned long) {}
 #endif
 
 #if BLAECK_ENABLE_EVENTS
-bool BlaeckSerial::addEventChannel(const char *channelName)
-{
-  return this->addEventChannel(channelName, nullptr, false);
-}
-
-bool BlaeckSerial::addEventChannel(const char *channelName, const __FlashStringHelper *icon)
-{
-  return this->addEventChannel(channelName, icon, false);
-}
-
-bool BlaeckSerial::addEventChannel(const char *channelName, const __FlashStringHelper *icon, bool diagnostic)
+int BlaeckSerial::_registerEventChannel(const char *channelName)
 {
   if (channelName == nullptr || channelName[0] == '\0')
-    return false;
+  {
+    _rejectedChannelCount++;
+    return -1;
+  }
 
   if (strlen(channelName) >= MAX_EVENT_NAME_COUNT)
   {
@@ -1594,17 +1584,19 @@ bool BlaeckSerial::addEventChannel(const char *channelName, const __FlashStringH
       _debugStream->print(F("Channel name too long for event channel table: "));
       _debugStream->println(channelName);
     }
-    return false;
+    _rejectedChannelCount++;
+    return -1;
   }
 
-  // Re-declaring a channel updates its metadata rather than consuming a slot.
-  // Its already-declared event types keep their indices.
+  // Re-declaring a channel updates it rather than consuming a slot, so the metadata starts
+  // empty. Its already-declared event types keep their indices: those are wire positions other
+  // frames refer to, and clearing them would renumber events a host has already been told about.
   int existing = _findEventChannel(channelName);
   if (existing >= 0)
   {
-    _eventChannels[existing].icon = icon;
-    _eventChannels[existing].diagnostic = diagnostic;
-    return true;
+    _eventChannels[existing].icon = nullptr;
+    _eventChannels[existing].diagnostic = false;
+    return existing;
   }
 
   for (byte i = 0; i < MAX_EVENT_CHANNELS; i++)
@@ -1613,10 +1605,10 @@ bool BlaeckSerial::addEventChannel(const char *channelName, const __FlashStringH
     {
       strncpy(_eventChannels[i].name, channelName, MAX_EVENT_NAME_COUNT - 1);
       _eventChannels[i].name[MAX_EVENT_NAME_COUNT - 1] = '\0';
-      _eventChannels[i].icon = icon;
-      _eventChannels[i].diagnostic = diagnostic;
+      _eventChannels[i].icon = nullptr;
+      _eventChannels[i].diagnostic = false;
       _eventChannels[i].inUse = true;
-      return true;
+      return (int)i;
     }
   }
 
@@ -1625,7 +1617,39 @@ bool BlaeckSerial::addEventChannel(const char *channelName, const __FlashStringH
     _debugStream->print(F("Event channel table full for: "));
     _debugStream->println(channelName);
   }
-  return false;
+  _rejectedChannelCount++;
+  return -1;
+}
+
+BlaeckEventChannelRef BlaeckSerial::addEventChannel(const char *channelName)
+{
+  return BlaeckEventChannelRef(this, (int16_t)_registerEventChannel(channelName));
+}
+
+void BlaeckSerial::_addEventTypesCsv(byte channelIndex, const __FlashStringHelper *eventTypes)
+{
+  // One pool entry per field, all pointing at the same flash string. Appended in
+  // order, so a field's position is its wire index - the same rule call order gives
+  // addEventType().
+  byte fieldCount = _flashCsvOptionCount(eventTypes);
+  for (byte f = 0; f < fieldCount; f++)
+  {
+    if (_eventTypeCount >= MAX_EVENT_TYPES)
+    {
+      if (_debugStream != nullptr)
+      {
+        _debugStream->print(F("Event type pool full for channel: "));
+        _debugStream->println(_eventChannels[channelIndex].name);
+      }
+      // Every remaining field is lost too, and each is a type a host will never hear about.
+      _rejectedChannelCount += (uint16_t)(fieldCount - f);
+      break;
+    }
+    _eventTypes[_eventTypeCount].channelIndex = channelIndex;
+    _eventTypes[_eventTypeCount].text = eventTypes;
+    _eventTypes[_eventTypeCount].field = f;
+    _eventTypeCount++;
+  }
 }
 
 void BlaeckSerial::_eventTypeExtent(const EventTypeEntry &e, unsigned int &start, unsigned int &len)
@@ -1691,42 +1715,6 @@ bool BlaeckSerial::_eventTypeEquals(const EventTypeEntry &e, const __FlashString
   return pgm_read_byte(b + len) == 0;
 }
 
-bool BlaeckSerial::addEventChannel(const char *channelName, const __FlashStringHelper *icon, bool diagnostic,
-                                   const __FlashStringHelper *eventTypes)
-{
-  if (!this->addEventChannel(channelName, icon, diagnostic))
-    return false;
-
-  if (eventTypes == nullptr)
-    return true;
-
-  int channelIndex = _findEventChannel(channelName);
-  if (channelIndex < 0)
-    return false;
-
-  // One pool entry per field, all pointing at the same flash string. Appended in
-  // order, so a field's position is its wire index - the same rule call order gives
-  // addEventType().
-  byte fieldCount = _flashCsvOptionCount(eventTypes);
-  for (byte f = 0; f < fieldCount; f++)
-  {
-    if (_eventTypeCount >= MAX_EVENT_TYPES)
-    {
-      if (_debugStream != nullptr)
-      {
-        _debugStream->print(F("Event type pool full for channel: "));
-        _debugStream->println(channelName);
-      }
-      break;
-    }
-    _eventTypes[_eventTypeCount].channelIndex = (byte)channelIndex;
-    _eventTypes[_eventTypeCount].text = eventTypes;
-    _eventTypes[_eventTypeCount].field = f;
-    _eventTypeCount++;
-  }
-  return true;
-}
-
 bool BlaeckSerial::addEventType(const char *channelName, const __FlashStringHelper *eventType)
 {
   if (eventType == nullptr)
@@ -1740,6 +1728,7 @@ bool BlaeckSerial::addEventType(const char *channelName, const __FlashStringHelp
       _debugStream->print(F("Event type dropped, channel not declared with addEventChannel(): "));
       _debugStream->println(channelName != nullptr ? channelName : "");
     }
+    _rejectedChannelCount++;
     return false;
   }
 
@@ -1762,6 +1751,7 @@ bool BlaeckSerial::addEventType(const char *channelName, const __FlashStringHelp
       _debugStream->print(F("Event type pool full for channel: "));
       _debugStream->println(channelName);
     }
+    _rejectedChannelCount++;
     return false;
   }
 
@@ -2047,10 +2037,7 @@ void BlaeckSerial::writeEvent(const char *channelName, const __FlashStringHelper
 #else
 // BLAECK_ENABLE_EVENTS=0: the API stays so sketches still build, but nothing
 // is stored. The catalog still answers, with an empty list (see _writeEmptyFrame).
-bool BlaeckSerial::addEventChannel(const char *) { return false; }
-bool BlaeckSerial::addEventChannel(const char *, const __FlashStringHelper *) { return false; }
-bool BlaeckSerial::addEventChannel(const char *, const __FlashStringHelper *, bool) { return false; }
-bool BlaeckSerial::addEventChannel(const char *, const __FlashStringHelper *, bool, const __FlashStringHelper *) { return false; }
+BlaeckEventChannelRef BlaeckSerial::addEventChannel(const char *) { return BlaeckEventChannelRef(this, -1); }
 bool BlaeckSerial::addEventType(const char *, const __FlashStringHelper *) { return false; }
 void BlaeckSerial::clearAllEventChannels() {}
 void BlaeckSerial::writeEventChannels() { this->writeEventChannels(1); }

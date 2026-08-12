@@ -395,6 +395,8 @@ class BlaeckSwitchCommandRef;
 class BlaeckSelectCommandRef;
 class BlaeckButtonCommandRef;
 class BlaeckTextCommandRef;
+class BlaeckMessageChannelRef;
+class BlaeckEventChannelRef;
 
 class BlaeckSerial
 {
@@ -481,23 +483,7 @@ public:
   // `channelName` is copied; `icon` must outlive the call (use a string literal
   // or F("mdi:...")). Returns false if the name is empty/too long or the table
   // is full.
-  bool addMessageChannel(const char *channelName);
-  bool addMessageChannel(const char *channelName, const __FlashStringHelper *icon);
-  // `diagnostic` groups the sensor under the HA device's diagnostic section.
-  bool addMessageChannel(const char *channelName, const __FlashStringHelper *icon, bool diagnostic);
-  // `getStateText` makes this channel report a current value: the library calls it
-  // while building the 0x90 catalog, so a host that polls learns the value as it is
-  // at that moment and the sketch never has to push it just to keep the host in step.
-  // Because the value is fetched rather than stored, it cannot go stale - a change
-  // made anywhere in the sketch is reported correctly without remembering to update
-  // anything. Build the text in a function-local static and return it. Pass nullptr
-  // for a plain log channel, which then carries no value in the catalog.
-  // The catalog is read when the host asks for it, so a host that already holds one
-  // keeps the value it read - across a device restart included, where the sketch's
-  // variables are back at their startup values. Call writeMessage() once in setup()
-  // to announce that too.
-  bool addMessageChannel(const char *channelName, const __FlashStringHelper *icon, bool diagnostic,
-                         BlaeckStateTextGetter getStateText);
+  BlaeckMessageChannelRef addMessageChannel(const char *channelName);
   void clearAllMessageChannels();
 
   // Send the 0x90 "Message Channel List" frame (the declared-channel catalog).
@@ -538,25 +524,14 @@ public:
   // `channelName` is copied; `icon` must outlive the call (use a string literal
   // or F("mdi:...")). Returns false if the name is empty/too long or the table
   // is full.
-  bool addEventChannel(const char *channelName);
-  bool addEventChannel(const char *channelName, const __FlashStringHelper *icon);
-  // `diagnostic` groups the entity under the HA device's diagnostic section.
-  bool addEventChannel(const char *channelName, const __FlashStringHelper *icon, bool diagnostic);
-  // Declares the channel and its event types in one call: `eventTypes` is a
-  // comma-separated list, F("started,stopped"), read left to right so position defines
-  // each type's index exactly as call order does with addEventType(). Equivalent to
-  // calling addEventType() once per name, and mixable with it - use this for a set
-  // known at compile time, addEventType() when the list is built conditionally.
-  // Returns false if the channel could not be declared; individual types that do not
-  // fit the pool are dropped and reported on DebugRef, as with addEventType().
-  bool addEventChannel(const char *channelName, const __FlashStringHelper *icon, bool diagnostic,
-                       const __FlashStringHelper *eventTypes);
+  BlaeckEventChannelRef addEventChannel(const char *channelName);
 
-  // Append an event type to a declared channel. Call order defines the index
-  // used on the wire: the first type added to a channel is index 0, the next 1.
-  // `eventType` must outlive the call (use F("...")). Types are held in one pool
-  // shared by all channels. Returns false if the channel was never declared, the
-  // pool is full, or the channel already has that type.
+  // Append an event type to a declared channel. Call order defines the index used on the wire:
+  // the first type added to a channel is index 0, the next 1. Use withTypes() for a list known
+  // at compile time and this when it is built conditionally; the two are mixable. `eventType`
+  // must outlive the call (use F("...")). Types are held in one pool shared by all channels.
+  // A type that does not fit, names an undeclared channel, or duplicates one the channel
+  // already has is dropped, reported on DebugRef, and counted by hasRejectedChannels().
   bool addEventType(const char *channelName, const __FlashStringHelper *eventType);
   void clearAllEventChannels();
 
@@ -731,6 +706,13 @@ public:
   bool hasRejectedCommands() const { return _rejectedCommandCount > 0; }
   uint16_t getRejectedCommandCount() const { return _rejectedCommandCount; }
 
+  // Message channels, event channels and event types that could not be declared - a full table
+  // or pool, a name too long, a duplicate type - each reported on DebugRef and counted here.
+  // A command's withOwnState() channel counts too: when it cannot be declared the command keeps
+  // no state at all, so a full message channel table costs a control's value, not just a channel.
+  bool hasRejectedChannels() const { return _rejectedChannelCount > 0; }
+  uint16_t getRejectedChannelCount() const { return _rejectedChannelCount; }
+
   // ----- Typed command registration (Home Assistant discovery metadata) -----
   // Same runtime behavior as onCommand(), but the returned handle describes the control so the
   // device can declare it in a 0xA0 "Command List" frame (BLAECK.WRITE_COMMANDS):
@@ -829,6 +811,15 @@ private:
   // Clears an entry's metadata to the defaults for its kind. Registering a name twice replaces
   // the command outright, so what the previous declaration said must not survive.
   void _resetCommandMeta(byte handlerIndex, uint8_t kind);
+  // The one place a channel is declared, mirroring _registerCommand(): the table index, or -1
+  // having counted the rejection and said why on DebugRef. Re-declaring a name returns its
+  // existing slot with the metadata cleared, so what a previous declaration said cannot linger.
+  // An event channel keeps its already-declared types and their indices.
+  int _registerMessageChannel(const char *channelName);
+  int _registerEventChannel(const char *channelName);
+  // Appends one pool entry per field of a comma-separated list, in order, so a field's position
+  // is its wire index - the same rule call order gives addEventType().
+  void _addEventTypesCsv(byte channelIndex, const __FlashStringHelper *eventTypes);
 #if BLAECK_ENABLE_COMMAND_META
   void writeCommandsFrame(unsigned long MessageID);
   byte _validateTypedCommand(byte handlerIndex);
@@ -837,7 +828,9 @@ private:
   bool _addOwnedMessageChannel(const __FlashStringHelper *channelName, BlaeckStateTextGetter getStateText);
   // Declares and announces the channel a command carries itself, for withOwnState(). Announcing
   // at registration is what corrects a host that was already connected when the board reset.
-  void _declareOwnState(byte handlerIndex, const __FlashStringHelper *channelName,
+  // False when the channel could not be declared, so withOwnState() can leave the command
+  // without state rather than advertising a channel absent from the 0x90 catalog.
+  bool _declareOwnState(byte handlerIndex, const __FlashStringHelper *channelName,
                         BlaeckStateTextGetter getStateText);
 
   static void _percentDecodeInPlace(char *s);
@@ -883,6 +876,7 @@ private:
   bool _signalOverflowOccurred = false;
   uint16_t _signalOverflowCount = 0;
   uint16_t _rejectedCommandCount = 0;
+  uint16_t _rejectedChannelCount = 0;
 
   bool _writeRestartedAlreadyDone = false;
   bool _sendRestartFlag = true;
@@ -1196,6 +1190,8 @@ private:
 
   friend class BlaeckSignalRef;
   friend class BlaeckCommandRefBase;
+  friend class BlaeckMessageChannelRef;
+  friend class BlaeckEventChannelRef;
 };
 
 // Handle to the command a typed helper just registered, describing the control it drives.
@@ -1240,9 +1236,14 @@ protected:
 #if BLAECK_ENABLE_COMMAND_META
     if (auto *e = _entry())
     {
-      e->stateSignal = channelName;
-      e->stateSource = BLAECK_STATE_MESSAGE;
-      _owner->_declareOwnState((byte)_index, channelName, getStateText);
+      // Only claim the state if the channel was actually declared. Advertising one the 0x90
+      // catalog does not carry would wire a control to a topic nothing ever publishes, and it
+      // would sit at unknown forever - a full table costs the state, not the command.
+      if (_owner->_declareOwnState((byte)_index, channelName, getStateText))
+      {
+        e->stateSignal = channelName;
+        e->stateSource = BLAECK_STATE_MESSAGE;
+      }
     }
 #else
     (void)channelName;
@@ -1550,6 +1551,109 @@ private:
     return *this;
   }
 
+  BlaeckSerial *_owner;
+  int16_t _index;
+};
+
+// Handle to the channel just declared. Returned by value and meant to be chained, not stored;
+// a channel that could not be declared gives a dead handle that swallows the chain, and
+// hasRejectedChannels() is where that shows up. The methods are always defined - with
+// BLAECK_ENABLE_MESSAGES=0 or BLAECK_ENABLE_EVENTS=0 they store nothing, so a sketch needs no
+// #ifdef.
+class BlaeckMessageChannelRef
+{
+public:
+  BlaeckMessageChannelRef(BlaeckSerial *owner, int16_t index) : _owner(owner), _index(index) {}
+
+  // Material Design Icons name, e.g. F("mdi:pulse").
+  BlaeckMessageChannelRef &withIcon(const __FlashStringHelper *icon)
+  {
+#if BLAECK_ENABLE_MESSAGES
+    if (_index >= 0 && _owner != nullptr)
+      _owner->_messageChannels[_index].icon = icon;
+#else
+    (void)icon;
+#endif
+    return *this;
+  }
+
+  // Groups the sensor under Home Assistant's diagnostic section.
+  BlaeckMessageChannelRef &diagnostic(bool on = true)
+  {
+#if BLAECK_ENABLE_MESSAGES
+    if (_index >= 0 && _owner != nullptr)
+      _owner->_messageChannels[_index].diagnostic = on;
+#else
+    (void)on;
+#endif
+    return *this;
+  }
+
+  // Makes the channel report a current value: the library calls the getter while building the
+  // 0x90 catalog, so a host that polls learns the value as it is at that moment and the sketch
+  // never pushes just to keep it in step. Because it is fetched rather than stored it cannot go
+  // stale. Build the text in a function-local static and return it. Left out, the channel is a
+  // plain log channel and carries no value in the catalog.
+  BlaeckMessageChannelRef &withStateText(BlaeckStateTextGetter getStateText)
+  {
+#if BLAECK_ENABLE_MESSAGES
+    if (_index >= 0 && _owner != nullptr)
+      _owner->_messageChannels[_index].getStateText = getStateText;
+#else
+    (void)getStateText;
+#endif
+    return *this;
+  }
+
+private:
+  BlaeckSerial *_owner;
+  int16_t _index;
+};
+
+class BlaeckEventChannelRef
+{
+public:
+  BlaeckEventChannelRef(BlaeckSerial *owner, int16_t index) : _owner(owner), _index(index) {}
+
+  // Material Design Icons name, e.g. F("mdi:sine-wave").
+  BlaeckEventChannelRef &withIcon(const __FlashStringHelper *icon)
+  {
+#if BLAECK_ENABLE_EVENTS
+    if (_index >= 0 && _owner != nullptr)
+      _owner->_eventChannels[_index].icon = icon;
+#else
+    (void)icon;
+#endif
+    return *this;
+  }
+
+  // Groups the entity under Home Assistant's diagnostic section.
+  BlaeckEventChannelRef &diagnostic(bool on = true)
+  {
+#if BLAECK_ENABLE_EVENTS
+    if (_index >= 0 && _owner != nullptr)
+      _owner->_eventChannels[_index].diagnostic = on;
+#else
+    (void)on;
+#endif
+    return *this;
+  }
+
+  // The closed set this channel can report, comma-separated and read left to right, so position
+  // defines each type's index exactly as call order does with addEventType(). Use this for a set
+  // known at compile time and addEventType() when the list is built conditionally; they mix.
+  BlaeckEventChannelRef &withTypes(const __FlashStringHelper *eventTypes)
+  {
+#if BLAECK_ENABLE_EVENTS
+    if (_index >= 0 && _owner != nullptr && eventTypes != nullptr)
+      _owner->_addEventTypesCsv((byte)_index, eventTypes);
+#else
+    (void)eventTypes;
+#endif
+    return *this;
+  }
+
+private:
   BlaeckSerial *_owner;
   int16_t _index;
 };
