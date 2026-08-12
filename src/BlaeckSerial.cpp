@@ -732,7 +732,7 @@ bool BlaeckSerial::_addOwnedMessageChannel(const __FlashStringHelper *channelNam
     _debugStream->print(F("Message channel table full for a command's own state: "));
     _debugStream->println(name);
   }
-  _rejectedChannelCount++;
+  _rejectedMessageChannelCount++;
   return false;
 #endif
 }
@@ -1232,7 +1232,7 @@ int BlaeckSerial::_registerMessageChannel(const char *channelName)
 {
   if (channelName == nullptr || channelName[0] == '\0')
   {
-    _rejectedChannelCount++;
+    _rejectedMessageChannelCount++;
     return -1;
   }
 
@@ -1246,7 +1246,7 @@ int BlaeckSerial::_registerMessageChannel(const char *channelName)
       _debugStream->print(F("Channel belongs to a command's own state and cannot be redeclared: "));
       _debugStream->println(channelName);
     }
-    _rejectedChannelCount++;
+    _rejectedMessageChannelCount++;
     return -1;
   }
 
@@ -1257,7 +1257,7 @@ int BlaeckSerial::_registerMessageChannel(const char *channelName)
       _debugStream->print(F("Channel name too long for message channel table: "));
       _debugStream->println(channelName);
     }
-    _rejectedChannelCount++;
+    _rejectedMessageChannelCount++;
     return -1;
   }
 
@@ -1291,7 +1291,7 @@ int BlaeckSerial::_registerMessageChannel(const char *channelName)
     _debugStream->print(F("Message channel table full for: "));
     _debugStream->println(channelName);
   }
-  _rejectedChannelCount++;
+  _rejectedMessageChannelCount++;
   return -1;
 }
 
@@ -1573,7 +1573,7 @@ int BlaeckSerial::_registerEventChannel(const char *channelName)
 {
   if (channelName == nullptr || channelName[0] == '\0')
   {
-    _rejectedChannelCount++;
+    _rejectedEventChannelCount++;
     return -1;
   }
 
@@ -1584,7 +1584,7 @@ int BlaeckSerial::_registerEventChannel(const char *channelName)
       _debugStream->print(F("Channel name too long for event channel table: "));
       _debugStream->println(channelName);
     }
-    _rejectedChannelCount++;
+    _rejectedEventChannelCount++;
     return -1;
   }
 
@@ -1617,7 +1617,7 @@ int BlaeckSerial::_registerEventChannel(const char *channelName)
     _debugStream->print(F("Event channel table full for: "));
     _debugStream->println(channelName);
   }
-  _rejectedChannelCount++;
+  _rejectedEventChannelCount++;
   return -1;
 }
 
@@ -1642,7 +1642,7 @@ void BlaeckSerial::_addEventTypesCsv(byte channelIndex, const __FlashStringHelpe
         _debugStream->println(_eventChannels[channelIndex].name);
       }
       // Every remaining field is lost too, and each is a type a host will never hear about.
-      _rejectedChannelCount += (uint16_t)(fieldCount - f);
+      _rejectedEventChannelCount += (uint16_t)(fieldCount - f);
       break;
     }
     _eventTypes[_eventTypeCount].channelIndex = channelIndex;
@@ -1728,7 +1728,7 @@ bool BlaeckSerial::addEventType(const char *channelName, const __FlashStringHelp
       _debugStream->print(F("Event type dropped, channel not declared with addEventChannel(): "));
       _debugStream->println(channelName != nullptr ? channelName : "");
     }
-    _rejectedChannelCount++;
+    _rejectedEventChannelCount++;
     return false;
   }
 
@@ -1751,7 +1751,7 @@ bool BlaeckSerial::addEventType(const char *channelName, const __FlashStringHelp
       _debugStream->print(F("Event type pool full for channel: "));
       _debugStream->println(channelName);
     }
-    _rejectedChannelCount++;
+    _rejectedEventChannelCount++;
     return false;
   }
 

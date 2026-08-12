@@ -541,7 +541,7 @@ public:
   // at compile time and this when it is built conditionally; the two are mixable. `eventType`
   // must outlive the call (use F("...")). Types are held in one pool shared by all channels.
   // A type that does not fit, names an undeclared channel, or duplicates one the channel
-  // already has is dropped, reported on DebugRef, and counted by hasRejectedChannels().
+  // already has is dropped, reported on DebugRef, and counted by hasRejectedEventChannels().
   bool addEventType(const char *channelName, const __FlashStringHelper *eventType);
   void clearAllEventChannels();
 
@@ -716,12 +716,19 @@ public:
   bool hasRejectedCommands() const { return _rejectedCommandCount > 0; }
   uint16_t getRejectedCommandCount() const { return _rejectedCommandCount; }
 
-  // Message channels, event channels and event types that could not be declared - a full table
-  // or pool, a name too long, a duplicate type - each reported on DebugRef and counted here.
-  // A command's withOwnState() channel counts too: when it cannot be declared the command keeps
-  // no state at all, so a full message channel table costs a control's value, not just a channel.
-  bool hasRejectedChannels() const { return _rejectedChannelCount > 0; }
-  uint16_t getRejectedChannelCount() const { return _rejectedChannelCount; }
+  // Message channels that could not be declared - a full table, a name too long, a name a
+  // command already owns - each reported on DebugRef and counted here. A command's
+  // withOwnState() channel counts too: when it cannot be declared the command keeps no state at
+  // all, so a full message channel table costs a control's value, not just a channel.
+  bool hasRejectedMessageChannels() const { return _rejectedMessageChannelCount > 0; }
+  uint16_t getRejectedMessageChannelCount() const { return _rejectedMessageChannelCount; }
+
+  // Event channels and event types that could not be declared. Counted together because both
+  // sit behind BLAECK_ENABLE_EVENTS and a type belongs to a channel, so either answer sends you
+  // to the same place - BLAECK_EVENT_MAX_CHANNELS_DEFAULT or BLAECK_EVENT_MAX_TYPES_DEFAULT,
+  // and DebugRef says which.
+  bool hasRejectedEventChannels() const { return _rejectedEventChannelCount > 0; }
+  uint16_t getRejectedEventChannelCount() const { return _rejectedEventChannelCount; }
 
   // ----- Typed command registration (Home Assistant discovery metadata) -----
   // Same runtime behavior as onCommand(), but the returned handle describes the control so the
@@ -886,7 +893,8 @@ private:
   bool _signalRegistrationFailed = false;
   uint16_t _rejectedSignalCount = 0;
   uint16_t _rejectedCommandCount = 0;
-  uint16_t _rejectedChannelCount = 0;
+  uint16_t _rejectedMessageChannelCount = 0;
+  uint16_t _rejectedEventChannelCount = 0;
 
   bool _writeRestartedAlreadyDone = false;
   bool _sendRestartFlag = true;
