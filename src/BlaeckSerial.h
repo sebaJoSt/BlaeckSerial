@@ -1437,6 +1437,9 @@ public:
   // The closed list this control offers, comma-separated. A value that is not an index into it
   // is rejected before dispatch. getSelectOption() reads a name back out, so the list lives in
   // flash once instead of being repeated in the sketch.
+  //
+  // Avoid naming an option "none" in any casing: Home Assistant reads that state as "no option
+  // selected" and blanks the control rather than showing it.
   BlaeckSelectCommandRef &withOptions(const __FlashStringHelper *optionsCsv)
   {
     _setOptions(optionsCsv);
