@@ -3502,9 +3502,11 @@ void BlaeckSerial::writeSignalConfigFrame(unsigned long msg_id)
   //   [deviceClass\0]          if flags bit 1
   //   [icon\0]                 if flags bit 2
   //   [displayPrecision(1)]    if flags bit 8
+  //   [options\0]              if flags bit 9
   // flags bits: 0=hasUnit 1=hasDeviceClass 2=hasIcon 3-4=stateClass
   //             5=isDiagnostic 6=disabledByDefault 7=forceUpdate
-  //             8=hasDisplayPrecision
+  //             8=hasDisplayPrecision 9=hasOptions. Bits 10-15 reserved.
+  // Optional fields follow in bit order, which is why precision precedes options.
   // Signals that declare nothing are skipped entirely, so a frame with no
   // entries is the ordinary case and not an error. The signal is named by its
   // index in the 0xB0 Symbol List, which already says which device it belongs
@@ -3532,10 +3534,10 @@ void BlaeckSerial::writeSignalConfigFrame(unsigned long msg_id)
         _bufFlashStr0(s.DeviceClass);
       if (s.MetaFlags & BLAECK_SIG_HAS_ICON)
         _bufFlashStr0(s.Icon);
-      if (s.MetaFlags & BLAECK_SIG_HAS_OPTIONS)
-        _bufFlashStr0(s.Options);
       if (s.MetaFlags & BLAECK_SIG_HAS_DISPLAY_PRECISION)
         _bufByte(s.DisplayPrecision);
+      if (s.MetaFlags & BLAECK_SIG_HAS_OPTIONS)
+        _bufFlashStr0(s.Options);
     }
 
     _bufFooter();
@@ -3578,13 +3580,13 @@ void BlaeckSerial::writeSignalConfigFrame(unsigned long msg_id)
         StreamRef->print(s.Icon);
         StreamRef->print('\0');
       }
+      if (s.MetaFlags & BLAECK_SIG_HAS_DISPLAY_PRECISION)
+        StreamRef->write(s.DisplayPrecision);
       if (s.MetaFlags & BLAECK_SIG_HAS_OPTIONS)
       {
         StreamRef->print(s.Options);
         StreamRef->print('\0');
       }
-      if (s.MetaFlags & BLAECK_SIG_HAS_DISPLAY_PRECISION)
-        StreamRef->write(s.DisplayPrecision);
     }
 
     StreamRef->write("/BLAECK>");
