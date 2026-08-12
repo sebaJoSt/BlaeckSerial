@@ -1837,10 +1837,14 @@ public:
     return *this;
   }
 
-  // What the channel reports: F("button"), F("doorbell") or F("motion"). Home Assistant's
-  // vocabulary, carried as written - this library does not hold the list, for the same reason
-  // signals do not. It does validate it, so a name it does not know fails discovery and the
-  // entity never appears.
+  // What the channel reports: F("button"), F("doorbell") or F("motion") - those three and no
+  // others. Carried as written, like a signal's, but Home Assistant validates this one against
+  // an enum, so a name it does not know fails discovery and the entity never appears.
+  //
+  // F("doorbell") also requires the channel to declare a "ring" event type. Home Assistant warns
+  // without it today and stops accepting it in 2027.4. F("button") has standard names too -
+  // press_start, press_end, long_press_start, long_press_end, multi_press_ongoing,
+  // multi_press_end - but none are required; declare only what the hardware can produce.
   BlaeckEventChannelRef &withDeviceClass(const __FlashStringHelper *deviceClass)
   {
 #if BLAECK_ENABLE_EVENTS
