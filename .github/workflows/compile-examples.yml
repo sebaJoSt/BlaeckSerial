@@ -27,7 +27,7 @@ jobs:
       matrix:
         board:
           # --- AVR boards: all examples including EEPROMEx-based ones ---
-          # Three examples are mega-only and stay off this job:
+          # Four examples are mega-only and stay off this job:
           #   WaveformGenerator drives a full dashboard - six signals, seven
           #     commands, two message channels and an event channel - and needs
           #     about 34 kB of flash against a nano's 30 kB. Everything it
@@ -36,6 +36,8 @@ jobs:
           #   SineGeneratorAdvanced declares an EEPROMSizeMega memory pool
           #     (4096 bytes, four times a nano's EEPROM) and names a Mega 2560.
           #     It also left only ~300 bytes for locals on a nano.
+          #   EventChannels declares four event channels, which is the Mega
+          #     default; a small AVR holds two, so two would be refused.
           #   SignalMetadata compiles for a nano at 87% flash and 81% RAM, but
           #     that 81% counts neither the signal table nor the ten String
           #     names, both of which come off the same 371 bytes the report
@@ -68,6 +70,7 @@ jobs:
               - examples/Basic
               - examples/Commands
               - examples/DatatypeTest
+              - examples/EventChannels
               - examples/SHT31TempHumiditySensor
               - examples/SignalMetadata
               - examples/SineGeneratorAdvanced
@@ -87,6 +90,7 @@ jobs:
               - examples/Basic
               - examples/Commands
               - examples/DatatypeTest
+              - examples/EventChannels
               - examples/SHT31TempHumiditySensor
               - examples/SignalMetadata
               - examples/SineGeneratorBasic
@@ -105,6 +109,7 @@ jobs:
               - examples/Basic
               - examples/Commands
               - examples/DatatypeTest
+              - examples/EventChannels
               - examples/SHT31TempHumiditySensor
               - examples/SignalMetadata
               - examples/SineGeneratorBasic
@@ -123,6 +128,7 @@ jobs:
               - examples/Basic
               - examples/Commands
               - examples/DatatypeTest
+              - examples/EventChannels
               - examples/SHT31TempHumiditySensor
               - examples/SignalMetadata
               - examples/SineGeneratorBasic
@@ -144,6 +150,7 @@ jobs:
               - examples/Basic
               - examples/Commands
               - examples/DatatypeTest
+              - examples/EventChannels
               - examples/SHT31TempHumiditySensor
               - examples/SignalMetadata
               - examples/SineGeneratorBasic
