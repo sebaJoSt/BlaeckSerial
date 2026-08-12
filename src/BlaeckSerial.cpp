@@ -1912,10 +1912,13 @@ void BlaeckSerial::writeEventChannels(unsigned long msg_id)
 void BlaeckSerial::writeEventChannelsFrame(unsigned long msg_id)
 {
   // 0x80 "Event Channel List" frame. Per declared channel entry:
-  //   reserved(1) reserved(1) name\0 flags(1)
+  //   reserved(1) reserved(1) name\0 flags(2, LE uint16)
   //   [icon\0]                 if flags.hasIcon
+  //   [deviceClass\0]          if flags.hasDeviceClass
   //   count(1) type\0 x count
-  // flags bits: 0=hasIcon 1=isDiagnostic
+  // flags bits: 0=hasIcon 1=isDiagnostic 2=hasDeviceClass 3=disabledByDefault.
+  //             Bits 4-15 reserved - two bytes, matching 0x90, so the catalog has room to
+  //             grow without taking a new message key.
   // The two leading bytes are always zero, matching the 0x90 and 0xA0 entries,
   // so a host parses all three the same way: skip two, read the NUL-terminated
   // name, then the flags.
@@ -1936,24 +1939,25 @@ void BlaeckSerial::writeEventChannelsFrame(unsigned long msg_id)
       if (!e.inUse)
         continue;
 
-      byte flags = 0;
+      uint16_t flags = 0;
       if (e.icon != nullptr)
-        flags |= 0x01;
+        flags |= 0x0001;
       if (e.diagnostic)
-        flags |= 0x02;
+        flags |= 0x0002;
       if (e.deviceClass != nullptr)
-        flags |= 0x04;
+        flags |= 0x0004;
       if (e.disabledByDefault)
-        flags |= 0x08;
+        flags |= 0x0008;
 
       _bufByte((byte)0);
       _bufByte((byte)0);
       _bufStr0(e.name);
-      _bufByte(flags);
+      _bufByte((byte)(flags & 0xFF));
+      _bufByte((byte)((flags >> 8) & 0xFF));
 
-      if (flags & 0x01)
+      if (flags & 0x0001)
         _bufFlashStr0(e.icon);
-      if (flags & 0x04)
+      if (flags & 0x0004)
         _bufFlashStr0(e.deviceClass);
 
       byte typeCount = 0;
@@ -1990,28 +1994,29 @@ void BlaeckSerial::writeEventChannelsFrame(unsigned long msg_id)
       if (!e.inUse)
         continue;
 
-      byte flags = 0;
+      uint16_t flags = 0;
       if (e.icon != nullptr)
-        flags |= 0x01;
+        flags |= 0x0001;
       if (e.diagnostic)
-        flags |= 0x02;
+        flags |= 0x0002;
       if (e.deviceClass != nullptr)
-        flags |= 0x04;
+        flags |= 0x0004;
       if (e.disabledByDefault)
-        flags |= 0x08;
+        flags |= 0x0008;
 
       StreamRef->write((byte)0);
       StreamRef->write((byte)0);
       StreamRef->print(e.name);
       StreamRef->write((byte)0);
-      StreamRef->write(flags);
+      StreamRef->write((byte)(flags & 0xFF));
+      StreamRef->write((byte)((flags >> 8) & 0xFF));
 
-      if (flags & 0x01)
+      if (flags & 0x0001)
       {
         StreamRef->print(e.icon);
         StreamRef->write((byte)0);
       }
-      if (flags & 0x04)
+      if (flags & 0x0004)
       {
         StreamRef->print(e.deviceClass);
         StreamRef->write((byte)0);
