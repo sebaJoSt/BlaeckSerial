@@ -1601,13 +1601,6 @@ protected:
   {                                                                                       \
     _setBit(BLAECK_SIG_FORCE_UPDATE, on);                                                 \
     return *this;                                                                         \
-  }                                                                                       \
-  /* The closed set of values this signal reports, comma-separated. Home Assistant needs */ \
-  /* withDeviceClass(F("enum")) alongside it, and rejects the list without one. */        \
-  TYPE &withOptions(const __FlashStringHelper *optionsCsv)                                \
-  {                                                                                       \
-    _setOptions(optionsCsv);                                                              \
-    return *this;                                                                         \
   }
 
 // Any of the nine numeric datatypes. The only shape with decimals to show and a value that
@@ -1653,6 +1646,16 @@ public:
   BlaeckTextSignalRef &withUnit(const __FlashStringHelper *unit)
   {
     _setFlash(unit, BLAECK_SIG_HAS_UNIT);
+    return *this;
+  }
+
+  // The closed set of values this signal reports, comma-separated. Text only: the list is a set
+  // of names, which is what Home Assistant's enum device class describes - a number has no such
+  // set, and a bool becomes a binary sensor, which has no options at all. Home Assistant needs
+  // withDeviceClass(F("enum")) alongside it, and rejects the list without one.
+  BlaeckTextSignalRef &withOptions(const __FlashStringHelper *optionsCsv)
+  {
+    _setOptions(optionsCsv);
     return *this;
   }
 };
