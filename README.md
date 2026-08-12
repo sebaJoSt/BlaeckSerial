@@ -70,7 +70,7 @@ gets no entry in the frame and costs nothing on the wire.
 
 | Method | | Numeric | Text | Bool |
 |--------|--|:-:|:-:|:-:|
-| `withUnit(F("Hz"))` | Symbol shown after the value. Non-ASCII must be UTF-8 | ● | ● | |
+| `withUnit(F("Hz"))` | Symbol shown after the value. Non-ASCII must be UTF-8. Numeric only: a unit tells Home Assistant the state is a number | ● | | |
 | `withDeviceClass(F("temperature"))` | What the value measures | ● | ● | ● |
 | `withIcon(F("mdi:sine-wave"))` | Material Design Icons name | ● | ● | ● |
 | `withStateClass(...)` | `BLAECK_STATE_CLASS_MEASUREMENT`, `_TOTAL` or `_TOTAL_INCREASING`. Left out means no statistics are kept | ● | | |

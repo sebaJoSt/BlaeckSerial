@@ -1270,7 +1270,6 @@ int BlaeckSerial::_registerMessageChannel(const char *channelName)
     _messageChannels[existing].icon = nullptr;
     _messageChannels[existing].diagnostic = false;
     _messageChannels[existing].deviceClass = nullptr;
-    _messageChannels[existing].unit = nullptr;
     _messageChannels[existing].options = nullptr;
     _messageChannels[existing].disabledByDefault = false;
     _messageChannels[existing].forceUpdate = false;
@@ -1287,7 +1286,6 @@ int BlaeckSerial::_registerMessageChannel(const char *channelName)
       _messageChannels[i].icon = nullptr;
       _messageChannels[i].diagnostic = false;
       _messageChannels[i].deviceClass = nullptr;
-      _messageChannels[i].unit = nullptr;
       _messageChannels[i].options = nullptr;
       _messageChannels[i].disabledByDefault = false;
       _messageChannels[i].forceUpdate = false;
@@ -1464,9 +1462,9 @@ void BlaeckSerial::writeMessageChannelsFrame(unsigned long msg_id)
   //   [icon\0]                 if flags.hasIcon
   //   [stateText\0]            if flags.hasStateText
   //   [deviceClass\0]          if flags.hasDeviceClass
-  //   [unit\0]                 if flags.hasUnit
+  //   [options\0]              if flags.hasOptions
   // flags bits: 0=hasIcon 1=isDiagnostic 2=hasStateText 3=hasDeviceClass 4=disabledByDefault
-  //             5=forceUpdate 6=hasUnit. Bits 7-15 reserved - two bytes rather than one,
+  //             5=forceUpdate 6=hasOptions. Bits 7-15 reserved - two bytes rather than one,
   //             so the catalog has room to grow without taking a new message key.
   // stateText is fetched from the channel's getter as the frame is built, so the catalog
   // reports each channel's value as of that moment and there is no stored copy to go
@@ -1507,10 +1505,8 @@ void BlaeckSerial::writeMessageChannelsFrame(unsigned long msg_id)
         flags |= 0x0010;
       if (e.forceUpdate)
         flags |= 0x0020;
-      if (e.unit != nullptr)
-        flags |= 0x0040;
       if (e.options != nullptr)
-        flags |= 0x0080;
+        flags |= 0x0040;
       if (stateText != nullptr)
         flags |= 0x0004;
 
@@ -1527,8 +1523,6 @@ void BlaeckSerial::writeMessageChannelsFrame(unsigned long msg_id)
       if (flags & 0x0008)
         _bufFlashStr0(e.deviceClass);
       if (flags & 0x0040)
-        _bufFlashStr0(e.unit);
-      if (flags & 0x0080)
         _bufFlashStr0(e.options);
     }
 
@@ -1567,10 +1561,8 @@ void BlaeckSerial::writeMessageChannelsFrame(unsigned long msg_id)
         flags |= 0x0010;
       if (e.forceUpdate)
         flags |= 0x0020;
-      if (e.unit != nullptr)
-        flags |= 0x0040;
       if (e.options != nullptr)
-        flags |= 0x0080;
+        flags |= 0x0040;
       if (stateText != nullptr)
         flags |= 0x0004;
 
@@ -1597,11 +1589,6 @@ void BlaeckSerial::writeMessageChannelsFrame(unsigned long msg_id)
         StreamRef->write((byte)0);
       }
       if (flags & 0x0040)
-      {
-        StreamRef->print(e.unit);
-        StreamRef->write((byte)0);
-      }
-      if (flags & 0x0080)
       {
         StreamRef->print(e.options);
         StreamRef->write((byte)0);

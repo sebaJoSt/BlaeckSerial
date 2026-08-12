@@ -1063,12 +1063,11 @@ private:
     // catalog reports cannot lag behind the sketch - there is no stored copy to
     // go stale, and nothing the sketch has to remember to refresh.
     BlaeckStateTextGetter getStateText = nullptr;
+    const __FlashStringHelper *deviceClass = nullptr;
+    const __FlashStringHelper *options = nullptr;
     // Declared by a typed command through withOwnState(), which makes the channel that
     // command's alone: addMessageChannel() and writeMessage() both refuse the name, so the
     // value on its topic can only ever come from the getter above.
-    const __FlashStringHelper *deviceClass = nullptr;
-    const __FlashStringHelper *unit = nullptr;
-    const __FlashStringHelper *options = nullptr;
     bool ownedByCommand = false;
     bool diagnostic = false;
     bool disabledByDefault = false;
@@ -1635,19 +1634,13 @@ public:
   }
 };
 
-// A string signal. It keeps a unit, because a device that formats a number into text may still
-// want one, but it has no decimals to round and nothing to keep statistics on.
+// A string signal. No unit, no decimals to round and nothing to keep statistics on: all three
+// tell Home Assistant the state is a number, and it then refuses the text.
 class BlaeckTextSignalRef : public BlaeckSignalRefBase
 {
 public:
   BlaeckTextSignalRef(BlaeckSerial *owner, int16_t index) : BlaeckSignalRefBase(owner, index) {}
   BLAECK_SIGNAL_REF_SHARED(BlaeckTextSignalRef)
-
-  BlaeckTextSignalRef &withUnit(const __FlashStringHelper *unit)
-  {
-    _setFlash(unit, BLAECK_SIG_HAS_UNIT);
-    return *this;
-  }
 
   // The closed set of values this signal reports, comma-separated. Text only: the list is a set
   // of names, which is what Home Assistant's enum device class describes - a number has no such
@@ -1732,19 +1725,6 @@ public:
       _owner->_messageChannels[_index].options = optionsCsv;
 #else
     (void)optionsCsv;
-#endif
-    return *this;
-  }
-
-  // Symbol shown after the text, e.g. F("Hz"). Non-ASCII must be UTF-8. For a channel whose
-  // text is a formatted number - the usual reason a value ends up here rather than in a signal.
-  BlaeckMessageChannelRef &withUnit(const __FlashStringHelper *unit)
-  {
-#if BLAECK_ENABLE_MESSAGES
-    if (_index >= 0 && _owner != nullptr)
-      _owner->_messageChannels[_index].unit = unit;
-#else
-    (void)unit;
 #endif
     return *this;
   }
