@@ -114,12 +114,14 @@ void setup()
       .config();
   BlaeckSerial.onButtonCommand("STATUS", onStatus);
 
-  // Seven commands need seven handler slots, and the default is six on a small AVR. One look
-  // covers every registration above; raise BLAECK_COMMAND_MAX_HANDLERS_DEFAULT if it fires.
+  // One look covers every registration above. Raise BLAECK_COMMAND_MAX_HANDLERS_DEFAULT if it
+  // fires - a small AVR has fewer slots than this sketch registers commands.
   if (BlaeckSerial.hasRejectedCommands())
   {
     Serial.print(F("Commands not registered: "));
-    Serial.println(BlaeckSerial.getRejectedCommandCount());
+    Serial.print(BlaeckSerial.getRejectedCommandCount());
+    Serial.print(F(", handler slots: "));
+    Serial.println(BLAECK_COMMAND_MAX_HANDLERS_DEFAULT);
   }
 
   // Declared up-front so the host can announce one text sensor per channel before
