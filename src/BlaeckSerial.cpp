@@ -69,7 +69,6 @@ int BlaeckSerial::_registerSignal(const String &signalName, dataType type, void 
   Signals[_signalIndex].Icon = nullptr;
   Signals[_signalIndex].Options = nullptr;
   Signals[_signalIndex].MetaFlags = 0;
-  Signals[_signalIndex].OffDelay = 0;
   Signals[_signalIndex].DisplayPrecision = 0;
 #endif
   int16_t added = (int16_t)_signalIndex;
@@ -3503,7 +3502,6 @@ void BlaeckSerial::writeSignalConfigFrame(unsigned long msg_id)
   //   [deviceClass\0]          if flags bit 1
   //   [icon\0]                 if flags bit 2
   //   [displayPrecision(1)]    if flags bit 8
-  //   [offDelay(2)]            if flags bit 10 (LE uint16)
   // flags bits: 0=hasUnit 1=hasDeviceClass 2=hasIcon 3-4=stateClass
   //             5=isDiagnostic 6=disabledByDefault 7=forceUpdate
   //             8=hasDisplayPrecision
@@ -3538,11 +3536,6 @@ void BlaeckSerial::writeSignalConfigFrame(unsigned long msg_id)
         _bufFlashStr0(s.Options);
       if (s.MetaFlags & BLAECK_SIG_HAS_DISPLAY_PRECISION)
         _bufByte(s.DisplayPrecision);
-      if (s.MetaFlags & BLAECK_SIG_HAS_OFF_DELAY)
-      {
-        _bufByte((byte)(s.OffDelay & 0xFF));
-        _bufByte((byte)((s.OffDelay >> 8) & 0xFF));
-      }
     }
 
     _bufFooter();
@@ -3592,11 +3585,6 @@ void BlaeckSerial::writeSignalConfigFrame(unsigned long msg_id)
       }
       if (s.MetaFlags & BLAECK_SIG_HAS_DISPLAY_PRECISION)
         StreamRef->write(s.DisplayPrecision);
-      if (s.MetaFlags & BLAECK_SIG_HAS_OFF_DELAY)
-      {
-        StreamRef->write((byte)(s.OffDelay & 0xFF));
-        StreamRef->write((byte)((s.OffDelay >> 8) & 0xFF));
-      }
     }
 
     StreamRef->write("/BLAECK>");

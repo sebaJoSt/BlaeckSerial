@@ -297,8 +297,7 @@ enum BlaeckSignalMetaFlag
   BLAECK_SIG_DISABLED_BY_DEFAULT = 0x0040,
   BLAECK_SIG_FORCE_UPDATE = 0x0080,
   BLAECK_SIG_HAS_DISPLAY_PRECISION = 0x0100,
-  BLAECK_SIG_HAS_OPTIONS = 0x0200,
-  BLAECK_SIG_HAS_OFF_DELAY = 0x0400
+  BLAECK_SIG_HAS_OPTIONS = 0x0200
 };
 static const byte BLAECK_SIG_STATE_CLASS_SHIFT = 3;
 
@@ -315,7 +314,6 @@ struct Signal
   const __FlashStringHelper *Icon = nullptr;
   const __FlashStringHelper *Options = nullptr;
   uint16_t MetaFlags = 0;
-  uint16_t OffDelay = 0;
   uint8_t DisplayPrecision = 0;
 #endif
 };
@@ -567,7 +565,27 @@ public:
   void writeEvent(const char *channelName, const __FlashStringHelper *eventType, unsigned long messageID);
 
   // ----- Data Write -----
-  // Update value and write directly - by name
+  // Update value and write directly - by name. Independent of the timed interval, so a sketch
+  // can push a value the moment something happens and stream nothing otherwise
+  // (setIntervalMs(BLAECK_INTERVAL_OFF)).
+  //
+  // A momentary signal clears itself here rather than asking a host to time it out:
+  //
+  //   if (triggered && !Pulse)
+  //   {
+  //     Pulse = true;
+  //     pulseSince = millis();
+  //     BlaeckSerial.write("Pulse", Pulse);
+  //   }
+  //   if (Pulse && millis() - pulseSince >= 2000)
+  //   {
+  //     Pulse = false;
+  //     BlaeckSerial.write("Pulse", Pulse);
+  //   }
+  //
+  // Both edges then reach every consumer alike - a dashboard, the logged table, a second host -
+  // and the stored data says how long the value was true. A host-side timer would leave the
+  // table holding one reading and the duration existing nowhere but that host.
   void write(String signalName, bool value);
   void write(String signalName, byte value);
   void write(String signalName, short value);
@@ -1554,19 +1572,6 @@ protected:
 #endif
   }
 
-  void _setOffDelay(uint16_t seconds)
-  {
-#if BLAECK_ENABLE_SIGNAL_META
-    if (Signal *s = _signal())
-    {
-      s->OffDelay = seconds;
-      s->MetaFlags |= BLAECK_SIG_HAS_OFF_DELAY;
-    }
-#else
-    (void)seconds;
-#endif
-  }
-
   void _setDisplayPrecision(uint8_t decimals)
   {
 #if BLAECK_ENABLE_SIGNAL_META
@@ -1686,20 +1691,6 @@ class BlaeckBoolSignalRef : public BlaeckSignalRefBase
 public:
   BlaeckBoolSignalRef(BlaeckSerial *owner, int16_t index) : BlaeckSignalRefBase(owner, index) {}
   BLAECK_SIGNAL_REF_SHARED(BlaeckBoolSignalRef)
-
-  // Seconds after which a host returns the entity to off by itself. For a signal that is pushed
-  // true with write() when something happens and never pushed false - the host clears it rather
-  // than the sketch having to remember to.
-  //
-  // Only for that pattern. A signal that also streams on the interval re-sends its value every
-  // frame, which restarts the host's timer, so the delay never elapses while logging runs and
-  // then fires when the data stops - reporting off where the truth is that nothing is being
-  // sent. Leave it out unless the on is pushed and the off never is.
-  BlaeckBoolSignalRef &withOffDelay(uint16_t seconds)
-  {
-    _setOffDelay(seconds);
-    return *this;
-  }
 };
 
 // Handle to the channel just declared. Returned by value and meant to be chained, not stored;

@@ -79,7 +79,6 @@ gets no entry in the frame and costs nothing on the wire.
 | `disabledByDefault()` | Registered, but switched off until someone enables it | ● | ● | ● |
 | `forceUpdate()` | Report every reading, even one identical to the last | ● | ● | ● |
 | `withOptions(F("a,b,c"))` | The closed set of values reported. Home Assistant needs `withDeviceClass(F("enum"))` alongside it, and every value reported must be in the list | | ● | |
-| `withOffDelay(2)` | Seconds after which a host returns the entity to off by itself, for a value pushed true and never pushed false | | | ● |
 
 The three booleans take an argument, so `diagnostic(isDebugBuild)` works as well.
 
