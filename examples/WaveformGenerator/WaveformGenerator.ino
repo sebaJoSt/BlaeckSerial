@@ -130,7 +130,9 @@ void setup()
 
   // Declared up-front so the host can announce one text sensor per channel before
   // the first line is written.
-  BlaeckSerial.addMessageChannel("Status").withIcon(F("mdi:pulse")).diagnostic();
+  // forceUpdate: the heartbeat repeats the same line, which a host would otherwise collapse
+  // into the entry it already holds.
+  BlaeckSerial.addMessageChannel("Status").withIcon(F("mdi:pulse")).diagnostic().forceUpdate();
   BlaeckSerial.addMessageChannel("StatusOnDemand").withIcon(F("mdi:message-text")).diagnostic();
 
   // Each event channel declares up-front the closed set of events it can report.

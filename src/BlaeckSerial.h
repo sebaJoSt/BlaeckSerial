@@ -1066,6 +1066,8 @@ private:
     // value on its topic can only ever come from the getter above.
     bool ownedByCommand = false;
     bool diagnostic = false;
+    bool disabledByDefault = false;
+    bool forceUpdate = false;
     bool inUse = false;
   };
   MessageChannelEntry _messageChannels[MAX_MESSAGE_CHANNELS];
@@ -1682,6 +1684,32 @@ public:
       _owner->_messageChannels[_index].getStateText = getStateText;
 #else
     (void)getStateText;
+#endif
+    return *this;
+  }
+
+  // Registers the entity but leaves it switched off until someone enables it.
+  BlaeckMessageChannelRef &disabledByDefault(bool on = true)
+  {
+#if BLAECK_ENABLE_MESSAGES
+    if (_index >= 0 && _owner != nullptr)
+      _owner->_messageChannels[_index].disabledByDefault = on;
+#else
+    (void)on;
+#endif
+    return *this;
+  }
+
+  // Report every line, even one identical to the last. A host otherwise collapses a repeated
+  // line into the entry it already has, so a heartbeat that says the same thing each time
+  // leaves no trace of having run.
+  BlaeckMessageChannelRef &forceUpdate(bool on = true)
+  {
+#if BLAECK_ENABLE_MESSAGES
+    if (_index >= 0 && _owner != nullptr)
+      _owner->_messageChannels[_index].forceUpdate = on;
+#else
+    (void)on;
 #endif
     return *this;
   }
