@@ -1660,6 +1660,12 @@ public:
 
 // A bool signal, which a host announces as a binary sensor - a shape with no unit at all, on
 // top of having no decimals and no statistics.
+//
+// withDeviceClass() draws from a different list here than on the other signals: a binary sensor
+// takes F("door"), F("motion"), F("smoke"), F("window") and the like, not F("temperature").
+// Some names appear in both lists meaning different things - battery is a percentage on a
+// numeric signal and low/normal on this one. A name from the wrong list fails discovery, and
+// the entity never appears.
 class BlaeckBoolSignalRef : public BlaeckSignalRefBase
 {
 public:
