@@ -92,10 +92,10 @@ void setup()
   BlaeckSerial.addSignal("WaveName", WaveName);
   BlaeckSerial.addSignal("DeviceLabel", DeviceLabel);
 
-  if (BlaeckSerial.hasSignalOverflow())
+  if (BlaeckSerial.hasRejectedSignals())
   {
     Serial.print(F("Signals not added: "));
-    Serial.println(BlaeckSerial.getSignalOverflowCount());
+    Serial.println(BlaeckSerial.getRejectedSignalCount());
   }
 
   BlaeckSerial.onNumberCommand("SET_FREQ", onSetFreq)

@@ -432,7 +432,7 @@ public:
   // A signal that describes nothing gets no 0xF0 entry and costs nothing on the
   // wire. When the signal table is full the handle is dead: the chain still
   // compiles and runs, and stores nothing - the missing signal is the real
-  // problem and hasSignalOverflow() already reports it.
+  // problem and hasRejectedSignals() already reports it.
   BlaeckSignalRef addSignal(String signalName, bool *value);
   BlaeckSignalRef addSignal(String signalName, byte *value);
   BlaeckSignalRef addSignal(String signalName, short *value);
@@ -447,8 +447,12 @@ public:
 
   // Delete all Signals
   void deleteSignals();
-  bool hasSignalOverflow() const { return _signalOverflowOccurred; }
-  uint16_t getSignalOverflowCount() const { return _signalOverflowCount; }
+  // Signals that could not be added - past the capacity begin() was given, or all of them when
+  // the board had no RAM for the table at all, which is why the flag can be set before the
+  // first addSignal(). Named like hasRejectedCommands() and hasRejectedChannels(): three tables,
+  // one question, one shape of answer.
+  bool hasRejectedSignals() const { return _signalRegistrationFailed; }
+  uint16_t getRejectedSignalCount() const { return _rejectedSignalCount; }
 
   // Signal Count
   int SignalCount;
@@ -876,8 +880,8 @@ private:
   Signal *Signals = nullptr;
   int _signalIndex = 0;
   unsigned int _signalCapacity = 0;
-  bool _signalOverflowOccurred = false;
-  uint16_t _signalOverflowCount = 0;
+  bool _signalRegistrationFailed = false;
+  uint16_t _rejectedSignalCount = 0;
   uint16_t _rejectedCommandCount = 0;
   uint16_t _rejectedChannelCount = 0;
 

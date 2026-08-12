@@ -36,14 +36,14 @@ void BlaeckSerial::begin(Stream *Ref, unsigned int size, Stream *DebugRef)
   _signalIndex = 0;
   SignalCount = 0;
   _schemaHash = 0;
-  _signalOverflowOccurred = false;
-  _signalOverflowCount = 0;
+  _signalRegistrationFailed = false;
+  _rejectedSignalCount = 0;
 
   // Requesting more signals than the board has RAM for leaves Signals null.
-  // Reported through the same flag addSignal uses, so hasSignalOverflow()
+  // Reported through the same flag addSignal uses, so hasRejectedSignals()
   // catches it even before the first addSignal call.
   if (Signals == nullptr)
-    _signalOverflowOccurred = true;
+    _signalRegistrationFailed = true;
 
   if (_bufferedWrites)
     _bufAllocate();
@@ -53,8 +53,8 @@ BlaeckSignalRef BlaeckSerial::_registerSignal(const String &signalName, dataType
 {
   if (Signals == nullptr || static_cast<unsigned int>(_signalIndex) >= _signalCapacity)
   {
-    _signalOverflowOccurred = true;
-    _signalOverflowCount++;
+    _signalRegistrationFailed = true;
+    _rejectedSignalCount++;
     // Dead handle: the chain that follows compiles and runs and stores nothing.
     return BlaeckSignalRef(this, -1);
   }
@@ -144,8 +144,8 @@ void BlaeckSerial::deleteSignals()
   _signalIndex = 0;
   SignalCount = _signalIndex;
   _schemaHash = 0;
-  _signalOverflowOccurred = false;
-  _signalOverflowCount = 0;
+  _signalRegistrationFailed = false;
+  _rejectedSignalCount = 0;
 }
 
 uint16_t BlaeckSerial::_computeSchemaHash()

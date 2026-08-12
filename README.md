@@ -45,9 +45,9 @@ void setup()
 If more signals are added than the configured capacity in `begin(...)`, extra signals are ignored.
 You can detect this in your sketch:
 ```CPP
-if (BlaeckSerial.hasSignalOverflow()) {
+if (BlaeckSerial.hasRejectedSignals()) {
   Serial.print("Ignored signals: ");
-  Serial.println(BlaeckSerial.getSignalOverflowCount());
+  Serial.println(BlaeckSerial.getRejectedSignalCount());
 }
 ```
 
