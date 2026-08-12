@@ -1064,6 +1064,7 @@ private:
     // Declared by a typed command through withOwnState(), which makes the channel that
     // command's alone: addMessageChannel() and writeMessage() both refuse the name, so the
     // value on its topic can only ever come from the getter above.
+    const __FlashStringHelper *deviceClass = nullptr;
     bool ownedByCommand = false;
     bool diagnostic = false;
     bool disabledByDefault = false;
@@ -1684,6 +1685,20 @@ public:
       _owner->_messageChannels[_index].getStateText = getStateText;
 #else
     (void)getStateText;
+#endif
+    return *this;
+  }
+
+  // What the channel's text is, for a host that renders it: F("timestamp") or F("date") make a
+  // channel carrying an ISO 8601 value show as a time rather than as the string it is. Only
+  // meaningful on a device that knows what day it is - one with an RTC or a network clock.
+  BlaeckMessageChannelRef &withDeviceClass(const __FlashStringHelper *deviceClass)
+  {
+#if BLAECK_ENABLE_MESSAGES
+    if (_index >= 0 && _owner != nullptr)
+      _owner->_messageChannels[_index].deviceClass = deviceClass;
+#else
+    (void)deviceClass;
 #endif
     return *this;
   }
