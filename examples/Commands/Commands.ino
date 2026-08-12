@@ -144,7 +144,7 @@ void setup()
   // Typed: validated by the library, and listed with the metadata a host needs
   // to create an entity. A switch is 0/1 and mirrors a state signal; a button
   // carries no value.
-  BlaeckSerial.onSwitchCommand("LED", onLED, F("LED_State"));
+  BlaeckSerial.onSwitchCommand("LED", onLED).withStateSignal(F("LED_State"));
   BlaeckSerial.onButtonCommand("Ping", onPing);
 
   // Message channels are declared up-front so the host can announce a text

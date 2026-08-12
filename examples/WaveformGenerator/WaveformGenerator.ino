@@ -93,15 +93,26 @@ void setup()
   BlaeckSerial.addSignal("WaveName", WaveName);
   BlaeckSerial.addSignal("DeviceLabel", DeviceLabel);
 
-  BlaeckSerial.onNumberCommand("SET_FREQ", onSetFreq, F("Frequency"), 0.0f, 2.0f, 0.01f, F("Hz"));
-  BlaeckSerial.onNumberCommand("SET_AMP", onSetAmp, F("Amplitude"), 0.0f, 100.0f, 0.1f);
-  BlaeckSerial.onNumberCommand("SET_OFFSET", onSetOffset,
-                               BlaeckOwnState(F("Offset"), OffsetState),
-                               -100.0f, 100.0f, 0.1f);
-  BlaeckSerial.onSelectCommand("SET_WAVE", onSetWave, F("WaveName"), F("Sine,Square,Triangle,Sawtooth"));
-  BlaeckSerial.onSwitchCommand("SET_ENABLE", onSetEnable, F("Enabled"));
+  BlaeckSerial.onNumberCommand("SET_FREQ", onSetFreq)
+      .withRange(0.0f, 2.0f, 0.01f)
+      .withUnit(F("Hz"))
+      .withStateSignal(F("Frequency"));
+  BlaeckSerial.onNumberCommand("SET_AMP", onSetAmp)
+      .withRange(0.0f, 100.0f, 0.1f)
+      .withStateSignal(F("Amplitude"));
+  BlaeckSerial.onNumberCommand("SET_OFFSET", onSetOffset)
+      .withRange(-100.0f, 100.0f, 0.1f)
+      .withOwnState(F("Offset"), OffsetState);
+  BlaeckSerial.onSelectCommand("SET_WAVE", onSetWave)
+      .withOptions(F("Sine,Square,Triangle,Sawtooth"))
+      .withStateSignal(F("WaveName"));
+  BlaeckSerial.onSwitchCommand("SET_ENABLE", onSetEnable)
+      .withStateSignal(F("Enabled"));
   // Host percent-encodes the value; the device decodes it and enforces the 32-byte max.
-  BlaeckSerial.onTextCommand("SET_LABEL", onSetLabel, F("DeviceLabel"), sizeof(DeviceLabel) - 1, BLAECK_CAT_CONFIG);
+  BlaeckSerial.onTextCommand("SET_LABEL", onSetLabel)
+      .withMaxLength(sizeof(DeviceLabel) - 1)
+      .withStateSignal(F("DeviceLabel"))
+      .config();
   BlaeckSerial.onButtonCommand("STATUS", onStatus);
 
   // Declared up-front so the host can announce one text sensor per channel before

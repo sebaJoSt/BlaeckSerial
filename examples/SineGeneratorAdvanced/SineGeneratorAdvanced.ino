@@ -95,8 +95,12 @@ void setup()
 
   // Typed: each becomes a dashboard control. The bounds are numbers with a
   // range and a mirrored signal; applying them is a button, as is STATUS.
-  BlaeckSerial.onNumberCommand("SIGNAL_FIRST", onSetSignalFirst, F("Signal_First"), 1.0f, (float)MAXIMUM_SIGNALS, 1.0f);
-  BlaeckSerial.onNumberCommand("SIGNAL_LAST", onSetSignalLast, F("Signal_Last"), 1.0f, (float)MAXIMUM_SIGNALS, 1.0f);
+  BlaeckSerial.onNumberCommand("SIGNAL_FIRST", onSetSignalFirst)
+      .withRange(1.0f, (float)MAXIMUM_SIGNALS, 1.0f)
+      .withStateSignal(F("Signal_First"));
+  BlaeckSerial.onNumberCommand("SIGNAL_LAST", onSetSignalLast)
+      .withRange(1.0f, (float)MAXIMUM_SIGNALS, 1.0f)
+      .withStateSignal(F("Signal_Last"));
   BlaeckSerial.onButtonCommand("SIGNAL_ACTIVATE_RANGE", onSignalActivateRange);
   BlaeckSerial.onButtonCommand("SIGNAL_DEACTIVATE_RANGE", onSignalDeactivateRange);
   BlaeckSerial.onButtonCommand("STATUS", onStatus);
