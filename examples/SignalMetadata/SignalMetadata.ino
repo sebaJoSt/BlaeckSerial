@@ -12,7 +12,7 @@
     EnergyTotal      total_increasing - the shape long-term statistics are built from
     Uptime           seconds, converted to minutes or hours by the host if it prefers
     SignalStrength   diagnostic and switched off until enabled: look for it under Diagnostic
-    Heartbeat        never changes value, but forceUpdate records every reading anyway
+    Heartbeat        never changes value: watch "last changed" in its more-info dialog
     Plain            declares nothing - the default rendering, for comparison
     Running / Fault  bool, one with a device class and one without
     PumpState        a closed set of names
@@ -78,8 +78,12 @@ void setup()
       .diagnostic()
       .disabledByDefault();
 
-  // Never changes value. Without forceUpdate a host collapses each identical reading into the
-  // one it already holds, and a device that is alive looks the same as one that stopped.
+  // Never changes value. Without forceUpdate an identical reading is not a state change at all,
+  // so "last changed" freezes and a device still sending every second looks exactly like one
+  // that died an hour ago. With it, "last changed" ticks over on every reading.
+  //
+  // The more-info dialog is where to see this. A history timeline merges neighbouring identical
+  // states into one band, so both versions look the same there.
   BlaeckSerial.addSignal("Heartbeat", &Heartbeat)
       .forceUpdate();
 
