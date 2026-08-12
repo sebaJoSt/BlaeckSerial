@@ -1065,6 +1065,7 @@ private:
     // command's alone: addMessageChannel() and writeMessage() both refuse the name, so the
     // value on its topic can only ever come from the getter above.
     const __FlashStringHelper *deviceClass = nullptr;
+    const __FlashStringHelper *unit = nullptr;
     bool ownedByCommand = false;
     bool diagnostic = false;
     bool disabledByDefault = false;
@@ -1685,6 +1686,19 @@ public:
       _owner->_messageChannels[_index].getStateText = getStateText;
 #else
     (void)getStateText;
+#endif
+    return *this;
+  }
+
+  // Symbol shown after the text, e.g. F("Hz"). Non-ASCII must be UTF-8. For a channel whose
+  // text is a formatted number - the usual reason a value ends up here rather than in a signal.
+  BlaeckMessageChannelRef &withUnit(const __FlashStringHelper *unit)
+  {
+#if BLAECK_ENABLE_MESSAGES
+    if (_index >= 0 && _owner != nullptr)
+      _owner->_messageChannels[_index].unit = unit;
+#else
+    (void)unit;
 #endif
     return *this;
   }
