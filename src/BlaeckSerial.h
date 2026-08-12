@@ -772,9 +772,11 @@ public:
   // All metadata strings must be F()/PROGMEM literals with program lifetime: they are stored as
   // pointers, never copied.
   //
-  // A number command must state its range, since that is what the firmware validates against;
-  // one that never calls withRange() accepts anything. Values outside [min,max], bad select
-  // indices and non-0/1 switch values are rejected before dispatch and reported on DebugRef.
+  // A number command must state its range. The firmware validates against it - values outside
+  // [min,max], bad select indices and non-0/1 switch values are rejected before dispatch and
+  // reported on DebugRef - and a host needs it too: Home Assistant defaults an undeclared range
+  // to 0..100 step 1, so a command accepting 0..500 gets a control that stops at 100, and one
+  // accepting 0..1 gets a control with only two positions.
   BlaeckNumberCommandRef onNumberCommand(const char *command, BlaeckCommandHandler handler);
   BlaeckSwitchCommandRef onSwitchCommand(const char *command, BlaeckCommandHandler handler);
   BlaeckSelectCommandRef onSelectCommand(const char *command, BlaeckCommandHandler handler);
