@@ -150,6 +150,62 @@ void setup()
 }
 ```
 
+### Describe what a command controls
+
+The typed helpers register the same way, and return a handle describing the control so a host
+can build an entity for it — a number with a range, a select with its options, a text field
+with a length limit:
+
+```CPP
+ BlaeckSerial.onNumberCommand("SET_FREQ", onSetFreq)
+     .withRange(0.0f, 2.0f, 0.01f)
+     .withUnit(F("Hz"))
+     .withStateSignal(F("Frequency"));
+
+ BlaeckSerial.onSelectCommand("SET_WAVE", onSetWave)
+     .withOptions(F("Sine,Square,Triangle,Sawtooth"))
+     .withStateSignal(F("WaveName"));
+
+ BlaeckSerial.onTextCommand("SET_LABEL", onSetLabel)
+     .withMaxLength(sizeof(DeviceLabel) - 1)
+     .withStateSignal(F("DeviceLabel"))
+     .config();
+```
+
+The kind is the helper's name because it decides the entity; every modifier is optional, so a
+command that declares nothing reads exactly like `onCommand(...)`. Each helper returns the handle
+for its own kind, so `.withRange(...)` on a text command does not compile rather than quietly
+doing nothing.
+
+| | Number | Switch | Select | Button | Text |
+|---|:-:|:-:|:-:|:-:|:-:|
+| `withRange(min, max, step)` | ● | | | | |
+| `withUnit(F("Hz"))` | ● | | | | |
+| `withOptions(F("A,B,C"))` | | | ● | | |
+| `withMaxLength(32)` | | | | | ● |
+| `withStateSignal(F("Name"))` | ● | ● | ● | ● | ● |
+| `withOwnState(F("Name"), getter)` | ● | ● | ● | ● | ● |
+| `config()` / `diagnostic()` | ● | ● | ● | ● | ● |
+
+`withStateSignal` names the signal that mirrors the command's value, so a dashboard shows what the
+device holds rather than what was last sent. `withOwnState` has the command carry its own value
+instead, on a message channel it owns — for a control with no signal behind it.
+
+All metadata strings must be `F()` literals: they are stored as pointers, never copied.
+
+No registration returns a value to check. One look afterwards covers every command, whichever
+helper declared it:
+
+```CPP
+if (BlaeckSerial.hasRejectedCommands()) {
+  Serial.print("Commands not registered: ");
+  Serial.println(BlaeckSerial.getRejectedCommandCount());
+}
+```
+
+Set `BLAECK_ENABLE_COMMAND_META` to `0` to drop the metadata: the modifiers still compile and
+store nothing, so the typed helpers behave exactly like `onCommand(...)`.
+
 ### Buffered writes
 
 On boards with UART-to-USB bridges (e.g. **Arduino Uno R4 WiFi**), rapid

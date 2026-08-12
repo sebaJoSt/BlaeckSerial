@@ -369,54 +369,8 @@ enum BlaeckEntityCategory
 enum BlaeckStateSource
 {
   BLAECK_STATE_SIGNAL = 0, // an addSignal() signal
-  BLAECK_STATE_MESSAGE = 1 // a message channel the command owns (see BlaeckOwnState)
+  BLAECK_STATE_MESSAGE = 1 // a message channel the command owns (see withOwnState())
 };
-
-// Where a typed command's state comes from. Constructed implicitly from a name, so the
-// common case needs no extra syntax and reads exactly as it always did:
-//
-//   onNumberCommand("SET_FREQ", onSetFreq, F("Frequency"), 0.0f, 2.0f, 0.01f);  // a signal
-//   onTextCommand("SET_LABEL", onSetLabel, nullptr, 32);                        // no state
-//
-// The other form is spelled out, because it does more than name something:
-//
-//   onNumberCommand("SET_OFFSET", onSetOffset,
-//                   BlaeckOwnState(F("Offset"), OffsetState), -100.0f, 100.0f, 0.1f);
-//
-// which makes the command carry its own state rather than mirror a signal. Registering it
-// announces the value once, so a host that was already connected when the board reset sees the
-// state the device came up with. The channel belongs to the command and is not offered as a
-// sensor of its own: the control is where that value is read.
-struct BlaeckCommandState
-{
-  const __FlashStringHelper *name = nullptr;
-  BlaeckStateTextGetter getStateText = nullptr;
-  uint8_t source = BLAECK_STATE_SIGNAL;
-
-  // Deliberately not explicit: a bare F("Frequency") or nullptr has to keep working.
-  BlaeckCommandState(const __FlashStringHelper *signalName = nullptr)
-      : name(signalName) {}
-
-  BlaeckCommandState(const __FlashStringHelper *channelName, BlaeckStateTextGetter getter, uint8_t src)
-      : name(channelName), getStateText(getter), source(src) {}
-};
-
-// State the command carries itself: it declares a message channel of that name, asks the
-// getter for the value whenever a host polls the channel catalog, and announces it once at
-// registration - so a host already connected when the board resets is corrected.
-//
-// The channel belongs to the command and cannot be reached from the sketch: addMessageChannel()
-// and writeMessage() both refuse that name. Its value comes from the getter and nowhere else,
-// which is what makes the catalog and the pushes agree. Push a change with
-// writeCommandState(); see BlaeckStateTextGetter for what the getter may do.
-//
-// Independent of the signal table, so a device that adds no signals can still report what its
-// controls are set to. Requires BLAECK_ENABLE_COMMAND_META - without it the typed helpers keep
-// no metadata, so no channel is declared and no state is published.
-inline BlaeckCommandState BlaeckOwnState(const __FlashStringHelper *name, BlaeckStateTextGetter getStateText)
-{
-  return BlaeckCommandState(name, getStateText, BLAECK_STATE_MESSAGE);
-}
 
 // Acknowledgement reason for the 0xA5 Command Ack frame. Sent back to the
 // serial host after a command is dispatched so a host (e.g. Loggbok) can confirm
@@ -435,6 +389,12 @@ enum BlaeckCommandAckReason
 };
 
 class BlaeckSignalRef;
+class BlaeckCommandRefBase;
+class BlaeckNumberCommandRef;
+class BlaeckSwitchCommandRef;
+class BlaeckSelectCommandRef;
+class BlaeckButtonCommandRef;
+class BlaeckTextCommandRef;
 
 class BlaeckSerial
 {
@@ -762,45 +722,40 @@ public:
   void read();
 
   // ----- Command callback  -----
-  bool onCommand(const char *command, BlaeckCommandHandler handler);
+  // A command not registered - table full, name too long, or a null argument - is reported on
+  // DebugRef and counted; see hasRejectedCommands(). No registration returns a value to check,
+  // so one look after them all answers for every command whichever helper declared it.
+  void onCommand(const char *command, BlaeckCommandHandler handler);
   void onAnyCommand(BlaeckAnyCommandHandler handler);
   void clearAllCommandHandlers();
+  bool hasRejectedCommands() const { return _rejectedCommandCount > 0; }
+  uint16_t getRejectedCommandCount() const { return _rejectedCommandCount; }
 
   // ----- Typed command registration (Home Assistant discovery metadata) -----
-  // Same runtime behavior as onCommand(), but attach metadata so the device can
-  // describe the command in a 0xA0 "Command List" frame (BLAECK.WRITE_COMMANDS).
-  // stateSignal (nullable): name of the signal that mirrors this command's value
-  // (closed-loop -> HA state_topic + logged); pass nullptr for an optimistic /
-  // open-loop control. All metadata strings must be F()/PROGMEM literals with
-  // program lifetime (stored as pointers, never copied).
-  // Number values outside [min,max], bad select indices and non-0/1 switch
-  // values are rejected (handler skipped) and reported on DebugRef.
-  // step is HA display resolution only; the firmware does not round. It is the one number
-  // that can be left unspecified: pass 0 and the host omits it, letting Home Assistant apply
-  // its own default. min and max have no such escape - they are the range the firmware itself
-  // validates against, so every number command must state them.
-  // Home Assistant refuses a step below 0.001, so a finer resolution than that cannot be
-  // shown; the host raises it to 0.001 rather than let the whole entity be rejected.
-  // category (optional): Home Assistant entity_category. Leave at BLAECK_CAT_NONE for a
-  // primary control; BLAECK_CAT_CONFIG marks a device setting, which Home Assistant then
-  // keeps off its auto-generated dashboards.
-  // state: the signal that mirrors this command's value, given as a bare F("Name") - or
-  // BlaeckOwnState(F("Name"), getter) to have the command carry its own state instead.
-  // nullptr for an optimistic / open-loop control. See BlaeckCommandState.
-  bool onNumberCommand(const char *command, BlaeckCommandHandler handler,
-                       BlaeckCommandState state,
-                       float min, float max, float step,
-                       const __FlashStringHelper *unit = nullptr,
-                       BlaeckEntityCategory category = BLAECK_CAT_NONE);
-  bool onSwitchCommand(const char *command, BlaeckCommandHandler handler,
-                       BlaeckCommandState state,
-                       BlaeckEntityCategory category = BLAECK_CAT_NONE);
-  bool onSelectCommand(const char *command, BlaeckCommandHandler handler,
-                       BlaeckCommandState state,
-                       const __FlashStringHelper *optionsCsv,
-                       BlaeckEntityCategory category = BLAECK_CAT_NONE);
-  bool onButtonCommand(const char *command, BlaeckCommandHandler handler,
-                       BlaeckEntityCategory category = BLAECK_CAT_NONE);
+  // Same runtime behavior as onCommand(), but the returned handle describes the control so the
+  // device can declare it in a 0xA0 "Command List" frame (BLAECK.WRITE_COMMANDS):
+  //
+  //   BlaeckSerial.onNumberCommand("SET_FREQ", onSetFreq)
+  //       .withRange(0.0f, 2.0f, 0.01f)
+  //       .withUnit(F("Hz"))
+  //       .withStateSignal(F("Frequency"));
+  //
+  // The kind is the factory's name because it decides the entity and is not optional; every
+  // modifier is. Each helper hands back the handle for its own kind, so a modifier that does
+  // not apply - a range on a text command - does not compile rather than quietly doing nothing.
+  //
+  // All metadata strings must be F()/PROGMEM literals with program lifetime: they are stored as
+  // pointers, never copied.
+  //
+  // A number command must state its range, since that is what the firmware validates against;
+  // one that never calls withRange() accepts anything. Values outside [min,max], bad select
+  // indices and non-0/1 switch values are rejected before dispatch and reported on DebugRef.
+  BlaeckNumberCommandRef onNumberCommand(const char *command, BlaeckCommandHandler handler);
+  BlaeckSwitchCommandRef onSwitchCommand(const char *command, BlaeckCommandHandler handler);
+  BlaeckSelectCommandRef onSelectCommand(const char *command, BlaeckCommandHandler handler);
+  BlaeckButtonCommandRef onButtonCommand(const char *command, BlaeckCommandHandler handler);
+  BlaeckTextCommandRef onTextCommand(const char *command, BlaeckCommandHandler handler);
+
   // Copies option `index` of a select command's declared list into `out`, so a sketch can
   // render the option it just selected without keeping a second copy of the names. The
   // list already lives in flash; this is the only way to read it back.
@@ -808,17 +763,6 @@ public:
   // index is past the end, or the option would not fit - a truncated name is no use,
   // since a host matches state against the declared options exactly.
   bool getSelectOption(const char *command, byte index, char *out, byte outSize) const;
-  // HA text entity: the host sends the value percent-encoded (so commas and other
-  // delimiters survive the frame); the device percent-decodes it in place before
-  // the handler runs, so the handler receives the raw UTF-8 text. maxLength is the
-  // advertised limit (in decoded bytes) enforced before dispatch; a longer value
-  // is rejected (BLAECK_ACK_TOO_LONG). Text is the one kind where an empty value is a value:
-  // it clears the field, and arrives as an empty params[0]. A frame carrying no parameter at
-  // all is a missing value, not an empty one, and is rejected like any other kind.
-  bool onTextCommand(const char *command, BlaeckCommandHandler handler,
-                     BlaeckCommandState state = BlaeckCommandState(),
-                     unsigned int maxLength = 255,
-                     BlaeckEntityCategory category = BLAECK_CAT_NONE);
 
   // ----- Before data write callback  -----
   // Called just before signal data is sent, in normal loop context
@@ -877,22 +821,24 @@ private:
   // the datatype they record, so they all land here rather than repeating the
   // capacity check and the overflow bookkeeping eleven times.
   BlaeckSignalRef _registerSignal(const String &signalName, dataType type, void *address);
+  // The one place a command is registered. Returns the handler table index, or -1 when the
+  // command was rejected - table full, name too long, or a null argument - having counted it
+  // and said so on DebugRef. The typed helpers hand that index to their handle, so a modifier
+  // writes to the entry directly instead of looking it up by name again.
+  int _registerCommand(const char *command, BlaeckCommandHandler handler, uint8_t kind);
+  // Clears an entry's metadata to the defaults for its kind. Registering a name twice replaces
+  // the command outright, so what the previous declaration said must not survive.
+  void _resetCommandMeta(byte handlerIndex, uint8_t kind);
 #if BLAECK_ENABLE_COMMAND_META
   void writeCommandsFrame(unsigned long MessageID);
-  void _annotateCommand(const char *command, uint8_t kind,
-                        const __FlashStringHelper *stateSignal,
-                        float mn, float mx, float st,
-                        const __FlashStringHelper *unit,
-                        const __FlashStringHelper *options,
-                        uint8_t category,
-                        uint8_t stateSource);
   byte _validateTypedCommand(byte handlerIndex);
   // Declares the channel a typed command owns. Separate from addMessageChannel() so that one
   // can refuse an owned name outright rather than needing a "unless it is mine" exception.
   bool _addOwnedMessageChannel(const __FlashStringHelper *channelName, BlaeckStateTextGetter getStateText);
-  // Declares and announces the channel for a command registered with BlaeckOwnState. A no-op
-  // for any other kind of state, so every typed helper can call it unconditionally.
-  void _declareOwnState(const char *command, const BlaeckCommandState &state);
+  // Declares and announces the channel a command carries itself, for withOwnState(). Announcing
+  // at registration is what corrects a host that was already connected when the board reset.
+  void _declareOwnState(byte handlerIndex, const __FlashStringHelper *channelName,
+                        BlaeckStateTextGetter getStateText);
 
   static void _percentDecodeInPlace(char *s);
   static long _flashCsvIndexOf(const __FlashStringHelper *csv, const char *value);
@@ -936,6 +882,7 @@ private:
   unsigned int _signalCapacity = 0;
   bool _signalOverflowOccurred = false;
   uint16_t _signalOverflowCount = 0;
+  uint16_t _rejectedCommandCount = 0;
 
   bool _writeRestartedAlreadyDone = false;
   bool _sendRestartFlag = true;
@@ -1098,7 +1045,7 @@ private:
     // catalog reports cannot lag behind the sketch - there is no stored copy to
     // go stale, and nothing the sketch has to remember to refresh.
     BlaeckStateTextGetter getStateText = nullptr;
-    // Declared by a typed command through BlaeckOwnState, which makes the channel that
+    // Declared by a typed command through withOwnState(), which makes the channel that
     // command's alone: addMessageChannel() and writeMessage() both refuse the name, so the
     // value on its topic can only ever come from the getter above.
     bool ownedByCommand = false;
@@ -1248,6 +1195,223 @@ private:
   } dblCvt;
 
   friend class BlaeckSignalRef;
+  friend class BlaeckCommandRefBase;
+};
+
+// Handle to the command a typed helper just registered, describing the control it drives.
+// Returned by value and meant to be chained, not stored.
+//
+// The modifiers live here so that every kind shares one implementation, and each kind's handle
+// re-exposes only the ones that apply to it - which is what makes a range on a text command a
+// compile error rather than a silent no-op. Nothing here validates: a command whose registration
+// was rejected gets a dead handle that swallows the chain, and hasRejectedCommands() is where
+// that shows up.
+//
+// The methods are always defined. With BLAECK_ENABLE_COMMAND_META=0 they store nothing and the
+// typed helpers behave exactly like onCommand(), so a sketch needs no #ifdef.
+class BlaeckCommandRefBase
+{
+protected:
+  BlaeckCommandRefBase(BlaeckSerial *owner, int16_t index) : _owner(owner), _index(index) {}
+
+  // The entry this handle names, or nullptr when registration was rejected.
+  BlaeckSerial::CommandHandlerEntry *_entry() const
+  {
+    if (_owner == nullptr || _index < 0)
+      return nullptr;
+    return &_owner->_commandHandlers[_index];
+  }
+
+  void _setStateSignal(const __FlashStringHelper *signalName)
+  {
+#if BLAECK_ENABLE_COMMAND_META
+    if (auto *e = _entry())
+    {
+      e->stateSignal = signalName;
+      e->stateSource = BLAECK_STATE_SIGNAL;
+    }
+#else
+    (void)signalName;
+#endif
+  }
+
+  void _setOwnState(const __FlashStringHelper *channelName, BlaeckStateTextGetter getStateText)
+  {
+#if BLAECK_ENABLE_COMMAND_META
+    if (auto *e = _entry())
+    {
+      e->stateSignal = channelName;
+      e->stateSource = BLAECK_STATE_MESSAGE;
+      _owner->_declareOwnState((byte)_index, channelName, getStateText);
+    }
+#else
+    (void)channelName;
+    (void)getStateText;
+#endif
+  }
+
+  void _setRange(float mn, float mx, float st)
+  {
+#if BLAECK_ENABLE_COMMAND_META
+    if (auto *e = _entry())
+    {
+      e->meta_min = mn;
+      e->meta_max = mx;
+      e->meta_step = st;
+    }
+#else
+    (void)mn; (void)mx; (void)st;
+#endif
+  }
+
+  void _setUnit(const __FlashStringHelper *unit)
+  {
+#if BLAECK_ENABLE_COMMAND_META
+    if (auto *e = _entry())
+      e->unit = unit;
+#else
+    (void)unit;
+#endif
+  }
+
+  void _setOptions(const __FlashStringHelper *optionsCsv)
+  {
+#if BLAECK_ENABLE_COMMAND_META
+    if (auto *e = _entry())
+      e->options = optionsCsv;
+#else
+    (void)optionsCsv;
+#endif
+  }
+
+  // Stored in meta_max, which a text command uses for nothing else.
+  void _setMaxLength(unsigned int maxLength)
+  {
+#if BLAECK_ENABLE_COMMAND_META
+    if (auto *e = _entry())
+      e->meta_max = (float)maxLength;
+#else
+    (void)maxLength;
+#endif
+  }
+
+  void _setCategory(uint8_t category)
+  {
+#if BLAECK_ENABLE_COMMAND_META
+    if (auto *e = _entry())
+      e->category = category;
+#else
+    (void)category;
+#endif
+  }
+
+  BlaeckSerial *_owner;
+  int16_t _index;
+};
+
+// Each kind re-exposes the modifiers that apply to it, returning its own type so the chain keeps
+// its kind all the way down. The repetition is the point: this reads as a table of what each
+// control accepts, and it is what an editor offers when the dot is typed.
+
+#define BLAECK_COMMAND_REF_SHARED(TYPE)                                                     \
+  /* The signal that mirrors this command's value, so a host shows what the device holds */ \
+  /* rather than what was last sent. Leave it out for an optimistic control. */             \
+  TYPE &withStateSignal(const __FlashStringHelper *signalName)                              \
+  {                                                                                         \
+    _setStateSignal(signalName);                                                            \
+    return *this;                                                                           \
+  }                                                                                         \
+  /* State the command carries itself: it declares a message channel of that name and asks */ \
+  /* the getter for the value, instead of mirroring a signal. The channel belongs to the */  \
+  /* command - addMessageChannel() and writeMessage() both refuse the name - so what the */  \
+  /* catalog reports and what is pushed cannot disagree. Push a change with */               \
+  /* writeCommandState(). Independent of the signal table, so a device that adds no signals */ \
+  /* can still report what its controls are set to. */                                       \
+  TYPE &withOwnState(const __FlashStringHelper *channelName, BlaeckStateTextGetter getStateText) \
+  {                                                                                         \
+    _setOwnState(channelName, getStateText);                                                \
+    return *this;                                                                           \
+  }                                                                                         \
+  /* A device setting rather than a primary function. Home Assistant keeps both this and */  \
+  /* diagnostic() off its auto-generated dashboards. */                                      \
+  TYPE &config()                                                                            \
+  {                                                                                         \
+    _setCategory((uint8_t)BLAECK_CAT_CONFIG);                                               \
+    return *this;                                                                           \
+  }                                                                                         \
+  TYPE &diagnostic()                                                                        \
+  {                                                                                         \
+    _setCategory((uint8_t)BLAECK_CAT_DIAGNOSTIC);                                           \
+    return *this;                                                                           \
+  }
+
+class BlaeckNumberCommandRef : public BlaeckCommandRefBase
+{
+public:
+  BlaeckNumberCommandRef(BlaeckSerial *owner, int16_t index) : BlaeckCommandRefBase(owner, index) {}
+  BLAECK_COMMAND_REF_SHARED(BlaeckNumberCommandRef)
+
+  // The range the firmware validates against: a value outside it is rejected before dispatch.
+  // A number command that never calls this accepts anything.
+  // step is display resolution only and is never rounded to - pass 0 to leave it unsaid and let
+  // Home Assistant apply its own. It refuses a step below 0.001, so a finer resolution cannot be
+  // shown; the host raises it rather than let the whole entity be rejected.
+  BlaeckNumberCommandRef &withRange(float min, float max, float step = 0.0f)
+  {
+    _setRange(min, max, step);
+    return *this;
+  }
+
+  BlaeckNumberCommandRef &withUnit(const __FlashStringHelper *unit)
+  {
+    _setUnit(unit);
+    return *this;
+  }
+};
+
+class BlaeckSwitchCommandRef : public BlaeckCommandRefBase
+{
+public:
+  BlaeckSwitchCommandRef(BlaeckSerial *owner, int16_t index) : BlaeckCommandRefBase(owner, index) {}
+  BLAECK_COMMAND_REF_SHARED(BlaeckSwitchCommandRef)
+};
+
+class BlaeckSelectCommandRef : public BlaeckCommandRefBase
+{
+public:
+  BlaeckSelectCommandRef(BlaeckSerial *owner, int16_t index) : BlaeckCommandRefBase(owner, index) {}
+  BLAECK_COMMAND_REF_SHARED(BlaeckSelectCommandRef)
+
+  // The closed list this control offers, comma-separated. A value that is not an index into it
+  // is rejected before dispatch. getSelectOption() reads a name back out, so the list lives in
+  // flash once instead of being repeated in the sketch.
+  BlaeckSelectCommandRef &withOptions(const __FlashStringHelper *optionsCsv)
+  {
+    _setOptions(optionsCsv);
+    return *this;
+  }
+};
+
+class BlaeckButtonCommandRef : public BlaeckCommandRefBase
+{
+public:
+  BlaeckButtonCommandRef(BlaeckSerial *owner, int16_t index) : BlaeckCommandRefBase(owner, index) {}
+  BLAECK_COMMAND_REF_SHARED(BlaeckButtonCommandRef)
+};
+
+class BlaeckTextCommandRef : public BlaeckCommandRefBase
+{
+public:
+  BlaeckTextCommandRef(BlaeckSerial *owner, int16_t index) : BlaeckCommandRefBase(owner, index) {}
+  BLAECK_COMMAND_REF_SHARED(BlaeckTextCommandRef)
+
+  // The advertised limit in decoded bytes, enforced before dispatch: a longer value is rejected
+  // with BLAECK_ACK_TOO_LONG. Left unsaid it is 255. sizeof(buffer) - 1 is usually what you want.
+  BlaeckTextCommandRef &withMaxLength(unsigned int maxLength)
+  {
+    _setMaxLength(maxLength);
+    return *this;
+  }
 };
 
 // Handle to the signal addSignal() just added, describing how it is presented.

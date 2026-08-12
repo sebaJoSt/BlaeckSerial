@@ -521,11 +521,12 @@ void BlaeckSerial::setBeforeWriteCallback(void (*callback)())
   _beforeWriteCallback = callback;
 }
 
-bool BlaeckSerial::onCommand(const char *command, BlaeckCommandHandler handler)
+int BlaeckSerial::_registerCommand(const char *command, BlaeckCommandHandler handler, uint8_t kind)
 {
   if (command == nullptr || handler == nullptr || command[0] == '\0')
   {
-    return false;
+    _rejectedCommandCount++;
+    return -1;
   }
   if (strlen(command) >= MAX_COMMAND_NAME_COUNT)
   {
@@ -534,7 +535,8 @@ bool BlaeckSerial::onCommand(const char *command, BlaeckCommandHandler handler)
       _debugStream->print("Command name too long for handler table: ");
       _debugStream->println(command);
     }
-    return false;
+    _rejectedCommandCount++;
+    return -1;
   }
 
   for (byte i = 0; i < MAX_COMMAND_HANDLERS; i++)
@@ -542,14 +544,8 @@ bool BlaeckSerial::onCommand(const char *command, BlaeckCommandHandler handler)
     if (_commandHandlers[i].inUse && strcmp(_commandHandlers[i].command, command) == 0)
     {
       _commandHandlers[i].handler = handler;
-#if BLAECK_ENABLE_COMMAND_META
-      _commandHandlers[i].kind = BLAECK_CMD_PLAIN;
-      _commandHandlers[i].unit = nullptr;
-      _commandHandlers[i].options = nullptr;
-      _commandHandlers[i].stateSignal = nullptr;
-      _commandHandlers[i].stateSource = BLAECK_STATE_SIGNAL;
-#endif
-      return true;
+      _resetCommandMeta(i, kind);
+      return (int)i;
     }
   }
 
@@ -561,14 +557,8 @@ bool BlaeckSerial::onCommand(const char *command, BlaeckCommandHandler handler)
       _commandHandlers[i].command[MAX_COMMAND_NAME_COUNT - 1] = '\0';
       _commandHandlers[i].handler = handler;
       _commandHandlers[i].inUse = true;
-#if BLAECK_ENABLE_COMMAND_META
-      _commandHandlers[i].kind = BLAECK_CMD_PLAIN;
-      _commandHandlers[i].unit = nullptr;
-      _commandHandlers[i].options = nullptr;
-      _commandHandlers[i].stateSignal = nullptr;
-      _commandHandlers[i].stateSource = BLAECK_STATE_SIGNAL;
-#endif
-      return true;
+      _resetCommandMeta(i, kind);
+      return (int)i;
     }
   }
 
@@ -577,7 +567,36 @@ bool BlaeckSerial::onCommand(const char *command, BlaeckCommandHandler handler)
     _debugStream->print("Command handler table full for: ");
     _debugStream->println(command);
   }
-  return false;
+  _rejectedCommandCount++;
+  return -1;
+}
+
+// Registering the same name twice replaces the command outright, so the metadata starts empty
+// rather than inheriting whatever the previous declaration said.
+void BlaeckSerial::_resetCommandMeta(byte handlerIndex, uint8_t kind)
+{
+#if BLAECK_ENABLE_COMMAND_META
+  CommandHandlerEntry &e = _commandHandlers[handlerIndex];
+  e.kind = kind;
+  e.meta_min = 0.0f;
+  // A text command that never states a limit advertises 255; every other kind reads this as a
+  // range maximum and states its own.
+  e.meta_max = (kind == BLAECK_CMD_TEXT) ? 255.0f : 0.0f;
+  e.meta_step = 0.0f;
+  e.unit = nullptr;
+  e.options = nullptr;
+  e.stateSignal = nullptr;
+  e.stateSource = BLAECK_STATE_SIGNAL;
+  e.category = BLAECK_CAT_NONE;
+#else
+  (void)handlerIndex;
+  (void)kind;
+#endif
+}
+
+void BlaeckSerial::onCommand(const char *command, BlaeckCommandHandler handler)
+{
+  _registerCommand(command, handler, BLAECK_CMD_PLAIN);
 }
 
 void BlaeckSerial::onAnyCommand(BlaeckAnyCommandHandler handler)
@@ -717,12 +736,13 @@ bool BlaeckSerial::_addOwnedMessageChannel(const __FlashStringHelper *channelNam
 #endif
 }
 
-void BlaeckSerial::_declareOwnState(const char *command, const BlaeckCommandState &state)
+void BlaeckSerial::_declareOwnState(byte handlerIndex, const __FlashStringHelper *channelName,
+                                   BlaeckStateTextGetter getStateText)
 {
-  if (state.source != BLAECK_STATE_MESSAGE || state.getStateText == nullptr)
+  if (channelName == nullptr || getStateText == nullptr)
     return;
 
-  if (!_addOwnedMessageChannel(state.name, state.getStateText))
+  if (!_addOwnedMessageChannel(channelName, getStateText))
     return;
 
   // Announce once, here. A host connecting later reads the value from the channel catalog,
@@ -730,97 +750,33 @@ void BlaeckSerial::_declareOwnState(const char *command, const BlaeckCommandStat
   // already holds - and the sketch's variables are back at their startup values. Dropped
   // harmlessly when no host holds the catalog yet, which is the cold-start case the poll
   // covers.
-  writeCommandState(command);
+  writeCommandState(_commandHandlers[handlerIndex].command);
 }
 #endif
 
-bool BlaeckSerial::onNumberCommand(const char *command, BlaeckCommandHandler handler,
-                                   BlaeckCommandState state,
-                                   float min, float max, float step,
-                                   const __FlashStringHelper *unit,
-                                   BlaeckEntityCategory category)
+BlaeckNumberCommandRef BlaeckSerial::onNumberCommand(const char *command, BlaeckCommandHandler handler)
 {
-  bool ok = onCommand(command, handler);
-#if BLAECK_ENABLE_COMMAND_META
-  if (ok)
-  {
-    _annotateCommand(command, BLAECK_CMD_NUMBER, state.name, min, max, step, unit, nullptr, (uint8_t)category, state.source);
-    _declareOwnState(command, state);
-  }
-#else
-  (void)state; (void)min; (void)max; (void)step; (void)unit; (void)category;
-#endif
-  return ok;
+  return BlaeckNumberCommandRef(this, (int16_t)_registerCommand(command, handler, BLAECK_CMD_NUMBER));
 }
 
-bool BlaeckSerial::onSwitchCommand(const char *command, BlaeckCommandHandler handler,
-                                   BlaeckCommandState state,
-                                   BlaeckEntityCategory category)
+BlaeckSwitchCommandRef BlaeckSerial::onSwitchCommand(const char *command, BlaeckCommandHandler handler)
 {
-  bool ok = onCommand(command, handler);
-#if BLAECK_ENABLE_COMMAND_META
-  if (ok)
-  {
-    _annotateCommand(command, BLAECK_CMD_SWITCH, state.name, 0.0f, 0.0f, 0.0f, nullptr, nullptr, (uint8_t)category, state.source);
-    _declareOwnState(command, state);
-  }
-#else
-  (void)state; (void)category;
-#endif
-  return ok;
+  return BlaeckSwitchCommandRef(this, (int16_t)_registerCommand(command, handler, BLAECK_CMD_SWITCH));
 }
 
-bool BlaeckSerial::onSelectCommand(const char *command, BlaeckCommandHandler handler,
-                                   BlaeckCommandState state,
-                                   const __FlashStringHelper *optionsCsv,
-                                   BlaeckEntityCategory category)
+BlaeckSelectCommandRef BlaeckSerial::onSelectCommand(const char *command, BlaeckCommandHandler handler)
 {
-  bool ok = onCommand(command, handler);
-#if BLAECK_ENABLE_COMMAND_META
-  if (ok)
-  {
-    _annotateCommand(command, BLAECK_CMD_SELECT, state.name, 0.0f, 0.0f, 0.0f, nullptr, optionsCsv, (uint8_t)category, state.source);
-    _declareOwnState(command, state);
-  }
-#else
-  (void)state; (void)optionsCsv; (void)category;
-#endif
-  return ok;
+  return BlaeckSelectCommandRef(this, (int16_t)_registerCommand(command, handler, BLAECK_CMD_SELECT));
 }
 
-bool BlaeckSerial::onButtonCommand(const char *command, BlaeckCommandHandler handler,
-                                   BlaeckEntityCategory category)
+BlaeckButtonCommandRef BlaeckSerial::onButtonCommand(const char *command, BlaeckCommandHandler handler)
 {
-  bool ok = onCommand(command, handler);
-#if BLAECK_ENABLE_COMMAND_META
-  if (ok)
-    // A button carries no state, so the source is irrelevant and stays at the default.
-    _annotateCommand(command, BLAECK_CMD_BUTTON, nullptr, 0.0f, 0.0f, 0.0f, nullptr, nullptr, (uint8_t)category, (uint8_t)BLAECK_STATE_SIGNAL);
-#else
-  (void)category;
-#endif
-  return ok;
+  return BlaeckButtonCommandRef(this, (int16_t)_registerCommand(command, handler, BLAECK_CMD_BUTTON));
 }
 
-bool BlaeckSerial::onTextCommand(const char *command, BlaeckCommandHandler handler,
-                                 BlaeckCommandState state,
-                                 unsigned int maxLength,
-                                 BlaeckEntityCategory category)
+BlaeckTextCommandRef BlaeckSerial::onTextCommand(const char *command, BlaeckCommandHandler handler)
 {
-  bool ok = onCommand(command, handler);
-#if BLAECK_ENABLE_COMMAND_META
-  if (ok)
-  {
-    // maxLength is stored in meta_max (reused as the text length limit).
-    _annotateCommand(command, BLAECK_CMD_TEXT, state.name, 0.0f, (float)maxLength, 0.0f, nullptr, nullptr, (uint8_t)category, state.source);
-    _declareOwnState(command, state);
-  }
-#else
-  (void)state;
-  (void)maxLength;
-  (void)category;
-#endif
-  return ok;
+  return BlaeckTextCommandRef(this, (int16_t)_registerCommand(command, handler, BLAECK_CMD_TEXT));
 }
 
 byte BlaeckSerial::_flashCsvOptionCount(const __FlashStringHelper *csv)
@@ -899,32 +855,6 @@ bool BlaeckSerial::getSelectOption(const char *command, byte index, char *out, b
 }
 
 #if BLAECK_ENABLE_COMMAND_META
-void BlaeckSerial::_annotateCommand(const char *command, uint8_t kind,
-                                    const __FlashStringHelper *stateSignal,
-                                    float mn, float mx, float st,
-                                    const __FlashStringHelper *unit,
-                                    const __FlashStringHelper *options,
-                                    uint8_t category,
-                                    uint8_t stateSource)
-{
-  for (byte i = 0; i < MAX_COMMAND_HANDLERS; i++)
-  {
-    if (_commandHandlers[i].inUse && strcmp(_commandHandlers[i].command, command) == 0)
-    {
-      _commandHandlers[i].kind = kind;
-      _commandHandlers[i].meta_min = mn;
-      _commandHandlers[i].meta_max = mx;
-      _commandHandlers[i].meta_step = st;
-      _commandHandlers[i].unit = unit;
-      _commandHandlers[i].options = options;
-      _commandHandlers[i].stateSignal = stateSignal;
-      _commandHandlers[i].stateSource = stateSource;
-      _commandHandlers[i].category = category;
-      return;
-    }
-  }
-}
-
 long BlaeckSerial::_flashCsvIndexOf(const __FlashStringHelper *csv, const char *value)
 {
   if (csv == nullptr || value == nullptr || value[0] == '\0')
