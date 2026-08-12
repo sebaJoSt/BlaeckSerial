@@ -8,9 +8,6 @@
   Assistant MQTT Discovery entities, so a dashboard comes from the sketch rather than being
   built by hand.
 
-  Registers 7 commands. Small AVRs (Uno/Nano) default to 6 (raise BLAECK_COMMAND_MAX_HANDLERS_DEFAULT
-  or drop one).
-
   Log fast enough to resolve the wave: at the default 1 Hz, a 20 ms interval gives 50 points
   per cycle. Sample slower than that and Output aliases into a shape the device never made.
 
@@ -116,6 +113,14 @@ void setup()
       .withStateSignal(F("DeviceLabel"))
       .config();
   BlaeckSerial.onButtonCommand("STATUS", onStatus);
+
+  // Seven commands need seven handler slots, and the default is six on a small AVR. One look
+  // covers every registration above; raise BLAECK_COMMAND_MAX_HANDLERS_DEFAULT if it fires.
+  if (BlaeckSerial.hasRejectedCommands())
+  {
+    Serial.print(F("Commands not registered: "));
+    Serial.println(BlaeckSerial.getRejectedCommandCount());
+  }
 
   // Declared up-front so the host can announce one text sensor per channel before
   // the first line is written.
