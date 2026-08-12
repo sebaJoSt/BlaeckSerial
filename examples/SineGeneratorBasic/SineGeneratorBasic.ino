@@ -38,6 +38,8 @@ void setup()
   for (int i = 1; i <= 200; i++)
   {
     snprintf(signalName, sizeof(signalName), "Sine_%d", i);
+    // All 200 read the same variable: this sketch is about how many signals the library
+    // can carry, not about distinct values. See SineGeneratorAdvanced for one per signal.
     BlaeckSerial.addSignal(signalName, &sine);
   }
 
