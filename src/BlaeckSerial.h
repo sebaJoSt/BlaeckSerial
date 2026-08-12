@@ -391,7 +391,10 @@ enum BlaeckCommandAckReason
   BLAECK_ACK_TRUNCATED = 7      // rejected: frame did not fit - too many parameters, or longer than the receive buffer
 };
 
-class BlaeckSignalRef;
+class BlaeckSignalRefBase;
+class BlaeckNumericSignalRef;
+class BlaeckTextSignalRef;
+class BlaeckBoolSignalRef;
 class BlaeckCommandRefBase;
 class BlaeckNumberCommandRef;
 class BlaeckSwitchCommandRef;
@@ -433,17 +436,17 @@ public:
   // wire. When the signal table is full the handle is dead: the chain still
   // compiles and runs, and stores nothing - the missing signal is the real
   // problem and hasRejectedSignals() already reports it.
-  BlaeckSignalRef addSignal(String signalName, bool *value);
-  BlaeckSignalRef addSignal(String signalName, byte *value);
-  BlaeckSignalRef addSignal(String signalName, short *value);
-  BlaeckSignalRef addSignal(String signalName, unsigned short *value);
-  BlaeckSignalRef addSignal(String signalName, int *value);
-  BlaeckSignalRef addSignal(String signalName, unsigned int *value);
-  BlaeckSignalRef addSignal(String signalName, long *value);
-  BlaeckSignalRef addSignal(String signalName, unsigned long *value);
-  BlaeckSignalRef addSignal(String signalName, float *value);
-  BlaeckSignalRef addSignal(String signalName, double *value);
-  BlaeckSignalRef addSignal(String signalName, const char *value);
+  BlaeckBoolSignalRef addSignal(String signalName, bool *value);
+  BlaeckNumericSignalRef addSignal(String signalName, byte *value);
+  BlaeckNumericSignalRef addSignal(String signalName, short *value);
+  BlaeckNumericSignalRef addSignal(String signalName, unsigned short *value);
+  BlaeckNumericSignalRef addSignal(String signalName, int *value);
+  BlaeckNumericSignalRef addSignal(String signalName, unsigned int *value);
+  BlaeckNumericSignalRef addSignal(String signalName, long *value);
+  BlaeckNumericSignalRef addSignal(String signalName, unsigned long *value);
+  BlaeckNumericSignalRef addSignal(String signalName, float *value);
+  BlaeckNumericSignalRef addSignal(String signalName, double *value);
+  BlaeckTextSignalRef addSignal(String signalName, const char *value);
 
   // Delete all Signals
   void deleteSignals();
@@ -809,7 +812,7 @@ private:
   // The one place a signal is appended. The eleven public overloads differ only in
   // the datatype they record, so they all land here rather than repeating the
   // capacity check and the overflow bookkeeping eleven times.
-  BlaeckSignalRef _registerSignal(const String &signalName, dataType type, void *address);
+  int _registerSignal(const String &signalName, dataType type, void *address);
   // The one place a command is registered. Returns the handler table index, or -1 when the
   // command was rejected - table full, name too long, or a null argument - having counted it
   // and said so on DebugRef. The typed helpers hand that index to their handle, so a modifier
@@ -1195,7 +1198,7 @@ private:
     byte bval[8];
   } dblCvt;
 
-  friend class BlaeckSignalRef;
+  friend class BlaeckSignalRefBase;
   friend class BlaeckCommandRefBase;
   friend class BlaeckMessageChannelRef;
   friend class BlaeckEventChannelRef;
@@ -1433,84 +1436,26 @@ public:
 //       .diagnostic()
 //       .disabledByDefault();
 //
-// Every method returns the handle again, so order does not matter and a call may
-// be left out. with* carries a value, a bare adjective does not; the booleans take
-// an argument so a sketch can drive them from a variable instead of an #if.
+// Every method returns the handle again, so order does not matter and a call may be left out.
+// with* carries a value, a bare adjective does not; the booleans take an argument so a sketch
+// can drive them from a variable instead of an #if.
 //
-// The methods are always defined. With BLAECK_ENABLE_SIGNAL_META=0 they store
-// nothing, and with a full signal table the handle is dead and they store nothing
-// either - so a chain is safe to write without checking anything first.
-class BlaeckSignalRef
+// Each datatype gets its own handle, so a modifier that cannot mean anything for that signal
+// does not compile. A string has no decimals and no statistics; a bool becomes a binary sensor,
+// which has no unit either. Nothing else catches those: the device does not validate what it
+// declares and a host publishes what it is told, so this is the only place the mistake is
+// caught at all.
+//
+// The methods are always defined. With BLAECK_ENABLE_SIGNAL_META=0 they store nothing, and with
+// a full signal table the handle is dead and they store nothing either - so a chain is safe to
+// write without checking anything first.
+class BlaeckSignalRefBase
 {
-public:
-  BlaeckSignalRef(BlaeckSerial *owner, int16_t index) : _owner(owner), _index(index) {}
+protected:
+  BlaeckSignalRefBase(BlaeckSerial *owner, int16_t index) : _owner(owner), _index(index) {}
 
-  // Symbol shown after the value, e.g. F("Hz"). Non-ASCII must be UTF-8:
-  // F("\xC2\xB0" "C") is the degree sign followed by C.
-  BlaeckSignalRef &withUnit(const __FlashStringHelper *unit)
-  {
-    return _setFlash(unit, BLAECK_SIG_HAS_UNIT);
-  }
-
-  // What the value measures, e.g. F("temperature"). Home Assistant's vocabulary,
-  // carried as written: this library does not hold the list, because the list
-  // grows faster than firmware is reflashed.
-  BlaeckSignalRef &withDeviceClass(const __FlashStringHelper *deviceClass)
-  {
-    return _setFlash(deviceClass, BLAECK_SIG_HAS_DEVICE_CLASS);
-  }
-
-  // Material Design Icons name, e.g. F("mdi:sine-wave").
-  BlaeckSignalRef &withIcon(const __FlashStringHelper *icon)
-  {
-    return _setFlash(icon, BLAECK_SIG_HAS_ICON);
-  }
-
-  BlaeckSignalRef &withStateClass(BlaeckStateClass stateClass)
-  {
-#if BLAECK_ENABLE_SIGNAL_META
-    if (Signal *s = _signal())
-    {
-      s->MetaFlags &= (uint16_t)~BLAECK_SIG_STATE_CLASS_MASK;
-      s->MetaFlags |= (uint16_t)(((uint16_t)stateClass << BLAECK_SIG_STATE_CLASS_SHIFT) &
-                                 BLAECK_SIG_STATE_CLASS_MASK);
-    }
-#else
-    (void)stateClass;
-#endif
-    return *this;
-  }
-
-  // Decimal places to display. 0 is a real instruction - show it as an integer -
-  // and not the same as saying nothing, which is why it needs its own flag bit
-  // where the state class encodes its own absence.
-  BlaeckSignalRef &withDisplayPrecision(uint8_t decimals)
-  {
-#if BLAECK_ENABLE_SIGNAL_META
-    if (Signal *s = _signal())
-    {
-      s->DisplayPrecision = decimals;
-      s->MetaFlags |= BLAECK_SIG_HAS_DISPLAY_PRECISION;
-    }
-#else
-    (void)decimals;
-#endif
-    return *this;
-  }
-
-  // Moves the entity off Home Assistant's auto-generated dashboards, for a value
-  // that describes the device rather than what it measures.
-  BlaeckSignalRef &diagnostic(bool on = true) { return _setBit(BLAECK_SIG_DIAGNOSTIC, on); }
-
-  // Registers the entity but leaves it switched off until someone enables it.
-  BlaeckSignalRef &disabledByDefault(bool on = true) { return _setBit(BLAECK_SIG_DISABLED_BY_DEFAULT, on); }
-
-  // Report every reading, even one identical to the last.
-  BlaeckSignalRef &forceUpdate(bool on = true) { return _setBit(BLAECK_SIG_FORCE_UPDATE, on); }
-
-private:
   // The signal this handle names, or nullptr when the table was full - which is
-  // what makes every method above safe to call unconditionally.
+  // what makes every method safe to call unconditionally.
   Signal *_signal() const
   {
     if (_owner == nullptr || _index < 0 || _owner->Signals == nullptr)
@@ -1518,7 +1463,7 @@ private:
     return &_owner->Signals[_index];
   }
 
-  BlaeckSignalRef &_setFlash(const __FlashStringHelper *value, uint16_t bit)
+  void _setFlash(const __FlashStringHelper *value, uint16_t bit)
   {
 #if BLAECK_ENABLE_SIGNAL_META
     if (Signal *s = _signal())
@@ -1539,10 +1484,9 @@ private:
     (void)value;
     (void)bit;
 #endif
-    return *this;
   }
 
-  BlaeckSignalRef &_setBit(uint16_t bit, bool on)
+  void _setBit(uint16_t bit, bool on)
   {
 #if BLAECK_ENABLE_SIGNAL_META
     if (Signal *s = _signal())
@@ -1556,11 +1500,126 @@ private:
     (void)bit;
     (void)on;
 #endif
-    return *this;
+  }
+
+  void _setStateClass(BlaeckStateClass stateClass)
+  {
+#if BLAECK_ENABLE_SIGNAL_META
+    if (Signal *s = _signal())
+    {
+      s->MetaFlags &= (uint16_t)~BLAECK_SIG_STATE_CLASS_MASK;
+      s->MetaFlags |= (uint16_t)(((uint16_t)stateClass << BLAECK_SIG_STATE_CLASS_SHIFT) &
+                                 BLAECK_SIG_STATE_CLASS_MASK);
+    }
+#else
+    (void)stateClass;
+#endif
+  }
+
+  void _setDisplayPrecision(uint8_t decimals)
+  {
+#if BLAECK_ENABLE_SIGNAL_META
+    if (Signal *s = _signal())
+    {
+      s->DisplayPrecision = decimals;
+      s->MetaFlags |= BLAECK_SIG_HAS_DISPLAY_PRECISION;
+    }
+#else
+    (void)decimals;
+#endif
   }
 
   BlaeckSerial *_owner;
   int16_t _index;
+};
+
+// What every signal accepts, whatever it holds. Repeated per handle so the chain keeps its
+// datatype all the way down, and so an editor offers exactly what applies when the dot is typed.
+#define BLAECK_SIGNAL_REF_SHARED(TYPE)                                                    \
+  /* What the value measures, e.g. F("temperature"). Home Assistant's vocabulary, */      \
+  /* carried as written: this library does not hold the list, because the list grows */   \
+  /* faster than firmware is reflashed. */                                                \
+  TYPE &withDeviceClass(const __FlashStringHelper *deviceClass)                           \
+  {                                                                                       \
+    _setFlash(deviceClass, BLAECK_SIG_HAS_DEVICE_CLASS);                                  \
+    return *this;                                                                         \
+  }                                                                                       \
+  /* Material Design Icons name, e.g. F("mdi:sine-wave"). */                              \
+  TYPE &withIcon(const __FlashStringHelper *icon)                                         \
+  {                                                                                       \
+    _setFlash(icon, BLAECK_SIG_HAS_ICON);                                                 \
+    return *this;                                                                         \
+  }                                                                                       \
+  /* Moves the entity off Home Assistant's auto-generated dashboards, for a value that */ \
+  /* describes the device rather than what it measures. */                                \
+  TYPE &diagnostic(bool on = true) { return _setBit(BLAECK_SIG_DIAGNOSTIC, on), *this; }  \
+  /* Registers the entity but leaves it switched off until someone enables it. */         \
+  TYPE &disabledByDefault(bool on = true)                                                 \
+  {                                                                                       \
+    _setBit(BLAECK_SIG_DISABLED_BY_DEFAULT, on);                                          \
+    return *this;                                                                         \
+  }                                                                                       \
+  /* Report every reading, even one identical to the last. */                             \
+  TYPE &forceUpdate(bool on = true)                                                       \
+  {                                                                                       \
+    _setBit(BLAECK_SIG_FORCE_UPDATE, on);                                                 \
+    return *this;                                                                         \
+  }
+
+// Any of the nine numeric datatypes. The only shape with decimals to show and a value that
+// accumulates, so it is the only one carrying a state class or a display precision.
+class BlaeckNumericSignalRef : public BlaeckSignalRefBase
+{
+public:
+  BlaeckNumericSignalRef(BlaeckSerial *owner, int16_t index) : BlaeckSignalRefBase(owner, index) {}
+  BLAECK_SIGNAL_REF_SHARED(BlaeckNumericSignalRef)
+
+  // Symbol shown after the value, e.g. F("Hz"). Non-ASCII must be UTF-8:
+  // F("\xC2\xB0" "C") is the degree sign followed by C.
+  BlaeckNumericSignalRef &withUnit(const __FlashStringHelper *unit)
+  {
+    _setFlash(unit, BLAECK_SIG_HAS_UNIT);
+    return *this;
+  }
+
+  BlaeckNumericSignalRef &withStateClass(BlaeckStateClass stateClass)
+  {
+    _setStateClass(stateClass);
+    return *this;
+  }
+
+  // Decimal places to display. 0 is a real instruction - show it as an integer - and not the
+  // same as saying nothing, which is why it needs its own flag bit where the state class
+  // encodes its own absence.
+  BlaeckNumericSignalRef &withDisplayPrecision(uint8_t decimals)
+  {
+    _setDisplayPrecision(decimals);
+    return *this;
+  }
+};
+
+// A string signal. It keeps a unit, because a device that formats a number into text may still
+// want one, but it has no decimals to round and nothing to keep statistics on.
+class BlaeckTextSignalRef : public BlaeckSignalRefBase
+{
+public:
+  BlaeckTextSignalRef(BlaeckSerial *owner, int16_t index) : BlaeckSignalRefBase(owner, index) {}
+  BLAECK_SIGNAL_REF_SHARED(BlaeckTextSignalRef)
+
+  BlaeckTextSignalRef &withUnit(const __FlashStringHelper *unit)
+  {
+    _setFlash(unit, BLAECK_SIG_HAS_UNIT);
+    return *this;
+  }
+};
+
+// A bool signal, which a host announces as a binary sensor - a shape with no unit at all, on
+// top of having no decimals and no statistics.
+class BlaeckBoolSignalRef : public BlaeckSignalRefBase
+{
+public:
+  BlaeckBoolSignalRef(BlaeckSerial *owner, int16_t index) : BlaeckSignalRefBase(owner, index) {}
+  BLAECK_SIGNAL_REF_SHARED(BlaeckBoolSignalRef)
 };
 
 // Handle to the channel just declared. Returned by value and meant to be chained, not stored;

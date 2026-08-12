@@ -67,18 +67,22 @@ reads from the `0xF0` Signal Config frame:
 Every call is optional and the order does not matter. A signal that describes nothing
 gets no entry in the frame and costs nothing on the wire.
 
-| Method | |
-|--------|--|
-| `withUnit(F("Hz"))` | Symbol shown after the value. Non-ASCII must be UTF-8 |
-| `withDeviceClass(F("temperature"))` | What the value measures |
-| `withIcon(F("mdi:sine-wave"))` | Material Design Icons name |
-| `withStateClass(...)` | `BLAECK_STATE_CLASS_MEASUREMENT`, `_TOTAL` or `_TOTAL_INCREASING`. Left out means no statistics are kept |
-| `withDisplayPrecision(1)` | Decimal places. `0` means show it as an integer |
-| `diagnostic()` | Describes the device rather than what it measures |
-| `disabledByDefault()` | Registered, but switched off until someone enables it |
-| `forceUpdate()` | Report every reading, even one identical to the last |
+| Method | | Numeric | Text | Bool |
+|--------|--|:-:|:-:|:-:|
+| `withUnit(F("Hz"))` | Symbol shown after the value. Non-ASCII must be UTF-8 | ● | ● | |
+| `withDeviceClass(F("temperature"))` | What the value measures | ● | ● | ● |
+| `withIcon(F("mdi:sine-wave"))` | Material Design Icons name | ● | ● | ● |
+| `withStateClass(...)` | `BLAECK_STATE_CLASS_MEASUREMENT`, `_TOTAL` or `_TOTAL_INCREASING`. Left out means no statistics are kept | ● | | |
+| `withDisplayPrecision(1)` | Decimal places. `0` means show it as an integer | ● | | |
+| `diagnostic()` | Describes the device rather than what it measures | ● | ● | ● |
+| `disabledByDefault()` | Registered, but switched off until someone enables it | ● | ● | ● |
+| `forceUpdate()` | Report every reading, even one identical to the last | ● | ● | ● |
 
 The three booleans take an argument, so `diagnostic(isDebugBuild)` works as well.
+
+Each datatype returns its own handle, so a modifier that cannot mean anything for that signal
+does not compile: a string has no decimals and no statistics, and a bool becomes a
+`binary_sensor`, which has no unit either.
 
 Metadata costs about 9 bytes of SRAM per signal. Set `BLAECK_ENABLE_SIGNAL_META` to `0`
 to drop it: the methods still compile and store nothing, so no `#ifdef` is needed.

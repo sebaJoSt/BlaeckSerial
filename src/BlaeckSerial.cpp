@@ -49,14 +49,14 @@ void BlaeckSerial::begin(Stream *Ref, unsigned int size, Stream *DebugRef)
     _bufAllocate();
 }
 
-BlaeckSignalRef BlaeckSerial::_registerSignal(const String &signalName, dataType type, void *address)
+int BlaeckSerial::_registerSignal(const String &signalName, dataType type, void *address)
 {
   if (Signals == nullptr || static_cast<unsigned int>(_signalIndex) >= _signalCapacity)
   {
     _signalRegistrationFailed = true;
     _rejectedSignalCount++;
-    // Dead handle: the chain that follows compiles and runs and stores nothing.
-    return BlaeckSignalRef(this, -1);
+    // -1 gives a dead handle: the chain that follows compiles and runs and stores nothing.
+    return -1;
   }
   setSignalName(_signalIndex, signalName);
   Signals[_signalIndex].DataType = type;
@@ -74,69 +74,69 @@ BlaeckSignalRef BlaeckSerial::_registerSignal(const String &signalName, dataType
   _signalIndex++;
   SignalCount = _signalIndex;
   _schemaHash = _computeSchemaHash();
-  return BlaeckSignalRef(this, added);
+  return added;
 }
 
-BlaeckSignalRef BlaeckSerial::addSignal(String signalName, bool *value)
+BlaeckBoolSignalRef BlaeckSerial::addSignal(String signalName, bool *value)
 {
-  return _registerSignal(signalName, Blaeck_bool, value);
+  return BlaeckBoolSignalRef(this, (int16_t)_registerSignal(signalName, Blaeck_bool, value));
 }
 
-BlaeckSignalRef BlaeckSerial::addSignal(String signalName, byte *value)
+BlaeckNumericSignalRef BlaeckSerial::addSignal(String signalName, byte *value)
 {
-  return _registerSignal(signalName, Blaeck_byte, value);
+  return BlaeckNumericSignalRef(this, (int16_t)_registerSignal(signalName, Blaeck_byte, value));
 }
 
-BlaeckSignalRef BlaeckSerial::addSignal(String signalName, short *value)
+BlaeckNumericSignalRef BlaeckSerial::addSignal(String signalName, short *value)
 {
-  return _registerSignal(signalName, Blaeck_short, value);
+  return BlaeckNumericSignalRef(this, (int16_t)_registerSignal(signalName, Blaeck_short, value));
 }
 
-BlaeckSignalRef BlaeckSerial::addSignal(String signalName, unsigned short *value)
+BlaeckNumericSignalRef BlaeckSerial::addSignal(String signalName, unsigned short *value)
 {
-  return _registerSignal(signalName, Blaeck_ushort, value);
+  return BlaeckNumericSignalRef(this, (int16_t)_registerSignal(signalName, Blaeck_ushort, value));
 }
 
-BlaeckSignalRef BlaeckSerial::addSignal(String signalName, int *value)
+BlaeckNumericSignalRef BlaeckSerial::addSignal(String signalName, int *value)
 {
-  return _registerSignal(signalName, Blaeck_int, value);
+  return BlaeckNumericSignalRef(this, (int16_t)_registerSignal(signalName, Blaeck_int, value));
 }
 
-BlaeckSignalRef BlaeckSerial::addSignal(String signalName, unsigned int *value)
+BlaeckNumericSignalRef BlaeckSerial::addSignal(String signalName, unsigned int *value)
 {
-  return _registerSignal(signalName, Blaeck_uint, value);
+  return BlaeckNumericSignalRef(this, (int16_t)_registerSignal(signalName, Blaeck_uint, value));
 }
 
-BlaeckSignalRef BlaeckSerial::addSignal(String signalName, long *value)
+BlaeckNumericSignalRef BlaeckSerial::addSignal(String signalName, long *value)
 {
-  return _registerSignal(signalName, Blaeck_long, value);
+  return BlaeckNumericSignalRef(this, (int16_t)_registerSignal(signalName, Blaeck_long, value));
 }
 
-BlaeckSignalRef BlaeckSerial::addSignal(String signalName, unsigned long *value)
+BlaeckNumericSignalRef BlaeckSerial::addSignal(String signalName, unsigned long *value)
 {
-  return _registerSignal(signalName, Blaeck_ulong, value);
+  return BlaeckNumericSignalRef(this, (int16_t)_registerSignal(signalName, Blaeck_ulong, value));
 }
 
-BlaeckSignalRef BlaeckSerial::addSignal(String signalName, float *value)
+BlaeckNumericSignalRef BlaeckSerial::addSignal(String signalName, float *value)
 {
-  return _registerSignal(signalName, Blaeck_float, value);
+  return BlaeckNumericSignalRef(this, (int16_t)_registerSignal(signalName, Blaeck_float, value));
 }
 
-BlaeckSignalRef BlaeckSerial::addSignal(String signalName, double *value)
+BlaeckNumericSignalRef BlaeckSerial::addSignal(String signalName, double *value)
 {
 #ifdef __AVR__
   /*On the Uno and other ATMEGA based boards, the double implementation occupies 4 bytes
   and is exactly the same as the float, with no gain in precision.*/
-  return _registerSignal(signalName, Blaeck_float, value);
+  return BlaeckNumericSignalRef(this, (int16_t)_registerSignal(signalName, Blaeck_float, value));
 #else
-  return _registerSignal(signalName, Blaeck_double, value);
+  return BlaeckNumericSignalRef(this, (int16_t)_registerSignal(signalName, Blaeck_double, value));
 #endif
 }
 
-BlaeckSignalRef BlaeckSerial::addSignal(String signalName, const char *value)
+BlaeckTextSignalRef BlaeckSerial::addSignal(String signalName, const char *value)
 {
   // Address is void* for every datatype; a string address is only ever read from.
-  return _registerSignal(signalName, Blaeck_string, const_cast<char *>(value));
+  return BlaeckTextSignalRef(this, (int16_t)_registerSignal(signalName, Blaeck_string, const_cast<char *>(value)));
 }
 
 void BlaeckSerial::deleteSignals()
