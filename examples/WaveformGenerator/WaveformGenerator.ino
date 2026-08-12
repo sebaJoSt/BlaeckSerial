@@ -3,10 +3,10 @@
 
   A dashboard-friendly demo: BlaeckSerial -> Loggbok (MQTT bridge) -> Home Assistant (MQTT Discovery).
 
-  One fully controllable waveform, driven entirely over MQTT. Commands are registered with
-  the typed helpers (onNumberCommand / onSelectCommand / onSwitchCommand / onTextCommand /
-  onButtonCommand), so the device is self-describing: it advertises range, unit, options and
-  the mirrored signal, which Loggbok turns into Home Assistant MQTT Discovery entities.
+  One fully controllable waveform, driven entirely over MQTT. The device describes what it
+  exposes - its signals, controls, messages and events - and Loggbok turns that into Home
+  Assistant MQTT Discovery entities, so a dashboard comes from the sketch rather than being
+  built by hand.
 
   Registers 7 commands. Small AVRs (Uno/Nano) default to 6 (raise BLAECK_COMMAND_MAX_HANDLERS_DEFAULT
   or drop one).
@@ -27,6 +27,9 @@
     SET_ENABLE  switch  off -> Output = Offset          state: Enabled signal
     SET_LABEL   text    max 32 bytes, config category   state: DeviceLabel signal
     STATUS      button  writes the StatusOnDemand channel
+
+  Signals that describe themselves (the other five declare nothing, and cost nothing):
+    Output      measurement, 3 decimals, mdi:sine-wave
 
   --- HOW A CONTROL GETS ITS VALUE BACK ---
 
@@ -81,8 +84,7 @@ void setup()
   BlaeckSerial.DeviceHWVersion = "Arduino Mega 2560 Rev3";
   BlaeckSerial.DeviceFWVersion = "1.0";
 
-  // addSignal() returns a handle describing how a host shows the signal. Every call is
-  // optional; the five signals below declare nothing and are left out of the 0xF0 frame.
+  // addSignal() returns a handle describing how a host shows the signal. Every call is optional.
   BlaeckSerial.addSignal("Output", &Output)
       .withStateClass(BLAECK_STATE_CLASS_MEASUREMENT)
       .withDisplayPrecision(3)
