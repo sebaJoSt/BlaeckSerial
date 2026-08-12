@@ -31,11 +31,14 @@ void setup()
   BlaeckSerial.DeviceHWVersion = "Arduino Mega 2560 Rev3";
   BlaeckSerial.DeviceFWVersion = ExampleVersion;
 
-  // Add signals to BlaeckSerial
+  // Add signals to BlaeckSerial. One reused stack buffer rather than a String per name:
+  // at 200 signals the concatenation would allocate and free its way through the heap
+  // before any of it is stored.
+  char signalName[10]; // fits "Sine_200"
   for (int i = 1; i <= 200; i++)
   {
-    String signalName = "Sine_";
-    BlaeckSerial.addSignal(signalName + i, &sine);
+    snprintf(signalName, sizeof(signalName), "Sine_%d", i);
+    BlaeckSerial.addSignal(signalName, &sine);
   }
 
   /*Uncomment for fixed interval lock (ms)

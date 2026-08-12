@@ -154,15 +154,16 @@ void UpdateLoggingSignals()
   BlaeckSerial.addSignal("Signal_First", &signalFirst);
   BlaeckSerial.addSignal("Signal_Last", &signalLast);
 
+  // The name is a literal plus a counter, so one reused stack buffer builds it without a
+  // String per signal - this runs again on every range change, and the churn is what
+  // fragments the heap.
+  char signalName[10]; // fits "Sine_" plus MAXIMUM_SIGNALS
   for (int i = 1; i <= MAXIMUM_SIGNALS; i++)
   {
     if (sine[i].isActivated)
     {
-      // Builds a String per active signal. A fixed name could be wrapped in
-      // F() to keep the literal out of RAM (see Basic), but these are
-      // generated at runtime, so there is no literal to move to flash.
-      String signalName = "Sine_";
-      BlaeckSerial.addSignal(signalName + i, &sine[i].value);
+      snprintf(signalName, sizeof(signalName), "Sine_%d", i);
+      BlaeckSerial.addSignal(signalName, &sine[i].value);
     }
   }
 }
