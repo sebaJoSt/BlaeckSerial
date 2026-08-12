@@ -1636,6 +1636,9 @@ public:
 
 // A string signal. No unit, no decimals to round and nothing to keep statistics on: all three
 // tell Home Assistant the state is a number, and it then refuses the text.
+//
+// Mirrors BlaeckMessageChannelRef: a string signal and a message channel become the same Home
+// Assistant entity, so they carry the same fields. Change one, change the other.
 class BlaeckTextSignalRef : public BlaeckSignalRefBase
 {
 public:
@@ -1669,6 +1672,11 @@ public:
 // hasRejectedChannels() is where that shows up. The methods are always defined - with
 // BLAECK_ENABLE_MESSAGES=0 or BLAECK_ENABLE_EVENTS=0 they store nothing, so a sketch needs no
 // #ifdef.
+//
+// Mirrors BlaeckTextSignalRef: a message channel and a string signal become the same Home
+// Assistant entity, so they carry the same fields. Change one, change the other. The five
+// shared modifiers are spelled out here rather than taken from BLAECK_SIGNAL_REF_SHARED,
+// because a channel keeps plain members where a signal keeps a flag word.
 class BlaeckMessageChannelRef
 {
 public:
