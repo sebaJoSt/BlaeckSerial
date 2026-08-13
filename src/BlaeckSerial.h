@@ -257,6 +257,23 @@ enum BlaeckStateChannelFlag
 };
 static const byte BLAECK_SCH_STATE_CLASS_SHIFT = 8;
 
+#if BLAECK_ENABLE_SIGNAL_META
+// What a signal says about itself beyond its name and datatype: everything the 0xF0
+// Signal Metadata frame carries. Kept out of the signal entry and allocated only when
+// a sketch describes a signal, because most signals describe nothing and this record
+// is bigger than the entry that would otherwise hold it.
+struct SignalMeta
+{
+  // Flash pointers, so a declared unit costs 2 bytes of SRAM and not its length.
+  const __FlashStringHelper *Unit = nullptr;
+  const __FlashStringHelper *DeviceClass = nullptr;
+  const __FlashStringHelper *Icon = nullptr;
+  const __FlashStringHelper *Options = nullptr;
+  uint16_t MetaFlags = 0;
+  uint8_t DisplayPrecision = 0;
+};
+#endif
+
 struct Signal
 {
   // Either a copy this library owns, or a pointer into flash when the sketch named the
@@ -269,13 +286,8 @@ struct Signal
   bool Updated = false;
   bool NameInFlash = false;
 #if BLAECK_ENABLE_SIGNAL_META
-  // Flash pointers, so a declared unit costs 2 bytes of SRAM and not its length.
-  const __FlashStringHelper *Unit = nullptr;
-  const __FlashStringHelper *DeviceClass = nullptr;
-  const __FlashStringHelper *Icon = nullptr;
-  const __FlashStringHelper *Options = nullptr;
-  uint16_t MetaFlags = 0;
-  uint8_t DisplayPrecision = 0;
+  // Null until the sketch describes this signal. Owned by the entry; see _ensureSignalMeta.
+  SignalMeta *Meta = nullptr;
 #endif
 };
 
@@ -857,10 +869,18 @@ private:
   // flash is. Frees whatever copy the slot held, so a reused slot cannot leak and the two
   // kinds cannot be mixed up. One of the two arguments is null.
   void _setSignalName(int signalIndex, const char *ram, const __FlashStringHelper *flash);
-  // Frees every name the signal table owns. Flash names own nothing, so they are skipped.
+  // Frees everything the signal table owns and the table itself does not hold: name
+  // copies - flash names own nothing, so they are skipped - and metadata records.
   // Walks the table by _signalCapacity, so it must run while that still describes the
   // allocated table - before begin() resets the capacity for the next one.
-  void _freeSignalNames();
+  void _freeSignalOwned();
+#if BLAECK_ENABLE_SIGNAL_META
+  // The metadata record for a signal, allocated on first use, because a signal that
+  // describes nothing should not pay for the fields that would describe it. Returns null
+  // when the handle is dead or there is no room, which every caller treats as "store
+  // nothing" - the signal itself is unaffected either way.
+  SignalMeta *_ensureSignalMeta(int16_t index);
+#endif
   // The two kinds, read the one way that is right for each. Every use of a name goes
   // through these: the schema hash, both catalog writers, and the by-name lookups.
   bool _signalNameEquals(const Signal &s, const char *name) const;
@@ -990,6 +1010,12 @@ private:
   unsigned int _signalCapacity = 0;
   bool _signalRegistrationFailed = false;
   uint16_t _rejectedSignalCount = 0;
+#if BLAECK_ENABLE_SIGNAL_META
+  // Metadata records are allocated as they are described, so a heap too full costs a
+  // description rather than a signal. No table size cures it, which is why it is
+  // counted apart from the others and reported in its own words.
+  uint16_t _rejectedSignalMetaCount = 0;
+#endif
   uint16_t _rejectedCommandCount = 0;
   uint16_t _rejectedStateChannelCount = 0;
   uint16_t _rejectedEventChannelCount = 0;
@@ -1873,31 +1899,22 @@ class BlaeckSignalRefBase
 protected:
   BlaeckSignalRefBase(BlaeckSerial *owner, int16_t index) : _owner(owner), _index(index) {}
 
-  // The signal this handle names, or nullptr when the table was full - which is
-  // what makes every method safe to call unconditionally.
-  Signal *_signal() const
-  {
-    if (_owner == nullptr || _index < 0 || _owner->Signals == nullptr)
-      return nullptr;
-    return &_owner->Signals[_index];
-  }
-
   void _setFlash(const __FlashStringHelper *value, uint16_t bit)
   {
 #if BLAECK_ENABLE_SIGNAL_META
-    if (Signal *s = _signal())
+    if (SignalMeta *m = _owner != nullptr ? _owner->_ensureSignalMeta(_index) : nullptr)
     {
       // Together, so the bit and the field can never disagree.
       switch (bit)
       {
-      case BLAECK_SIG_HAS_UNIT:         s->Unit = value; break;
-      case BLAECK_SIG_HAS_DEVICE_CLASS: s->DeviceClass = value; break;
-      default:                          s->Icon = value; break;
+      case BLAECK_SIG_HAS_UNIT:         m->Unit = value; break;
+      case BLAECK_SIG_HAS_DEVICE_CLASS: m->DeviceClass = value; break;
+      default:                          m->Icon = value; break;
       }
       if (value != nullptr)
-        s->MetaFlags |= bit;
+        m->MetaFlags |= bit;
       else
-        s->MetaFlags &= (uint16_t)~bit;
+        m->MetaFlags &= (uint16_t)~bit;
     }
 #else
     (void)value;
@@ -1908,12 +1925,12 @@ protected:
   void _setBit(uint16_t bit, bool on)
   {
 #if BLAECK_ENABLE_SIGNAL_META
-    if (Signal *s = _signal())
+    if (SignalMeta *m = _owner != nullptr ? _owner->_ensureSignalMeta(_index) : nullptr)
     {
       if (on)
-        s->MetaFlags |= bit;
+        m->MetaFlags |= bit;
       else
-        s->MetaFlags &= (uint16_t)~bit;
+        m->MetaFlags &= (uint16_t)~bit;
     }
 #else
     (void)bit;
@@ -1924,10 +1941,10 @@ protected:
   void _setStateClass(BlaeckStateClass stateClass)
   {
 #if BLAECK_ENABLE_SIGNAL_META
-    if (Signal *s = _signal())
+    if (SignalMeta *m = _owner != nullptr ? _owner->_ensureSignalMeta(_index) : nullptr)
     {
-      s->MetaFlags &= (uint16_t)~BLAECK_SIG_STATE_CLASS_MASK;
-      s->MetaFlags |= (uint16_t)(((uint16_t)stateClass << BLAECK_SIG_STATE_CLASS_SHIFT) &
+      m->MetaFlags &= (uint16_t)~BLAECK_SIG_STATE_CLASS_MASK;
+      m->MetaFlags |= (uint16_t)(((uint16_t)stateClass << BLAECK_SIG_STATE_CLASS_SHIFT) &
                                  BLAECK_SIG_STATE_CLASS_MASK);
     }
 #else
@@ -1938,13 +1955,13 @@ protected:
   void _setOptions(const __FlashStringHelper *optionsCsv)
   {
 #if BLAECK_ENABLE_SIGNAL_META
-    if (Signal *s = _signal())
+    if (SignalMeta *m = _owner != nullptr ? _owner->_ensureSignalMeta(_index) : nullptr)
     {
-      s->Options = optionsCsv;
+      m->Options = optionsCsv;
       if (optionsCsv != nullptr)
-        s->MetaFlags |= BLAECK_SIG_HAS_OPTIONS;
+        m->MetaFlags |= BLAECK_SIG_HAS_OPTIONS;
       else
-        s->MetaFlags &= (uint16_t)~BLAECK_SIG_HAS_OPTIONS;
+        m->MetaFlags &= (uint16_t)~BLAECK_SIG_HAS_OPTIONS;
     }
 #else
     (void)optionsCsv;
@@ -1954,10 +1971,10 @@ protected:
   void _setDisplayPrecision(uint8_t decimals)
   {
 #if BLAECK_ENABLE_SIGNAL_META
-    if (Signal *s = _signal())
+    if (SignalMeta *m = _owner != nullptr ? _owner->_ensureSignalMeta(_index) : nullptr)
     {
-      s->DisplayPrecision = decimals;
-      s->MetaFlags |= BLAECK_SIG_HAS_DISPLAY_PRECISION;
+      m->DisplayPrecision = decimals;
+      m->MetaFlags |= BLAECK_SIG_HAS_DISPLAY_PRECISION;
     }
 #else
     (void)decimals;

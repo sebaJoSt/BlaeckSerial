@@ -13,8 +13,9 @@ BlaeckSerial::BlaeckSerial()
 
 BlaeckSerial::~BlaeckSerial()
 {
-  // Names first: the entries own them, and freeing the table would lose the pointers.
-  _freeSignalNames();
+  // Names and metadata first: the entries own them, and freeing the table would lose
+  // the pointers.
+  _freeSignalOwned();
   delete[] Signals;
   Signals = nullptr;
   delete[] _commandHandlers;
@@ -35,11 +36,11 @@ BlaeckSerial::~BlaeckSerial()
 BlaeckBeginRef BlaeckSerial::begin(Stream *Ref)
 {
   StreamRef = (Stream *)Ref;
-  // Torn down before the capacity changes: _freeSignalNames() walks the table by
+  // Torn down before the capacity changes: _freeSignalOwned() walks the table by
   // _signalCapacity, so that member has to still describe the table that exists.
   if (Signals != nullptr)
   {
-    _freeSignalNames();
+    _freeSignalOwned();
     delete[] Signals;
     Signals = nullptr;
   }
@@ -49,6 +50,9 @@ BlaeckBeginRef BlaeckSerial::begin(Stream *Ref)
   _schemaHash = 0;
   _signalRegistrationFailed = false;
   _rejectedSignalCount = 0;
+#if BLAECK_ENABLE_SIGNAL_META
+  _rejectedSignalMetaCount = 0;
+#endif
 
   // No table is built here. Each one is allocated by the first entry added to
   // it, so a sketch pays for the tables it uses and the chain this returns can
@@ -65,6 +69,10 @@ bool BlaeckSerial::hasRejections() const
 {
   if (_rejectedSignalCount > 0 || _rejectedCommandCount > 0)
     return true;
+#if BLAECK_ENABLE_SIGNAL_META
+  if (_rejectedSignalMetaCount > 0)
+    return true;
+#endif
 #if BLAECK_ENABLE_STATE_CHANNELS
   if (_rejectedStateChannelCount > 0)
     return true;
@@ -124,6 +132,17 @@ bool BlaeckSerial::printRejections(Stream *out)
   // The debug stream is where the individual reason was given.
   out->println(F("  (a name too long or already taken counts here too - "
                  "withDebugStream() names each one)"));
+#if BLAECK_ENABLE_SIGNAL_META
+  // Not a table that ran out but the heap, so no chain call is suggested: the signals
+  // are all there and sending fine, only what they say about themselves is missing.
+  if (_rejectedSignalMetaCount > 0)
+  {
+    out->print(F("  "));
+    out->print(_rejectedSignalMetaCount);
+    out->println(F(" signal description(s) dropped, out of heap - the signals themselves "
+                   "are unaffected"));
+  }
+#endif
   return true;
 }
 
@@ -362,14 +381,14 @@ int BlaeckSerial::_registerSignalCommon(const char *ram, const __FlashStringHelp
   Signals[_signalIndex].DataType = type;
   Signals[_signalIndex].Address = address;
 #if BLAECK_ENABLE_SIGNAL_META
-  // deleteSignals() only rewinds the index, so a slot can be written twice.
-  // Cleared on registration rather than on deletion, which covers both.
-  Signals[_signalIndex].Unit = nullptr;
-  Signals[_signalIndex].DeviceClass = nullptr;
-  Signals[_signalIndex].Icon = nullptr;
-  Signals[_signalIndex].Options = nullptr;
-  Signals[_signalIndex].MetaFlags = 0;
-  Signals[_signalIndex].DisplayPrecision = 0;
+  // deleteSignals() only rewinds the index, so a slot can be written twice. Cleared on
+  // registration rather than on deletion, which covers both - and the record the slot
+  // may still hold from its last life is given back rather than leaked.
+  if (Signals[_signalIndex].Meta != nullptr)
+  {
+    delete Signals[_signalIndex].Meta;
+    Signals[_signalIndex].Meta = nullptr;
+  }
 #endif
   int16_t added = (int16_t)_signalIndex;
   _signalIndex++;
@@ -503,11 +522,18 @@ BlaeckTextSignalRef BlaeckSerial::addSignal(const __FlashStringHelper *signalNam
 
 void BlaeckSerial::deleteSignals()
 {
+  // The slots are given back as well as rewound: a name copy and a metadata record are
+  // heap the entries own, and holding them until the next sketch happens to reuse the
+  // slot would keep memory that nothing can reach.
+  _freeSignalOwned();
   _signalIndex = 0;
   SignalCount = _signalIndex;
   _schemaHash = 0;
   _signalRegistrationFailed = false;
   _rejectedSignalCount = 0;
+#if BLAECK_ENABLE_SIGNAL_META
+  _rejectedSignalMetaCount = 0;
+#endif
 }
 
 uint16_t BlaeckSerial::_computeSchemaHash()
@@ -567,7 +593,7 @@ void BlaeckSerial::_setSignalName(int signalIndex, const char *ram, const __Flas
   // datatype and its address are all still good, and _signalName* reads null as "".
 }
 
-void BlaeckSerial::_freeSignalNames()
+void BlaeckSerial::_freeSignalOwned()
 {
   if (Signals == nullptr)
     return;
@@ -577,8 +603,32 @@ void BlaeckSerial::_freeSignalNames()
       free((void *)Signals[i].SignalName);
     Signals[i].SignalName = nullptr;
     Signals[i].NameInFlash = false;
+#if BLAECK_ENABLE_SIGNAL_META
+    delete Signals[i].Meta;
+    Signals[i].Meta = nullptr;
+#endif
   }
 }
+
+#if BLAECK_ENABLE_SIGNAL_META
+SignalMeta *BlaeckSerial::_ensureSignalMeta(int16_t index)
+{
+  // A dead handle - the table was full when the signal was added - has nowhere to store
+  // anything, which is what lets a chain be written without checking it first.
+  if (index < 0 || Signals == nullptr || static_cast<unsigned int>(index) >= _signalCapacity)
+    return nullptr;
+  Signal &s = Signals[index];
+  if (s.Meta == nullptr)
+  {
+    // Whichever new the core provides: a throwing one gives a record or does not
+    // return, a nothrow one gives null, and null is handled either way.
+    s.Meta = new (std::nothrow) SignalMeta();
+    if (s.Meta == nullptr)
+      _rejectedSignalMetaCount++;
+  }
+  return s.Meta;
+}
+#endif
 
 bool BlaeckSerial::_signalNameEquals(const Signal &s, const char *name) const
 {
@@ -4235,26 +4285,28 @@ void BlaeckSerial::writeSignalConfigFrame(unsigned long msg_id)
 
     for (int i = 0; i < _signalIndex; i++)
     {
-      Signal &s = Signals[i];
-      if (s.MetaFlags == 0)
+      const SignalMeta *m = Signals[i].Meta;
+      // No record, or one that ended up saying nothing - diagnostic(false) alone builds
+      // one - is the ordinary case, and the frame carries no entry for it.
+      if (m == nullptr || m->MetaFlags == 0)
         continue;
 
       uint16_t symbolId = (uint16_t)i;
       _bufByte((byte)(symbolId & 0xFF));
       _bufByte((byte)((symbolId >> 8) & 0xFF));
-      _bufByte((byte)(s.MetaFlags & 0xFF));
-      _bufByte((byte)((s.MetaFlags >> 8) & 0xFF));
+      _bufByte((byte)(m->MetaFlags & 0xFF));
+      _bufByte((byte)((m->MetaFlags >> 8) & 0xFF));
 
-      if (s.MetaFlags & BLAECK_SIG_HAS_UNIT)
-        _bufFlashStr0(s.Unit);
-      if (s.MetaFlags & BLAECK_SIG_HAS_DEVICE_CLASS)
-        _bufFlashStr0(s.DeviceClass);
-      if (s.MetaFlags & BLAECK_SIG_HAS_ICON)
-        _bufFlashStr0(s.Icon);
-      if (s.MetaFlags & BLAECK_SIG_HAS_DISPLAY_PRECISION)
-        _bufByte(s.DisplayPrecision);
-      if (s.MetaFlags & BLAECK_SIG_HAS_OPTIONS)
-        _bufFlashStr0(s.Options);
+      if (m->MetaFlags & BLAECK_SIG_HAS_UNIT)
+        _bufFlashStr0(m->Unit);
+      if (m->MetaFlags & BLAECK_SIG_HAS_DEVICE_CLASS)
+        _bufFlashStr0(m->DeviceClass);
+      if (m->MetaFlags & BLAECK_SIG_HAS_ICON)
+        _bufFlashStr0(m->Icon);
+      if (m->MetaFlags & BLAECK_SIG_HAS_DISPLAY_PRECISION)
+        _bufByte(m->DisplayPrecision);
+      if (m->MetaFlags & BLAECK_SIG_HAS_OPTIONS)
+        _bufFlashStr0(m->Options);
     }
 
     _bufFooter();
@@ -4272,36 +4324,36 @@ void BlaeckSerial::writeSignalConfigFrame(unsigned long msg_id)
 
     for (int i = 0; i < _signalIndex; i++)
     {
-      Signal &s = Signals[i];
-      if (s.MetaFlags == 0)
+      const SignalMeta *m = Signals[i].Meta;
+      if (m == nullptr || m->MetaFlags == 0)
         continue;
 
       uint16_t symbolId = (uint16_t)i;
       StreamRef->write((byte)(symbolId & 0xFF));
       StreamRef->write((byte)((symbolId >> 8) & 0xFF));
-      StreamRef->write((byte)(s.MetaFlags & 0xFF));
-      StreamRef->write((byte)((s.MetaFlags >> 8) & 0xFF));
+      StreamRef->write((byte)(m->MetaFlags & 0xFF));
+      StreamRef->write((byte)((m->MetaFlags >> 8) & 0xFF));
 
-      if (s.MetaFlags & BLAECK_SIG_HAS_UNIT)
+      if (m->MetaFlags & BLAECK_SIG_HAS_UNIT)
       {
-        StreamRef->print(s.Unit);
+        StreamRef->print(m->Unit);
         StreamRef->print('\0');
       }
-      if (s.MetaFlags & BLAECK_SIG_HAS_DEVICE_CLASS)
+      if (m->MetaFlags & BLAECK_SIG_HAS_DEVICE_CLASS)
       {
-        StreamRef->print(s.DeviceClass);
+        StreamRef->print(m->DeviceClass);
         StreamRef->print('\0');
       }
-      if (s.MetaFlags & BLAECK_SIG_HAS_ICON)
+      if (m->MetaFlags & BLAECK_SIG_HAS_ICON)
       {
-        StreamRef->print(s.Icon);
+        StreamRef->print(m->Icon);
         StreamRef->print('\0');
       }
-      if (s.MetaFlags & BLAECK_SIG_HAS_DISPLAY_PRECISION)
-        StreamRef->write(s.DisplayPrecision);
-      if (s.MetaFlags & BLAECK_SIG_HAS_OPTIONS)
+      if (m->MetaFlags & BLAECK_SIG_HAS_DISPLAY_PRECISION)
+        StreamRef->write(m->DisplayPrecision);
+      if (m->MetaFlags & BLAECK_SIG_HAS_OPTIONS)
       {
-        StreamRef->print(s.Options);
+        StreamRef->print(m->Options);
         StreamRef->print('\0');
       }
     }

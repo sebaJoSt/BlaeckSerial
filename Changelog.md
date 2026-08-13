@@ -99,6 +99,17 @@ without being configured for that board in advance.
   catalog writer used to copy the whole entry, `String` and all, once per signal. The
   public API is unchanged: every `addSignal`, `write`, `update` and `findSignalIndex`
   overload still takes a `String`, and a name is still copied unless it came from `F()`.
+- **A signal only pays for metadata once it has some.** `unit`, `device class`, `icon`,
+  `options`, the flags word and the display precision used to sit in every signal entry
+  whether or not the sketch set them; they now live in a record allocated by the first
+  `with*()` call that describes the signal. A signal entry goes from 19 bytes to 10 on
+  AVR, so a sketch that describes nothing — the common case — saves 9 bytes per signal,
+  while a fully described signal costs about 4 bytes more than before. The 0xF0 Signal
+  Metadata frame and the public API are unchanged. If the heap cannot hold a record the
+  description is dropped and the signal itself keeps working; `printRejections()` says
+  how many.
+- `deleteSignals()` now gives back the names and metadata the signal table held instead
+  of only rewinding the index.
 - `BlaeckSerial.h` includes the `CRC.h` umbrella header instead of `<CRC32.h>` and
   `<CRC16.h>` individually, preventing a collision with core headers seen on
   ArduinoCore-mbed. No functional change; flash is byte-identical.

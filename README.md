@@ -101,8 +101,9 @@ Each datatype returns its own handle, so a modifier that cannot mean anything fo
 does not compile: a string has no decimals and no statistics, and a bool becomes a
 `binary_sensor`, which has no unit either.
 
-Metadata costs about 9 bytes of SRAM per signal. Set `BLAECK_ENABLE_SIGNAL_META` to `0`
-to drop it: the methods still compile and store nothing, so no `#ifdef` is needed.
+Metadata is only paid for by the signals that have it: a described signal costs about 13
+bytes of SRAM, one you say nothing about costs 2. Set `BLAECK_ENABLE_SIGNAL_META` to `0`
+to drop even those: the methods still compile and store nothing, so no `#ifdef` is needed.
 
 ### Update your variables and don't forget to `tick()`!
 ```CPP
