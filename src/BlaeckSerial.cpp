@@ -13,6 +13,8 @@ BlaeckSerial::BlaeckSerial()
 
 BlaeckSerial::~BlaeckSerial()
 {
+  // Names first: the entries own them, and freeing the table would lose the pointers.
+  _freeSignalNames();
   delete[] Signals;
   Signals = nullptr;
   delete[] _commandHandlers;
@@ -33,12 +35,15 @@ BlaeckSerial::~BlaeckSerial()
 BlaeckBeginRef BlaeckSerial::begin(Stream *Ref)
 {
   StreamRef = (Stream *)Ref;
-  _signalCapacity = DEFAULT_SIGNALS;
+  // Torn down before the capacity changes: _freeSignalNames() walks the table by
+  // _signalCapacity, so that member has to still describe the table that exists.
   if (Signals != nullptr)
   {
+    _freeSignalNames();
     delete[] Signals;
     Signals = nullptr;
   }
+  _signalCapacity = DEFAULT_SIGNALS;
   _signalIndex = 0;
   SignalCount = 0;
   _schemaHash = 0;
@@ -328,16 +333,32 @@ bool BlaeckSerial::_ensureEventTypeTable()
 
 int BlaeckSerial::_registerSignal(const String &signalName, dataType type, void *address)
 {
+  return _registerSignalCommon(signalName.c_str(), nullptr, type, address);
+}
+
+int BlaeckSerial::_registerSignal(const __FlashStringHelper *signalName, dataType type, void *address)
+{
+  return _registerSignalCommon(nullptr, signalName, type, address);
+}
+
+int BlaeckSerial::_registerSignalCommon(const char *ram, const __FlashStringHelper *flash,
+                                        dataType type, void *address)
+{
   if (!_ensureSignalTable() || static_cast<unsigned int>(_signalIndex) >= _signalCapacity)
   {
     if (Signals != nullptr)
-      _warnTableFull(F("withSignals"), _signalCapacity, signalName.c_str());
+    {
+      if (flash != nullptr)
+        _warnTableFull(F("withSignals"), _signalCapacity, flash);
+      else
+        _warnTableFull(F("withSignals"), _signalCapacity, ram);
+    }
     _signalRegistrationFailed = true;
     _rejectedSignalCount++;
     // -1 gives a dead handle: the chain that follows compiles and runs and stores nothing.
     return -1;
   }
-  setSignalName(_signalIndex, signalName);
+  _setSignalName(_signalIndex, ram, flash);
   Signals[_signalIndex].DataType = type;
   Signals[_signalIndex].Address = address;
 #if BLAECK_ENABLE_SIGNAL_META
@@ -419,6 +440,67 @@ BlaeckTextSignalRef BlaeckSerial::addSignal(String signalName, const char *value
   return BlaeckTextSignalRef(this, (int16_t)_registerSignal(signalName, Blaeck_string, const_cast<char *>(value)));
 }
 
+BlaeckBoolSignalRef BlaeckSerial::addSignal(const __FlashStringHelper *signalName, bool *value)
+{
+  return BlaeckBoolSignalRef(this, (int16_t)_registerSignal(signalName, Blaeck_bool, value));
+}
+
+BlaeckNumericSignalRef BlaeckSerial::addSignal(const __FlashStringHelper *signalName, byte *value)
+{
+  return BlaeckNumericSignalRef(this, (int16_t)_registerSignal(signalName, Blaeck_byte, value));
+}
+
+BlaeckNumericSignalRef BlaeckSerial::addSignal(const __FlashStringHelper *signalName, short *value)
+{
+  return BlaeckNumericSignalRef(this, (int16_t)_registerSignal(signalName, Blaeck_short, value));
+}
+
+BlaeckNumericSignalRef BlaeckSerial::addSignal(const __FlashStringHelper *signalName, unsigned short *value)
+{
+  return BlaeckNumericSignalRef(this, (int16_t)_registerSignal(signalName, Blaeck_ushort, value));
+}
+
+BlaeckNumericSignalRef BlaeckSerial::addSignal(const __FlashStringHelper *signalName, int *value)
+{
+  return BlaeckNumericSignalRef(this, (int16_t)_registerSignal(signalName, Blaeck_int, value));
+}
+
+BlaeckNumericSignalRef BlaeckSerial::addSignal(const __FlashStringHelper *signalName, unsigned int *value)
+{
+  return BlaeckNumericSignalRef(this, (int16_t)_registerSignal(signalName, Blaeck_uint, value));
+}
+
+BlaeckNumericSignalRef BlaeckSerial::addSignal(const __FlashStringHelper *signalName, long *value)
+{
+  return BlaeckNumericSignalRef(this, (int16_t)_registerSignal(signalName, Blaeck_long, value));
+}
+
+BlaeckNumericSignalRef BlaeckSerial::addSignal(const __FlashStringHelper *signalName, unsigned long *value)
+{
+  return BlaeckNumericSignalRef(this, (int16_t)_registerSignal(signalName, Blaeck_ulong, value));
+}
+
+BlaeckNumericSignalRef BlaeckSerial::addSignal(const __FlashStringHelper *signalName, float *value)
+{
+  return BlaeckNumericSignalRef(this, (int16_t)_registerSignal(signalName, Blaeck_float, value));
+}
+
+BlaeckNumericSignalRef BlaeckSerial::addSignal(const __FlashStringHelper *signalName, double *value)
+{
+#ifdef __AVR__
+  /*On the Uno and other ATMEGA based boards, the double implementation occupies 4 bytes
+  and is exactly the same as the float, with no gain in precision.*/
+  return BlaeckNumericSignalRef(this, (int16_t)_registerSignal(signalName, Blaeck_float, value));
+#else
+  return BlaeckNumericSignalRef(this, (int16_t)_registerSignal(signalName, Blaeck_double, value));
+#endif
+}
+
+BlaeckTextSignalRef BlaeckSerial::addSignal(const __FlashStringHelper *signalName, const char *value)
+{
+  return BlaeckTextSignalRef(this, (int16_t)_registerSignal(signalName, Blaeck_string, const_cast<char *>(value)));
+}
+
 void BlaeckSerial::deleteSignals()
 {
   _signalIndex = 0;
@@ -432,45 +514,138 @@ uint16_t BlaeckSerial::_computeSchemaHash()
 {
   // CRC16-CCITT (init=0x0000, poly=0x1021) over signal names + datatype codes.
   // Must match Python: binascii.crc_hqx(data, 0) & 0xFFFF
-  uint16_t crc = 0x0000;
+  // Runs through the same accumulator the frame writers feed, so a name in flash and a
+  // name in RAM cannot hash differently: both arrive here as the same bytes.
+  uint16_t saved = _schemaHashAccum;
+  _schemaHashAccum = 0x0000;
   for (int j = 0; j < _signalIndex; j++)
   {
-    const char *name = Signals[j].SignalName.c_str();
-    while (*name)
-    {
-      byte b = (byte)*name++;
-      crc ^= ((uint16_t)b << 8);
-      for (byte k = 0; k < 8; k++)
-      {
-        if (crc & 0x8000)
-          crc = (crc << 1) ^ 0x1021;
-        else
-          crc <<= 1;
-      }
-    }
-    byte code = (byte)Signals[j].DataType;
-    crc ^= ((uint16_t)code << 8);
-    for (byte k = 0; k < 8; k++)
-    {
-      if (crc & 0x8000)
-        crc = (crc << 1) ^ 0x1021;
-      else
-        crc <<= 1;
-    }
+    _signalNameFeedHash(Signals[j]);
+    _schemaHashFeedByte((byte)Signals[j].DataType);
   }
+  uint16_t crc = _schemaHashAccum;
+  _schemaHashAccum = saved;
   return crc & 0xFFFF;
 }
 
 void BlaeckSerial::setSignalName(int signalIndex, String signalName)
 {
+  _setSignalName(signalIndex, signalName.c_str(), nullptr);
+}
+
+void BlaeckSerial::_setSignalName(int signalIndex, const char *ram, const __FlashStringHelper *flash)
+{
   if (Signals == nullptr || signalIndex < 0 || signalIndex >= (int)_signalCapacity)
     return;
 
-  Signals[signalIndex].SignalName = "";
-  size_t needed = signalName.length() + 1;
-  Signals[signalIndex].SignalName.reserve(needed);
+  Signal &s = Signals[signalIndex];
+  // Whatever the slot held: a copy is freed, a flash name owns nothing. deleteSignals()
+  // only rewinds the index, so a slot is written twice whenever signals are re-declared.
+  if (!s.NameInFlash && s.SignalName != nullptr)
+    free((void *)s.SignalName);
+  s.SignalName = nullptr;
+  s.NameInFlash = false;
 
-  Signals[signalIndex].SignalName += signalName;
+  if (flash != nullptr)
+  {
+    s.SignalName = reinterpret_cast<const char *>(flash);
+    s.NameInFlash = true;
+    return;
+  }
+  if (ram == nullptr)
+    return;
+
+  // One exact-size allocation, the same one String made - minus the String.
+  size_t needed = strlen(ram) + 1;
+  char *copy = (char *)malloc(needed);
+  if (copy != nullptr)
+  {
+    memcpy(copy, ram, needed);
+    s.SignalName = copy;
+  }
+  // Out of RAM leaves the name empty rather than the signal missing: the slot, its
+  // datatype and its address are all still good, and _signalName* reads null as "".
+}
+
+void BlaeckSerial::_freeSignalNames()
+{
+  if (Signals == nullptr)
+    return;
+  for (unsigned int i = 0; i < _signalCapacity; i++)
+  {
+    if (!Signals[i].NameInFlash && Signals[i].SignalName != nullptr)
+      free((void *)Signals[i].SignalName);
+    Signals[i].SignalName = nullptr;
+    Signals[i].NameInFlash = false;
+  }
+}
+
+bool BlaeckSerial::_signalNameEquals(const Signal &s, const char *name) const
+{
+  if (name == nullptr)
+    return false;
+  if (s.SignalName == nullptr)
+    return name[0] == '\0';
+  if (s.NameInFlash)
+  {
+    // Compared byte by byte through pgm_read_byte rather than strcmp_P, which not every
+    // core provides; on a core where flash is directly addressable pgm_read_byte is a
+    // plain read, so this costs nothing there.
+    PGM_P p = reinterpret_cast<PGM_P>(s.SignalName);
+    const char *q = name;
+    byte c;
+    while ((c = pgm_read_byte(p++)) != 0)
+    {
+      if (*q++ != (char)c)
+        return false;
+    }
+    return *q == '\0';
+  }
+  return strcmp(name, s.SignalName) == 0;
+}
+
+void BlaeckSerial::_signalNameFeedHash(const Signal &s)
+{
+  if (s.SignalName == nullptr)
+    return;
+  if (s.NameInFlash)
+  {
+    PGM_P p = reinterpret_cast<PGM_P>(s.SignalName);
+    byte c;
+    while ((c = pgm_read_byte(p++)) != 0)
+      _schemaHashFeedByte(c);
+    return;
+  }
+  const char *p = s.SignalName;
+  while (*p)
+    _schemaHashFeedByte((byte)*p++);
+}
+
+void BlaeckSerial::_bufSignalName0(const Signal &s)
+{
+  if (s.SignalName == nullptr)
+  {
+    _bufByte(0);
+    return;
+  }
+  if (s.NameInFlash)
+  {
+    _bufFlashStr0(reinterpret_cast<const __FlashStringHelper *>(s.SignalName));
+    return;
+  }
+  _bufStr0(s.SignalName);
+}
+
+void BlaeckSerial::_printSignalName(const Signal &s)
+{
+  if (s.SignalName == nullptr)
+    return;
+  if (s.NameInFlash)
+  {
+    StreamRef->print(reinterpret_cast<const __FlashStringHelper *>(s.SignalName));
+    return;
+  }
+  StreamRef->print(s.SignalName);
 }
 
 void BlaeckSerial::update(int signalIndex, bool value)
@@ -712,7 +887,7 @@ int BlaeckSerial::findSignalIndex(String signalName)
 {
   for (int i = 0; i < _signalIndex; i++)
   {
-    if (Signals[i].SignalName == signalName)
+    if (_signalNameEquals(Signals[i], signalName.c_str()))
     {
       return i;
     }
@@ -3956,13 +4131,12 @@ void BlaeckSerial::writeSymbolsFrame(unsigned long msg_id)
       _bufByte((byte)0);
       _bufByte((byte)0);
 
-      Signal signal = Signals[i];
+      // A reference, not a copy: copying the entry per signal per frame cost a heap
+      // allocation while the name was a String.
+      const Signal &signal = Signals[i];
 
-      const char *namePtr = signal.SignalName.c_str();
-      while (*namePtr)
-        _schemaHashFeedByte((byte)*namePtr++);
-
-      _bufStr0(signal.SignalName);
+      _signalNameFeedHash(signal);
+      _bufSignalName0(signal);
 
       byte dtCode;
       switch (signal.DataType)
@@ -4002,13 +4176,10 @@ void BlaeckSerial::writeSymbolsFrame(unsigned long msg_id)
       StreamRef->write((byte)0);
       StreamRef->write((byte)0);
 
-      Signal signal = Signals[i];
+      const Signal &signal = Signals[i];
 
-      const char *namePtr = signal.SignalName.c_str();
-      while (*namePtr)
-        _schemaHashFeedByte((byte)*namePtr++);
-
-      StreamRef->print(signal.SignalName);
+      _signalNameFeedHash(signal);
+      _printSignalName(signal);
       StreamRef->print('\0');
 
       byte dtCode;
@@ -4362,7 +4533,7 @@ void BlaeckSerial::markSignalUpdated(String signalName)
 {
   for (int i = 0; i < _signalIndex; i++)
   {
-    if (Signals[i].SignalName == signalName)
+    if (_signalNameEquals(Signals[i], signalName.c_str()))
     {
       Signals[i].Updated = true;
       break;

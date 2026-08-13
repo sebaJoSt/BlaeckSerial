@@ -259,10 +259,15 @@ static const byte BLAECK_SCH_STATE_CLASS_SHIFT = 8;
 
 struct Signal
 {
-  String SignalName;
+  // Either a copy this library owns, or a pointer into flash when the sketch named the
+  // signal with F(). NameInFlash says which, and nothing reads this field directly - the
+  // _signalName* helpers do, because reading a flash address as if it were RAM is silent
+  // garbage on AVR rather than a crash.
+  const char *SignalName = nullptr;
   dataType DataType;
   void *Address;
   bool Updated = false;
+  bool NameInFlash = false;
 #if BLAECK_ENABLE_SIGNAL_META
   // Flash pointers, so a declared unit costs 2 bytes of SRAM and not its length.
   const __FlashStringHelper *Unit = nullptr;
@@ -422,6 +427,25 @@ public:
   BlaeckNumericSignalRef addSignal(String signalName, float *value);
   BlaeckNumericSignalRef addSignal(String signalName, double *value);
   BlaeckTextSignalRef addSignal(String signalName, const char *value);
+
+  // The same eleven, named with F(). The name then stays in flash and the signal keeps a
+  // 2-byte pointer to it instead of a copy, which is most of what a signal costs in SRAM:
+  //
+  //   BlaeckSerial.addSignal(F("Temperature"), &Temperature);
+  //
+  // Only for a name fixed at compile time. A name built at runtime - snprintf into a
+  // buffer, say - must use the overloads above, which copy it.
+  BlaeckBoolSignalRef addSignal(const __FlashStringHelper *signalName, bool *value);
+  BlaeckNumericSignalRef addSignal(const __FlashStringHelper *signalName, byte *value);
+  BlaeckNumericSignalRef addSignal(const __FlashStringHelper *signalName, short *value);
+  BlaeckNumericSignalRef addSignal(const __FlashStringHelper *signalName, unsigned short *value);
+  BlaeckNumericSignalRef addSignal(const __FlashStringHelper *signalName, int *value);
+  BlaeckNumericSignalRef addSignal(const __FlashStringHelper *signalName, unsigned int *value);
+  BlaeckNumericSignalRef addSignal(const __FlashStringHelper *signalName, long *value);
+  BlaeckNumericSignalRef addSignal(const __FlashStringHelper *signalName, unsigned long *value);
+  BlaeckNumericSignalRef addSignal(const __FlashStringHelper *signalName, float *value);
+  BlaeckNumericSignalRef addSignal(const __FlashStringHelper *signalName, double *value);
+  BlaeckTextSignalRef addSignal(const __FlashStringHelper *signalName, const char *value);
 
   // Delete all Signals
   void deleteSignals();
@@ -829,6 +853,20 @@ public:
 private:
   unsigned long long getTimeStamp();
   void setSignalName(int signalIndex, String signalName);
+  // Points a slot at its name: a copy when ram is given, the flash address itself when
+  // flash is. Frees whatever copy the slot held, so a reused slot cannot leak and the two
+  // kinds cannot be mixed up. One of the two arguments is null.
+  void _setSignalName(int signalIndex, const char *ram, const __FlashStringHelper *flash);
+  // Frees every name the signal table owns. Flash names own nothing, so they are skipped.
+  // Walks the table by _signalCapacity, so it must run while that still describes the
+  // allocated table - before begin() resets the capacity for the next one.
+  void _freeSignalNames();
+  // The two kinds, read the one way that is right for each. Every use of a name goes
+  // through these: the schema hash, both catalog writers, and the by-name lookups.
+  bool _signalNameEquals(const Signal &s, const char *name) const;
+  void _signalNameFeedHash(const Signal &s);
+  void _bufSignalName0(const Signal &s);
+  void _printSignalName(const Signal &s);
   void _setTimedDataState(bool timedActivated, unsigned long timedInterval_ms);
   void _parseCommandTokens(const char *raw);
   void _dispatchRegisteredHandlers(bool sendAck = true);
@@ -865,6 +903,12 @@ private:
   // the datatype they record, so they all land here rather than repeating the
   // capacity check and the overflow bookkeeping eleven times.
   int _registerSignal(const String &signalName, dataType type, void *address);
+  // The flash-named half of the same thing. Separate rather than a flag on the one above,
+  // because the two names are read differently everywhere they are read.
+  int _registerSignal(const __FlashStringHelper *signalName, dataType type, void *address);
+  // What both of those do; only the name differs, and one of ram/flash is null.
+  int _registerSignalCommon(const char *ram, const __FlashStringHelper *flash,
+                            dataType type, void *address);
   // The one place a command is registered. Returns the handler table index, or -1 when the
   // command was rejected - table full, name too long, or a null argument - having counted it
   // and said so on DebugRef. The typed helpers hand that index to their handle, so a modifier

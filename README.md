@@ -51,6 +51,21 @@ if (BlaeckSerial.hasRejectedSignals()) {
 }
 ```
 
+On AVR, wrapping a name in `F()` keeps it in flash and the signal stores a 2-byte pointer
+instead of a copy — worth doing on an Uno or Nano with many signals:
+```CPP
+ BlaeckSerial.addSignal(F("Test Signal 1"), &someGlobalVariable);
+```
+A name built at runtime cannot use `F()`; pass the buffer and it is copied, so the buffer
+may be reused straight away:
+```CPP
+ char signalName[10];
+ for (int i = 0; i < 8; i++) {
+   snprintf(signalName, sizeof(signalName), "Sine_%d", i + 1);
+   BlaeckSerial.addSignal(signalName, &sine[i]);
+ }
+```
+
 
 ### Describe how a signal is shown
 

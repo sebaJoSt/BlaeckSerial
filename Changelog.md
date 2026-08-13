@@ -45,6 +45,14 @@ without being configured for that board in advance.
   `<SET_LABEL, hi>` sets `" hi"`, and `<SET_ENABLE, 1>` is rejected.
 
 ### Added
+- **`addSignal(F("Name"), &value)`.** Eleven new overloads that take the name as a flash
+  string. The name then stays in flash and the signal keeps a 2-byte pointer to it instead
+  of a copy, which is most of what a signal costs in SRAM on AVR: about 18 bytes per signal
+  for a 12-character name, against 3 for the same name passed as a plain literal. Existing
+  `addSignal(F("..."), ...)` calls — which worked before by building a `String` — pick the
+  new overload automatically and get the saving without an edit. A name built at runtime
+  still uses the existing overloads and is still copied, so a reused `char` buffer works
+  exactly as before.
 - **`printRejections(&Serial)`.** One summary of everything the tables had no room
   for, naming the `begin()` call that would have kept it, and printing nothing when
   all of it fitted — so it can end `setup()` unconditionally. For boards with a
@@ -85,6 +93,12 @@ without being configured for that board in advance.
   typed commands, state channels, event channels and string signals together.
 
 ### Changed
+- **A signal no longer keeps its name in a `String`.** The entry holds a pointer the
+  library owns (or the flash address, for an `F()` name), which takes a signal entry from
+  22 bytes to 19 on AVR and removes a heap allocation per signal per `0xB0` frame — the
+  catalog writer used to copy the whole entry, `String` and all, once per signal. The
+  public API is unchanged: every `addSignal`, `write`, `update` and `findSignalIndex`
+  overload still takes a `String`, and a name is still copied unless it came from `F()`.
 - `BlaeckSerial.h` includes the `CRC.h` umbrella header instead of `<CRC32.h>` and
   `<CRC16.h>` individually, preventing a collision with core headers seen on
   ArduinoCore-mbed. No functional change; flash is byte-identical.
