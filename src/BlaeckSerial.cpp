@@ -1692,7 +1692,7 @@ uint16_t BlaeckSerial::_stateChannelFlags(const StateChannelEntry &e, bool hasSt
 void BlaeckSerial::writeStateChannelsFrame(unsigned long msg_id)
 {
   // 0x90 "State Channel List" frame. Per declared channel entry:
-  //   reserved(1) reserved(1) name\0 flags(2, LE uint16) valueType(1)
+  //   msConfig(1) slaveID(1) name\0 flags(2, LE uint16) valueType(1)
   //   [icon\0]                 if flags.hasIcon
   //   [stateValue]             if flags.hasStateValue
   //   [deviceClass\0]          if flags.hasDeviceClass
@@ -1713,10 +1713,9 @@ void BlaeckSerial::writeStateChannelsFrame(unsigned long msg_id)
   // reports each channel's value as of that moment and there is no stored copy to go
   // stale. A channel that registered no getter, or whose getter returns nullptr, carries
   // no value.
-  // The two leading bytes are always zero. They keep the entry byte-shape
-  // identical to a 0xA0 command entry (where they carried the now-removed I2C
-  // masterSlaveConfig/slaveID), so a host parses both frames the same way:
-  // skip two, read the NUL-terminated name, then the flags.
+  // The two leading bytes are the entry's device identity, msConfig and slaveID: zero from
+  // a single-device library, rewritten by an aggregator relaying several boards. Not
+  // padding - without them a catalog could name only one device.
   // Declared up-front so the host can announce one text entity per channel
   // before any 0x95 push arrives, the same way 0xA0 announces commands.
   if (StreamRef == nullptr)
@@ -2174,16 +2173,16 @@ void BlaeckSerial::writeEventChannels(unsigned long msg_id)
 void BlaeckSerial::writeEventChannelsFrame(unsigned long msg_id)
 {
   // 0x80 "Event Channel List" frame. Per declared channel entry:
-  //   reserved(1) reserved(1) name\0 flags(2, LE uint16)
+  //   msConfig(1) slaveID(1) name\0 flags(2, LE uint16)
   //   [icon\0]                 if flags.hasIcon
   //   [deviceClass\0]          if flags.hasDeviceClass
   //   count(1) type\0 x count
   // flags bits: 0=hasIcon 1=isDiagnostic 2=hasDeviceClass 3=disabledByDefault.
   //             Bits 4-15 reserved - two bytes, matching 0x90, so the catalog has room to
   //             grow without taking a new message key.
-  // The two leading bytes are always zero, matching the 0x90 and 0xA0 entries,
-  // so a host parses all three the same way: skip two, read the NUL-terminated
-  // name, then the flags.
+  // The two leading bytes are the entry's device identity, msConfig and slaveID: zero from
+  // a single-device library, rewritten by an aggregator relaying several boards. Not
+  // padding - without them a catalog could name only one device.
   // Declared up-front so the host can announce one event entity per channel,
   // including its list of types, before any 0x85 event arrives. The count is
   // what lets a host reject an out-of-range index without parsing the run.
@@ -3863,7 +3862,7 @@ void BlaeckSerial::writeSignalConfigFrame(unsigned long msg_id)
 void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
 {
   // 0xA0 "Command List" frame. Per discovered command entry:
-  //   reserved(1) reserved(1) name\0 kind(1) flags(2, LE uint16)
+  //   msConfig(1) slaveID(1) name\0 kind(1) flags(2, LE uint16)
   //   [min(4) max(4) step(4)]  if flags.hasRange   (LE float)
   //   [unit\0]                 if flags.hasUnit
   //   [optionsCsv\0]           if flags.hasOptions
@@ -3875,6 +3874,9 @@ void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
   // src says what stateSignal names: 0 an addSignal() signal, 1 an
   // addStateChannel() channel (BlaeckStateSource). It rides with the name rather
   // than taking a flags bit, so the last free bit (0x80) stays available.
+  // The two leading bytes are the entry's device identity, msConfig and slaveID: zero from
+  // a single-device library, rewritten by an aggregator relaying several boards. Not
+  // padding - without them a catalog could name only one device.
   // All in-use entries are emitted, including plain onCommand() entries
   // (kind=BLAECK_CMD_PLAIN, flags=0, no trailing metadata). Plain entries carry
   // no Home Assistant entity, but are listed so a host can build a full command
