@@ -32,7 +32,7 @@
     <SwitchLED>   Serial.println(...)      Serial Monitor only. A Blaeck host
                                            skips anything that is not a frame.
     <LED>         its state signal         The dashboard follows LED_State.
-    <Ping>        writeMessage(...)        A button has no state signal, so it
+    <Ping>        writeState(...)        A button has no state signal, so it
                                            pushes a line to a named message
                                            channel ("Status"). It is written
                                            only on a press, so the host gets an
@@ -80,7 +80,7 @@
         <LED,0>                       Turn off the LED  (typed switch)
         <LED,7>                       Rejected: a switch only accepts 0 or 1
         <Ping>                        Typed button, takes no value. The board
-                                      answers on the "Status" message channel
+                                      answers on the "Status" state channel
                                       with how long it has been running, so the
                                       reply reaches a host and not just the
                                       Serial Monitor.
@@ -147,9 +147,9 @@ void setup()
   BlaeckSerial.onSwitchCommand("LED", onLED).withStateSignal(F("LED_State"));
   BlaeckSerial.onButtonCommand("Ping", onPing);
 
-  // Message channels are declared up-front so the host can announce a text
+  // State channels are declared up-front so the host can announce a text
   // sensor for "Status" before the first line is written.
-  BlaeckSerial.addMessageChannel("Status").withIcon(F("mdi:message-text"));
+  BlaeckSerial.addStateChannel("Status").withIcon(F("mdi:message-text"));
 }
 
 void loop()
@@ -212,13 +212,13 @@ void onLED(const char *command, const char *const *params, byte paramCount)
 
 /* Typed button. Carries no value, so there is nothing to parse.
 
-   A button has no state signal, so writeMessage() is how it reports back: it
-   pushes a line to a named 0x95 message channel, which a host can surface as
+   A button has no state signal, so writeState() is how it reports back: it
+   pushes a line to a named 0x95 state channel, which a host can surface as
    a text sensor. Serial.println() would only reach the Serial Monitor - a
    Blaeck host skips anything that is not a frame.
 
    The channel is only written on a button press, so a sensor bound to it
-   updates when asked rather than continuously. Calling writeMessage() from
+   updates when asked rather than continuously. Calling writeState() from
    loop() on a timer instead would give the same channel a steady heartbeat.
 */
 void onPing(const char *command, const char *const *params, byte paramCount)
@@ -230,7 +230,7 @@ void onPing(const char *command, const char *const *params, byte paramCount)
   char text[40];
   unsigned long seconds = millis() / 1000UL;
   snprintf(text, sizeof(text), "alive, running for %lu s", seconds);
-  BlaeckSerial.writeMessage("Status", text);
+  BlaeckSerial.writeState("Status", text);
 }
 
 /* Exemplary command using string parameters:

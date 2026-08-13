@@ -161,40 +161,43 @@
   #define BLAECK_ENABLE_SIGNAL_META 1
 #endif
 
-// Messages (Home Assistant text/log channels).
-// When ON, the device can declare named message channels with
-// addMessageChannel(), emit the 0x90 "Message Channel List" frame in response to
-// BLAECK.WRITE_MESSAGE_CHANNELS, and send free-text lines on those channels with
-// writeMessage() (0x95). Turn OFF to save SRAM/flash on tiny targets; both
-// writeMessage() and addMessageChannel() then compile away, and
-// BLAECK.WRITE_MESSAGE_CHANNELS answers with an empty 0x90 so a polling host
+// State channels (a value the device reports when it changes).
+// When ON, the device can declare named state channels with
+// addStateChannel(), emit the 0x90 "State Channel List" frame in response to
+// BLAECK.WRITE_STATE_CHANNELS, and report a value on those channels with
+// writeState() (0x95). A state channel carries the current value of something -
+// text or a number - pushed when it changes and never written to a data store,
+// which is what separates it from a signal: a signal is sampled into every
+// logged row on the logging interval. Turn OFF to save SRAM/flash on tiny targets; both
+// writeState() and addStateChannel() then compile away, and
+// BLAECK.WRITE_STATE_CHANNELS answers with an empty 0x90 so a polling host
 // does not wait out its timeout.
 // Override via BlaeckSerialConfig.h or build flag.
-#ifndef BLAECK_ENABLE_MESSAGES
-  #define BLAECK_ENABLE_MESSAGES 1
+#ifndef BLAECK_ENABLE_STATE_CHANNELS
+  #define BLAECK_ENABLE_STATE_CHANNELS 1
 #endif
 
-// Two things create a message channel, and both spend a slot here: addMessageChannel(), and a
+// Two things create a state channel, and both spend a slot here: addStateChannel(), and a
 // typed command's withOwnState(), which gives that command a channel of its own to carry its
 // value on.
-#ifndef BLAECK_MESSAGE_MAX_CHANNELS_DEFAULT
+#ifndef BLAECK_STATE_MAX_CHANNELS_DEFAULT
   #if defined(__AVR__)
-    // Each entry costs BLAECK_MESSAGE_MAX_NAME_CHARS_DEFAULT + ~3 bytes of SRAM.
+    // Each entry costs BLAECK_STATE_MAX_NAME_CHARS_DEFAULT + ~3 bytes of SRAM.
     #if defined(RAMEND) && (RAMEND >= 0x10FF)
-      #define BLAECK_MESSAGE_MAX_CHANNELS_DEFAULT 6
+      #define BLAECK_STATE_MAX_CHANNELS_DEFAULT 6
     #else
-      #define BLAECK_MESSAGE_MAX_CHANNELS_DEFAULT 3
+      #define BLAECK_STATE_MAX_CHANNELS_DEFAULT 3
     #endif
   #else
-    #define BLAECK_MESSAGE_MAX_CHANNELS_DEFAULT 8
+    #define BLAECK_STATE_MAX_CHANNELS_DEFAULT 8
   #endif
 #endif
 
-#ifndef BLAECK_MESSAGE_MAX_NAME_CHARS_DEFAULT
+#ifndef BLAECK_STATE_MAX_NAME_CHARS_DEFAULT
   #if defined(__AVR__)
-    #define BLAECK_MESSAGE_MAX_NAME_CHARS_DEFAULT 16
+    #define BLAECK_STATE_MAX_NAME_CHARS_DEFAULT 16
   #else
-    #define BLAECK_MESSAGE_MAX_NAME_CHARS_DEFAULT 32
+    #define BLAECK_STATE_MAX_NAME_CHARS_DEFAULT 32
   #endif
 #endif
 
@@ -203,9 +206,9 @@
 // give each a closed list of event types with addEventType(), emit the 0x80
 // "Event Channel List" frame in response to BLAECK.WRITE_EVENT_CHANNELS, and
 // report an occurrence with writeEvent() (0x85).
-// Unlike a message, an event carries no text: the frame holds only the channel
+// Unlike a state channel, an event carries no value: the frame holds only the channel
 // and event type indices, so the wording is fixed at compile time and a host
-// needs the 0x80 catalog to interpret it. Use a message channel for anything
+// needs the 0x80 catalog to interpret it. Use a state channel for anything
 // that has to carry a runtime value.
 // Turn OFF to save SRAM/flash on tiny targets; the API then compiles away, and
 // BLAECK.WRITE_EVENT_CHANNELS answers with an empty 0x80 so a polling host does
@@ -268,9 +271,10 @@ typedef enum DataType
 } dataType;
 
 // How a signal's value accumulates over time, for Home Assistant statistics
-// (0xF0 SignalMetaFlags bits 3-4). MEASUREMENT is a value that goes up and down
+// (0xF0 SignalMetaFlags bits 3-5). MEASUREMENT is a value that goes up and down
 // and is meaningful at any instant; TOTAL and TOTAL_INCREASING are running sums,
-// the latter one that only ever grows and may reset to zero.
+// the latter one that only ever grows and may reset to zero. MEASUREMENT_ANGLE is
+// a measurement that wraps, averaged the short way round.
 //
 // NONE is what a signal that never called withStateClass() carries, and a host
 // keeps no statistics on it. Nothing is assumed on a signal's behalf: a value
@@ -280,7 +284,10 @@ enum BlaeckStateClass
   BLAECK_STATE_CLASS_NONE = 0,
   BLAECK_STATE_CLASS_MEASUREMENT = 1,
   BLAECK_STATE_CLASS_TOTAL = 2,
-  BLAECK_STATE_CLASS_TOTAL_INCREASING = 3
+  BLAECK_STATE_CLASS_TOTAL_INCREASING = 3,
+  // An angle averages the long way round otherwise: the arithmetic mean of 350 and 10
+  // is 180, the circular mean is 0. For a wind vane, a compass heading, a phase.
+  BLAECK_STATE_CLASS_MEASUREMENT_ANGLE = 4
 };
 
 // 0xF0 SignalMetaFlags. The stored word is the wire value: a with*/adjective call
@@ -292,14 +299,36 @@ enum BlaeckSignalMetaFlag
   BLAECK_SIG_HAS_UNIT = 0x0001,
   BLAECK_SIG_HAS_DEVICE_CLASS = 0x0002,
   BLAECK_SIG_HAS_ICON = 0x0004,
-  BLAECK_SIG_STATE_CLASS_MASK = 0x0018, // bits 3-4
-  BLAECK_SIG_DIAGNOSTIC = 0x0020,
-  BLAECK_SIG_DISABLED_BY_DEFAULT = 0x0040,
-  BLAECK_SIG_FORCE_UPDATE = 0x0080,
-  BLAECK_SIG_HAS_DISPLAY_PRECISION = 0x0100,
-  BLAECK_SIG_HAS_OPTIONS = 0x0200
+  // Three bits, not two: Home Assistant defines five state classes counting none, and a
+  // two-bit field could hold only four. Bits 11-15 stay reserved.
+  BLAECK_SIG_STATE_CLASS_MASK = 0x0038, // bits 3-5
+  BLAECK_SIG_DIAGNOSTIC = 0x0040,
+  BLAECK_SIG_DISABLED_BY_DEFAULT = 0x0080,
+  BLAECK_SIG_FORCE_UPDATE = 0x0100,
+  BLAECK_SIG_HAS_DISPLAY_PRECISION = 0x0200,
+  BLAECK_SIG_HAS_OPTIONS = 0x0400
 };
 static const byte BLAECK_SIG_STATE_CLASS_SHIFT = 3;
+
+// 0x90 StateChannelFlags. A different word from the signal one above and laid out
+// differently - the two catalogs grew apart - so the names are kept separate rather
+// than shared, and the frame writer reads these instead of spelling the bits twice.
+// Unit, state class and display precision only mean anything on a channel whose
+// value type is numeric; a text channel leaves them unset.
+enum BlaeckStateChannelFlag
+{
+  BLAECK_SCH_HAS_ICON = 0x0001,
+  BLAECK_SCH_DIAGNOSTIC = 0x0002,
+  BLAECK_SCH_HAS_STATE_VALUE = 0x0004,
+  BLAECK_SCH_HAS_DEVICE_CLASS = 0x0008,
+  BLAECK_SCH_DISABLED_BY_DEFAULT = 0x0010,
+  BLAECK_SCH_FORCE_UPDATE = 0x0020,
+  BLAECK_SCH_HAS_OPTIONS = 0x0040,
+  BLAECK_SCH_HAS_UNIT = 0x0080,
+  BLAECK_SCH_STATE_CLASS_MASK = 0x0700, // bits 8-10
+  BLAECK_SCH_HAS_DISPLAY_PRECISION = 0x0800
+};
+static const byte BLAECK_SCH_STATE_CLASS_SHIFT = 8;
 
 struct Signal
 {
@@ -339,7 +368,7 @@ enum BlaeckIntervalMode
 typedef void (*BlaeckCommandHandler)(const char *command, const char *const *params, byte paramCount);
 typedef void (*BlaeckAnyCommandHandler)(const char *command, const char *const *params, byte paramCount);
 
-// Supplies a message channel's current value on demand. Called while the 0x90 catalog frame is
+// Supplies a state channel's current value on demand. Called while the 0x90 catalog frame is
 // being built, so it must return promptly and must not block. The returned text is copied into
 // the frame immediately, so a function-local static is the natural place to build it. Returning
 // nullptr means "no value right now" and leaves the channel's value out of the catalog.
@@ -374,7 +403,7 @@ enum BlaeckEntityCategory
 enum BlaeckStateSource
 {
   BLAECK_STATE_SIGNAL = 0, // an addSignal() signal
-  BLAECK_STATE_MESSAGE = 1 // a message channel the command owns (see withOwnState())
+  BLAECK_STATE_CHANNEL = 1 // a state channel the command owns (see withOwnState())
 };
 
 // Acknowledgement reason for the 0xA5 Command Ack frame. Sent back to the
@@ -403,7 +432,10 @@ class BlaeckSwitchCommandRef;
 class BlaeckSelectCommandRef;
 class BlaeckButtonCommandRef;
 class BlaeckTextCommandRef;
-class BlaeckMessageChannelRef;
+class BlaeckStateRefBase;
+class BlaeckNumericStateRef;
+class BlaeckTextStateRef;
+class BlaeckBoolStateRef;
 class BlaeckEventChannelRef;
 
 class BlaeckSerial
@@ -485,33 +517,57 @@ public:
   void writeCommands();
   void writeCommands(unsigned long messageID);
 
-  // ----- Messages (Home Assistant text/log channel, 0x95) -----
-  // With BLAECK_ENABLE_MESSAGES=0 these still compile but do nothing, so a
+  // ----- State channels (0x90 / 0x95) -----
+  // With BLAECK_ENABLE_STATE_CHANNELS=0 these still compile but do nothing, so a
   // sketch can be built for a tiny target without being rewritten.
   //
-  // Declare a message channel. Channels must be declared up-front (typically in
+  // Declare a state channel. Channels must be declared up-front (typically in
   // setup()) so the host can announce every text sensor before the first line
-  // arrives; writeMessage() on an undeclared channel is dropped.
+  // arrives; writeState() on an undeclared channel is dropped.
   // `channelName` is copied; `icon` must outlive the call (use a string literal
   // or F("mdi:...")). Returns false if the name is empty/too long or the table
   // is full.
-  BlaeckMessageChannelRef addMessageChannel(const char *channelName);
-  void clearAllMessageChannels();
+  // Declares a channel. Which overload is called settles the channel's type, and the type
+  // settles the handle: a numeric channel takes withUnit()/withStateClass()/
+  // withDisplayPrecision(), a text one takes withStateText()/withOptions(), and asking for
+  // the wrong one does not compile. Pass a pointer and the library reads that variable when
+  // the value is wanted, exactly as addSignal() does; pass none and the channel carries only
+  // what writeState() hands it.
+  BlaeckTextStateRef addStateChannel(const char *channelName);
+  BlaeckTextStateRef addStateChannel(const char *channelName, const char *value);
+  BlaeckBoolStateRef addStateChannel(const char *channelName, bool *value);
+  BlaeckNumericStateRef addStateChannel(const char *channelName, byte *value);
+  BlaeckNumericStateRef addStateChannel(const char *channelName, short *value);
+  BlaeckNumericStateRef addStateChannel(const char *channelName, unsigned short *value);
+  BlaeckNumericStateRef addStateChannel(const char *channelName, int *value);
+  BlaeckNumericStateRef addStateChannel(const char *channelName, unsigned int *value);
+  BlaeckNumericStateRef addStateChannel(const char *channelName, long *value);
+  BlaeckNumericStateRef addStateChannel(const char *channelName, unsigned long *value);
+  BlaeckNumericStateRef addStateChannel(const char *channelName, float *value);
+  BlaeckNumericStateRef addStateChannel(const char *channelName, double *value);
+  void clearAllStateChannels();
 
-  // Send the 0x90 "Message Channel List" frame (the declared-channel catalog).
-  // Sent automatically in response to BLAECK.WRITE_MESSAGE_CHANNELS.
-  void writeMessageChannels();
-  void writeMessageChannels(unsigned long messageID);
+  // Send the 0x90 "State Channel List" frame (the declared-channel catalog).
+  // Sent automatically in response to BLAECK.WRITE_STATE_CHANNELS.
+  void writeStateChannels();
+  void writeStateChannels(unsigned long messageID);
 
-  // Send a free-text status/log message on a declared channel to the serial host.
-  // Fire-and-forget: a host may surface it (e.g. a Home Assistant text sensor
-  // per declared channel) but it is never stored as signal data. The frame
-  // carries the channel's index in the 0x90 catalog rather than its name, so the
-  // catalog must reach the host first. No CRC (like the 0xA0/0xA5 frames). Text
-  // longer than 65535 bytes is truncated. Messages on channels that were never
-  // passed to addMessageChannel() are dropped.
-  void writeMessage(const char *channelName, const char *text);
-  void writeMessage(const char *channelName, const char *text, unsigned long messageID);
+  // Report a value on a declared channel. Fire-and-forget: a host may surface it
+  // (e.g. a Home Assistant sensor per declared channel) but it is never stored as
+  // signal data. The frame carries the channel's index in the 0x90 catalog rather
+  // than its name, so the catalog must reach the host first. No CRC (like the
+  // 0xA0/0xA5 frames). Text longer than 255 bytes is truncated - the same cap a
+  // string signal has, and the same one Home Assistant puts on a state - and the
+  // truncation is reported once per channel on the debug stream. Values on
+  // channels that were never passed to addStateChannel() are dropped.
+  void writeState(const char *channelName, const char *text);
+  void writeState(const char *channelName, const char *text, unsigned long messageID);
+
+  // Report whatever the channel currently holds - the variable a typed channel points at, or
+  // the text its getter builds. The only way to push a numeric channel, since there is nothing
+  // for the caller to pass: the value already lives where the channel was told to look.
+  void writeState(const char *channelName);
+  void writeState(const char *channelName, unsigned long messageID);
 
   // Publish a command's own state now: asks the getter it was registered with and sends the
   // value on the channel the command owns. The push is what makes a change visible at once -
@@ -742,12 +798,12 @@ public:
   bool hasRejectedCommands() const { return _rejectedCommandCount > 0; }
   uint16_t getRejectedCommandCount() const { return _rejectedCommandCount; }
 
-  // Message channels that could not be declared - a full table, a name too long, a name a
+  // State channels that could not be declared - a full table, a name too long, a name a
   // command already owns - each reported on DebugRef and counted here. A command's
   // withOwnState() channel counts too: when it cannot be declared the command keeps no state at
-  // all, so a full message channel table costs a control's value, not just a channel.
-  bool hasRejectedMessageChannels() const { return _rejectedMessageChannelCount > 0; }
-  uint16_t getRejectedMessageChannelCount() const { return _rejectedMessageChannelCount; }
+  // all, so a full state channel table costs a control's value, not just a channel.
+  bool hasRejectedStateChannels() const { return _rejectedStateChannelCount > 0; }
+  uint16_t getRejectedStateChannelCount() const { return _rejectedStateChannelCount; }
 
   // Event channels and event types that could not be declared. Counted together because both
   // sit behind BLAECK_ENABLE_EVENTS and a type belongs to a channel, so either answer sends you
@@ -860,7 +916,11 @@ private:
   // having counted the rejection and said why on DebugRef. Re-declaring a name returns its
   // existing slot with the metadata cleared, so what a previous declaration said cannot linger.
   // An event channel keeps its already-declared types and their indices.
-  int _registerMessageChannel(const char *channelName);
+  // The type and the variable are settled at registration because they come from which
+  // overload the sketch called, not from a modifier a handle could offer - which is what
+  // keeps a channel from ever holding a type its value does not match.
+  int _registerStateChannel(const char *channelName, dataType valueType = Blaeck_string,
+                              const void *value = nullptr);
   int _registerEventChannel(const char *channelName, const __FlashStringHelper *eventTypes);
   // Appends one pool entry per field of a comma-separated list, in order, so a field's position
   // is its wire index - the same rule call order gives addEventType().
@@ -868,13 +928,16 @@ private:
 #if BLAECK_ENABLE_COMMAND_META
   void writeCommandsFrame(unsigned long MessageID);
   byte _validateTypedCommand(byte handlerIndex);
-  // Declares the channel a typed command owns. Separate from addMessageChannel() so that one
+  // Declares the channel a typed command owns. Separate from addStateChannel() so that one
   // can refuse an owned name outright rather than needing a "unless it is mine" exception.
-  bool _addOwnedMessageChannel(const __FlashStringHelper *channelName, BlaeckStateTextGetter getStateText);
+  bool _addOwnedStateChannel(const __FlashStringHelper *channelName, BlaeckStateTextGetter getStateText,
+                             dataType valueType = Blaeck_string, const void *value = nullptr);
   // Declares and announces the channel a command carries itself, for withOwnState(). Announcing
   // at registration is what corrects a host that was already connected when the board reset.
   // False when the channel could not be declared, so withOwnState() can leave the command
   // without state rather than advertising a channel absent from the 0x90 catalog.
+  bool _declareOwnState(byte handlerIndex, const __FlashStringHelper *channelName,
+                        BlaeckStateTextGetter getStateText, dataType valueType, const void *value);
   bool _declareOwnState(byte handlerIndex, const __FlashStringHelper *channelName,
                         BlaeckStateTextGetter getStateText);
 
@@ -885,10 +948,10 @@ private:
   // command-metadata guard: it counts a select command's options and an event
   // channel's type list, and those features are enabled independently.
   static byte _flashCsvOptionCount(const __FlashStringHelper *csv);
-#if BLAECK_ENABLE_MESSAGES
-  void writeMessageChannelsFrame(unsigned long MessageID);
+#if BLAECK_ENABLE_STATE_CHANNELS
+  void writeStateChannelsFrame(unsigned long MessageID);
   // Index of a declared channel, or -1 when the name was never declared.
-  int _findMessageChannel(const char *channelName) const;
+  int _findStateChannel(const char *channelName) const;
 #endif
 #if BLAECK_ENABLE_EVENTS
   void writeEventChannelsFrame(unsigned long MessageID);
@@ -921,7 +984,7 @@ private:
   bool _signalRegistrationFailed = false;
   uint16_t _rejectedSignalCount = 0;
   uint16_t _rejectedCommandCount = 0;
-  uint16_t _rejectedMessageChannelCount = 0;
+  uint16_t _rejectedStateChannelCount = 0;
   uint16_t _rejectedEventChannelCount = 0;
 
   bool _writeRestartedAlreadyDone = false;
@@ -942,9 +1005,9 @@ private:
   static const byte MAX_COMMAND_HANDLERS = BLAECK_COMMAND_MAX_HANDLERS_DEFAULT;
   static const byte MAX_COMMAND_PARAM_COUNT = BLAECK_COMMAND_MAX_PARAMS_DEFAULT;
   static const byte MAX_COMMAND_NAME_COUNT = BLAECK_COMMAND_MAX_NAME_CHARS_DEFAULT;
-#if BLAECK_ENABLE_MESSAGES
-  static const byte MAX_MESSAGE_CHANNELS = BLAECK_MESSAGE_MAX_CHANNELS_DEFAULT;
-  static const byte MAX_MESSAGE_NAME_COUNT = BLAECK_MESSAGE_MAX_NAME_CHARS_DEFAULT;
+#if BLAECK_ENABLE_STATE_CHANNELS
+  static const byte MAX_STATE_CHANNELS = BLAECK_STATE_MAX_CHANNELS_DEFAULT;
+  static const byte MAX_STATE_NAME_COUNT = BLAECK_STATE_MAX_NAME_CHARS_DEFAULT;
 #endif
 #if BLAECK_ENABLE_EVENTS
   static const byte MAX_EVENT_CHANNELS = BLAECK_EVENT_MAX_CHANNELS_DEFAULT;
@@ -1076,10 +1139,10 @@ private:
 #endif
   };
   CommandHandlerEntry _commandHandlers[MAX_COMMAND_HANDLERS];
-#if BLAECK_ENABLE_MESSAGES
-  struct MessageChannelEntry
+#if BLAECK_ENABLE_STATE_CHANNELS
+  struct StateChannelEntry
   {
-    char name[MAX_MESSAGE_NAME_COUNT];
+    char name[MAX_STATE_NAME_COUNT];
     const __FlashStringHelper *icon = nullptr;
     // Asked for the channel's value while the 0x90 catalog is built, so what the
     // catalog reports cannot lag behind the sketch - there is no stored copy to
@@ -1087,23 +1150,54 @@ private:
     BlaeckStateTextGetter getStateText = nullptr;
     const __FlashStringHelper *deviceClass = nullptr;
     const __FlashStringHelper *options = nullptr;
+    const __FlashStringHelper *unit = nullptr;
+    // The variable this channel reports, read where the getter above would have been called.
+    // A channel has one or the other, never both: a numeric channel points at a variable, a
+    // text channel may instead compute its value in a getter. valueType says which shape the
+    // bytes take on the wire and is sent whether or not there is a value to send yet.
+    const void *stateValue = nullptr;
+    dataType valueType = Blaeck_string;
+    // Bits the plain members above cannot hold: state class needs three values-wide room and
+    // display precision needs to distinguish 0 from unset. The rest of the 0x90 word is built
+    // from the members at write time.
+    uint16_t metaFlags = 0;
+    uint8_t displayPrecision = 0;
     // Declared by a typed command through withOwnState(), which makes the channel that
-    // command's alone: addMessageChannel() and writeMessage() both refuse the name, so the
-    // value on its topic can only ever come from the getter above.
+    // command's alone: addStateChannel() and writeState() both refuse the name, so the
+    // value on its topic can only ever come from the getter or variable above.
     bool ownedByCommand = false;
     bool diagnostic = false;
     bool disabledByDefault = false;
     bool forceUpdate = false;
+    // Said once per channel, not once per push: a value that is too long is usually too
+    // long every time, and a warning on every push would bury the log it is trying to help.
+    bool truncationWarned = false;
     bool inUse = false;
   };
-  MessageChannelEntry _messageChannels[MAX_MESSAGE_CHANNELS];
+  StateChannelEntry _stateChannels[MAX_STATE_CHANNELS];
+
+  // The 0x90 flag word for one channel. Both writer paths call this so the bits are decided
+  // once: the buffered and unbuffered writers are otherwise the same code twice, and a flag
+  // added to only one of them would make a board's catalog depend on how it was configured.
+  uint16_t _stateChannelFlags(const StateChannelEntry &e, bool hasStateValue) const;
+
+  // Wire code for a datatype, the same 0x00-0x0A a 0xB0 symbol carries.
+  static byte _dtypeCode(dataType t);
+
+  // Lays a numeric channel's value into out (never more than 8 bytes) and returns the width.
+  // Goes through the same converter unions the data writer uses, so a value is identical on
+  // the wire whether it arrives as a signal or as a channel - including where a platform's
+  // double is narrower than the union that carries it. Returns 0 for a string, which the
+  // callers length-prefix or NUL-terminate themselves, and for a channel with no value.
+  byte _channelValueBytes(const StateChannelEntry &e, byte *out);
+
 
   // Equality between a flash string and a RAM one. strcmp_P reads its FIRST argument from RAM,
   // which is the wrong way round here, so the flash side is read with pgm_read_byte.
   static bool _flashStringEqualsName(const __FlashStringHelper *flashName, const char *name);
-  // The 0x95 frame itself, by channel index. Reached by writeMessage() after its guards and by
+  // The 0x95 frame itself, by channel index. Reached by writeState() after its guards and by
   // writeCommandState() for a channel those guards deliberately refuse.
-  void _writeMessageFrame(int channelIndex, const char *text, unsigned long messageID);
+  void _writeStateFrame(int channelIndex, const char *text, unsigned long messageID);
 #endif
 #if BLAECK_ENABLE_EVENTS
   struct EventChannelEntry
@@ -1158,9 +1252,9 @@ private:
   bool _receiveOverflowed = false;
   // Monotonic message id stamped into the 0xA5 Command Ack frame header.
   unsigned long _commandAckMsgId = 0;
-#if BLAECK_ENABLE_MESSAGES
-  // Monotonic message id stamped into the 0x95 Message frame header.
-  unsigned long _messageMsgId = 0;
+#if BLAECK_ENABLE_STATE_CHANNELS
+  // Monotonic message id stamped into the 0x95 State frame header.
+  unsigned long _stateMsgId = 0;
 #endif
 #if BLAECK_ENABLE_EVENTS
   // Monotonic message id stamped into the 0x85 Event frame header.
@@ -1242,7 +1336,7 @@ private:
 
   friend class BlaeckSignalRefBase;
   friend class BlaeckCommandRefBase;
-  friend class BlaeckMessageChannelRef;
+  friend class BlaeckStateRefBase;
   friend class BlaeckEventChannelRef;
 };
 
@@ -1283,6 +1377,27 @@ protected:
 #endif
   }
 
+  // Typed own state: the command reports a variable rather than text a getter builds. Same
+  // path as the getter form, so the channel is declared, claimed and announced identically -
+  // only where the value comes from differs.
+  void _setOwnState(const __FlashStringHelper *channelName, dataType valueType, const void *value)
+  {
+#if BLAECK_ENABLE_COMMAND_META
+    if (auto *e = _entry())
+    {
+      if (_owner->_declareOwnState((byte)_index, channelName, nullptr, valueType, value))
+      {
+        e->stateSignal = channelName;
+        e->stateSource = BLAECK_STATE_CHANNEL;
+      }
+    }
+#else
+    (void)channelName;
+    (void)valueType;
+    (void)value;
+#endif
+  }
+
   void _setOwnState(const __FlashStringHelper *channelName, BlaeckStateTextGetter getStateText)
   {
 #if BLAECK_ENABLE_COMMAND_META
@@ -1294,7 +1409,7 @@ protected:
       if (_owner->_declareOwnState((byte)_index, channelName, getStateText))
       {
         e->stateSignal = channelName;
-        e->stateSource = BLAECK_STATE_MESSAGE;
+        e->stateSource = BLAECK_STATE_CHANNEL;
       }
     }
 #else
@@ -1374,10 +1489,10 @@ protected:
     _setStateSignal(signalName);                                                            \
     return *this;                                                                           \
   }                                                                                         \
-  /* State the command carries itself: it declares a message channel of that name - taking a */ \
-  /* slot from BLAECK_MESSAGE_MAX_CHANNELS_DEFAULT like any other - and asks */                 \
+  /* State the command carries itself: it declares a state channel of that name - taking a */ \
+  /* slot from BLAECK_STATE_MAX_CHANNELS_DEFAULT like any other - and asks */                 \
   /* the getter for the value, instead of mirroring a signal. The channel belongs to the */  \
-  /* command - addMessageChannel() and writeMessage() both refuse the name - so what the */  \
+  /* command - addStateChannel() and writeState() both refuse the name - so what the */  \
   /* catalog reports and what is pushed cannot disagree. Push a change with */               \
   /* writeCommandState(). Independent of the signal table, so a device that adds no signals */ \
   /* can still report what its controls are set to. */                                       \
@@ -1421,6 +1536,64 @@ public:
     _setUnit(unit);
     return *this;
   }
+
+  // The command's own state as a variable rather than as text: the library reads it where the
+  // getter would have been called and sends it typed, so the host renders the number and the
+  // sketch never formats one. One overload per numeric type, as addSignal() has.
+
+  BlaeckNumberCommandRef &withOwnState(const __FlashStringHelper *channelName, byte *value)
+  {
+    _setOwnState(channelName, Blaeck_byte, value);
+    return *this;
+  }
+
+  BlaeckNumberCommandRef &withOwnState(const __FlashStringHelper *channelName, short *value)
+  {
+    _setOwnState(channelName, Blaeck_short, value);
+    return *this;
+  }
+
+  BlaeckNumberCommandRef &withOwnState(const __FlashStringHelper *channelName, unsigned short *value)
+  {
+    _setOwnState(channelName, Blaeck_ushort, value);
+    return *this;
+  }
+
+  BlaeckNumberCommandRef &withOwnState(const __FlashStringHelper *channelName, int *value)
+  {
+    _setOwnState(channelName, Blaeck_int, value);
+    return *this;
+  }
+
+  BlaeckNumberCommandRef &withOwnState(const __FlashStringHelper *channelName, unsigned int *value)
+  {
+    _setOwnState(channelName, Blaeck_uint, value);
+    return *this;
+  }
+
+  BlaeckNumberCommandRef &withOwnState(const __FlashStringHelper *channelName, long *value)
+  {
+    _setOwnState(channelName, Blaeck_long, value);
+    return *this;
+  }
+
+  BlaeckNumberCommandRef &withOwnState(const __FlashStringHelper *channelName, unsigned long *value)
+  {
+    _setOwnState(channelName, Blaeck_ulong, value);
+    return *this;
+  }
+
+  BlaeckNumberCommandRef &withOwnState(const __FlashStringHelper *channelName, float *value)
+  {
+    _setOwnState(channelName, Blaeck_float, value);
+    return *this;
+  }
+
+  BlaeckNumberCommandRef &withOwnState(const __FlashStringHelper *channelName, double *value)
+  {
+    _setOwnState(channelName, Blaeck_double, value);
+    return *this;
+  }
 };
 
 class BlaeckSwitchCommandRef : public BlaeckCommandRefBase
@@ -1428,6 +1601,14 @@ class BlaeckSwitchCommandRef : public BlaeckCommandRefBase
 public:
   BlaeckSwitchCommandRef(BlaeckSerial *owner, int16_t index) : BlaeckCommandRefBase(owner, index) {}
   BLAECK_COMMAND_REF_SHARED(BlaeckSwitchCommandRef)
+
+  // A switch reports its own state as the bool it is: the host renders it as the on/off
+  // payloads it declared, so the sketch never has to know which spelling those use.
+  BlaeckSwitchCommandRef &withOwnState(const __FlashStringHelper *channelName, bool *value)
+  {
+    _setOwnState(channelName, Blaeck_bool, value);
+    return *this;
+  }
 };
 
 class BlaeckSelectCommandRef : public BlaeckCommandRefBase
@@ -1447,6 +1628,14 @@ public:
     _setOptions(optionsCsv);
     return *this;
   }
+
+  // The buffer this control's state lives in. No getter and no formatting: the library reads
+  // the characters where they sit, so a value the sketch already keeps needs no second copy.
+  BlaeckSelectCommandRef &withOwnState(const __FlashStringHelper *channelName, const char *value)
+  {
+    _setOwnState(channelName, Blaeck_string, value);
+    return *this;
+  }
 };
 
 class BlaeckButtonCommandRef : public BlaeckCommandRefBase
@@ -1461,6 +1650,14 @@ class BlaeckTextCommandRef : public BlaeckCommandRefBase
 public:
   BlaeckTextCommandRef(BlaeckSerial *owner, int16_t index) : BlaeckCommandRefBase(owner, index) {}
   BLAECK_COMMAND_REF_SHARED(BlaeckTextCommandRef)
+
+  // The buffer this control's state lives in. No getter and no formatting: the library reads
+  // the characters where they sit, so a value the sketch already keeps needs no second copy.
+  BlaeckTextCommandRef &withOwnState(const __FlashStringHelper *channelName, const char *value)
+  {
+    _setOwnState(channelName, Blaeck_string, value);
+    return *this;
+  }
 
   // The advertised limit in decoded bytes, enforced before dispatch: a longer value is rejected
   // with BLAECK_ACK_TOO_LONG. Left unsaid it is 255. sizeof(buffer) - 1 is usually what you want.
@@ -1662,7 +1859,7 @@ public:
 // A string signal. No unit, no decimals to round and nothing to keep statistics on: all three
 // tell Home Assistant the state is a number, and it then refuses the text.
 //
-// Mirrors BlaeckMessageChannelRef: a string signal and a message channel become the same Home
+// Mirrors BlaeckTextStateRef: a string signal and a state channel become the same Home
 // Assistant entity, so they carry the same fields. Change one, change the other.
 class BlaeckTextSignalRef : public BlaeckSignalRefBase
 {
@@ -1700,118 +1897,195 @@ public:
 
 // Handle to the channel just declared. Returned by value and meant to be chained, not stored;
 // a channel that could not be declared gives a dead handle that swallows the chain, and
-// hasRejectedChannels() is where that shows up. The methods are always defined - with
-// BLAECK_ENABLE_MESSAGES=0 or BLAECK_ENABLE_EVENTS=0 they store nothing, so a sketch needs no
-// #ifdef.
+// hasRejectedStateChannels() is where that shows up. The methods are always defined - with
+// BLAECK_ENABLE_STATE_CHANNELS=0 they store nothing, so a sketch needs no #ifdef.
 //
-// Mirrors BlaeckTextSignalRef: a message channel and a string signal become the same Home
-// Assistant entity, so they carry the same fields. Change one, change the other. The five
-// shared modifiers are spelled out here rather than taken from BLAECK_SIGNAL_REF_SHARED,
-// because a channel keeps plain members where a signal keeps a flag word.
-class BlaeckMessageChannelRef
+// Three kinds, mirroring the three signal handles, because a channel's value now has a type and
+// the wrong modifier on the wrong type is a bug a host cannot report. Unit, state class and
+// display precision each tell Home Assistant the state is a number, so on a text channel they
+// do not merely do nothing - they make it refuse the text and show nothing at all. Splitting
+// the handles turns that into a compile error.
+class BlaeckStateRefBase
+{
+protected:
+  BlaeckStateRefBase(BlaeckSerial *owner, int16_t index) : _owner(owner), _index(index) {}
+
+  // The entry this handle names, or nullptr when registration was rejected.
+  BlaeckSerial::StateChannelEntry *_entry() const
+  {
+#if BLAECK_ENABLE_STATE_CHANNELS
+    if (_owner != nullptr && _index >= 0)
+      return &_owner->_stateChannels[_index];
+#endif
+    return nullptr;
+  }
+
+  void _setStateClass(BlaeckStateClass stateClass)
+  {
+#if BLAECK_ENABLE_STATE_CHANNELS
+    if (auto *e = _entry())
+    {
+      e->metaFlags &= (uint16_t)~BLAECK_SCH_STATE_CLASS_MASK;
+      e->metaFlags |= (uint16_t)(((uint16_t)stateClass << BLAECK_SCH_STATE_CLASS_SHIFT) &
+                                 BLAECK_SCH_STATE_CLASS_MASK);
+    }
+#else
+    (void)stateClass;
+#endif
+  }
+
+  void _setDisplayPrecision(uint8_t decimals)
+  {
+#if BLAECK_ENABLE_STATE_CHANNELS
+    if (auto *e = _entry())
+    {
+      e->displayPrecision = decimals;
+      e->metaFlags |= BLAECK_SCH_HAS_DISPLAY_PRECISION;
+    }
+#else
+    (void)decimals;
+#endif
+  }
+
+  BlaeckSerial *_owner;
+  int16_t _index;
+};
+
+// The modifiers every channel kind takes, whatever its value type.
+#define BLAECK_STATE_REF_SHARED(TYPE)                                                     \
+  /* Material Design Icons name, e.g. F("mdi:pulse"). */                                    \
+  TYPE &withIcon(const __FlashStringHelper *icon)                                           \
+  {                                                                                         \
+    if (auto *e = _entry())                                                                 \
+      e->icon = icon;                                                                       \
+    return *this;                                                                           \
+  }                                                                                         \
+  /* Groups the entity under Home Assistant's diagnostic section. */                        \
+  TYPE &diagnostic(bool on = true)                                                          \
+  {                                                                                         \
+    if (auto *e = _entry())                                                                 \
+      e->diagnostic = on;                                                                   \
+    return *this;                                                                           \
+  }                                                                                         \
+  /* What the value is, for a host that renders it. The list a host draws from depends on */ \
+  /* the value type: F("timestamp") or F("date") suit text, F("voltage") a number. A name */ \
+  /* from the wrong list fails discovery and the entity never appears. */                   \
+  TYPE &withDeviceClass(const __FlashStringHelper *deviceClass)                             \
+  {                                                                                         \
+    if (auto *e = _entry())                                                                 \
+      e->deviceClass = deviceClass;                                                         \
+    return *this;                                                                           \
+  }                                                                                         \
+  /* Registers the entity but leaves it switched off until someone enables it. */           \
+  TYPE &disabledByDefault(bool on = true)                                                   \
+  {                                                                                         \
+    if (auto *e = _entry())                                                                 \
+      e->disabledByDefault = on;                                                            \
+    return *this;                                                                           \
+  }                                                                                         \
+  /* Report every value, even one identical to the last. A host otherwise collapses a */    \
+  /* repeat into the entry it already has, so a heartbeat that says the same thing each */  \
+  /* time leaves no trace of having run. */                                                 \
+  TYPE &forceUpdate(bool on = true)                                                         \
+  {                                                                                         \
+    if (auto *e = _entry())                                                                 \
+      e->forceUpdate = on;                                                                  \
+    return *this;                                                                           \
+  }
+
+// A channel carrying a number. Mirrors BlaeckNumericSignalRef: the same value becomes the same
+// Home Assistant entity whichever way it arrives, so they carry the same fields. Change one,
+// change the other. What differs is not the entity but the cadence - a signal is sampled into
+// every logged row, a channel is pushed when it changes and never stored.
+class BlaeckNumericStateRef : public BlaeckStateRefBase
 {
 public:
-  BlaeckMessageChannelRef(BlaeckSerial *owner, int16_t index) : _owner(owner), _index(index) {}
+  BlaeckNumericStateRef(BlaeckSerial *owner, int16_t index) : BlaeckStateRefBase(owner, index) {}
+  BLAECK_STATE_REF_SHARED(BlaeckNumericStateRef)
 
-  // Material Design Icons name, e.g. F("mdi:pulse").
-  BlaeckMessageChannelRef &withIcon(const __FlashStringHelper *icon)
+  // Symbol shown after the value, e.g. F("Hz"). Non-ASCII must be UTF-8:
+  // F("\xC2\xB0" "C") is the degree sign followed by C.
+  BlaeckNumericStateRef &withUnit(const __FlashStringHelper *unit)
   {
-#if BLAECK_ENABLE_MESSAGES
-    if (_index >= 0 && _owner != nullptr)
-      _owner->_messageChannels[_index].icon = icon;
-#else
-    (void)icon;
-#endif
+    if (auto *e = _entry())
+    {
+      e->unit = unit;
+      e->metaFlags |= BLAECK_SCH_HAS_UNIT;
+    }
     return *this;
   }
 
-  // Groups the sensor under Home Assistant's diagnostic section.
-  BlaeckMessageChannelRef &diagnostic(bool on = true)
+  // Declares that the value accumulates, which is what makes Home Assistant keep long-term
+  // statistics on it - a channel is never written to the host's own store, so this is the only
+  // way its history outlives the recorder's window.
+  BlaeckNumericStateRef &withStateClass(BlaeckStateClass stateClass)
   {
-#if BLAECK_ENABLE_MESSAGES
-    if (_index >= 0 && _owner != nullptr)
-      _owner->_messageChannels[_index].diagnostic = on;
-#else
-    (void)on;
-#endif
+    _setStateClass(stateClass);
     return *this;
   }
+
+  // Decimal places to display. 0 is a real instruction - show it as an integer - and not the
+  // same as saying nothing, which is why it needs its own flag bit where the state class
+  // encodes its own absence.
+  BlaeckNumericStateRef &withDisplayPrecision(uint8_t decimals)
+  {
+    _setDisplayPrecision(decimals);
+    return *this;
+  }
+};
+
+// A channel carrying text. Mirrors BlaeckTextSignalRef: no unit, no decimals to round and
+// nothing to keep statistics on: all three tell Home Assistant the state is a number, and it
+// then refuses the text.
+class BlaeckTextStateRef : public BlaeckStateRefBase
+{
+public:
+  BlaeckTextStateRef(BlaeckSerial *owner, int16_t index) : BlaeckStateRefBase(owner, index) {}
+  BLAECK_STATE_REF_SHARED(BlaeckTextStateRef)
 
   // Makes the channel report a current value: the library calls the getter while building the
   // 0x90 catalog, so a host that polls learns the value as it is at that moment and the sketch
   // never pushes just to keep it in step. Because it is fetched rather than stored it cannot go
   // stale. Build the text in a function-local static and return it. Left out, the channel is a
   // plain log channel and carries no value in the catalog.
-  BlaeckMessageChannelRef &withStateText(BlaeckStateTextGetter getStateText)
+  //
+  // Only text takes a getter. A numeric channel points at the variable instead, which needs no
+  // function at all - and anything a getter would have computed can be assigned to a variable
+  // first.
+  BlaeckTextStateRef &withStateText(BlaeckStateTextGetter getStateText)
   {
-#if BLAECK_ENABLE_MESSAGES
-    if (_index >= 0 && _owner != nullptr)
-      _owner->_messageChannels[_index].getStateText = getStateText;
-#else
-    (void)getStateText;
-#endif
+    if (auto *e = _entry())
+      e->getStateText = getStateText;
     return *this;
   }
 
-  // The closed set of values this channel reports, comma-separated. Home Assistant needs
-  // withDeviceClass(F("enum")) alongside it and rejects the list without one. Every value
-  // reported must be in the list: one that is not raises rather than being shown. A unit is
-  // ignored alongside options rather than refused.
-  BlaeckMessageChannelRef &withOptions(const __FlashStringHelper *optionsCsv)
+  // The closed set of values this channel reports, comma-separated. Text only: the list is a set
+  // of names, which is what Home Assistant's enum device class describes - a number has no such
+  // set. Home Assistant needs withDeviceClass(F("enum")) alongside it and rejects the list
+  // without one. Every value reported must be in the list: one that is not raises rather than
+  // being shown. A unit is ignored alongside options rather than refused.
+  BlaeckTextStateRef &withOptions(const __FlashStringHelper *optionsCsv)
   {
-#if BLAECK_ENABLE_MESSAGES
-    if (_index >= 0 && _owner != nullptr)
-      _owner->_messageChannels[_index].options = optionsCsv;
-#else
-    (void)optionsCsv;
-#endif
+    if (auto *e = _entry())
+      e->options = optionsCsv;
     return *this;
   }
-
-  // What the channel's text is, for a host that renders it: F("timestamp") or F("date") make a
-  // channel carrying an ISO 8601 value show as a time rather than as the string it is. Only
-  // meaningful on a device that knows what day it is - one with an RTC or a network clock.
-  BlaeckMessageChannelRef &withDeviceClass(const __FlashStringHelper *deviceClass)
-  {
-#if BLAECK_ENABLE_MESSAGES
-    if (_index >= 0 && _owner != nullptr)
-      _owner->_messageChannels[_index].deviceClass = deviceClass;
-#else
-    (void)deviceClass;
-#endif
-    return *this;
-  }
-
-  // Registers the entity but leaves it switched off until someone enables it.
-  BlaeckMessageChannelRef &disabledByDefault(bool on = true)
-  {
-#if BLAECK_ENABLE_MESSAGES
-    if (_index >= 0 && _owner != nullptr)
-      _owner->_messageChannels[_index].disabledByDefault = on;
-#else
-    (void)on;
-#endif
-    return *this;
-  }
-
-  // Report every line, even one identical to the last. A host otherwise collapses a repeated
-  // line into the entry it already has, so a heartbeat that says the same thing each time
-  // leaves no trace of having run.
-  BlaeckMessageChannelRef &forceUpdate(bool on = true)
-  {
-#if BLAECK_ENABLE_MESSAGES
-    if (_index >= 0 && _owner != nullptr)
-      _owner->_messageChannels[_index].forceUpdate = on;
-#else
-    (void)on;
-#endif
-    return *this;
-  }
-
-private:
-  BlaeckSerial *_owner;
-  int16_t _index;
 };
+
+// A channel carrying a bool, which a host announces as a binary sensor - a shape with no unit
+// at all, on top of having no decimals and no statistics.
+//
+// withDeviceClass() draws from a different list here than on a numeric channel: a binary sensor
+// takes F("door"), F("motion"), F("smoke"), F("window") and the like, not F("temperature").
+// Some names appear in both lists meaning different things - battery is a percentage on a
+// numeric channel and low/normal on this one.
+class BlaeckBoolStateRef : public BlaeckStateRefBase
+{
+public:
+  BlaeckBoolStateRef(BlaeckSerial *owner, int16_t index) : BlaeckStateRefBase(owner, index) {}
+  BLAECK_STATE_REF_SHARED(BlaeckBoolStateRef)
+};
+
 
 class BlaeckEventChannelRef
 {

@@ -130,7 +130,7 @@ void onStatus(const char *command, const char *const *params, byte paramCount)
   PrintInfo(false);
 
   // A Blaeck host skips anything that is not a frame, so it would see none of
-  // that. Push a one-line summary on a message channel as well, written only
+  // that. Push a one-line summary on a state channel as well, written only
   // on a button press.
   byte active = 0;
   for (byte i = 1; i <= MAXIMUM_SIGNALS; i++)
@@ -140,7 +140,7 @@ void onStatus(const char *command, const char *const *params, byte paramCount)
   }
   char text[48];
   snprintf(text, sizeof(text), "%u of %u signals active", (unsigned)active, (unsigned)MAXIMUM_SIGNALS);
-  BlaeckSerial.writeMessage("Status", text);
+  BlaeckSerial.writeState("Status", text);
 }
 
 // Catch-all handler for help commands (?) and LS

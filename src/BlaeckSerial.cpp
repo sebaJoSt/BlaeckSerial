@@ -485,11 +485,11 @@ void BlaeckSerial::read()
 
       this->writeCommands(msg_id);
     }
-    else if (strcmp(COMMAND, "BLAECK.WRITE_MESSAGE_CHANNELS") == 0)
+    else if (strcmp(COMMAND, "BLAECK.WRITE_STATE_CHANNELS") == 0)
     {
       unsigned long msg_id = ((unsigned long)PARAMETER[3] << 24) | ((unsigned long)PARAMETER[2] << 16) | ((unsigned long)PARAMETER[1] << 8) | ((unsigned long)PARAMETER[0]);
 
-      this->writeMessageChannels(msg_id);
+      this->writeStateChannels(msg_id);
     }
     else if (strcmp(COMMAND, "BLAECK.WRITE_EVENT_CHANNELS") == 0)
     {
@@ -630,7 +630,7 @@ void BlaeckSerial::writeCommandState(const char *command)
 
 void BlaeckSerial::writeCommandState(const char *command, unsigned long messageID)
 {
-#if !BLAECK_ENABLE_COMMAND_META || !BLAECK_ENABLE_MESSAGES
+#if !BLAECK_ENABLE_COMMAND_META || !BLAECK_ENABLE_STATE_CHANNELS
   (void)command;
   (void)messageID;
 #else
@@ -640,7 +640,7 @@ void BlaeckSerial::writeCommandState(const char *command, unsigned long messageI
   for (byte i = 0; i < MAX_COMMAND_HANDLERS; i++)
   {
     const CommandHandlerEntry &e = _commandHandlers[i];
-    if (!e.inUse || e.stateSource != BLAECK_STATE_MESSAGE || e.stateSignal == nullptr)
+    if (!e.inUse || e.stateSource != BLAECK_STATE_CHANNEL || e.stateSignal == nullptr)
       continue;
     if (strcmp(e.command, command) != 0)
       continue;
@@ -648,15 +648,15 @@ void BlaeckSerial::writeCommandState(const char *command, unsigned long messageI
     // The channel was declared from this same name at registration, so it exists unless the
     // table was full - in which case there is nothing to publish to and the warning was
     // already given there.
-    for (byte c = 0; c < MAX_MESSAGE_CHANNELS; c++)
+    for (byte c = 0; c < MAX_STATE_CHANNELS; c++)
     {
-      if (!_messageChannels[c].inUse || !_messageChannels[c].ownedByCommand)
+      if (!_stateChannels[c].inUse || !_stateChannels[c].ownedByCommand)
         continue;
-      if (!_flashStringEqualsName(e.stateSignal, _messageChannels[c].name))
+      if (!_flashStringEqualsName(e.stateSignal, _stateChannels[c].name))
         continue;
 
-      BlaeckStateTextGetter getter = _messageChannels[c].getStateText;
-      _writeMessageFrame(c, getter != nullptr ? getter() : nullptr, messageID);
+      BlaeckStateTextGetter getter = _stateChannels[c].getStateText;
+      _writeStateFrame(c, getter != nullptr ? getter() : nullptr, messageID);
       return;
     }
     return;
@@ -666,23 +666,26 @@ void BlaeckSerial::writeCommandState(const char *command, unsigned long messageI
 
 #if BLAECK_ENABLE_COMMAND_META
 // Copies a flash name into `out` and declares the channel as owned by a command. Kept apart
-// from addMessageChannel() so that one can refuse an owned name outright, with no exception
+// from addStateChannel() so that one can refuse an owned name outright, with no exception
 // for "unless the caller is me".
-bool BlaeckSerial::_addOwnedMessageChannel(const __FlashStringHelper *channelName, BlaeckStateTextGetter getStateText)
+bool BlaeckSerial::_addOwnedStateChannel(const __FlashStringHelper *channelName, BlaeckStateTextGetter getStateText,
+                                        dataType valueType, const void *value)
 {
-#if !BLAECK_ENABLE_MESSAGES
+#if !BLAECK_ENABLE_STATE_CHANNELS
   (void)channelName;
   (void)getStateText;
+  (void)valueType;
+  (void)value;
   return false;
 #else
   if (channelName == nullptr)
     return false;
 
-  char name[MAX_MESSAGE_NAME_COUNT];
+  char name[MAX_STATE_NAME_COUNT];
   PGM_P p = reinterpret_cast<PGM_P>(channelName);
   byte len = 0;
   byte c;
-  while ((c = pgm_read_byte(p + len)) != 0 && len + 1 < MAX_MESSAGE_NAME_COUNT)
+  while ((c = pgm_read_byte(p + len)) != 0 && len + 1 < MAX_STATE_NAME_COUNT)
   {
     name[len] = (char)c;
     len++;
@@ -691,49 +694,54 @@ bool BlaeckSerial::_addOwnedMessageChannel(const __FlashStringHelper *channelNam
   if (len == 0)
     return false;
 
-  int existing = _findMessageChannel(name);
-  if (existing >= 0 && !_messageChannels[existing].ownedByCommand)
+  int existing = _findStateChannel(name);
+  if (existing >= 0 && !_stateChannels[existing].ownedByCommand)
   {
     // The sketch declared this name itself. The command takes it, because its state has to
-    // come from one place - but say so, since the addMessageChannel() line is now dead.
+    // come from one place - but say so, since the addStateChannel() line is now dead.
     if (_debugStream != nullptr)
     {
-      _debugStream->print(F("Channel taken over by a command's own state; drop the addMessageChannel() for: "));
+      _debugStream->print(F("Channel taken over by a command's own state; drop the addStateChannel() for: "));
       _debugStream->println(name);
     }
   }
 
   if (existing >= 0)
   {
-    _messageChannels[existing].icon = nullptr;
-    _messageChannels[existing].diagnostic = true;
-    _messageChannels[existing].getStateText = getStateText;
-    _messageChannels[existing].ownedByCommand = true;
+    _stateChannels[existing].icon = nullptr;
+    _stateChannels[existing].diagnostic = true;
+    _stateChannels[existing].getStateText = getStateText;
+    _stateChannels[existing].valueType = valueType;
+    _stateChannels[existing].stateValue = value;
+    _stateChannels[existing].ownedByCommand = true;
     return true;
   }
 
-  for (byte i = 0; i < MAX_MESSAGE_CHANNELS; i++)
+  for (byte i = 0; i < MAX_STATE_CHANNELS; i++)
   {
-    if (_messageChannels[i].inUse)
+    if (_stateChannels[i].inUse)
       continue;
-    strncpy(_messageChannels[i].name, name, MAX_MESSAGE_NAME_COUNT - 1);
-    _messageChannels[i].name[MAX_MESSAGE_NAME_COUNT - 1] = '\0';
-    _messageChannels[i].icon = nullptr;
+    strncpy(_stateChannels[i].name, name, MAX_STATE_NAME_COUNT - 1);
+    _stateChannels[i].name[MAX_STATE_NAME_COUNT - 1] = '\0';
+    _stateChannels[i].icon = nullptr;
     // Diagnostic on principle: a host that announces a sensor for it anyway should file it
     // away, since the control already shows this value.
-    _messageChannels[i].diagnostic = true;
-    _messageChannels[i].getStateText = getStateText;
-    _messageChannels[i].ownedByCommand = true;
-    _messageChannels[i].inUse = true;
+    _stateChannels[i].diagnostic = true;
+    _stateChannels[i].getStateText = getStateText;
+    _stateChannels[i].valueType = valueType;
+    _stateChannels[i].stateValue = value;
+    _stateChannels[i].truncationWarned = false;
+    _stateChannels[i].ownedByCommand = true;
+    _stateChannels[i].inUse = true;
     return true;
   }
 
   if (_debugStream != nullptr)
   {
-    _debugStream->print(F("Message channel table full for a command's own state: "));
+    _debugStream->print(F("State channel table full for a command's own state: "));
     _debugStream->println(name);
   }
-  _rejectedMessageChannelCount++;
+  _rejectedStateChannelCount++;
   return false;
 #endif
 }
@@ -741,10 +749,20 @@ bool BlaeckSerial::_addOwnedMessageChannel(const __FlashStringHelper *channelNam
 bool BlaeckSerial::_declareOwnState(byte handlerIndex, const __FlashStringHelper *channelName,
                                    BlaeckStateTextGetter getStateText)
 {
-  if (channelName == nullptr || getStateText == nullptr)
+  return _declareOwnState(handlerIndex, channelName, getStateText, Blaeck_string, nullptr);
+}
+
+bool BlaeckSerial::_declareOwnState(byte handlerIndex, const __FlashStringHelper *channelName,
+                                   BlaeckStateTextGetter getStateText, dataType valueType,
+                                   const void *value)
+{
+  // One or the other has to supply the value: a getter that builds text, or a variable the
+  // library reads. Neither means the control would sit at unknown forever, so refuse it here
+  // rather than announce a topic nothing publishes to.
+  if (channelName == nullptr || (getStateText == nullptr && value == nullptr))
     return false;
 
-  if (!_addOwnedMessageChannel(channelName, getStateText))
+  if (!_addOwnedStateChannel(channelName, getStateText, valueType, value))
     return false;
 
   // Announce once, here. A host connecting later reads the value from the channel catalog,
@@ -1223,90 +1241,157 @@ void BlaeckSerial::_writeCommandAck(const char *rawCommand, byte status, byte re
   }
 }
 
-#if BLAECK_ENABLE_MESSAGES
-void BlaeckSerial::writeMessage(const char *channelName, const char *text)
+#if BLAECK_ENABLE_STATE_CHANNELS
+void BlaeckSerial::writeState(const char *channelName, const char *text)
 {
-  this->writeMessage(channelName, text, _messageMsgId++);
+  this->writeState(channelName, text, _stateMsgId++);
 }
 
-int BlaeckSerial::_registerMessageChannel(const char *channelName)
+int BlaeckSerial::_registerStateChannel(const char *channelName, dataType valueType,
+                                         const void *value)
 {
   if (channelName == nullptr || channelName[0] == '\0')
   {
-    _rejectedMessageChannelCount++;
+    _rejectedStateChannelCount++;
     return -1;
   }
 
   // A channel a command owns is that command's alone: its value comes from the getter it was
   // registered with, and nowhere else.
-  int owned = _findMessageChannel(channelName);
-  if (owned >= 0 && _messageChannels[owned].ownedByCommand)
+  int owned = _findStateChannel(channelName);
+  if (owned >= 0 && _stateChannels[owned].ownedByCommand)
   {
     if (_debugStream != nullptr)
     {
       _debugStream->print(F("Channel belongs to a command's own state and cannot be redeclared: "));
       _debugStream->println(channelName);
     }
-    _rejectedMessageChannelCount++;
+    _rejectedStateChannelCount++;
     return -1;
   }
 
-  if (strlen(channelName) >= MAX_MESSAGE_NAME_COUNT)
+  if (strlen(channelName) >= MAX_STATE_NAME_COUNT)
   {
     if (_debugStream != nullptr)
     {
-      _debugStream->print(F("Channel name too long for message channel table: "));
+      _debugStream->print(F("Channel name too long for state channel table: "));
       _debugStream->println(channelName);
     }
-    _rejectedMessageChannelCount++;
+    _rejectedStateChannelCount++;
     return -1;
   }
 
   // Re-declaring a channel updates it rather than consuming a slot, so the metadata starts
   // empty: what the previous declaration said must not survive a chain that says less.
-  int existing = _findMessageChannel(channelName);
+  int existing = _findStateChannel(channelName);
   if (existing >= 0)
   {
-    _messageChannels[existing].icon = nullptr;
-    _messageChannels[existing].diagnostic = false;
-    _messageChannels[existing].deviceClass = nullptr;
-    _messageChannels[existing].options = nullptr;
-    _messageChannels[existing].disabledByDefault = false;
-    _messageChannels[existing].forceUpdate = false;
-    _messageChannels[existing].getStateText = nullptr;
+    _stateChannels[existing].icon = nullptr;
+    _stateChannels[existing].diagnostic = false;
+    _stateChannels[existing].deviceClass = nullptr;
+    _stateChannels[existing].options = nullptr;
+    _stateChannels[existing].disabledByDefault = false;
+    _stateChannels[existing].forceUpdate = false;
+    _stateChannels[existing].getStateText = nullptr;
+    _stateChannels[existing].unit = nullptr;
+    _stateChannels[existing].metaFlags = 0;
+    _stateChannels[existing].displayPrecision = 0;
+    _stateChannels[existing].valueType = valueType;
+    _stateChannels[existing].stateValue = value;
     return existing;
   }
 
-  for (byte i = 0; i < MAX_MESSAGE_CHANNELS; i++)
+  for (byte i = 0; i < MAX_STATE_CHANNELS; i++)
   {
-    if (!_messageChannels[i].inUse)
+    if (!_stateChannels[i].inUse)
     {
-      strncpy(_messageChannels[i].name, channelName, MAX_MESSAGE_NAME_COUNT - 1);
-      _messageChannels[i].name[MAX_MESSAGE_NAME_COUNT - 1] = '\0';
-      _messageChannels[i].icon = nullptr;
-      _messageChannels[i].diagnostic = false;
-      _messageChannels[i].deviceClass = nullptr;
-      _messageChannels[i].options = nullptr;
-      _messageChannels[i].disabledByDefault = false;
-      _messageChannels[i].forceUpdate = false;
-      _messageChannels[i].getStateText = nullptr;
-      _messageChannels[i].inUse = true;
+      strncpy(_stateChannels[i].name, channelName, MAX_STATE_NAME_COUNT - 1);
+      _stateChannels[i].name[MAX_STATE_NAME_COUNT - 1] = '\0';
+      _stateChannels[i].icon = nullptr;
+      _stateChannels[i].diagnostic = false;
+      _stateChannels[i].deviceClass = nullptr;
+      _stateChannels[i].options = nullptr;
+      _stateChannels[i].disabledByDefault = false;
+      _stateChannels[i].forceUpdate = false;
+      _stateChannels[i].getStateText = nullptr;
+      _stateChannels[i].unit = nullptr;
+      _stateChannels[i].metaFlags = 0;
+      _stateChannels[i].displayPrecision = 0;
+      _stateChannels[i].truncationWarned = false;
+      _stateChannels[i].valueType = valueType;
+      _stateChannels[i].stateValue = value;
+      _stateChannels[i].inUse = true;
       return (int)i;
     }
   }
 
   if (_debugStream != nullptr)
   {
-    _debugStream->print(F("Message channel table full for: "));
+    _debugStream->print(F("State channel table full for: "));
     _debugStream->println(channelName);
   }
-  _rejectedMessageChannelCount++;
+  _rejectedStateChannelCount++;
   return -1;
 }
 
-BlaeckMessageChannelRef BlaeckSerial::addMessageChannel(const char *channelName)
+BlaeckTextStateRef BlaeckSerial::addStateChannel(const char *channelName)
 {
-  return BlaeckMessageChannelRef(this, (int16_t)_registerMessageChannel(channelName));
+  return BlaeckTextStateRef(this, (int16_t)_registerStateChannel(channelName));
+}
+
+BlaeckTextStateRef BlaeckSerial::addStateChannel(const char *channelName, const char *value)
+{
+  return BlaeckTextStateRef(this, (int16_t)_registerStateChannel(channelName, Blaeck_string, value));
+}
+
+BlaeckBoolStateRef BlaeckSerial::addStateChannel(const char *channelName, bool *value)
+{
+  return BlaeckBoolStateRef(this, (int16_t)_registerStateChannel(channelName, Blaeck_bool, value));
+}
+
+BlaeckNumericStateRef BlaeckSerial::addStateChannel(const char *channelName, byte *value)
+{
+  return BlaeckNumericStateRef(this, (int16_t)_registerStateChannel(channelName, Blaeck_byte, value));
+}
+
+BlaeckNumericStateRef BlaeckSerial::addStateChannel(const char *channelName, short *value)
+{
+  return BlaeckNumericStateRef(this, (int16_t)_registerStateChannel(channelName, Blaeck_short, value));
+}
+
+BlaeckNumericStateRef BlaeckSerial::addStateChannel(const char *channelName, unsigned short *value)
+{
+  return BlaeckNumericStateRef(this, (int16_t)_registerStateChannel(channelName, Blaeck_ushort, value));
+}
+
+BlaeckNumericStateRef BlaeckSerial::addStateChannel(const char *channelName, int *value)
+{
+  return BlaeckNumericStateRef(this, (int16_t)_registerStateChannel(channelName, Blaeck_int, value));
+}
+
+BlaeckNumericStateRef BlaeckSerial::addStateChannel(const char *channelName, unsigned int *value)
+{
+  return BlaeckNumericStateRef(this, (int16_t)_registerStateChannel(channelName, Blaeck_uint, value));
+}
+
+BlaeckNumericStateRef BlaeckSerial::addStateChannel(const char *channelName, long *value)
+{
+  return BlaeckNumericStateRef(this, (int16_t)_registerStateChannel(channelName, Blaeck_long, value));
+}
+
+BlaeckNumericStateRef BlaeckSerial::addStateChannel(const char *channelName, unsigned long *value)
+{
+  return BlaeckNumericStateRef(this, (int16_t)_registerStateChannel(channelName, Blaeck_ulong, value));
+}
+
+BlaeckNumericStateRef BlaeckSerial::addStateChannel(const char *channelName, float *value)
+{
+  return BlaeckNumericStateRef(this, (int16_t)_registerStateChannel(channelName, Blaeck_float, value));
+}
+
+BlaeckNumericStateRef BlaeckSerial::addStateChannel(const char *channelName, double *value)
+{
+  return BlaeckNumericStateRef(this, (int16_t)_registerStateChannel(channelName, Blaeck_double, value));
 }
 
 bool BlaeckSerial::_flashStringEqualsName(const __FlashStringHelper *flashName, const char *name)
@@ -1327,35 +1412,34 @@ bool BlaeckSerial::_flashStringEqualsName(const __FlashStringHelper *flashName, 
   }
 }
 
-void BlaeckSerial::clearAllMessageChannels()
+void BlaeckSerial::clearAllStateChannels()
 {
-  for (byte i = 0; i < MAX_MESSAGE_CHANNELS; i++)
+  for (byte i = 0; i < MAX_STATE_CHANNELS; i++)
   {
-    _messageChannels[i].inUse = false;
-    _messageChannels[i].icon = nullptr;
-    _messageChannels[i].diagnostic = false;
-    _messageChannels[i].name[0] = '\0';
+    _stateChannels[i].inUse = false;
+    _stateChannels[i].icon = nullptr;
+    _stateChannels[i].diagnostic = false;
+    _stateChannels[i].name[0] = '\0';
   }
 }
 
-int BlaeckSerial::_findMessageChannel(const char *channelName) const
+int BlaeckSerial::_findStateChannel(const char *channelName) const
 {
   if (channelName == nullptr || channelName[0] == '\0')
     return -1;
 
-  for (byte i = 0; i < MAX_MESSAGE_CHANNELS; i++)
+  for (byte i = 0; i < MAX_STATE_CHANNELS; i++)
   {
-    if (_messageChannels[i].inUse && strcmp(_messageChannels[i].name, channelName) == 0)
+    if (_stateChannels[i].inUse && strcmp(_stateChannels[i].name, channelName) == 0)
       return (int)i;
   }
   return -1;
 }
 
-void BlaeckSerial::writeMessage(const char *channelName, const char *text, unsigned long messageID)
+void BlaeckSerial::writeState(const char *channelName, const char *text, unsigned long messageID)
 {
-  // 0x95 "Message" frame: a free-text status/log line on a declared channel,
-  // device -> host.
-  //   channelIndex(1)  length(2, LE uint16)  text[length]
+  // 0x95 "State" frame: the current value of a declared channel, device -> host.
+  //   channelIndex(1)  valueType(1)  value
   // channelIndex is the channel's position in the 0x90 catalog, so that frame
   // must be received first. Channels are never removed, only cleared as a whole,
   // so the slot index and the catalog position cannot drift apart.
@@ -1367,12 +1451,12 @@ void BlaeckSerial::writeMessage(const char *channelName, const char *text, unsig
 
   // Only declared channels are sent: the host announces its entities from the
   // 0x90 catalog, so a line on an undeclared channel would have nowhere to go.
-  int channelIndex = _findMessageChannel(channelName);
+  int channelIndex = _findStateChannel(channelName);
   if (channelIndex < 0)
   {
     if (_debugStream != nullptr)
     {
-      _debugStream->print(F("Message dropped, channel not declared with addMessageChannel(): "));
+      _debugStream->print(F("State dropped, channel not declared with addStateChannel(): "));
       _debugStream->println(channelName != nullptr ? channelName : "");
     }
     return;
@@ -1381,45 +1465,121 @@ void BlaeckSerial::writeMessage(const char *channelName, const char *text, unsig
   // A channel a command owns reports what its getter says and nothing else. A line pushed
   // here would show until the next catalog poll and then be silently replaced, which is worse
   // than refusing it. Use writeCommandState() to publish the getter's value.
-  if (_messageChannels[channelIndex].ownedByCommand)
+  if (_stateChannels[channelIndex].ownedByCommand)
   {
     if (_debugStream != nullptr)
     {
-      _debugStream->print(F("Message dropped, channel belongs to a command's own state; use writeCommandState() for: "));
+      _debugStream->print(F("State dropped, channel belongs to a command's own state; use writeCommandState() for: "));
       _debugStream->println(channelName);
     }
     return;
   }
 
-  _writeMessageFrame(channelIndex, text, messageID);
+  // Text on a channel declared as a number would go out under a numeric valueType and be read
+  // as four bytes of a float - a plausible wrong number with nothing to show it went wrong.
+  // Refuse it here; writeState(channelName) reports the variable instead.
+  if (_stateChannels[channelIndex].valueType != Blaeck_string)
+  {
+    if (_debugStream != nullptr)
+    {
+      _debugStream->print(F("State dropped, channel carries a number; use writeState(channelName) for: "));
+      _debugStream->println(channelName);
+    }
+    return;
+  }
+
+  _writeStateFrame(channelIndex, text, messageID);
 }
 
-// The 0x95 frame itself. Split out because writeCommandState() has to reach it for a channel
-// writeMessage() deliberately refuses - the guard is about who may choose the text, not about
-// how it is sent.
-void BlaeckSerial::_writeMessageFrame(int channelIndex, const char *text, unsigned long messageID)
+// Reports whatever the channel currently holds: the variable a typed channel points at, or
+// the text a getter builds. The one form that needs no value from the caller, and the only
+// way to push a numeric channel.
+void BlaeckSerial::writeState(const char *channelName)
+{
+  this->writeState(channelName, _stateMsgId++);
+}
+
+void BlaeckSerial::writeState(const char *channelName, unsigned long messageID)
 {
   if (StreamRef == nullptr)
     return;
 
+  int channelIndex = _findStateChannel(channelName);
+  if (channelIndex < 0)
+  {
+    if (_debugStream != nullptr)
+    {
+      _debugStream->print(F("State dropped, channel not declared with addStateChannel(): "));
+      _debugStream->println(channelName != nullptr ? channelName : "");
+    }
+    return;
+  }
+
+  if (_stateChannels[channelIndex].ownedByCommand)
+  {
+    if (_debugStream != nullptr)
+    {
+      _debugStream->print(F("State dropped, channel belongs to a command's own state; use writeCommandState() for: "));
+      _debugStream->println(channelName);
+    }
+    return;
+  }
+
+  const StateChannelEntry &e = _stateChannels[channelIndex];
+  const char *text = (e.getStateText != nullptr) ? e.getStateText() : nullptr;
+  _writeStateFrame(channelIndex, text, messageID);
+}
+
+// The 0x95 frame itself. Split out because writeCommandState() has to reach it for a channel
+// writeState() deliberately refuses - the guard is about who may choose the text, not about
+// how it is sent.
+void BlaeckSerial::_writeStateFrame(int channelIndex, const char *text, unsigned long messageID)
+{
+  if (StreamRef == nullptr)
+    return;
+
+  // A typed channel reports its variable; text is what a string channel was handed, or what
+  // its getter returned. One or the other, never both - which is what valueType records.
+  StateChannelEntry &e = _stateChannels[channelIndex];
+  byte valueBytes[8];
+  byte valueLen = _channelValueBytes(e, valueBytes);
+
   if (text == nullptr)
     text = "";
 
-  // 2-byte length prefix caps a single message at 65535 bytes. Widen before
-  // comparing: size_t is 16 bit on AVR, where `len > 65535` can never be true
-  // and warns under -Wtype-limits.
-  uint32_t rawLen = (uint32_t)strlen(text);
-  uint16_t len = (rawLen > 0xFFFFu) ? (uint16_t)0xFFFFu : (uint16_t)rawLen;
+  // Capped at 255, the same as a string signal and as Home Assistant's own limit on a state.
+  // The cap also bounds how long one push holds the link: a frame goes out whole, so an
+  // unbounded value would delay every data frame queued behind it.
+  size_t rawLen = strlen(text);
+  byte len = (rawLen > 255) ? (byte)255 : (byte)rawLen;
+  if (rawLen > 255 && !e.truncationWarned)
+  {
+    e.truncationWarned = true;
+    if (_debugStream != nullptr)
+    {
+      _debugStream->print(F("State text truncated to 255 bytes on channel: "));
+      _debugStream->println(e.name);
+    }
+  }
 
   if (_bufferedWrites && _frameBuf)
   {
     _bufReset();
     _bufHeader(0x95, messageID);
-    // Channel index, then the UTF-8 text length-prefixed (LE uint16).
+    // Channel index, the datatype, then the value: fixed width for a number, a 1-byte length
+    // followed by that many UTF-8 bytes for a string - the same rule a data frame follows.
     _bufByte((byte)channelIndex);
-    _bufByte((byte)(len & 0xFF));
-    _bufByte((byte)((len >> 8) & 0xFF));
-    _bufBytes((const byte *)text, len);
+    _bufByte(_dtypeCode(e.valueType));
+    if (valueLen > 0)
+    {
+      _bufBytes(valueBytes, valueLen);
+    }
+    else
+    {
+      _bufByte(len);
+      if (len > 0)
+        _bufBytes((const byte *)text, len);
+    }
     _bufFooter();
     _bufSend();
   }
@@ -1433,11 +1593,18 @@ void BlaeckSerial::_writeMessageFrame(int channelIndex, const char *text, unsign
     StreamRef->write(ulngCvt.bval, 4);
     StreamRef->write(":");
 
-    // Channel index, then the UTF-8 text length-prefixed (LE uint16).
     StreamRef->write((byte)channelIndex);
-    StreamRef->write((byte)(len & 0xFF));
-    StreamRef->write((byte)((len >> 8) & 0xFF));
-    StreamRef->write((const uint8_t *)text, len);
+    StreamRef->write(_dtypeCode(e.valueType));
+    if (valueLen > 0)
+    {
+      StreamRef->write(valueBytes, valueLen);
+    }
+    else
+    {
+      StreamRef->write(len);
+      if (len > 0)
+        StreamRef->write((const uint8_t *)text, len);
+    }
 
     StreamRef->write("/BLAECK>");
     StreamRef->write("\r\n");
@@ -1445,27 +1612,103 @@ void BlaeckSerial::_writeMessageFrame(int channelIndex, const char *text, unsign
   }
 }
 
-void BlaeckSerial::writeMessageChannels()
+void BlaeckSerial::writeStateChannels()
 {
-  this->writeMessageChannels(1);
+  this->writeStateChannels(1);
 }
 
-void BlaeckSerial::writeMessageChannels(unsigned long msg_id)
+void BlaeckSerial::writeStateChannels(unsigned long msg_id)
 {
-  this->writeMessageChannelsFrame(msg_id);
+  this->writeStateChannelsFrame(msg_id);
 }
 
-void BlaeckSerial::writeMessageChannelsFrame(unsigned long msg_id)
+byte BlaeckSerial::_dtypeCode(dataType t)
 {
-  // 0x90 "Message Channel List" frame. Per declared channel entry:
-  //   reserved(1) reserved(1) name\0 flags(2, LE uint16)
+  switch (t)
+  {
+  case (Blaeck_bool):   return 0x0;
+  case (Blaeck_byte):   return 0x1;
+  case (Blaeck_short):  return 0x2;
+  case (Blaeck_ushort): return 0x3;
+  case (Blaeck_int):    return 0x4;
+  case (Blaeck_uint):   return 0x5;
+  case (Blaeck_long):   return 0x6;
+  case (Blaeck_ulong):  return 0x7;
+  case (Blaeck_float):  return 0x8;
+  case (Blaeck_double): return 0x9;
+  case (Blaeck_string): return 0xA;
+  default:              return 0x8;
+  }
+}
+
+#if BLAECK_ENABLE_STATE_CHANNELS
+byte BlaeckSerial::_channelValueBytes(const StateChannelEntry &e, byte *out)
+{
+  if (e.stateValue == nullptr)
+    return 0;
+
+  switch (e.valueType)
+  {
+  case (Blaeck_bool):   boolCvt.val   = *((const bool *)e.stateValue);           memcpy(out, boolCvt.bval, 1);   return 1;
+  case (Blaeck_byte):   out[0]        = *((const byte *)e.stateValue);                                           return 1;
+  case (Blaeck_short):  shortCvt.val  = *((const short *)e.stateValue);          memcpy(out, shortCvt.bval, 2);  return 2;
+  case (Blaeck_ushort): ushortCvt.val = *((const unsigned short *)e.stateValue); memcpy(out, ushortCvt.bval, 2); return 2;
+  case (Blaeck_int):    intCvt.val    = *((const int *)e.stateValue);            memcpy(out, intCvt.bval, 2);    return 2;
+  case (Blaeck_uint):   uintCvt.val   = *((const unsigned int *)e.stateValue);   memcpy(out, uintCvt.bval, 2);   return 2;
+  case (Blaeck_long):   lngCvt.val    = *((const long *)e.stateValue);           memcpy(out, lngCvt.bval, 4);    return 4;
+  case (Blaeck_ulong):  ulngCvt.val   = *((const unsigned long *)e.stateValue);  memcpy(out, ulngCvt.bval, 4);   return 4;
+  case (Blaeck_float):  fltCvt.val    = *((const float *)e.stateValue);          memcpy(out, fltCvt.bval, 4);    return 4;
+  case (Blaeck_double): dblCvt.val    = *((const double *)e.stateValue);         memcpy(out, dblCvt.bval, 8);    return 8;
+  default:                                                                                                       return 0;
+  }
+}
+#endif
+
+uint16_t BlaeckSerial::_stateChannelFlags(const StateChannelEntry &e, bool hasStateValue) const
+{
+  uint16_t flags = 0;
+  if (e.icon != nullptr)
+    flags |= BLAECK_SCH_HAS_ICON;
+  if (e.diagnostic)
+    flags |= BLAECK_SCH_DIAGNOSTIC;
+  if (hasStateValue)
+    flags |= BLAECK_SCH_HAS_STATE_VALUE;
+  if (e.deviceClass != nullptr)
+    flags |= BLAECK_SCH_HAS_DEVICE_CLASS;
+  if (e.disabledByDefault)
+    flags |= BLAECK_SCH_DISABLED_BY_DEFAULT;
+  if (e.forceUpdate)
+    flags |= BLAECK_SCH_FORCE_UPDATE;
+  if (e.options != nullptr)
+    flags |= BLAECK_SCH_HAS_OPTIONS;
+  if (e.unit != nullptr)
+    flags |= BLAECK_SCH_HAS_UNIT;
+  // State class and display precision live in the entry's own word already, because neither
+  // can be inferred from a member: state class 0 and precision 0 are both real values.
+  flags |= (uint16_t)(e.metaFlags & (BLAECK_SCH_STATE_CLASS_MASK | BLAECK_SCH_HAS_DISPLAY_PRECISION));
+  return flags;
+}
+
+void BlaeckSerial::writeStateChannelsFrame(unsigned long msg_id)
+{
+  // 0x90 "State Channel List" frame. Per declared channel entry:
+  //   reserved(1) reserved(1) name\0 flags(2, LE uint16) valueType(1)
   //   [icon\0]                 if flags.hasIcon
-  //   [stateText\0]            if flags.hasStateText
+  //   [stateValue]             if flags.hasStateValue
   //   [deviceClass\0]          if flags.hasDeviceClass
   //   [options\0]              if flags.hasOptions
-  // flags bits: 0=hasIcon 1=isDiagnostic 2=hasStateText 3=hasDeviceClass 4=disabledByDefault
-  //             5=forceUpdate 6=hasOptions. Bits 7-15 reserved - two bytes rather than one,
-  //             so the catalog has room to grow without taking a new message key.
+  //   [unit\0]                 if flags.hasUnit
+  //   [displayPrecision(1)]    if flags.hasDisplayPrecision
+  // flags bits: 0=hasIcon 1=isDiagnostic 2=hasStateValue 3=hasDeviceClass 4=disabledByDefault
+  //             5=forceUpdate 6=hasOptions 7=hasUnit 8-10=stateClass 11=hasDisplayPrecision.
+  //             Bits 12-15 reserved - two bytes rather than one, so the catalog has room to
+  //             grow without taking a new message key.
+  // Optional fields follow in bit order, as they do in 0xF0.
+  // valueType is unconditional: a channel has a type whether or not it has a value to report
+  // yet, so tying the type to the presence of a value would leave a host guessing. stateValue
+  // is a NUL-terminated string for type 0x0A and the fixed width its type implies otherwise.
+  // Unit, state class and display precision are what make a host treat the channel as a number
+  // rather than as text, so a text channel leaves all three unset.
   // stateText is fetched from the channel's getter as the frame is built, so the catalog
   // reports each channel's value as of that moment and there is no stored copy to go
   // stale. A channel that registered no getter, or whose getter returns nullptr, carries
@@ -1475,7 +1718,7 @@ void BlaeckSerial::writeMessageChannelsFrame(unsigned long msg_id)
   // masterSlaveConfig/slaveID), so a host parses both frames the same way:
   // skip two, read the NUL-terminated name, then the flags.
   // Declared up-front so the host can announce one text entity per channel
-  // before any 0x95 message arrives, the same way 0xA0 announces commands.
+  // before any 0x95 push arrives, the same way 0xA0 announces commands.
   if (StreamRef == nullptr)
     return;
 
@@ -1484,46 +1727,46 @@ void BlaeckSerial::writeMessageChannelsFrame(unsigned long msg_id)
     _bufReset();
     _bufHeader(0x90, msg_id);
 
-    for (byte i = 0; i < MAX_MESSAGE_CHANNELS; i++)
+    for (byte i = 0; i < MAX_STATE_CHANNELS; i++)
     {
-      MessageChannelEntry &e = _messageChannels[i];
+      StateChannelEntry &e = _stateChannels[i];
       if (!e.inUse)
         continue;
 
       // Fetched once, before the flag is decided: the getter may return nullptr, and
       // calling it twice could hand the two uses different text.
       const char *stateText = (e.getStateText != nullptr) ? e.getStateText() : nullptr;
+      byte valueBytes[8];
+      byte valueLen = _channelValueBytes(e, valueBytes);
 
-      uint16_t flags = 0;
-      if (e.icon != nullptr)
-        flags |= 0x0001;
-      if (e.diagnostic)
-        flags |= 0x0002;
-      if (e.deviceClass != nullptr)
-        flags |= 0x0008;
-      if (e.disabledByDefault)
-        flags |= 0x0010;
-      if (e.forceUpdate)
-        flags |= 0x0020;
-      if (e.options != nullptr)
-        flags |= 0x0040;
-      if (stateText != nullptr)
-        flags |= 0x0004;
+      uint16_t flags = _stateChannelFlags(e, stateText != nullptr || valueLen > 0);
 
       _bufByte((byte)0);
       _bufByte((byte)0);
       _bufStr0(e.name);
       _bufByte((byte)(flags & 0xFF));
       _bufByte((byte)((flags >> 8) & 0xFF));
+      _bufByte(_dtypeCode(e.valueType));
 
-      if (flags & 0x0001)
+      if (flags & BLAECK_SCH_HAS_ICON)
         _bufFlashStr0(e.icon);
-      if (flags & 0x0004)
-        _bufStr0(stateText);
-      if (flags & 0x0008)
+      // A string is NUL-terminated here like every other string in this frame; a number is the
+      // fixed width its type implies, which is why it needs no terminator of its own.
+      if (flags & BLAECK_SCH_HAS_STATE_VALUE)
+      {
+        if (valueLen > 0)
+          _bufBytes(valueBytes, valueLen);
+        else
+          _bufStr0(stateText);
+      }
+      if (flags & BLAECK_SCH_HAS_DEVICE_CLASS)
         _bufFlashStr0(e.deviceClass);
-      if (flags & 0x0040)
+      if (flags & BLAECK_SCH_HAS_OPTIONS)
         _bufFlashStr0(e.options);
+      if (flags & BLAECK_SCH_HAS_UNIT)
+        _bufFlashStr0(e.unit);
+      if (flags & BLAECK_SCH_HAS_DISPLAY_PRECISION)
+        _bufByte(e.displayPrecision);
     }
 
     _bufFooter();
@@ -1539,9 +1782,9 @@ void BlaeckSerial::writeMessageChannelsFrame(unsigned long msg_id)
     StreamRef->write(ulngCvt.bval, 4);
     StreamRef->write(":");
 
-    for (byte i = 0; i < MAX_MESSAGE_CHANNELS; i++)
+    for (byte i = 0; i < MAX_STATE_CHANNELS; i++)
     {
-      MessageChannelEntry &e = _messageChannels[i];
+      StateChannelEntry &e = _stateChannels[i];
       if (!e.inUse)
         continue;
 
@@ -1549,22 +1792,10 @@ void BlaeckSerial::writeMessageChannelsFrame(unsigned long msg_id)
       // is streamed as it is built, so the getter runs mid-transmission and a slow one
       // stalls a half-sent frame.
       const char *stateText = (e.getStateText != nullptr) ? e.getStateText() : nullptr;
+      byte valueBytes[8];
+      byte valueLen = _channelValueBytes(e, valueBytes);
 
-      uint16_t flags = 0;
-      if (e.icon != nullptr)
-        flags |= 0x0001;
-      if (e.diagnostic)
-        flags |= 0x0002;
-      if (e.deviceClass != nullptr)
-        flags |= 0x0008;
-      if (e.disabledByDefault)
-        flags |= 0x0010;
-      if (e.forceUpdate)
-        flags |= 0x0020;
-      if (e.options != nullptr)
-        flags |= 0x0040;
-      if (stateText != nullptr)
-        flags |= 0x0004;
+      uint16_t flags = _stateChannelFlags(e, stateText != nullptr || valueLen > 0);
 
       StreamRef->write((byte)0);
       StreamRef->write((byte)0);
@@ -1572,27 +1803,44 @@ void BlaeckSerial::writeMessageChannelsFrame(unsigned long msg_id)
       StreamRef->write((byte)0);
       StreamRef->write((byte)(flags & 0xFF));
       StreamRef->write((byte)((flags >> 8) & 0xFF));
+      StreamRef->write(_dtypeCode(e.valueType));
 
-      if (flags & 0x0001)
+      if (flags & BLAECK_SCH_HAS_ICON)
       {
         StreamRef->print(e.icon);
         StreamRef->write((byte)0);
       }
-      if (flags & 0x0004)
+      // A string is NUL-terminated here like every other string in this frame; a number is the
+      // fixed width its type implies, which is why it needs no terminator of its own.
+      if (flags & BLAECK_SCH_HAS_STATE_VALUE)
       {
-        StreamRef->print(stateText);
-        StreamRef->write((byte)0);
+        if (valueLen > 0)
+        {
+          StreamRef->write(valueBytes, valueLen);
+        }
+        else
+        {
+          StreamRef->print(stateText);
+          StreamRef->write((byte)0);
+        }
       }
-      if (flags & 0x0008)
+      if (flags & BLAECK_SCH_HAS_DEVICE_CLASS)
       {
         StreamRef->print(e.deviceClass);
         StreamRef->write((byte)0);
       }
-      if (flags & 0x0040)
+      if (flags & BLAECK_SCH_HAS_OPTIONS)
       {
         StreamRef->print(e.options);
         StreamRef->write((byte)0);
       }
+      if (flags & BLAECK_SCH_HAS_UNIT)
+      {
+        StreamRef->print(e.unit);
+        StreamRef->write((byte)0);
+      }
+      if (flags & BLAECK_SCH_HAS_DISPLAY_PRECISION)
+        StreamRef->write(e.displayPrecision);
     }
 
     StreamRef->write("/BLAECK>");
@@ -1601,16 +1849,29 @@ void BlaeckSerial::writeMessageChannelsFrame(unsigned long msg_id)
   }
 }
 #else
-// BLAECK_ENABLE_MESSAGES=0: the API stays so sketches still build, but nothing
+// BLAECK_ENABLE_STATE_CHANNELS=0: the API stays so sketches still build, but nothing
 // is stored. The catalog still answers, with an empty list (see _writeEmptyFrame).
 // The handle's modifiers compile and store nothing, so a sketch declaring channels needs no
 // #ifdef. Nothing is counted as rejected: the feature is off, not failing.
-BlaeckMessageChannelRef BlaeckSerial::addMessageChannel(const char *) { return BlaeckMessageChannelRef(this, -1); }
-void BlaeckSerial::clearAllMessageChannels() {}
-void BlaeckSerial::writeMessageChannels() { this->writeMessageChannels(1); }
-void BlaeckSerial::writeMessageChannels(unsigned long msg_id) { this->_writeEmptyFrame(0x90, msg_id); }
-void BlaeckSerial::writeMessage(const char *, const char *) {}
-void BlaeckSerial::writeMessage(const char *, const char *, unsigned long) {}
+BlaeckTextStateRef BlaeckSerial::addStateChannel(const char *) { return BlaeckTextStateRef(this, -1); }
+BlaeckTextStateRef BlaeckSerial::addStateChannel(const char *, const char *) { return BlaeckTextStateRef(this, -1); }
+BlaeckBoolStateRef BlaeckSerial::addStateChannel(const char *, bool *) { return BlaeckBoolStateRef(this, -1); }
+BlaeckNumericStateRef BlaeckSerial::addStateChannel(const char *, byte *) { return BlaeckNumericStateRef(this, -1); }
+BlaeckNumericStateRef BlaeckSerial::addStateChannel(const char *, short *) { return BlaeckNumericStateRef(this, -1); }
+BlaeckNumericStateRef BlaeckSerial::addStateChannel(const char *, unsigned short *) { return BlaeckNumericStateRef(this, -1); }
+BlaeckNumericStateRef BlaeckSerial::addStateChannel(const char *, int *) { return BlaeckNumericStateRef(this, -1); }
+BlaeckNumericStateRef BlaeckSerial::addStateChannel(const char *, unsigned int *) { return BlaeckNumericStateRef(this, -1); }
+BlaeckNumericStateRef BlaeckSerial::addStateChannel(const char *, long *) { return BlaeckNumericStateRef(this, -1); }
+BlaeckNumericStateRef BlaeckSerial::addStateChannel(const char *, unsigned long *) { return BlaeckNumericStateRef(this, -1); }
+BlaeckNumericStateRef BlaeckSerial::addStateChannel(const char *, float *) { return BlaeckNumericStateRef(this, -1); }
+BlaeckNumericStateRef BlaeckSerial::addStateChannel(const char *, double *) { return BlaeckNumericStateRef(this, -1); }
+void BlaeckSerial::clearAllStateChannels() {}
+void BlaeckSerial::writeStateChannels() { this->writeStateChannels(1); }
+void BlaeckSerial::writeStateChannels(unsigned long msg_id) { this->_writeEmptyFrame(0x90, msg_id); }
+void BlaeckSerial::writeState(const char *, const char *) {}
+void BlaeckSerial::writeState(const char *) {}
+void BlaeckSerial::writeState(const char *, unsigned long) {}
+void BlaeckSerial::writeState(const char *, const char *, unsigned long) {}
 #endif
 
 #if BLAECK_ENABLE_EVENTS
@@ -3501,11 +3762,13 @@ void BlaeckSerial::writeSignalConfigFrame(unsigned long msg_id)
   //   [unit\0]                 if flags bit 0
   //   [deviceClass\0]          if flags bit 1
   //   [icon\0]                 if flags bit 2
-  //   [displayPrecision(1)]    if flags bit 8
-  //   [options\0]              if flags bit 9
-  // flags bits: 0=hasUnit 1=hasDeviceClass 2=hasIcon 3-4=stateClass
-  //             5=isDiagnostic 6=disabledByDefault 7=forceUpdate
-  //             8=hasDisplayPrecision 9=hasOptions. Bits 10-15 reserved.
+  //   [displayPrecision(1)]    if flags bit 9
+  //   [options\0]              if flags bit 10
+  // flags bits: 0=hasUnit 1=hasDeviceClass 2=hasIcon 3-5=stateClass
+  //             6=isDiagnostic 7=disabledByDefault 8=forceUpdate
+  //             9=hasDisplayPrecision 10=hasOptions. Bits 11-15 reserved.
+  // stateClass takes three bits because Home Assistant defines five values counting
+  // none: measurement, total, total_increasing and measurement_angle.
   // Optional fields follow in bit order, which is why precision precedes options.
   // Signals that declare nothing are skipped entirely, so a frame with no
   // entries is the ordinary case and not an error. The signal is named by its
@@ -3610,7 +3873,7 @@ void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
   //             5-6=entity category. Bits 7-15 reserved - two bytes rather than one,
   //             so the catalog has room to grow without taking a new message key.
   // src says what stateSignal names: 0 an addSignal() signal, 1 an
-  // addMessageChannel() channel (BlaeckStateSource). It rides with the name rather
+  // addStateChannel() channel (BlaeckStateSource). It rides with the name rather
   // than taking a flags bit, so the last free bit (0x80) stays available.
   // All in-use entries are emitted, including plain onCommand() entries
   // (kind=BLAECK_CMD_PLAIN, flags=0, no trailing metadata). Plain entries carry

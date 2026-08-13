@@ -19,7 +19,7 @@
   Controls:
     SET_FREQ    number  0..2 Hz, step 0.01              state: Frequency signal
     SET_AMP     number  0..100, step 0.1                state: Amplitude signal
-    SET_OFFSET  number  -100..100, step 0.1             state: its own message channel
+    SET_OFFSET  number  -100..100, step 0.1             state: its own state channel
     SET_WAVE    select  Sine/Square/Triangle/Sawtooth   state: WaveName signal
     SET_ENABLE  switch  off -> Output = Offset          state: Enabled signal
     SET_LABEL   text    max 32 bytes, config category   state: DeviceLabel signal
@@ -42,7 +42,7 @@
   Sending a value is a request, not a fact: it can be clamped, rejected, lost on the way, or
   replaced by the device on its next boot. So every control reports its state back, and what a
   dashboard shows is the device's value rather than its own guess. SET_OFFSET makes the same
-  trip from a message channel instead of a signal.
+  trip from a state channel instead of a signal.
 
   Author: Sebastian Strobl, https://github.com/sebaJoSt/BlaeckSerial
 */
@@ -144,8 +144,8 @@ void setup()
   // the first line is written.
   // forceUpdate: the heartbeat repeats the same line, which a host would otherwise collapse
   // into the entry it already holds.
-  BlaeckSerial.addMessageChannel("Status").withIcon(F("mdi:pulse")).diagnostic().forceUpdate();
-  BlaeckSerial.addMessageChannel("StatusOnDemand").withIcon(F("mdi:message-text")).diagnostic();
+  BlaeckSerial.addStateChannel("Status").withIcon(F("mdi:pulse")).diagnostic().forceUpdate();
+  BlaeckSerial.addStateChannel("StatusOnDemand").withIcon(F("mdi:message-text")).diagnostic();
 
   // Each event channel declares up-front the closed set of events it can report.
   // addEventType() does the same one name at a time, for a list built conditionally.
@@ -221,7 +221,7 @@ void WriteStatus(const char *channel)
   String(Frequency, 2).toCharArray(hz, sizeof(hz));
   char text[80]; // fits "stopped Triangle @ 2.00 Hz"
   snprintf(text, sizeof(text), "%s %s @ %s Hz", Enabled ? "running" : "stopped", WaveName, hz);
-  BlaeckSerial.writeMessage(channel, text);
+  BlaeckSerial.writeState(channel, text);
 }
 
 // Warns once per idle stretch (>=5s -> "idle_warning"), and only reports "resumed" if a warning
@@ -261,7 +261,7 @@ void RefreshWaveName()
     snprintf(WaveName, sizeof(WaveName), "%u", (unsigned)waveIndex);
 }
 
-// Offset as text for its message channel: one decimal (SET_OFFSET's step) and no unit, since a
+// Offset as text for its state channel: one decimal (SET_OFFSET's step) and no unit, since a
 // Home Assistant number reads its state as a bare numeric.
 const char *OffsetState()
 {
