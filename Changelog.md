@@ -121,6 +121,12 @@ without being configured for that board in advance.
   `String` per call. Returns `-1` when no signal has that name.
 
 ### Fixed
+- **`BLAECK_ENABLE_STATE_CHANNELS=0` compiles again.** The state channel handle names
+  `StateChannelEntry` in a return type and its fields in the `withIcon()`/`diagnostic()`
+  chain, but the type was itself compiled away with the feature, so a sketch that turned
+  state channels off could not build at all. The type is now always declared — only the
+  table is conditional — which is what the feature flags promise everywhere else: the
+  calls still compile and store nothing, so a sketch needs no `#ifdef`.
 - **Compile-time configuration now has a documented, working route.** A
   `BlaeckSerialConfig.h` in the sketch folder — the method described since 6.0.0 —
   is never found under the Arduino IDE or arduino-cli, because the sketch folder is

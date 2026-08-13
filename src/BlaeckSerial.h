@@ -1097,12 +1097,12 @@ private:
 #else
   static const byte MAX_COMMAND_NAME_COUNT = 40;
 #endif
-#if BLAECK_ENABLE_STATE_CHANNELS
-  #if defined(__AVR__)
-    static const byte MAX_STATE_NAME_COUNT = 16;
-  #else
-    static const byte MAX_STATE_NAME_COUNT = 32;
-  #endif
+// Declared whether or not state channels are compiled in, because StateChannelEntry
+// is - see there.
+#if defined(__AVR__)
+  static const byte MAX_STATE_NAME_COUNT = 16;
+#else
+  static const byte MAX_STATE_NAME_COUNT = 32;
 #endif
 #if BLAECK_ENABLE_EVENTS
   #if defined(__AVR__)
@@ -1257,7 +1257,11 @@ private:
   // Allocates the table on first use. False when the board had no RAM for it,
   // which is reported the same way a full table is.
   bool _ensureCommandTable();
-#if BLAECK_ENABLE_STATE_CHANNELS
+  // Declared even with BLAECK_ENABLE_STATE_CHANNELS=0, when no table of these is ever
+  // built: BlaeckStateRefBase::_entry() names the type in its return type, and the
+  // withIcon()/diagnostic()/... chain names its fields - all of which has to keep
+  // compiling so a sketch needs no #ifdef around what it writes. A type on its own
+  // costs nothing; only the table below is compiled away.
   struct StateChannelEntry
   {
     char name[MAX_STATE_NAME_COUNT];
@@ -1292,6 +1296,7 @@ private:
     bool truncationWarned = false;
     bool inUse = false;
   };
+#if BLAECK_ENABLE_STATE_CHANNELS
   StateChannelEntry *_stateChannels = nullptr;
   byte _stateChannelCapacity = DEFAULT_STATE_CHANNELS;
   byte _stateChannelSlots() const { return _stateChannels != nullptr ? _stateChannelCapacity : 0; }
