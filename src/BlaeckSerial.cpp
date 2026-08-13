@@ -15,44 +15,323 @@ BlaeckSerial::~BlaeckSerial()
 {
   delete[] Signals;
   Signals = nullptr;
+  delete[] _commandHandlers;
+  _commandHandlers = nullptr;
+#if BLAECK_ENABLE_STATE_CHANNELS
+  delete[] _stateChannels;
+  _stateChannels = nullptr;
+#endif
+#if BLAECK_ENABLE_EVENTS
+  delete[] _eventChannels;
+  _eventChannels = nullptr;
+  delete[] _eventTypes;
+  _eventTypes = nullptr;
+#endif
   _bufFree();
 }
 
-void BlaeckSerial::begin(Stream *Ref, unsigned int size)
-{
-  begin(Ref, size, nullptr);
-}
-void BlaeckSerial::begin(Stream *Ref, unsigned int size, Stream *DebugRef)
+BlaeckBeginRef BlaeckSerial::begin(Stream *Ref)
 {
   StreamRef = (Stream *)Ref;
-  _debugStream = DebugRef;
-  _signalCapacity = size;
+  _signalCapacity = DEFAULT_SIGNALS;
   if (Signals != nullptr)
   {
     delete[] Signals;
     Signals = nullptr;
   }
-  Signals = new (std::nothrow) Signal[size];
   _signalIndex = 0;
   SignalCount = 0;
   _schemaHash = 0;
   _signalRegistrationFailed = false;
   _rejectedSignalCount = 0;
 
-  // Requesting more signals than the board has RAM for leaves Signals null.
-  // Reported through the same flag addSignal uses, so hasRejectedSignals()
-  // catches it even before the first addSignal call.
-  if (Signals == nullptr)
-    _signalRegistrationFailed = true;
-
-  if (_bufferedWrites)
-    _bufAllocate();
+  // No table is built here. Each one is allocated by the first entry added to
+  // it, so a sketch pays for the tables it uses and the chain this returns can
+  // still change their sizes after begin() has returned.
+  return BlaeckBeginRef(this);
 }
+
+BlaeckBeginRef BlaeckSerial::begin(Stream *Ref, unsigned int size)
+{
+  return begin(Ref).withSignals(size);
+}
+
+bool BlaeckSerial::hasRejections() const
+{
+  if (_rejectedSignalCount > 0 || _rejectedCommandCount > 0)
+    return true;
+#if BLAECK_ENABLE_STATE_CHANNELS
+  if (_rejectedStateChannelCount > 0)
+    return true;
+#endif
+#if BLAECK_ENABLE_EVENTS
+  if (_rejectedEventChannelCount > 0 || _rejectedEventTypeCount > 0)
+    return true;
+#endif
+  return false;
+}
+
+void BlaeckSerial::_printRejectionLine(Stream *out, const __FlashStringHelper *what,
+                                       const __FlashStringHelper *chainCall, uint16_t dropped,
+                                       unsigned int capacity)
+{
+  out->print(F("  "));
+  out->print(dropped);
+  out->print(F(" "));
+  out->print(what);
+  out->print(F(" dropped, table holds "));
+  out->print(capacity);
+  out->print(F(" - begin(&Serial)."));
+  out->print(chainCall);
+  out->print(F("("));
+  // What was asked for in total. Enough to hold this run, which is the number the sketch
+  // wants; a bigger one only matters if what it declares can grow.
+  out->print(capacity + dropped);
+  out->println(F(")"));
+}
+
+bool BlaeckSerial::printRejections(Stream *out)
+{
+  if (out == nullptr || !hasRejections())
+    return false;
+
+  out->println(F("BlaeckSerial dropped what it had no room for:"));
+  if (_rejectedSignalCount > 0)
+    _printRejectionLine(out, F("signal(s)"), F("withSignals"), _rejectedSignalCount,
+                        _signalCapacity);
+  if (_rejectedCommandCount > 0)
+    _printRejectionLine(out, F("command(s)"), F("withCommands"), _rejectedCommandCount,
+                        _commandCapacity);
+#if BLAECK_ENABLE_STATE_CHANNELS
+  if (_rejectedStateChannelCount > 0)
+    _printRejectionLine(out, F("state channel(s)"), F("withStateChannels"),
+                        _rejectedStateChannelCount, _stateChannelCapacity);
+#endif
+#if BLAECK_ENABLE_EVENTS
+  if (_rejectedEventChannelCount > 0)
+    _printRejectionLine(out, F("event channel(s)"), F("withEventChannels"),
+                        _rejectedEventChannelCount, _eventChannelCapacity);
+  if (_rejectedEventTypeCount > 0)
+    _printRejectionLine(out, F("event type(s)"), F("withEventTypes"),
+                        _rejectedEventTypeCount, _eventTypeCapacity);
+#endif
+  // A name too long or a duplicate is counted here too, and no capacity would cure those.
+  // The debug stream is where the individual reason was given.
+  out->println(F("  (a name too long or already taken counts here too - "
+                 "withDebugStream() names each one)"));
+  return true;
+}
+
+void BlaeckSerial::_setTableCapacity(TableId table, unsigned int count)
+{
+  if (count == 0)
+    return;
+
+  // The table this capacity would size, and whether it is already built.
+  const void *existing = nullptr;
+  const __FlashStringHelper *chainCall = nullptr;
+  switch (table)
+  {
+  case TABLE_SIGNALS:
+    existing = Signals;
+    chainCall = F("withSignals");
+    break;
+#if BLAECK_ENABLE_STATE_CHANNELS
+  case TABLE_STATE_CHANNELS:
+    existing = _stateChannels;
+    chainCall = F("withStateChannels");
+    break;
+#endif
+#if BLAECK_ENABLE_EVENTS
+  case TABLE_EVENT_CHANNELS:
+    existing = _eventChannels;
+    chainCall = F("withEventChannels");
+    break;
+  case TABLE_EVENT_TYPES:
+    existing = _eventTypes;
+    chainCall = F("withEventTypes");
+    break;
+#endif
+  case TABLE_COMMANDS:
+    existing = _commandHandlers;
+    chainCall = F("withCommands");
+    break;
+  default:
+    return;
+  }
+
+  // A table is sized once, when its first entry builds it. Asking afterwards
+  // would hand back a capacity the table does not have, so say so instead.
+  if (existing != nullptr)
+  {
+    if (_debugStream != nullptr)
+    {
+      _debugStream->print(F("Too late for BLAECK."));
+      _debugStream->print(chainCall);
+      _debugStream->println(F("(): that table already exists. Move the call up, "
+                              "before the first entry is added to it."));
+    }
+    return;
+  }
+
+  switch (table)
+  {
+  case TABLE_SIGNALS:
+    _signalCapacity = count;
+    break;
+#if BLAECK_ENABLE_STATE_CHANNELS
+  case TABLE_STATE_CHANNELS:
+    _stateChannelCapacity = (count > 255) ? 255 : (byte)count;
+    break;
+#endif
+#if BLAECK_ENABLE_EVENTS
+  case TABLE_EVENT_CHANNELS:
+    _eventChannelCapacity = (count > 255) ? 255 : (byte)count;
+    break;
+  case TABLE_EVENT_TYPES:
+    _eventTypeCapacity = (count > 255) ? 255 : (byte)count;
+    break;
+#endif
+  case TABLE_COMMANDS:
+    _commandCapacity = (count > 255) ? 255 : (byte)count;
+    break;
+  default:
+    break;
+  }
+}
+
+void BlaeckSerial::_warnTableFull(const __FlashStringHelper *table, unsigned int capacity,
+                                  const char *droppedName)
+{
+  if (_debugStream == nullptr)
+    return;
+  _debugStream->print(F("Dropped '"));
+  _debugStream->print(droppedName != nullptr ? droppedName : "");
+  _debugStream->print(F("': table full at "));
+  _debugStream->print(capacity);
+  _debugStream->print(F(". Room for more: BLAECK.begin(&Serial)."));
+  _debugStream->print(table);
+  _debugStream->print(F("("));
+  _debugStream->print(capacity + 1);
+  _debugStream->println(F(") or higher."));
+}
+
+void BlaeckSerial::_warnTableFull(const __FlashStringHelper *table, unsigned int capacity,
+                                  const __FlashStringHelper *droppedName)
+{
+  if (_debugStream == nullptr)
+    return;
+  _debugStream->print(F("Dropped '"));
+  if (droppedName != nullptr)
+    _debugStream->print(droppedName);
+  _debugStream->print(F("': table full at "));
+  _debugStream->print(capacity);
+  _debugStream->print(F(". Room for more: BLAECK.begin(&Serial)."));
+  _debugStream->print(table);
+  _debugStream->print(F("("));
+  _debugStream->print(capacity + 1);
+  _debugStream->println(F(") or higher."));
+}
+
+// Each table is built by its first entry and never grows: one block per table,
+// allocated during setup and never freed, so nothing can fragment the heap
+// later. A board too small to hold the table leaves the pointer null, which
+// every caller reads as "full" - the same path a full table takes, reported by
+// the same hasRejected*() flag.
+bool BlaeckSerial::_ensureSignalTable()
+{
+  if (Signals != nullptr)
+    return true;
+  if (_signalCapacity == 0)
+    return false;
+  Signals = new (std::nothrow) Signal[_signalCapacity];
+  if (Signals == nullptr)
+  {
+    if (_debugStream != nullptr)
+    {
+      _debugStream->print(F("No RAM for the signal table ("));
+      _debugStream->print(_signalCapacity);
+      _debugStream->println(F(" signals). Every signal will be dropped."));
+    }
+    return false;
+  }
+  return true;
+}
+
+bool BlaeckSerial::_ensureCommandTable()
+{
+  if (_commandHandlers != nullptr)
+    return true;
+  if (_commandCapacity == 0)
+    return false;
+  _commandHandlers = new (std::nothrow) CommandHandlerEntry[_commandCapacity]();
+  if (_commandHandlers == nullptr && _debugStream != nullptr)
+  {
+    _debugStream->print(F("No RAM for the command table ("));
+    _debugStream->print(_commandCapacity);
+    _debugStream->println(F(" commands). Every command will be dropped."));
+  }
+  return _commandHandlers != nullptr;
+}
+
+#if BLAECK_ENABLE_STATE_CHANNELS
+bool BlaeckSerial::_ensureStateChannelTable()
+{
+  if (_stateChannels != nullptr)
+    return true;
+  if (_stateChannelCapacity == 0)
+    return false;
+  _stateChannels = new (std::nothrow) StateChannelEntry[_stateChannelCapacity]();
+  if (_stateChannels == nullptr && _debugStream != nullptr)
+  {
+    _debugStream->print(F("No RAM for the state channel table ("));
+    _debugStream->print(_stateChannelCapacity);
+    _debugStream->println(F(" channels). Every channel will be dropped."));
+  }
+  return _stateChannels != nullptr;
+}
+#endif
+
+#if BLAECK_ENABLE_EVENTS
+bool BlaeckSerial::_ensureEventChannelTable()
+{
+  if (_eventChannels != nullptr)
+    return true;
+  if (_eventChannelCapacity == 0)
+    return false;
+  _eventChannels = new (std::nothrow) EventChannelEntry[_eventChannelCapacity]();
+  if (_eventChannels == nullptr && _debugStream != nullptr)
+  {
+    _debugStream->print(F("No RAM for the event channel table ("));
+    _debugStream->print(_eventChannelCapacity);
+    _debugStream->println(F(" channels). Every event channel will be dropped."));
+  }
+  return _eventChannels != nullptr;
+}
+
+bool BlaeckSerial::_ensureEventTypeTable()
+{
+  if (_eventTypes != nullptr)
+    return true;
+  if (_eventTypeCapacity == 0)
+    return false;
+  _eventTypes = new (std::nothrow) EventTypeEntry[_eventTypeCapacity]();
+  if (_eventTypes == nullptr && _debugStream != nullptr)
+  {
+    _debugStream->print(F("No RAM for the event type pool ("));
+    _debugStream->print(_eventTypeCapacity);
+    _debugStream->println(F(" types). Every event type will be dropped."));
+  }
+  return _eventTypes != nullptr;
+}
+#endif
 
 int BlaeckSerial::_registerSignal(const String &signalName, dataType type, void *address)
 {
-  if (Signals == nullptr || static_cast<unsigned int>(_signalIndex) >= _signalCapacity)
+  if (!_ensureSignalTable() || static_cast<unsigned int>(_signalIndex) >= _signalCapacity)
   {
+    if (Signals != nullptr)
+      _warnTableFull(F("withSignals"), _signalCapacity, signalName.c_str());
     _signalRegistrationFailed = true;
     _rejectedSignalCount++;
     // -1 gives a dead handle: the chain that follows compiles and runs and stores nothing.
@@ -540,7 +819,13 @@ int BlaeckSerial::_registerCommand(const char *command, BlaeckCommandHandler han
     return -1;
   }
 
-  for (byte i = 0; i < MAX_COMMAND_HANDLERS; i++)
+  if (!_ensureCommandTable())
+  {
+    _rejectedCommandCount++;
+    return -1;
+  }
+
+  for (byte i = 0; i < _commandSlots(); i++)
   {
     if (_commandHandlers[i].inUse && strcmp(_commandHandlers[i].command, command) == 0)
     {
@@ -550,7 +835,7 @@ int BlaeckSerial::_registerCommand(const char *command, BlaeckCommandHandler han
     }
   }
 
-  for (byte i = 0; i < MAX_COMMAND_HANDLERS; i++)
+  for (byte i = 0; i < _commandSlots(); i++)
   {
     if (!_commandHandlers[i].inUse)
     {
@@ -563,11 +848,7 @@ int BlaeckSerial::_registerCommand(const char *command, BlaeckCommandHandler han
     }
   }
 
-  if (_debugStream != nullptr)
-  {
-    _debugStream->print("Command handler table full for: ");
-    _debugStream->println(command);
-  }
+  _warnTableFull(F("withCommands"), _commandCapacity, command);
   _rejectedCommandCount++;
   return -1;
 }
@@ -607,7 +888,7 @@ void BlaeckSerial::onAnyCommand(BlaeckAnyCommandHandler handler)
 
 void BlaeckSerial::clearAllCommandHandlers()
 {
-  for (byte i = 0; i < MAX_COMMAND_HANDLERS; i++)
+  for (byte i = 0; i < _commandSlots(); i++)
   {
     _commandHandlers[i].inUse = false;
     _commandHandlers[i].handler = nullptr;
@@ -637,7 +918,7 @@ void BlaeckSerial::writeCommandState(const char *command, unsigned long messageI
   if (command == nullptr)
     return;
 
-  for (byte i = 0; i < MAX_COMMAND_HANDLERS; i++)
+  for (byte i = 0; i < _commandSlots(); i++)
   {
     const CommandHandlerEntry &e = _commandHandlers[i];
     if (!e.inUse || e.stateSource != BLAECK_STATE_CHANNEL || e.stateSignal == nullptr)
@@ -648,7 +929,7 @@ void BlaeckSerial::writeCommandState(const char *command, unsigned long messageI
     // The channel was declared from this same name at registration, so it exists unless the
     // table was full - in which case there is nothing to publish to and the warning was
     // already given there.
-    for (byte c = 0; c < MAX_STATE_CHANNELS; c++)
+    for (byte c = 0; c < _stateChannelSlots(); c++)
     {
       if (!_stateChannels[c].inUse || !_stateChannels[c].ownedByCommand)
         continue;
@@ -717,7 +998,13 @@ bool BlaeckSerial::_addOwnedStateChannel(const __FlashStringHelper *channelName,
     return true;
   }
 
-  for (byte i = 0; i < MAX_STATE_CHANNELS; i++)
+  if (!_ensureStateChannelTable())
+  {
+    _rejectedStateChannelCount++;
+    return false;
+  }
+
+  for (byte i = 0; i < _stateChannelSlots(); i++)
   {
     if (_stateChannels[i].inUse)
       continue;
@@ -736,11 +1023,7 @@ bool BlaeckSerial::_addOwnedStateChannel(const __FlashStringHelper *channelName,
     return true;
   }
 
-  if (_debugStream != nullptr)
-  {
-    _debugStream->print(F("State channel table full for a command's own state: "));
-    _debugStream->println(name);
-  }
+  _warnTableFull(F("withStateChannels"), _stateChannelCapacity, name);
   _rejectedStateChannelCount++;
   return false;
 #endif
@@ -831,7 +1114,7 @@ bool BlaeckSerial::getSelectOption(const char *command, byte index, char *out, b
   (void)index;
   return false;
 #else
-  for (byte i = 0; i < MAX_COMMAND_HANDLERS; i++)
+  for (byte i = 0; i < _commandSlots(); i++)
   {
     const CommandHandlerEntry &e = _commandHandlers[i];
     if (!e.inUse || e.kind != BLAECK_CMD_SELECT || e.options == nullptr)
@@ -1130,7 +1413,7 @@ void BlaeckSerial::_dispatchRegisteredHandlers(bool sendAck)
   byte ackReason = BLAECK_ACK_UNKNOWN; // reason reported when rejected
   bool matched = false;
 
-  for (byte i = 0; i < MAX_COMMAND_HANDLERS; i++)
+  for (byte i = 0; i < _commandSlots(); i++)
   {
     if (_commandHandlers[i].inUse &&
         _commandHandlers[i].handler != nullptr &&
@@ -1202,7 +1485,7 @@ void BlaeckSerial::_writeCommandAck(const char *rawCommand, byte status, byte re
   // hash cannot, because the bytes are not the ones the sender wrote.
   uint32_t nameHash = (_parsedCommand[0] == '\0') ? 0UL : _fnv1a32(_parsedCommand);
 
-  if (_bufferedWrites && _frameBuf)
+  if (_bufReady())
   {
     _bufReset();
     _bufHeader(0xA5, _commandAckMsgId++);
@@ -1301,7 +1584,13 @@ int BlaeckSerial::_registerStateChannel(const char *channelName, dataType valueT
     return existing;
   }
 
-  for (byte i = 0; i < MAX_STATE_CHANNELS; i++)
+  if (!_ensureStateChannelTable())
+  {
+    _rejectedStateChannelCount++;
+    return -1;
+  }
+
+  for (byte i = 0; i < _stateChannelSlots(); i++)
   {
     if (!_stateChannels[i].inUse)
     {
@@ -1325,11 +1614,7 @@ int BlaeckSerial::_registerStateChannel(const char *channelName, dataType valueT
     }
   }
 
-  if (_debugStream != nullptr)
-  {
-    _debugStream->print(F("State channel table full for: "));
-    _debugStream->println(channelName);
-  }
+  _warnTableFull(F("withStateChannels"), _stateChannelCapacity, channelName);
   _rejectedStateChannelCount++;
   return -1;
 }
@@ -1414,7 +1699,7 @@ bool BlaeckSerial::_flashStringEqualsName(const __FlashStringHelper *flashName, 
 
 void BlaeckSerial::clearAllStateChannels()
 {
-  for (byte i = 0; i < MAX_STATE_CHANNELS; i++)
+  for (byte i = 0; i < _stateChannelSlots(); i++)
   {
     _stateChannels[i].inUse = false;
     _stateChannels[i].icon = nullptr;
@@ -1428,7 +1713,7 @@ int BlaeckSerial::_findStateChannel(const char *channelName) const
   if (channelName == nullptr || channelName[0] == '\0')
     return -1;
 
-  for (byte i = 0; i < MAX_STATE_CHANNELS; i++)
+  for (byte i = 0; i < _stateChannelSlots(); i++)
   {
     if (_stateChannels[i].inUse && strcmp(_stateChannels[i].name, channelName) == 0)
       return (int)i;
@@ -1562,7 +1847,7 @@ void BlaeckSerial::_writeStateFrame(int channelIndex, const char *text, unsigned
     }
   }
 
-  if (_bufferedWrites && _frameBuf)
+  if (_bufReady())
   {
     _bufReset();
     _bufHeader(0x95, messageID);
@@ -1721,12 +2006,12 @@ void BlaeckSerial::writeStateChannelsFrame(unsigned long msg_id)
   if (StreamRef == nullptr)
     return;
 
-  if (_bufferedWrites && _frameBuf)
+  if (_bufReady())
   {
     _bufReset();
     _bufHeader(0x90, msg_id);
 
-    for (byte i = 0; i < MAX_STATE_CHANNELS; i++)
+    for (byte i = 0; i < _stateChannelSlots(); i++)
     {
       StateChannelEntry &e = _stateChannels[i];
       if (!e.inUse)
@@ -1781,7 +2066,7 @@ void BlaeckSerial::writeStateChannelsFrame(unsigned long msg_id)
     StreamRef->write(ulngCvt.bval, 4);
     StreamRef->write(":");
 
-    for (byte i = 0; i < MAX_STATE_CHANNELS; i++)
+    for (byte i = 0; i < _stateChannelSlots(); i++)
     {
       StateChannelEntry &e = _stateChannels[i];
       if (!e.inUse)
@@ -1919,7 +2204,13 @@ int BlaeckSerial::_registerEventChannel(const char *channelName, const __FlashSt
     return existing;
   }
 
-  for (byte i = 0; i < MAX_EVENT_CHANNELS; i++)
+  if (!_ensureEventChannelTable())
+  {
+    _rejectedEventChannelCount++;
+    return -1;
+  }
+
+  for (byte i = 0; i < _eventChannelSlots(); i++)
   {
     if (!_eventChannels[i].inUse)
     {
@@ -1935,11 +2226,7 @@ int BlaeckSerial::_registerEventChannel(const char *channelName, const __FlashSt
     }
   }
 
-  if (_debugStream != nullptr)
-  {
-    _debugStream->print(F("Event channel table full for: "));
-    _debugStream->println(channelName);
-  }
+  _warnTableFull(F("withEventChannels"), _eventChannelCapacity, channelName);
   _rejectedEventChannelCount++;
   return -1;
 }
@@ -1957,15 +2244,12 @@ void BlaeckSerial::_addEventTypesCsv(byte channelIndex, const __FlashStringHelpe
   byte fieldCount = _flashCsvOptionCount(eventTypes);
   for (byte f = 0; f < fieldCount; f++)
   {
-    if (_eventTypeCount >= MAX_EVENT_TYPES)
+    if (!_ensureEventTypeTable() || _eventTypeCount >= _eventTypeSlots())
     {
-      if (_debugStream != nullptr)
-      {
-        _debugStream->print(F("Event type pool full for channel: "));
-        _debugStream->println(_eventChannels[channelIndex].name);
-      }
+      _warnTableFull(F("withEventTypes"), _eventTypeCapacity,
+                     _eventChannels[channelIndex].name);
       // Every remaining field is lost too, and each is a type a host will never hear about.
-      _rejectedEventChannelCount += (uint16_t)(fieldCount - f);
+      _rejectedEventTypeCount += (uint16_t)(fieldCount - f);
       break;
     }
     _eventTypes[_eventTypeCount].channelIndex = channelIndex;
@@ -2051,7 +2335,7 @@ bool BlaeckSerial::addEventType(const char *channelName, const __FlashStringHelp
       _debugStream->print(F("Event type dropped, channel not declared with addEventChannel(): "));
       _debugStream->println(channelName != nullptr ? channelName : "");
     }
-    _rejectedEventChannelCount++;
+    _rejectedEventTypeCount++;
     return false;
   }
 
@@ -2067,14 +2351,10 @@ bool BlaeckSerial::addEventType(const char *channelName, const __FlashStringHelp
     return false;
   }
 
-  if (_eventTypeCount >= MAX_EVENT_TYPES)
+  if (!_ensureEventTypeTable() || _eventTypeCount >= _eventTypeSlots())
   {
-    if (_debugStream != nullptr)
-    {
-      _debugStream->print(F("Event type pool full for channel: "));
-      _debugStream->println(channelName);
-    }
-    _rejectedEventChannelCount++;
+    _warnTableFull(F("withEventTypes"), _eventTypeCapacity, channelName);
+    _rejectedEventTypeCount++;
     return false;
   }
 
@@ -2087,7 +2367,7 @@ bool BlaeckSerial::addEventType(const char *channelName, const __FlashStringHelp
 
 void BlaeckSerial::clearAllEventChannels()
 {
-  for (byte i = 0; i < MAX_EVENT_CHANNELS; i++)
+  for (byte i = 0; i < _eventChannelSlots(); i++)
   {
     _eventChannels[i].inUse = false;
     _eventChannels[i].icon = nullptr;
@@ -2103,7 +2383,7 @@ int BlaeckSerial::_findEventChannel(const char *channelName) const
   if (channelName == nullptr || channelName[0] == '\0')
     return -1;
 
-  for (byte i = 0; i < MAX_EVENT_CHANNELS; i++)
+  for (byte i = 0; i < _eventChannelSlots(); i++)
   {
     if (_eventChannels[i].inUse && strcmp(_eventChannels[i].name, channelName) == 0)
       return (int)i;
@@ -2189,12 +2469,12 @@ void BlaeckSerial::writeEventChannelsFrame(unsigned long msg_id)
   if (StreamRef == nullptr)
     return;
 
-  if (_bufferedWrites && _frameBuf)
+  if (_bufReady())
   {
     _bufReset();
     _bufHeader(0x80, msg_id);
 
-    for (byte i = 0; i < MAX_EVENT_CHANNELS; i++)
+    for (byte i = 0; i < _eventChannelSlots(); i++)
     {
       EventChannelEntry &e = _eventChannels[i];
       if (!e.inUse)
@@ -2249,7 +2529,7 @@ void BlaeckSerial::writeEventChannelsFrame(unsigned long msg_id)
     StreamRef->write(ulngCvt.bval, 4);
     StreamRef->write(":");
 
-    for (byte i = 0; i < MAX_EVENT_CHANNELS; i++)
+    for (byte i = 0; i < _eventChannelSlots(); i++)
     {
       EventChannelEntry &e = _eventChannels[i];
       if (!e.inUse)
@@ -2350,7 +2630,7 @@ void BlaeckSerial::writeEvent(const char *channelName, const __FlashStringHelper
     return;
   }
 
-  if (_bufferedWrites && _frameBuf)
+  if (_bufReady())
   {
     _bufReset();
     _bufHeader(0x85, messageID);
@@ -2626,7 +2906,7 @@ void BlaeckSerial::_writeEmptyFrame(byte msgKey, unsigned long msg_id)
   if (StreamRef == nullptr)
     return;
 
-  if (_bufferedWrites && _frameBuf)
+  if (_bufReady())
   {
     _bufReset();
     _bufHeader(msgKey, msg_id);
@@ -3180,9 +3460,13 @@ void BlaeckSerial::_bufAllocate()
   _bufFree();
   // Max frame size: D2 is largest.
   // Header(22) + per-signal(10) + timestamp(9) + tail(9) + footer(10) + margin
-  _frameBufSize = 60 + (int)_signalCapacity * 10;
+  // Sized from the signals actually added, not from the capacity the table was
+  // given: the buffer is built at the first write, by which time every add has
+  // run, and _bufEnsure() grows it if a frame still turns out larger.
+  int signalsHeld = _signalIndex > 0 ? _signalIndex : 1;
+  _frameBufSize = 60 + signalsHeld * 10;
   // B0/B3 can also be large with long names; ensure minimum
-  int b0b3_est = 60 + (int)_signalCapacity * 30;
+  int b0b3_est = 60 + signalsHeld * 30;
   if (b0b3_est > _frameBufSize)
     _frameBufSize = b0b3_est;
   _frameBuf = new (std::nothrow) byte[_frameBufSize];
@@ -3258,9 +3542,9 @@ void BlaeckSerial::_bufFree()
 void BlaeckSerial::setBufferedWrites(bool enabled)
 {
   _bufferedWrites = enabled;
-  if (enabled && _frameBuf == nullptr && _signalCapacity > 0)
-    _bufAllocate();
-  else if (!enabled)
+  // Turning it on allocates nothing: the first buffered frame builds the buffer,
+  // and by then it can be sized from the signals the sketch actually added.
+  if (!enabled)
     _bufFree();
 }
 
@@ -3300,7 +3584,7 @@ void BlaeckSerial::writeRestarted(unsigned long msg_id)
   {
     _writeRestartedAlreadyDone = true;
 
-    if (_bufferedWrites && _frameBuf)
+    if (_bufReady())
     {
       _bufReset();
       _bufHeader(0xC0, msg_id);
@@ -3350,7 +3634,7 @@ void BlaeckSerial::writeDevices(unsigned long msg_id)
 
 void BlaeckSerial::writeDevicesFrame(unsigned long msg_id)
 {
-  if (_bufferedWrites && _frameBuf)
+  if (_bufReady())
   {
     _bufReset();
     _bufHeader(0xB3, msg_id);
@@ -3401,7 +3685,7 @@ void BlaeckSerial::writeDataFrame(unsigned long msg_id, int signalIndex_start, i
   if (signalIndex_start > signalIndex_end)
     return; // No valid range
 
-  if (_bufferedWrites && _frameBuf)
+  if (_bufReady())
   {
     _bufReset();
     _bufStr("<BLAECK:");
@@ -3662,7 +3946,7 @@ void BlaeckSerial::writeDataFrame(unsigned long msg_id, int signalIndex_start, i
 
 void BlaeckSerial::writeSymbolsFrame(unsigned long msg_id)
 {
-  if (_bufferedWrites && _frameBuf)
+  if (_bufReady())
   {
     _bufReset();
     _bufHeader(0xB0, msg_id);
@@ -3773,7 +4057,7 @@ void BlaeckSerial::writeSignalConfigFrame(unsigned long msg_id)
   // entries is the ordinary case and not an error. The signal is named by its
   // index in the 0xB0 Symbol List, which already says which device it belongs
   // to - so unlike the other catalogs this frame carries no device fields.
-  if (_bufferedWrites && _frameBuf)
+  if (_bufReady())
   {
     _bufReset();
     _bufHeader(0xF0, msg_id);
@@ -3881,12 +4165,12 @@ void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
   // (kind=BLAECK_CMD_PLAIN, flags=0, no trailing metadata). Plain entries carry
   // no Home Assistant entity, but are listed so a host can build a full command
   // palette / autocomplete of every command the device accepts.
-  if (_bufferedWrites && _frameBuf)
+  if (_bufReady())
   {
     _bufReset();
     _bufHeader(0xA0, msg_id);
 
-    for (byte i = 0; i < MAX_COMMAND_HANDLERS; i++)
+    for (byte i = 0; i < _commandSlots(); i++)
     {
       CommandHandlerEntry &e = _commandHandlers[i];
       if (!e.inUse)
@@ -3961,7 +4245,7 @@ void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
     StreamRef->write(ulngCvt.bval, 4);
     StreamRef->write(":");
 
-    for (byte i = 0; i < MAX_COMMAND_HANDLERS; i++)
+    for (byte i = 0; i < _commandSlots(); i++)
     {
       CommandHandlerEntry &e = _commandHandlers[i];
       if (!e.inUse)

@@ -106,11 +106,7 @@ void setup()
       .withIcon(F("mdi:note-text"));
 
   // One look covers every addSignal() above.
-  if (BlaeckSerial.hasRejectedSignals())
-  {
-    Serial.print(F("Signals not added: "));
-    Serial.println(BlaeckSerial.getRejectedSignalCount());
-  }
+  BlaeckSerial.printRejections(&Serial);
 }
 
 void loop()

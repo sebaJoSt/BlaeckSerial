@@ -46,6 +46,8 @@ void setup()
     Serial.print("Signals not added: ");
     Serial.println(BlaeckSerial.getRejectedSignalCount());
   }
+  // Or ask about every table at once, with the call that would have made room:
+  //   BlaeckSerial.printRejections(&Serial);
 
   /*Uncomment for fixed interval lock (ms)
     - ignores ACTIVATE/DEACTIVATE while locked */

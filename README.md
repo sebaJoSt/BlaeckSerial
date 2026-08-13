@@ -223,9 +223,15 @@ Serial.println(BlaeckSerial.isBufferedWrites() ? "ON" : "OFF");
 
 ## Configuration
 
-Compile-time settings (buffer sizes, command parser limits, message channel
-limits, `BLAECK_ENABLE_COMMAND_META`, `BLAECK_ENABLE_SIGNAL_META`, `BLAECK_ENABLE_MESSAGES`)
-are plain `#define`s with `#ifndef` guards, so any value you define first wins.
+How many signals, state channels, event channels, event types and commands a
+device holds is set in the sketch, on the `begin()` chain — see
+[Table sizes](#table-sizes) below. What remains here are the compile-time
+settings: the command parser's buffer size, the buffered-writes default, and the
+`BLAECK_ENABLE_*` switches (`BLAECK_ENABLE_COMMAND_META`,
+`BLAECK_ENABLE_SIGNAL_META`, `BLAECK_ENABLE_STATE_CHANNELS`,
+`BLAECK_ENABLE_EVENTS`), which remove code rather than slots and so reclaim
+flash. All are plain `#define`s with `#ifndef` guards, so any value you define
+first wins.
 
 > [!IMPORTANT]
 > An override **must reach every translation unit** — your sketch *and*
@@ -311,13 +317,73 @@ for esp32, samd, renesas_uno, … Without this file the config is silently ignor
 ```CPP
 // BlaeckSerialConfig.h
 #define BLAECK_COMMAND_MAX_CHARS_DEFAULT 128
-#define BLAECK_COMMAND_MAX_HANDLERS_DEFAULT 8
-#define BLAECK_COMMAND_MAX_NAME_CHARS_DEFAULT 48
-#define BLAECK_COMMAND_MAX_PARAMS_DEFAULT 16
-#define BLAECK_MESSAGE_MAX_CHANNELS_DEFAULT 4
-#define BLAECK_MESSAGE_MAX_NAME_CHARS_DEFAULT 24
 #define BLAECK_BUFFERED_WRITES_DEFAULT false
 ```
+
+> [!NOTE]
+> How many signals, state channels, event channels, event types or commands a
+> device holds is not set here. Say it in the sketch, on the `begin()` chain:
+>
+> ```CPP
+> BlaeckSerial.begin(&Serial)
+>     .withSignals(50)
+>     .withStateChannels(12)
+>     .withCommands(16);
+> ```
+>
+> Every one of those calls is optional and starts from a per-board default, and
+> a table is only allocated once something is added to it — so a table your
+> sketch never uses costs nothing.
+
+### Table sizes
+
+`begin()` returns a handle that sizes each table, and every call on it is
+optional:
+
+```CPP
+BlaeckSerial.begin(&Serial);              // per-board defaults for everything
+BlaeckSerial.begin(&Serial, 20);          // shorthand for .withSignals(20)
+
+BlaeckSerial.begin(&Serial)
+    .withSignals(50)
+    .withStateChannels(12)
+    .withEventChannels(6)
+    .withEventTypes(20)
+    .withCommands(16)
+    .withDebugStream(&Serial1);
+```
+
+| | small AVR (≤2 kB SRAM) | Mega and larger AVR | ESP32, SAMD, RP2040, … |
+|---|---|---|---|
+| `withSignals` | 8 | 24 | 64 |
+| `withStateChannels` | 3 | 8 | 32 |
+| `withEventChannels` | 2 | 6 | 24 |
+| `withEventTypes` | 8 | 20 | 64 |
+| `withCommands` | 6 | 16 | 32 |
+
+A table is allocated in full by the first entry added to it and never grows, so
+raising a number costs SRAM whether or not the slots are filled — while a table
+your sketch never touches costs nothing at all.
+
+Once a table exists its size is fixed: a `with…()` call after the first entry
+was added is refused and says so on the debug stream. Both forms above run
+before any `add…()`, so either is safe.
+
+What did not fit is reported. `withDebugStream()` gives the line naming the
+entry that was dropped and the call that would have kept it. On a board with
+only one `Serial`, end `setup()` with `printRejections(&Serial)` instead — one
+summary line per table that dropped something, nothing at all when everything
+fitted, and safe on the Blaeck stream itself because no frame has been written
+yet:
+
+```
+BlaeckSerial dropped what it had no room for:
+  3 signal(s) dropped, table holds 8 - begin(&Serial).withSignals(11)
+```
+
+Or ask directly: `hasRejections()`, or the per-table `hasRejectedSignals()`,
+`hasRejectedCommands()`, `hasRejectedStateChannels()` and
+`hasRejectedEventChannels()`.
 
 ## Protocol
 

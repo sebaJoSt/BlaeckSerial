@@ -5,12 +5,33 @@ All notable changes to this project will be documented in this file.
 ## [7.0.0] - 2026-08-08
 
 This release makes a device self-describing. Alongside the signals it always declared,
-a board now declares its commands, plus message and event channels (both new), so a
+a board now declares its commands, plus state and event channels (both new), so a
 host (e.g. Loggbok) can turn the lot into Home Assistant MQTT auto-discovery — a sensor
 per signal, a control per command, a text sensor per channel, an entity per event —
 without being configured for that board in advance.
 
 ### Breaking
+- **Table sizes moved from build flags to the sketch.** `begin()` returns a handle
+  that sizes every table: `begin(&Serial).withSignals(50).withStateChannels(12)
+  .withEventChannels(6).withEventTypes(20).withCommands(16)`. Each call is optional
+  and starts from a per-board default, so `begin(&Serial)` alone is enough for most
+  sketches and `begin(&Serial, 20)` still means twenty signals.
+  The 6.x macros that sized these tables are gone: `BLAECK_COMMAND_MAX_HANDLERS_DEFAULT`,
+  `BLAECK_COMMAND_MAX_NAME_CHARS_DEFAULT` and `BLAECK_COMMAND_MAX_PARAMS_DEFAULT`.
+  A number in the sketch cannot disagree with itself the way a build flag seen by
+  only one translation unit could. `BLAECK_COMMAND_MAX_CHARS_DEFAULT`,
+  `BLAECK_BUFFERED_WRITES_DEFAULT` and `BLAECK_ENABLE_*` stay — they size a buffer or
+  reclaim flash, which no runtime number can.
+
+- **A table costs nothing until it is used.** Each table is allocated by the first
+  entry added to it rather than reserved up front, so a sketch that declares no
+  state channels, no event channels and no commands pays for none of them: 503
+  bytes of SRAM back on an Uno. Because of that, the linker's "global variables"
+  figure no longer counts these tables.
+
+- **`begin(Stream *, unsigned int, Stream *debug)` removed.** Name the debug stream
+  on the chain instead: `begin(&Serial).withDebugStream(&Serial1)`.
+
 - **I2C master/slave support removed.** All I2C master/slave functionality
   has been removed: `beginMaster(...)` / `beginSlave(...)`, the `MasterSlaveConfig`
   modes, slave discovery/scanning, per-signal `prefixSlaveID`, the `@<slaveID>:`
@@ -24,31 +45,36 @@ without being configured for that board in advance.
   `<SET_LABEL, hi>` sets `" hi"`, and `<SET_ENABLE, 1>` is rejected.
 
 ### Added
+- **`printRejections(&Serial)`.** One summary of everything the tables had no room
+  for, naming the `begin()` call that would have kept it, and printing nothing when
+  all of it fitted — so it can end `setup()` unconditionally. For boards with a
+  single `Serial`, where `withDebugStream()` has nowhere to go. `hasRejections()`
+  asks the same question without printing.
 - **Typed commands (`0xA0` / `0xA5`).** `onNumberCommand`, `onSwitchCommand`,
   `onSelectCommand`, `onTextCommand` and `onButtonCommand` register a command
   together with what it accepts — range, step, unit, options, text length — so the
   device describes its own controls. They join `onCommand` / `onAnyCommand` from
   6.0.0, which stay for commands that carry no metadata. 
   Requires `BLAECK_ENABLE_COMMAND_META`.
-- **Message channels (`0x90` / `0x95`).** `addMessageChannel(channelName[, icon[,
-  diagnostic[, getStateText]]])` declares a free-text status/log channel and
-  `writeMessage(channelName, text[, messageID])` sends a line on it. Channels are
-  declared up-front; messages on undeclared channels are dropped, and a message is
-  never stored as signal data. The optional `getStateText` makes a channel report a
-  current value, which the library fetches whenever a host polls the catalog — so a
-  control backed by that channel is right without anything having been pushed. Size the
-  tables with `BLAECK_MESSAGE_MAX_CHANNELS_DEFAULT` and `BLAECK_MESSAGE_MAX_NAME_CHARS_DEFAULT`.
-  Requires `BLAECK_ENABLE_MESSAGES`.
+- **State channels (`0x90` / `0x95`).** `addStateChannel(channelName[, value])` declares a
+  channel that carries the current value of something — text, bool, or any numeric type,
+  the overload settling the type and with it the handle (`withUnit()`/`withStateClass()`/
+  `withDisplayPrecision()` on a numeric one, `withStateText()`/`withOptions()` on a text
+  one) — and `writeState(channelName[, text])` reports it. Pass a pointer and the library
+  reads that variable whenever the value is wanted, exactly as `addSignal()` does, so a
+  host polling the catalog gets the truth without anything having been pushed. Channels are
+  declared up-front; values on undeclared channels are dropped, and a state is never stored
+  as signal data. Size the table with `begin(&Serial).withStateChannels(n)`.
+  Requires `BLAECK_ENABLE_STATE_CHANNELS`.
 - **Event channels (`0x80` / `0x85`).** `addEventChannel(channelName[, icon[,
   diagnostic[, eventTypes]]])` declares a channel and the closed set of events it may
   report — `F("idle_warning,resumed")`, position defining each index — or
   `addEventType(channelName, F("..."))` adds them one at a time, for a list built
   conditionally; `writeEvent(channelName, F("..."))` reports one occurrence. An event carries no text, 
-  so its wording is fixed at compile time — use a message channel for anything with a runtime value.
+  so its wording is fixed at compile time — use a state channel for anything with a runtime value.
   Events on undeclared channels or types are dropped. Size the tables with
-  `BLAECK_EVENT_MAX_CHANNELS_DEFAULT`, `BLAECK_EVENT_MAX_NAME_CHARS_DEFAULT` and
-  `BLAECK_EVENT_MAX_TYPES_DEFAULT` (types share one pool across channels,
-  so no channel needs sizing for the worst case).
+  `begin(&Serial).withEventChannels(n).withEventTypes(n)` (types share one pool across
+  channels, so no channel needs sizing for the worst case).
   Requires `BLAECK_ENABLE_EVENTS`.
 - **String signals (`addSignal(name, char *value)`).** New `Blaeck_string` data type
   for textual values (labels, states, small JSON). The value lives in a user-owned
@@ -56,14 +82,9 @@ without being configured for that board in advance.
   buffer and transmits that one signal, or update the buffer in place and let the
   periodic transmit pick it up. Up to 255 bytes.
 - New `WaveformGenerator` example: one fully controllable waveform, exercising
-  typed commands, message channels, event channels and string signals together.
+  typed commands, state channels, event channels and string signals together.
 
 ### Changed
-- Increased the default AVR command-handler limit on larger-SRAM AVR boards
-  (for example Arduino Mega 2560) from 4 to 12 handlers, while keeping smaller
-  AVR boards conservative at 6 handlers. This allows command-rich examples such
-  as `WaveformGenerator` to register their full command set without custom
-  compile-time overrides.
 - `BlaeckSerial.h` includes the `CRC.h` umbrella header instead of `<CRC32.h>` and
   `<CRC16.h>` individually, preventing a collision with core headers seen on
   ArduinoCore-mbed. No functional change; flash is byte-identical.

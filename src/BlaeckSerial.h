@@ -106,33 +106,9 @@
   #endif
 #endif
 
-#ifndef BLAECK_COMMAND_MAX_HANDLERS_DEFAULT
-  #if defined(__AVR__)
-    // Scale with available SRAM: each handler entry costs roughly
-    // MAX_COMMAND_NAME_COUNT + a function pointer (~28 bytes on AVR).
-    // Larger-SRAM AVRs (Mega 2560, ATmega1284, ...) get a generous limit;
-    // small ones (Uno/Nano/Leonardo) get a modest one to conserve SRAM.
-    #if defined(RAMEND) && (RAMEND >= 0x10FF)
-      #define BLAECK_COMMAND_MAX_HANDLERS_DEFAULT 12
-    #else
-      #define BLAECK_COMMAND_MAX_HANDLERS_DEFAULT 6
-    #endif
-  #else
-    #define BLAECK_COMMAND_MAX_HANDLERS_DEFAULT 12
-  #endif
-#endif
-
-#ifndef BLAECK_COMMAND_MAX_NAME_CHARS_DEFAULT
-  #if defined(__AVR__)
-    #define BLAECK_COMMAND_MAX_NAME_CHARS_DEFAULT 24
-  #else
-    #define BLAECK_COMMAND_MAX_NAME_CHARS_DEFAULT 40
-  #endif
-#endif
-
-#ifndef BLAECK_COMMAND_MAX_PARAMS_DEFAULT
-  #define BLAECK_COMMAND_MAX_PARAMS_DEFAULT 10
-#endif
+// How many commands, signals or channels a table holds is no longer a macro: say it in the
+// sketch, on the begin() chain - BLAECK.begin(&Serial).withCommands(16). See "Table sizes"
+// further down for the defaults each table starts from.
 
 // Command metadata (Home Assistant discovery catalog).
 // When ON, the typed command registration helpers (onNumberCommand/
@@ -179,27 +155,7 @@
 
 // Two things create a state channel, and both spend a slot here: addStateChannel(), and a
 // typed command's withOwnState(), which gives that command a channel of its own to carry its
-// value on.
-#ifndef BLAECK_STATE_MAX_CHANNELS_DEFAULT
-  #if defined(__AVR__)
-    // Each entry costs BLAECK_STATE_MAX_NAME_CHARS_DEFAULT + ~3 bytes of SRAM.
-    #if defined(RAMEND) && (RAMEND >= 0x10FF)
-      #define BLAECK_STATE_MAX_CHANNELS_DEFAULT 6
-    #else
-      #define BLAECK_STATE_MAX_CHANNELS_DEFAULT 3
-    #endif
-  #else
-    #define BLAECK_STATE_MAX_CHANNELS_DEFAULT 8
-  #endif
-#endif
-
-#ifndef BLAECK_STATE_MAX_NAME_CHARS_DEFAULT
-  #if defined(__AVR__)
-    #define BLAECK_STATE_MAX_NAME_CHARS_DEFAULT 16
-  #else
-    #define BLAECK_STATE_MAX_NAME_CHARS_DEFAULT 32
-  #endif
-#endif
+// value on. Size the table with BLAECK.begin(&Serial).withStateChannels(n).
 
 // Events (Home Assistant event entities).
 // When ON, the device can declare named event channels with addEventChannel(),
@@ -218,41 +174,12 @@
   #define BLAECK_ENABLE_EVENTS 1
 #endif
 
-#ifndef BLAECK_EVENT_MAX_CHANNELS_DEFAULT
-  #if defined(__AVR__)
-    // Each entry costs BLAECK_EVENT_MAX_NAME_CHARS_DEFAULT + ~3 bytes of SRAM.
-    #if defined(RAMEND) && (RAMEND >= 0x10FF)
-      #define BLAECK_EVENT_MAX_CHANNELS_DEFAULT 4
-    #else
-      #define BLAECK_EVENT_MAX_CHANNELS_DEFAULT 2
-    #endif
-  #else
-    #define BLAECK_EVENT_MAX_CHANNELS_DEFAULT 6
-  #endif
-#endif
-
-#ifndef BLAECK_EVENT_MAX_NAME_CHARS_DEFAULT
-  #if defined(__AVR__)
-    #define BLAECK_EVENT_MAX_NAME_CHARS_DEFAULT 16
-  #else
-    #define BLAECK_EVENT_MAX_NAME_CHARS_DEFAULT 32
-  #endif
-#endif
+// Size the channel table with BLAECK.begin(&Serial).withEventChannels(n).
 
 // Event types are held in one pool shared by every channel, so a channel that
 // needs ten types and one that needs two are both served without sizing every
-// channel for the worst case. Each entry costs ~3 bytes of SRAM.
-#ifndef BLAECK_EVENT_MAX_TYPES_DEFAULT
-  #if defined(__AVR__)
-    #if defined(RAMEND) && (RAMEND >= 0x10FF)
-      #define BLAECK_EVENT_MAX_TYPES_DEFAULT 16
-    #else
-      #define BLAECK_EVENT_MAX_TYPES_DEFAULT 8
-    #endif
-  #else
-    #define BLAECK_EVENT_MAX_TYPES_DEFAULT 24
-  #endif
-#endif
+// channel for the worst case. Each entry costs ~3 bytes of SRAM. Size the pool
+// with BLAECK.begin(&Serial).withEventTypes(n).
 
 
 typedef enum DataType
@@ -437,6 +364,7 @@ class BlaeckNumericStateRef;
 class BlaeckTextStateRef;
 class BlaeckBoolStateRef;
 class BlaeckEventChannelRef;
+class BlaeckBeginRef;
 
 class BlaeckSerial
 {
@@ -448,8 +376,21 @@ public:
   ~BlaeckSerial();
 
   // ----- Initialize -----
-  void begin(Stream *Ref, unsigned int Size);
-  void begin(Stream *Ref, unsigned int Size, Stream *DebugRef);
+  // The returned handle sizes the tables and names a debug stream, and may be
+  // ignored:
+  //
+  //   BlaeckSerial.begin(&Serial)
+  //       .withSignals(50)
+  //       .withStateChannels(12)
+  //       .withDebugStream(&Serial1);
+  //
+  // Every number is optional and starts at a per-board default; a table is
+  // allocated in full by the first entry added to it, so a table a sketch never
+  // uses costs nothing. The chain may run after begin() returns because nothing
+  // is allocated until the first add.
+  BlaeckBeginRef begin(Stream *Ref);
+  // Shorthand for begin(Ref).withSignals(Size).
+  BlaeckBeginRef begin(Stream *Ref, unsigned int Size);
 
   // Set these variables in your Arduino sketch
   String DeviceName = "Unknown";
@@ -484,10 +425,10 @@ public:
 
   // Delete all Signals
   void deleteSignals();
-  // Signals that could not be added - past the capacity begin() was given, or all of them when
-  // the board had no RAM for the table at all, which is why the flag can be set before the
-  // first addSignal(). Named like hasRejectedCommands() and hasRejectedChannels(): three tables,
-  // one question, one shape of answer.
+  // Signals that could not be added - past the capacity the table was given, or all of them
+  // when the board had no RAM for the table at all. Both surface at the first addSignal(),
+  // which is where the table is built. Named like hasRejectedCommands() and
+  // hasRejectedChannels(): three tables, one question, one shape of answer.
   bool hasRejectedSignals() const { return _signalRegistrationFailed; }
   uint16_t getRejectedSignalCount() const { return _rejectedSignalCount; }
 
@@ -807,10 +748,30 @@ public:
 
   // Event channels and event types that could not be declared. Counted together because both
   // sit behind BLAECK_ENABLE_EVENTS and a type belongs to a channel, so either answer sends you
-  // to the same place - BLAECK_EVENT_MAX_CHANNELS_DEFAULT or BLAECK_EVENT_MAX_TYPES_DEFAULT,
-  // and DebugRef says which.
-  bool hasRejectedEventChannels() const { return _rejectedEventChannelCount > 0; }
-  uint16_t getRejectedEventChannelCount() const { return _rejectedEventChannelCount; }
+  // to the same place - withEventChannels() or withEventTypes() on the begin() chain, and a
+  // debug stream says which.
+  bool hasRejectedEventChannels() const
+  {
+    return _rejectedEventChannelCount > 0 || _rejectedEventTypeCount > 0;
+  }
+  uint16_t getRejectedEventChannelCount() const
+  {
+    return (uint16_t)(_rejectedEventChannelCount + _rejectedEventTypeCount);
+  }
+
+  // Anything at all that a table had no room for, across all five tables.
+  bool hasRejections() const;
+  // Says what was dropped and the exact begin() call that would have kept it, one line per
+  // table, and prints nothing at all when there is nothing to report - so a sketch can end
+  // setup() with it unconditionally. Returns whether anything was printed.
+  //
+  //   BlaeckSerial.printRejections(&Serial);
+  //
+  // Meant for the stream the sketch already talks on, including the one Blaeck itself uses:
+  // called from setup() it cannot land inside a frame, since nothing has been written yet.
+  // A debug stream reports the same thing as it happens, naming each dropped entry; this is
+  // the summary for a board with only one Serial.
+  bool printRejections(Stream *out);
 
   // ----- Typed command registration (Home Assistant discovery metadata) -----
   // Same runtime behavior as onCommand(), but the returned handle describes the control so the
@@ -979,6 +940,8 @@ private:
   Stream *StreamRef;
   Stream *_debugStream = nullptr;
   Signal *Signals = nullptr;
+  // Allocates the signal table on first use.
+  bool _ensureSignalTable();
   int _signalIndex = 0;
   unsigned int _signalCapacity = 0;
   bool _signalRegistrationFailed = false;
@@ -986,6 +949,9 @@ private:
   uint16_t _rejectedCommandCount = 0;
   uint16_t _rejectedStateChannelCount = 0;
   uint16_t _rejectedEventChannelCount = 0;
+  // The type pool is its own table, so what it drops needs its own count - the
+  // cure is withEventTypes(), not withEventChannels().
+  uint16_t _rejectedEventTypeCount = 0;
 
   bool _writeRestartedAlreadyDone = false;
   bool _sendRestartFlag = true;
@@ -1001,18 +967,79 @@ private:
   unsigned long _timedInterval_ms = 1000;
   long _fixedInterval_ms = BLAECK_INTERVAL_CLIENT;
 
+  // ── Table sizes ───────────────────────────────────────────────────
+  // Which table a capacity call names. One setter for all of them, so the rule
+  // about setting a capacity too late is written once.
+  enum TableId
+  {
+    TABLE_SIGNALS,
+    TABLE_STATE_CHANNELS,
+    TABLE_EVENT_CHANNELS,
+    TABLE_EVENT_TYPES,
+    TABLE_COMMANDS
+  };
+  void _setTableCapacity(TableId table, unsigned int count);
+  // Says what was dropped and the exact call that would have kept it. Table
+  // names the chain method, e.g. F("withSignals").
+  void _warnTableFull(const __FlashStringHelper *table, unsigned int capacity,
+                      const char *droppedName);
+  void _warnTableFull(const __FlashStringHelper *table, unsigned int capacity,
+                      const __FlashStringHelper *droppedName);
+  // One line of printRejections(), for a table that dropped something.
+  void _printRejectionLine(Stream *out, const __FlashStringHelper *what,
+                           const __FlashStringHelper *chainCall, uint16_t dropped,
+                           unsigned int capacity);
+
+  // Defaults a table starts from, raised per sketch on the begin() chain:
+  // BLAECK.begin(&Serial).withSignals(50). Generous where SRAM is plentiful
+  // and careful where it is not, because a table is allocated in full by the
+  // first entry added to it - lazy allocation spares an unused table, not an
+  // unused slot.
+#if defined(__AVR__)
+  #if defined(RAMEND) && (RAMEND >= 0x10FF)
+    static const unsigned int DEFAULT_SIGNALS = 24;
+    static const byte DEFAULT_STATE_CHANNELS = 8;
+    static const byte DEFAULT_EVENT_CHANNELS = 6;
+    static const byte DEFAULT_EVENT_TYPES = 20;
+    static const byte DEFAULT_COMMANDS = 16;
+  #else
+    static const unsigned int DEFAULT_SIGNALS = 8;
+    static const byte DEFAULT_STATE_CHANNELS = 3;
+    static const byte DEFAULT_EVENT_CHANNELS = 2;
+    static const byte DEFAULT_EVENT_TYPES = 8;
+    static const byte DEFAULT_COMMANDS = 6;
+  #endif
+#else
+  static const unsigned int DEFAULT_SIGNALS = 64;
+  static const byte DEFAULT_STATE_CHANNELS = 32;
+  static const byte DEFAULT_EVENT_CHANNELS = 24;
+  static const byte DEFAULT_EVENT_TYPES = 64;
+  static const byte DEFAULT_COMMANDS = 32;
+#endif
+
+  // Name widths stay fixed: they size a member inside an entry, not the number
+  // of entries, so no chain call can change one without changing the layout of
+  // a table that may already exist.
   static const int MAXIMUM_CHAR_COUNT = BLAECK_COMMAND_MAX_CHARS_DEFAULT;
-  static const byte MAX_COMMAND_HANDLERS = BLAECK_COMMAND_MAX_HANDLERS_DEFAULT;
-  static const byte MAX_COMMAND_PARAM_COUNT = BLAECK_COMMAND_MAX_PARAMS_DEFAULT;
-  static const byte MAX_COMMAND_NAME_COUNT = BLAECK_COMMAND_MAX_NAME_CHARS_DEFAULT;
+  static const byte MAX_COMMAND_PARAM_COUNT = 10;
+#if defined(__AVR__)
+  static const byte MAX_COMMAND_NAME_COUNT = 24;
+#else
+  static const byte MAX_COMMAND_NAME_COUNT = 40;
+#endif
 #if BLAECK_ENABLE_STATE_CHANNELS
-  static const byte MAX_STATE_CHANNELS = BLAECK_STATE_MAX_CHANNELS_DEFAULT;
-  static const byte MAX_STATE_NAME_COUNT = BLAECK_STATE_MAX_NAME_CHARS_DEFAULT;
+  #if defined(__AVR__)
+    static const byte MAX_STATE_NAME_COUNT = 16;
+  #else
+    static const byte MAX_STATE_NAME_COUNT = 32;
+  #endif
 #endif
 #if BLAECK_ENABLE_EVENTS
-  static const byte MAX_EVENT_CHANNELS = BLAECK_EVENT_MAX_CHANNELS_DEFAULT;
-  static const byte MAX_EVENT_NAME_COUNT = BLAECK_EVENT_MAX_NAME_CHARS_DEFAULT;
-  static const byte MAX_EVENT_TYPES = BLAECK_EVENT_MAX_TYPES_DEFAULT;
+  #if defined(__AVR__)
+    static const byte MAX_EVENT_NAME_COUNT = 16;
+  #else
+    static const byte MAX_EVENT_NAME_COUNT = 32;
+  #endif
 #endif
   char receivedChars[MAXIMUM_CHAR_COUNT];
   char COMMAND[MAXIMUM_CHAR_COUNT] = {0};
@@ -1034,6 +1061,18 @@ private:
   bool _bufOverflowWarned = false;
 
   void _bufAllocate();
+  // True when a frame may be assembled in RAM. The buffer is built here, at the
+  // first buffered write rather than in begin(), so a sketch that never writes
+  // a frame never pays for it and the size can follow the signals actually
+  // added.
+  bool _bufReady()
+  {
+    if (!_bufferedWrites)
+      return false;
+    if (_frameBuf == nullptr)
+      _bufAllocate();
+    return _frameBuf != nullptr;
+  }
   bool _bufEnsure(size_t addLen);
   void _bufFree();
   void _bufReset()
@@ -1138,7 +1177,16 @@ private:
     uint8_t category = BLAECK_CAT_NONE;
 #endif
   };
-  CommandHandlerEntry _commandHandlers[MAX_COMMAND_HANDLERS];
+  CommandHandlerEntry *_commandHandlers = nullptr;
+  byte _commandCapacity = DEFAULT_COMMANDS;
+  // Slots that exist right now: the capacity once the table has been built, and
+  // zero before that. Every loop over a table is bounded by this, so a table
+  // that was never needed - or that the board had no RAM for - simply has
+  // nothing to walk.
+  byte _commandSlots() const { return _commandHandlers != nullptr ? _commandCapacity : 0; }
+  // Allocates the table on first use. False when the board had no RAM for it,
+  // which is reported the same way a full table is.
+  bool _ensureCommandTable();
 #if BLAECK_ENABLE_STATE_CHANNELS
   struct StateChannelEntry
   {
@@ -1174,7 +1222,10 @@ private:
     bool truncationWarned = false;
     bool inUse = false;
   };
-  StateChannelEntry _stateChannels[MAX_STATE_CHANNELS];
+  StateChannelEntry *_stateChannels = nullptr;
+  byte _stateChannelCapacity = DEFAULT_STATE_CHANNELS;
+  byte _stateChannelSlots() const { return _stateChannels != nullptr ? _stateChannelCapacity : 0; }
+  bool _ensureStateChannelTable();
 
   // The 0x90 flag word for one channel. Both writer paths call this so the bits are decided
   // once: the buffered and unbuffered writers are otherwise the same code twice, and a flag
@@ -1209,7 +1260,10 @@ private:
     bool disabledByDefault = false;
     bool inUse = false;
   };
-  EventChannelEntry _eventChannels[MAX_EVENT_CHANNELS];
+  EventChannelEntry *_eventChannels = nullptr;
+  byte _eventChannelCapacity = DEFAULT_EVENT_CHANNELS;
+  byte _eventChannelSlots() const { return _eventChannels != nullptr ? _eventChannelCapacity : 0; }
+  bool _ensureEventChannelTable();
 
   // One pool shared by every channel: each entry records which channel owns it,
   // so a channel with many types and one with few both fit without reserving a
@@ -1236,7 +1290,10 @@ private:
   // The entry's name, NUL-terminated, into the frame buffer. Declared here rather than
   // beside the other _buf helpers because it needs EventTypeEntry, declared just above.
   void _bufEventType0(const EventTypeEntry &e);
-  EventTypeEntry _eventTypes[MAX_EVENT_TYPES];
+  EventTypeEntry *_eventTypes = nullptr;
+  byte _eventTypeCapacity = DEFAULT_EVENT_TYPES;
+  byte _eventTypeSlots() const { return _eventTypes != nullptr ? _eventTypeCapacity : 0; }
+  bool _ensureEventTypeTable();
   byte _eventTypeCount = 0;
 #endif
   BlaeckAnyCommandHandler _anyCommandHandler = nullptr;
@@ -1338,6 +1395,82 @@ private:
   friend class BlaeckCommandRefBase;
   friend class BlaeckStateRefBase;
   friend class BlaeckEventChannelRef;
+  friend class BlaeckBeginRef;
+};
+
+// Handle to the just-initialised library, sizing the tables it will allocate.
+// Returned by begin(), meant to be chained, not stored.
+//
+//   BlaeckSerial.begin(&Serial).withSignals(50).withStateChannels(12);
+//
+// A number given here is a capacity, not a reservation: nothing is allocated
+// until the first entry is added to that table, so a table a sketch never uses
+// costs nothing at all. That is also why the chain may run after begin() has
+// returned - the numbers are read later, when the table is built.
+//
+// Raising a capacity after its table already exists is refused, not silently
+// ignored: the table is sized once, and a sketch that asks late is asking for
+// slots that cannot appear.
+class BlaeckBeginRef
+{
+public:
+  explicit BlaeckBeginRef(BlaeckSerial *owner) : _owner(owner) {}
+
+  BlaeckBeginRef &withSignals(unsigned int count)
+  {
+    if (_owner != nullptr)
+      _owner->_setTableCapacity(BlaeckSerial::TABLE_SIGNALS, count);
+    return *this;
+  }
+  // Kept even when the feature is compiled out, so a sketch that sizes the table
+  // still builds; the number is then simply not stored.
+  BlaeckBeginRef &withStateChannels(byte count)
+  {
+#if BLAECK_ENABLE_STATE_CHANNELS
+    if (_owner != nullptr)
+      _owner->_setTableCapacity(BlaeckSerial::TABLE_STATE_CHANNELS, count);
+#else
+    (void)count;
+#endif
+    return *this;
+  }
+  BlaeckBeginRef &withEventChannels(byte count)
+  {
+#if BLAECK_ENABLE_EVENTS
+    if (_owner != nullptr)
+      _owner->_setTableCapacity(BlaeckSerial::TABLE_EVENT_CHANNELS, count);
+#else
+    (void)count;
+#endif
+    return *this;
+  }
+  BlaeckBeginRef &withEventTypes(byte count)
+  {
+#if BLAECK_ENABLE_EVENTS
+    if (_owner != nullptr)
+      _owner->_setTableCapacity(BlaeckSerial::TABLE_EVENT_TYPES, count);
+#else
+    (void)count;
+#endif
+    return *this;
+  }
+  BlaeckBeginRef &withCommands(byte count)
+  {
+    if (_owner != nullptr)
+      _owner->_setTableCapacity(BlaeckSerial::TABLE_COMMANDS, count);
+    return *this;
+  }
+  // Where the library says what it rejected and why. Without one, a full table
+  // is silent apart from hasRejectedSignals() and its siblings.
+  BlaeckBeginRef &withDebugStream(Stream *debugStream)
+  {
+    if (_owner != nullptr)
+      _owner->_debugStream = debugStream;
+    return *this;
+  }
+
+private:
+  BlaeckSerial *_owner;
 };
 
 // Handle to the command a typed helper just registered, describing the control it drives.
@@ -1490,7 +1623,7 @@ protected:
     return *this;                                                                           \
   }                                                                                         \
   /* State the command carries itself: it declares a state channel of that name - taking a */ \
-  /* slot from BLAECK_STATE_MAX_CHANNELS_DEFAULT like any other - and asks */                 \
+  /* slot from the state channel table like any other - and asks */                 \
   /* the getter for the value, instead of mirroring a signal. The channel belongs to the */  \
   /* command - addStateChannel() and writeState() both refuse the name - so what the */  \
   /* catalog reports and what is pushed cannot disagree. Push a change with */               \

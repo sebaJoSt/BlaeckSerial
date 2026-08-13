@@ -79,7 +79,14 @@ void setup()
 {
   Serial.begin(115200);
 
-  BlaeckSerial.begin(&Serial, 7); // signal capacity: exactly the seven added below
+  // Sizing every table the sketch fills, so nothing is left to a default: seven signals, seven
+  // commands, two state channels (a third is declared by SET_OFFSET's withOwnState), three
+  // event channels. Every one of these calls is optional.
+  BlaeckSerial.begin(&Serial)
+      .withSignals(7)
+      .withCommands(7)
+      .withStateChannels(3)
+      .withEventChannels(3);
 
   BlaeckSerial.DeviceName = "Waveform Generator Demo";
   BlaeckSerial.DeviceHWVersion = "Arduino Mega 2560 Rev3";
@@ -104,12 +111,6 @@ void setup()
       .withStateClass(BLAECK_STATE_CLASS_MEASUREMENT)
       .diagnostic();
 
-  if (BlaeckSerial.hasRejectedSignals())
-  {
-    Serial.print(F("Signals not added: "));
-    Serial.println(BlaeckSerial.getRejectedSignalCount());
-  }
-
   BlaeckSerial.onNumberCommand("SET_FREQ", onSetFreq)
       .withRange(0.0f, 2.0f, 0.01f)
       .withUnit(F("Hz"))
@@ -132,14 +133,6 @@ void setup()
       .config();
   BlaeckSerial.onButtonCommand("STATUS", onStatus);
 
-  if (BlaeckSerial.hasRejectedCommands())
-  {
-    Serial.print(F("Commands not registered: "));
-    Serial.print(BlaeckSerial.getRejectedCommandCount());
-    Serial.print(F(", handler slots: "));
-    Serial.println(BLAECK_COMMAND_MAX_HANDLERS_DEFAULT);
-  }
-
   // Declared up-front so the host can announce one text sensor per channel before
   // the first line is written.
   // forceUpdate: the heartbeat repeats the same line, which a host would otherwise collapse
@@ -151,6 +144,10 @@ void setup()
   // addEventType() does the same one name at a time, for a list built conditionally.
   BlaeckSerial.addEventChannel("Activity", F("idle_warning,resumed"))
       .withIcon(F("mdi:sine-wave"));
+
+  // Everything is declared: one summary of anything a table had no room for, naming the
+  // begin() call that would have kept it. Prints nothing when all of it fitted.
+  BlaeckSerial.printRejections(&Serial);
 
   lastMicros = micros();
 }

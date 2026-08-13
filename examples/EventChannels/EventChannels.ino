@@ -5,8 +5,8 @@
   An event is an occurrence, not a state: it carries no value and nothing to switch off again,
   which is what separates it from a bool signal.
 
-  Four channels is what a Mega holds by default (BLAECK_EVENT_MAX_CHANNELS_DEFAULT), so this
-  sketch uses exactly four. Their ten types fit the shared pool of sixteen.
+  Four event channels and ten types is what this sketch declares, and the begin() chain below
+  says so - on a small AVR the defaults would hold two channels and eight types.
 
   What to look for once it is logging:
     Doorbell    device class doorbell, which requires a "ring" type - see the note below
@@ -38,7 +38,10 @@ void setup()
 {
   Serial.begin(115200);
 
-  BlaeckSerial.begin(&Serial, 2);
+  BlaeckSerial.begin(&Serial)
+      .withSignals(2)
+      .withEventChannels(4)
+      .withEventTypes(10);
 
   BlaeckSerial.DeviceName = "Event Channels Demo";
   BlaeckSerial.DeviceHWVersion = "Arduino Mega 2560 Rev3";
@@ -83,16 +86,9 @@ void setup()
   if (HAS_OVERHEAT_SENSOR)
     BlaeckSerial.addEventType("System", F("overheated"));
 
-  if (BlaeckSerial.hasRejectedSignals())
-  {
-    Serial.print(F("Signals not added: "));
-    Serial.println(BlaeckSerial.getRejectedSignalCount());
-  }
-  if (BlaeckSerial.hasRejectedEventChannels())
-  {
-    Serial.print(F("Event channels or types not declared: "));
-    Serial.println(BlaeckSerial.getRejectedEventChannelCount());
-  }
+  // One summary for every table, printed only if something was dropped. Safe here: nothing
+  // has been written to Serial as a Blaeck frame yet.
+  BlaeckSerial.printRejections(&Serial);
 
   BlaeckSerial.writeEvent("System", F("started"));
   EventCount++;
