@@ -4146,7 +4146,7 @@ void BlaeckSerial::writeSignalConfigFrame(unsigned long msg_id)
 void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
 {
   // 0xA0 "Command List" frame. Per discovered command entry:
-  //   msConfig(1) slaveID(1) name\0 kind(1) flags(2, LE uint16)
+  //   msConfig(1) slaveID(1) payloadMax(2, LE uint16) name\0 kind(1) flags(2, LE uint16)
   //   [min(4) max(4) step(4)]  if flags.hasRange   (LE float)
   //   [unit\0]                 if flags.hasUnit
   //   [optionsCsv\0]           if flags.hasOptions
