@@ -899,6 +899,16 @@ private:
   // The two kinds, read the one way that is right for each. Every use of a name goes
   // through these: the schema hash, both catalog writers, and the by-name lookups.
   bool _signalNameEquals(const Signal &s, const char *name) const;
+  // Where a name's bytes are going. One walk serves all three writers, so a name cannot
+  // be sent one way and hashed another.
+  enum NameSink : uint8_t
+  {
+    NAME_SINK_BUFFER,
+    NAME_SINK_STREAM,
+    NAME_SINK_HASH
+  };
+  void _emitSignalName(const Signal &s, NameSink sink);
+  void _emitNameByte(byte c, NameSink sink);
   // The suffix as decimal text; out must hold three chars. Static because it reads only
   // the entry, and shared so a name is matched, hashed and sent as the same bytes.
   static byte _signalSuffixDigits(const Signal &s, char *out);

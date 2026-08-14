@@ -705,7 +705,11 @@ byte BlaeckSerial::_signalSuffixDigits(const Signal &s, char *out)
   return n;
 }
 
-void BlaeckSerial::_signalNameFeedHash(const Signal &s)
+// One walk over a name, feeding each byte wherever it is wanted. The prefix lives in
+// flash or in RAM and may be followed by digits that are not stored at all, and every
+// writer needs all of those cases - so the walking happens once here rather than three
+// times, and a name cannot be sent one way and hashed another.
+void BlaeckSerial::_emitSignalName(const Signal &s, NameSink sink)
 {
   if (s.SignalName != nullptr)
   {
@@ -714,13 +718,13 @@ void BlaeckSerial::_signalNameFeedHash(const Signal &s)
       PGM_P p = reinterpret_cast<PGM_P>(s.SignalName);
       byte c;
       while ((c = pgm_read_byte(p++)) != 0)
-        _schemaHashFeedByte(c);
+        _emitNameByte(c, sink);
     }
     else
     {
       const char *p = s.SignalName;
       while (*p)
-        _schemaHashFeedByte((byte)*p++);
+        _emitNameByte((byte)*p++, sink);
     }
   }
   if (s.HasSuffix)
@@ -728,47 +732,42 @@ void BlaeckSerial::_signalNameFeedHash(const Signal &s)
     char digits[4];
     byte n = _signalSuffixDigits(s, digits);
     for (byte i = 0; i < n; i++)
-      _schemaHashFeedByte((byte)digits[i]);
+      _emitNameByte((byte)digits[i], sink);
   }
+}
+
+void BlaeckSerial::_emitNameByte(byte c, NameSink sink)
+{
+  switch (sink)
+  {
+  case NAME_SINK_BUFFER:
+    _bufByte(c);
+    break;
+  case NAME_SINK_STREAM:
+    StreamRef->write(c);
+    break;
+  default:
+    _schemaHashFeedByte(c);
+    break;
+  }
+}
+
+void BlaeckSerial::_signalNameFeedHash(const Signal &s)
+{
+  _emitSignalName(s, NAME_SINK_HASH);
 }
 
 void BlaeckSerial::_bufSignalName0(const Signal &s)
 {
-  if (s.SignalName != nullptr)
-  {
-    if (s.NameInFlash)
-      _bufFlashStr(reinterpret_cast<const __FlashStringHelper *>(s.SignalName));
-    else
-      _bufStr(s.SignalName);
-  }
-  if (s.HasSuffix)
-  {
-    char digits[4];
-    byte n = _signalSuffixDigits(s, digits);
-    for (byte i = 0; i < n; i++)
-      _bufByte((byte)digits[i]);
-  }
-  // The terminator comes last, after whatever the two halves contributed - a name with a
-  // suffix is one string on the wire, not two.
+  _emitSignalName(s, NAME_SINK_BUFFER);
+  // The terminator comes last, after whatever the prefix and the digits contributed - a
+  // name with a suffix is one string on the wire, not two.
   _bufByte(0);
 }
 
 void BlaeckSerial::_printSignalName(const Signal &s)
 {
-  if (s.SignalName != nullptr)
-  {
-    if (s.NameInFlash)
-      StreamRef->print(reinterpret_cast<const __FlashStringHelper *>(s.SignalName));
-    else
-      StreamRef->print(s.SignalName);
-  }
-  if (s.HasSuffix)
-  {
-    char digits[4];
-    byte n = _signalSuffixDigits(s, digits);
-    for (byte i = 0; i < n; i++)
-      StreamRef->write((byte)digits[i]);
-  }
+  _emitSignalName(s, NAME_SINK_STREAM);
 }
 
 void BlaeckSerial::update(int signalIndex, bool value)
