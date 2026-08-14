@@ -1403,7 +1403,32 @@ byte BlaeckSerial::_flashCsvOptionCount(const __FlashStringHelper *csv)
   return any ? count : 0;
 }
 
-bool BlaeckSerial::getSelectOption(const char *command, byte index, char *out, byte outSize) const
+long BlaeckSerial::getSelectOptionIndexOf(const char *command, const char *optionName) const
+{
+  if (command == nullptr || optionName == nullptr)
+    return -1;
+
+#if !BLAECK_ENABLE_COMMAND_META
+  // No metadata is stored, so there is no option list to match against.
+  return -1;
+#else
+  for (byte i = 0; i < _commandSlots(); i++)
+  {
+    const CommandHandlerEntry &e = _commandHandlers[i];
+    if (!e.inUse || e.kind != BLAECK_CMD_SELECT || e.options == nullptr)
+      continue;
+    if (strcmp(e.command, command) != 0)
+      continue;
+
+    // The same match an incoming command value gets, so a name that would be accepted on the
+    // wire resolves to the same option here.
+    return _flashCsvIndexOf(e.options, optionName);
+  }
+  return -1;
+#endif
+}
+
+bool BlaeckSerial::getSelectOptionNameAt(const char *command, byte index, char *out, byte outSize) const
 {
   if (out == nullptr || outSize == 0)
     return false;
@@ -2371,7 +2396,7 @@ const char *BlaeckSerial::_channelText(const StateChannelEntry &e, char *buf, by
   if (e.options == nullptr || buf == nullptr || bufSize == 0)
     return nullptr;
 
-  // Same field-walk getSelectOption() does, on the list the command handed the channel.
+  // Same field-walk getSelectOptionNameAt() does, on the list the command handed the channel.
   byte index = *((const byte *)e.stateValue);
   PGM_P p = reinterpret_cast<PGM_P>(e.options);
   byte seen = 0;

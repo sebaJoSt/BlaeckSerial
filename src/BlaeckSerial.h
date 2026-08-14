@@ -832,9 +832,24 @@ public:
   void timedWriteUpdatedData(unsigned long messageID, unsigned long long timestamp);
 
   // ----- Tick -----
+
+  // The one call a sketch needs in loop(): reads whatever arrived and dispatches it, then
+  // writes the signals if the interval is due. Equivalent to read() followed by
+  // timedWriteAllData(), so use read() alone for a device that answers commands and sends no
+  // data of its own.
   void tick();
+
+  // As tick(), with messageID stamped into the frame header so a host can match a response
+  // against its request. Left to tick(), the library supplies one that says whether the
+  // interval was fixed by the sketch or set by the host.
   void tick(unsigned long messageID);
+
+  // As tick(), but writes only the signals marked with markSignalUpdated() since the last
+  // write. For a device whose values change rarely: an unchanged signal costs nothing on the
+  // wire, where tick() sends every signal on every interval.
   void tickUpdated();
+
+  // As tickUpdated(), with messageID stamped into the frame header.
   void tickUpdated(unsigned long messageID);
 
   // ----- Timed Data configuruation -----
@@ -966,10 +981,21 @@ public:
   // reported on DebugRef - and a host needs it too: Home Assistant defaults an undeclared range
   // to 0..100 step 1, so a command accepting 0..500 gets a control that stops at 100, and one
   // accepting 0..1 gets a control with only two positions.
+
+  // A number. Give it a range with withRange(); the handler reads atof(params[0]).
   BlaeckNumberCommandRef onNumberCommand(const char *command, BlaeckCommandHandler handler);
+
+  // On or off. The handler receives "0" or "1"; anything else is rejected before it runs.
   BlaeckSwitchCommandRef onSwitchCommand(const char *command, BlaeckCommandHandler handler);
+
+  // A list, declared with withOptions(). A host may send an option by name or by index - the
+  // handler always receives the INDEX, so it reads atoi(params[0]).
   BlaeckSelectCommandRef onSelectCommand(const char *command, BlaeckCommandHandler handler);
+
+  // A press. It carries no value, so the handler runs with no parameters.
   BlaeckButtonCommandRef onButtonCommand(const char *command, BlaeckCommandHandler handler);
+
+  // Free text. The handler receives it percent-decoded and no longer than withMaxLength() said.
   BlaeckTextCommandRef onTextCommand(const char *command, BlaeckCommandHandler handler);
 
   // Copies option `index` of a select command's declared list into `out`, so a sketch can
@@ -978,7 +1004,23 @@ public:
   // Returns false and leaves `out` empty if the command is not a declared select, the
   // index is past the end, or the option would not fit - a truncated name is no use,
   // since a host matches state against the declared options exactly.
-  bool getSelectOption(const char *command, byte index, char *out, byte outSize) const;
+  bool getSelectOptionNameAt(const char *command, byte index, char *out, byte outSize) const;
+
+  // The other direction: the index of a named option, or -1 if that command is not a declared
+  // select or has no such option. Matching is case-insensitive, the same rule an incoming
+  // command value is matched by.
+  //
+  // Mainly for a setting restored from storage. An index is a position in the list declared
+  // with withOptions(), so it only means anything against that exact list: reorder the options
+  // in a later firmware and a stored index quietly selects something else. A stored NAME
+  // survives that, and a name that has since been removed returns -1 rather than landing
+  // somewhere arbitrary, so the sketch can choose its own fallback:
+  //
+  //   char saved[12];
+  //   EEPROM.get(addr, saved);
+  //   long i = BlaeckSerial.getSelectOptionIndexOf("SET_WAVE", saved);
+  //   waveIndex = (i >= 0) ? (byte)i : 0;
+  long getSelectOptionIndexOf(const char *command, const char *optionName) const;
 
   // ----- Before data write callback  -----
   // Called just before signal data is sent, in normal loop context
@@ -1882,44 +1924,65 @@ protected:
 // its kind all the way down. The repetition is the point: this reads as a table of what each
 // control accepts, and it is what an editor offers when the dot is typed.
 
-#define BLAECK_COMMAND_REF_SHARED(TYPE)                                                     \
-  /* The signal that mirrors this command's value, so a host shows what the device holds */ \
-  /* rather than what was last sent. Leave it out for an optimistic control. */             \
-  TYPE &withStateSignal(const __FlashStringHelper *signalName)                              \
-  {                                                                                         \
-    _setStateSignal(signalName);                                                            \
-    return *this;                                                                           \
-  }                                                                                         \
-  /* State the command carries itself: it declares a state channel of that name - taking a */ \
-  /* slot from the state channel table like any other - and asks */                 \
-  /* the getter for the value, instead of mirroring a signal. The channel belongs to the */  \
-  /* command - addStateChannel() and writeState() both refuse the name - so what the */  \
-  /* catalog reports and what is pushed cannot disagree. Push a change with */               \
-  /* writeCommandState(). Independent of the signal table, so a device that adds no signals */ \
-  /* can still report what its controls are set to. */                                       \
-  TYPE &withOwnState(const __FlashStringHelper *channelName, BlaeckStateTextGetter getStateText) \
-  {                                                                                         \
-    _setOwnState(channelName, getStateText);                                                \
-    return *this;                                                                           \
-  }                                                                                         \
-  /* A device setting rather than a primary function. Home Assistant keeps both this and */  \
-  /* diagnostic() off its auto-generated dashboards. */                                      \
-  TYPE &config()                                                                            \
-  {                                                                                         \
-    _setCategory((uint8_t)BLAECK_CAT_CONFIG);                                               \
-    return *this;                                                                           \
-  }                                                                                         \
-  TYPE &diagnostic()                                                                        \
-  {                                                                                         \
-    _setCategory((uint8_t)BLAECK_CAT_DIAGNOSTIC);                                           \
-    return *this;                                                                           \
-  }
-
-class BlaeckNumberCommandRef : public BlaeckCommandRefBase
+// The four every command handle shares. A template rather than a macro so each method is a real
+// declaration with a real comment: a comment inside a macro body documents nothing, because the
+// compiler and the editor both see only the expansion. TYPE is the handle deriving from this, so
+// each returns its own type and the chain keeps working.
+template <class TYPE>
+class BlaeckCommandRefShared : public BlaeckCommandRefBase
 {
 public:
-  BlaeckNumberCommandRef(BlaeckSerial *owner, int16_t index) : BlaeckCommandRefBase(owner, index) {}
-  BLAECK_COMMAND_REF_SHARED(BlaeckNumberCommandRef)
+  // The signal that mirrors this command's value, so a host shows what the device holds rather
+  // than what was last sent. Leave it out for an optimistic control.
+  TYPE &withStateSignal(const __FlashStringHelper *signalName)
+  {
+    _setStateSignal(signalName);
+    return _self();
+  }
+
+  // State the command carries itself: it declares a state channel of that name - taking a slot
+  // from the state channel table like any other - and asks the getter for the value, instead of
+  // mirroring a signal. The channel belongs to the command - addStateChannel() and writeState()
+  // both refuse the name - so what the catalog reports and what is pushed cannot disagree. Push
+  // a change with writeCommandState(). Independent of the signal table, so a device that adds no
+  // signals can still report what its controls are set to.
+  TYPE &withOwnState(const __FlashStringHelper *channelName, BlaeckStateTextGetter getStateText)
+  {
+    _setOwnState(channelName, getStateText);
+    return _self();
+  }
+
+  // A device setting rather than a primary function. Home Assistant keeps both this and
+  // diagnostic() off its auto-generated dashboards.
+  TYPE &config()
+  {
+    _setCategory((uint8_t)BLAECK_CAT_CONFIG);
+    return _self();
+  }
+
+  // Describes the board rather than what it does. Kept off auto-generated dashboards.
+  TYPE &diagnostic()
+  {
+    _setCategory((uint8_t)BLAECK_CAT_DIAGNOSTIC);
+    return _self();
+  }
+
+protected:
+  BlaeckCommandRefShared(BlaeckSerial *owner, int16_t index) : BlaeckCommandRefBase(owner, index) {}
+
+private:
+  TYPE &_self() { return *static_cast<TYPE *>(this); }
+};
+
+class BlaeckNumberCommandRef : public BlaeckCommandRefShared<BlaeckNumberCommandRef>
+{
+public:
+  BlaeckNumberCommandRef(BlaeckSerial *owner, int16_t index) : BlaeckCommandRefShared<BlaeckNumberCommandRef>(owner, index) {}
+
+  // Declaring withOwnState() below would otherwise hide the getter form inherited from the
+  // base - C++ hides by name, not by signature. The macro this replaced pasted both into one
+  // scope, so nothing had to say this.
+  using BlaeckCommandRefShared<BlaeckNumberCommandRef>::withOwnState;
 
   // The range the firmware validates against: a value outside it is rejected before dispatch.
   // A number command that never calls this accepts anything.
@@ -1938,58 +2001,81 @@ public:
     return *this;
   }
 
-  // The command's own state as a variable rather than as text: the library reads it where the
-  // getter would have been called and sends it typed, so the host renders the number and the
-  // sketch never formats one. One overload per numeric type, as addSignal() has.
-
+  // Carries this command's state as a byte (unsigned 8-bit), read directly instead of asking a
+  // getter for text. Sent typed, so the host renders the number and the sketch never formats
+  // one. One overload per numeric type, as addSignal() has.
   BlaeckNumberCommandRef &withOwnState(const __FlashStringHelper *channelName, byte *value)
   {
     _setOwnState(channelName, Blaeck_byte, value);
     return *this;
   }
 
+  // Carries this command's state as a short (signed 16-bit), read directly instead of asking a
+  // getter for text. Sent typed, so the host renders the number and the sketch never formats
+  // one. One overload per numeric type, as addSignal() has.
   BlaeckNumberCommandRef &withOwnState(const __FlashStringHelper *channelName, short *value)
   {
     _setOwnState(channelName, Blaeck_short, value);
     return *this;
   }
 
+  // Carries this command's state as an unsigned short (16-bit), read directly instead of asking
+  // a getter for text. Sent typed, so the host renders the number and the sketch never formats
+  // one. One overload per numeric type, as addSignal() has.
   BlaeckNumberCommandRef &withOwnState(const __FlashStringHelper *channelName, unsigned short *value)
   {
     _setOwnState(channelName, Blaeck_ushort, value);
     return *this;
   }
 
+  // Carries this command's state as an int, 16-bit on AVR and 32-bit elsewhere, read directly
+  // instead of asking a getter for text. Sent typed, so the host renders the number and the
+  // sketch never formats one. One overload per numeric type, as addSignal() has.
   BlaeckNumberCommandRef &withOwnState(const __FlashStringHelper *channelName, int *value)
   {
     _setOwnState(channelName, Blaeck_int, value);
     return *this;
   }
 
+  // Carries this command's state as an unsigned int, 16-bit on AVR and 32-bit elsewhere, read
+  // directly instead of asking a getter for text. Sent typed, so the host renders the number and
+  // the sketch never formats one. One overload per numeric type, as addSignal() has.
   BlaeckNumberCommandRef &withOwnState(const __FlashStringHelper *channelName, unsigned int *value)
   {
     _setOwnState(channelName, Blaeck_uint, value);
     return *this;
   }
 
+  // Carries this command's state as a long (signed 32-bit), read directly instead of asking a
+  // getter for text. Sent typed, so the host renders the number and the sketch never formats
+  // one. One overload per numeric type, as addSignal() has.
   BlaeckNumberCommandRef &withOwnState(const __FlashStringHelper *channelName, long *value)
   {
     _setOwnState(channelName, Blaeck_long, value);
     return *this;
   }
 
+  // Carries this command's state as an unsigned long (32-bit), read directly instead of asking a
+  // getter for text. Sent typed, so the host renders the number and the sketch never formats
+  // one. One overload per numeric type, as addSignal() has.
   BlaeckNumberCommandRef &withOwnState(const __FlashStringHelper *channelName, unsigned long *value)
   {
     _setOwnState(channelName, Blaeck_ulong, value);
     return *this;
   }
 
+  // Carries this command's state as a float (32-bit), read directly instead of asking a getter
+  // for text. Sent typed, so the host renders the number and the sketch never formats one. One
+  // overload per numeric type, as addSignal() has.
   BlaeckNumberCommandRef &withOwnState(const __FlashStringHelper *channelName, float *value)
   {
     _setOwnState(channelName, Blaeck_float, value);
     return *this;
   }
 
+  // Carries this command's state as a double, 32-bit on AVR and 64-bit elsewhere, read directly
+  // instead of asking a getter for text. Sent typed, so the host renders the number and the
+  // sketch never formats one. One overload per numeric type, as addSignal() has.
   BlaeckNumberCommandRef &withOwnState(const __FlashStringHelper *channelName, double *value)
   {
     _setOwnState(channelName, Blaeck_double, value);
@@ -1997,11 +2083,15 @@ public:
   }
 };
 
-class BlaeckSwitchCommandRef : public BlaeckCommandRefBase
+class BlaeckSwitchCommandRef : public BlaeckCommandRefShared<BlaeckSwitchCommandRef>
 {
 public:
-  BlaeckSwitchCommandRef(BlaeckSerial *owner, int16_t index) : BlaeckCommandRefBase(owner, index) {}
-  BLAECK_COMMAND_REF_SHARED(BlaeckSwitchCommandRef)
+  BlaeckSwitchCommandRef(BlaeckSerial *owner, int16_t index) : BlaeckCommandRefShared<BlaeckSwitchCommandRef>(owner, index) {}
+
+  // Declaring withOwnState() below would otherwise hide the getter form inherited from the
+  // base - C++ hides by name, not by signature. The macro this replaced pasted both into one
+  // scope, so nothing had to say this.
+  using BlaeckCommandRefShared<BlaeckSwitchCommandRef>::withOwnState;
 
   // A switch reports its own state as the bool it is: the host renders it as the on/off
   // payloads it declared, so the sketch never has to know which spelling those use.
@@ -2012,15 +2102,20 @@ public:
   }
 };
 
-class BlaeckSelectCommandRef : public BlaeckCommandRefBase
+class BlaeckSelectCommandRef : public BlaeckCommandRefShared<BlaeckSelectCommandRef>
 {
 public:
-  BlaeckSelectCommandRef(BlaeckSerial *owner, int16_t index) : BlaeckCommandRefBase(owner, index) {}
-  BLAECK_COMMAND_REF_SHARED(BlaeckSelectCommandRef)
+  BlaeckSelectCommandRef(BlaeckSerial *owner, int16_t index) : BlaeckCommandRefShared<BlaeckSelectCommandRef>(owner, index) {}
 
-  // The closed list this control offers, comma-separated. A value that is not an index into it
-  // is rejected before dispatch. getSelectOption() reads a name back out, so the list lives in
-  // flash once instead of being repeated in the sketch.
+  // Declaring withOwnState() below would otherwise hide the getter form inherited from the
+  // base - C++ hides by name, not by signature. The macro this replaced pasted both into one
+  // scope, so nothing had to say this.
+  using BlaeckCommandRefShared<BlaeckSelectCommandRef>::withOwnState;
+
+  // The closed list this control offers, comma-separated. The handler receives the option INDEX
+  // as text - atoi(params[0]) - whether the value arrived as a name or a number; anything that
+  // is neither is rejected before dispatch. getSelectOptionNameAt() reads a name back out when
+  // text is wanted, so the list lives in flash once instead of being repeated in the sketch.
   //
   // Avoid naming an option "none" in any casing: Home Assistant reads that state as "no option
   // selected" and blanks the control rather than showing it.
@@ -2035,9 +2130,10 @@ public:
   // calling it), so that is what a sketch already has; pass a buffer instead only if it keeps
   // the name for its own reasons. Either way the channel reports the option NAME, which is what
   // a host expects of a select.
-
-  // The byte the sketch switches on. The library resolves it against the list declared above,
-  // so nothing has to hold that text or refresh it when the selection changes.
+  //
+  // This overload: the byte the sketch switches on. The library resolves it against the
+  // list declared above, so nothing has to hold that text or refresh it when the selection
+  // changes.
   BlaeckSelectCommandRef &withOwnState(const __FlashStringHelper *channelName, byte *index)
   {
     _setOwnState(channelName, Blaeck_string, index, true);
@@ -2055,18 +2151,21 @@ public:
 
 };
 
-class BlaeckButtonCommandRef : public BlaeckCommandRefBase
+class BlaeckButtonCommandRef : public BlaeckCommandRefShared<BlaeckButtonCommandRef>
 {
 public:
-  BlaeckButtonCommandRef(BlaeckSerial *owner, int16_t index) : BlaeckCommandRefBase(owner, index) {}
-  BLAECK_COMMAND_REF_SHARED(BlaeckButtonCommandRef)
+  BlaeckButtonCommandRef(BlaeckSerial *owner, int16_t index) : BlaeckCommandRefShared<BlaeckButtonCommandRef>(owner, index) {}
 };
 
-class BlaeckTextCommandRef : public BlaeckCommandRefBase
+class BlaeckTextCommandRef : public BlaeckCommandRefShared<BlaeckTextCommandRef>
 {
 public:
-  BlaeckTextCommandRef(BlaeckSerial *owner, int16_t index) : BlaeckCommandRefBase(owner, index) {}
-  BLAECK_COMMAND_REF_SHARED(BlaeckTextCommandRef)
+  BlaeckTextCommandRef(BlaeckSerial *owner, int16_t index) : BlaeckCommandRefShared<BlaeckTextCommandRef>(owner, index) {}
+
+  // Declaring withOwnState() below would otherwise hide the getter form inherited from the
+  // base - C++ hides by name, not by signature. The macro this replaced pasted both into one
+  // scope, so nothing had to say this.
+  using BlaeckCommandRefShared<BlaeckTextCommandRef>::withOwnState;
 
   // The buffer this control's state lives in. No getter and no formatting: the library reads
   // the characters where they sit, so a value the sketch already keeps needs no second copy.
@@ -2214,54 +2313,73 @@ protected:
 
 // What every signal accepts, whatever it holds. Repeated per handle so the chain keeps its
 // datatype all the way down, and so an editor offers exactly what applies when the dot is typed.
-#define BLAECK_SIGNAL_REF_SHARED(TYPE)                                                    \
-  /* Ends the name in a number, e.g. addSignal(F("Sine_"), &v).withNameSuffix(i + 1) */   \
-  /* names a signal Sine_1. 0-255, and 0 is a number like any other. Worth doing for a */ \
-  /* run of signals sharing a prefix: the prefix stays in flash and the digits are */     \
-  /* produced when the name is sent, so nothing is copied to the heap - which is what */  \
-  /* a name built with snprintf costs instead. */                                         \
-  TYPE &withNameSuffix(uint8_t suffix)                                                    \
-  {                                                                                       \
-    _setNameSuffix(suffix);                                                               \
-    return *this;                                                                         \
-  }                                                                                       \
-  /* What the value measures, e.g. F("temperature"). Home Assistant's vocabulary, */      \
-  /* carried as written: this library does not hold the list, because the list grows */   \
-  /* faster than firmware is reflashed. */                                                \
-  TYPE &withDeviceClass(const __FlashStringHelper *deviceClass)                           \
-  {                                                                                       \
-    _setFlash(deviceClass, BLAECK_SIG_HAS_DEVICE_CLASS);                                  \
-    return *this;                                                                         \
-  }                                                                                       \
-  /* Material Design Icons name, e.g. F("mdi:sine-wave"). */                              \
-  TYPE &withIcon(const __FlashStringHelper *icon)                                         \
-  {                                                                                       \
-    _setFlash(icon, BLAECK_SIG_HAS_ICON);                                                 \
-    return *this;                                                                         \
-  }                                                                                       \
-  /* Moves the entity off Home Assistant's auto-generated dashboards, for a value that */ \
-  /* describes the device rather than what it measures. */                                \
-  TYPE &diagnostic(bool on = true) { return _setBit(BLAECK_SIG_DIAGNOSTIC, on), *this; }  \
-  /* Registers the entity but leaves it switched off until someone enables it. */         \
-  TYPE &disabledByDefault(bool on = true)                                                 \
-  {                                                                                       \
-    _setBit(BLAECK_SIG_DISABLED_BY_DEFAULT, on);                                          \
-    return *this;                                                                         \
-  }                                                                                       \
-  /* Report every reading, even one identical to the last. */                             \
-  TYPE &forceUpdate(bool on = true)                                                       \
-  {                                                                                       \
-    _setBit(BLAECK_SIG_FORCE_UPDATE, on);                                                 \
-    return *this;                                                                         \
+// What every signal handle shares. A template rather than a macro, for the reason given on
+// BlaeckCommandRefShared: a comment inside a macro body documents nothing.
+template <class TYPE>
+class BlaeckSignalRefShared : public BlaeckSignalRefBase
+{
+public:
+  // Ends the name in a number, e.g. addSignal(F("Sine_"), &v).withNameSuffix(i + 1) names a
+  // signal Sine_1. 0-255, and 0 is a number like any other. Worth doing for a run of signals
+  // sharing a prefix: the prefix stays in flash and the digits are produced when the name is
+  // sent, so nothing is copied to the heap - which is what a name built with snprintf costs.
+  TYPE &withNameSuffix(uint8_t suffix)
+  {
+    _setNameSuffix(suffix);
+    return _self();
   }
+
+  // What the value measures, e.g. F("temperature"). Home Assistant's vocabulary, carried as
+  // written: this library does not hold the list, because the list grows faster than firmware
+  // is reflashed.
+  TYPE &withDeviceClass(const __FlashStringHelper *deviceClass)
+  {
+    _setFlash(deviceClass, BLAECK_SIG_HAS_DEVICE_CLASS);
+    return _self();
+  }
+
+  // Material Design Icons name, e.g. F("mdi:sine-wave").
+  TYPE &withIcon(const __FlashStringHelper *icon)
+  {
+    _setFlash(icon, BLAECK_SIG_HAS_ICON);
+    return _self();
+  }
+
+  // Moves the entity off Home Assistant's auto-generated dashboards, for a value that describes
+  // the device rather than what it measures.
+  TYPE &diagnostic(bool on = true)
+  {
+    _setBit(BLAECK_SIG_DIAGNOSTIC, on);
+    return _self();
+  }
+
+  // Registers the entity but leaves it switched off until someone enables it.
+  TYPE &disabledByDefault(bool on = true)
+  {
+    _setBit(BLAECK_SIG_DISABLED_BY_DEFAULT, on);
+    return _self();
+  }
+
+  // Report every reading, even one identical to the last.
+  TYPE &forceUpdate(bool on = true)
+  {
+    _setBit(BLAECK_SIG_FORCE_UPDATE, on);
+    return _self();
+  }
+
+protected:
+  BlaeckSignalRefShared(BlaeckSerial *owner, int16_t index) : BlaeckSignalRefBase(owner, index) {}
+
+private:
+  TYPE &_self() { return *static_cast<TYPE *>(this); }
+};
 
 // Any of the nine numeric datatypes. The only shape with decimals to show and a value that
 // accumulates, so it is the only one carrying a state class or a display precision.
-class BlaeckNumericSignalRef : public BlaeckSignalRefBase
+class BlaeckNumericSignalRef : public BlaeckSignalRefShared<BlaeckNumericSignalRef>
 {
 public:
-  BlaeckNumericSignalRef(BlaeckSerial *owner, int16_t index) : BlaeckSignalRefBase(owner, index) {}
-  BLAECK_SIGNAL_REF_SHARED(BlaeckNumericSignalRef)
+  BlaeckNumericSignalRef(BlaeckSerial *owner, int16_t index) : BlaeckSignalRefShared<BlaeckNumericSignalRef>(owner, index) {}
 
   // Symbol shown after the value, e.g. F("Hz"). Non-ASCII must be UTF-8:
   // F("\xC2\xB0" "C") is the degree sign followed by C.
@@ -2292,11 +2410,10 @@ public:
 //
 // Mirrors BlaeckTextStateRef: a string signal and a state channel become the same Home
 // Assistant entity, so they carry the same fields. Change one, change the other.
-class BlaeckTextSignalRef : public BlaeckSignalRefBase
+class BlaeckTextSignalRef : public BlaeckSignalRefShared<BlaeckTextSignalRef>
 {
 public:
-  BlaeckTextSignalRef(BlaeckSerial *owner, int16_t index) : BlaeckSignalRefBase(owner, index) {}
-  BLAECK_SIGNAL_REF_SHARED(BlaeckTextSignalRef)
+  BlaeckTextSignalRef(BlaeckSerial *owner, int16_t index) : BlaeckSignalRefShared<BlaeckTextSignalRef>(owner, index) {}
 
   // The closed set of values this signal reports, comma-separated. Text only: the list is a set
   // of names, which is what Home Assistant's enum device class describes - a number has no such
@@ -2319,11 +2436,10 @@ public:
 // Some names appear in both lists meaning different things - battery is a percentage on a
 // numeric signal and low/normal on this one. A name from the wrong list fails discovery, and
 // the entity never appears.
-class BlaeckBoolSignalRef : public BlaeckSignalRefBase
+class BlaeckBoolSignalRef : public BlaeckSignalRefShared<BlaeckBoolSignalRef>
 {
 public:
-  BlaeckBoolSignalRef(BlaeckSerial *owner, int16_t index) : BlaeckSignalRefBase(owner, index) {}
-  BLAECK_SIGNAL_REF_SHARED(BlaeckBoolSignalRef)
+  BlaeckBoolSignalRef(BlaeckSerial *owner, int16_t index) : BlaeckSignalRefShared<BlaeckBoolSignalRef>(owner, index) {}
 };
 
 // Handle to the channel just declared. Returned by value and meant to be chained, not stored;
@@ -2383,56 +2499,71 @@ protected:
 };
 
 // The modifiers every channel kind takes, whatever its value type.
-#define BLAECK_STATE_REF_SHARED(TYPE)                                                     \
-  /* Material Design Icons name, e.g. F("mdi:pulse"). */                                    \
-  TYPE &withIcon(const __FlashStringHelper *icon)                                           \
-  {                                                                                         \
-    if (auto *e = _entry())                                                                 \
-      e->icon = icon;                                                                       \
-    return *this;                                                                           \
-  }                                                                                         \
-  /* Groups the entity under Home Assistant's diagnostic section. */                        \
-  TYPE &diagnostic(bool on = true)                                                          \
-  {                                                                                         \
-    if (auto *e = _entry())                                                                 \
-      e->diagnostic = on;                                                                   \
-    return *this;                                                                           \
-  }                                                                                         \
-  /* What the value is, for a host that renders it. The list a host draws from depends on */ \
-  /* the value type: F("timestamp") or F("date") suit text, F("voltage") a number. A name */ \
-  /* from the wrong list fails discovery and the entity never appears. */                   \
-  TYPE &withDeviceClass(const __FlashStringHelper *deviceClass)                             \
-  {                                                                                         \
-    if (auto *e = _entry())                                                                 \
-      e->deviceClass = deviceClass;                                                         \
-    return *this;                                                                           \
-  }                                                                                         \
-  /* Registers the entity but leaves it switched off until someone enables it. */           \
-  TYPE &disabledByDefault(bool on = true)                                                   \
-  {                                                                                         \
-    if (auto *e = _entry())                                                                 \
-      e->disabledByDefault = on;                                                            \
-    return *this;                                                                           \
-  }                                                                                         \
-  /* Report every value, even one identical to the last. A host otherwise collapses a */    \
-  /* repeat into the entry it already has, so a heartbeat that says the same thing each */  \
-  /* time leaves no trace of having run. */                                                 \
-  TYPE &forceUpdate(bool on = true)                                                         \
-  {                                                                                         \
-    if (auto *e = _entry())                                                                 \
-      e->forceUpdate = on;                                                                  \
-    return *this;                                                                           \
+// What every state channel handle shares. A template rather than a macro, for the reason given
+// on BlaeckCommandRefShared: a comment inside a macro body documents nothing.
+template <class TYPE>
+class BlaeckStateRefShared : public BlaeckStateRefBase
+{
+public:
+  // Material Design Icons name, e.g. F("mdi:pulse").
+  TYPE &withIcon(const __FlashStringHelper *icon)
+  {
+    if (auto *e = _entry())
+      e->icon = icon;
+    return _self();
   }
+
+  // Groups the entity under Home Assistant's diagnostic section.
+  TYPE &diagnostic(bool on = true)
+  {
+    if (auto *e = _entry())
+      e->diagnostic = on;
+    return _self();
+  }
+
+  // What the value is, for a host that renders it. The list a host draws from depends on the
+  // value type: F("timestamp") or F("date") suit text, F("voltage") a number. A name from the
+  // wrong list fails discovery and the entity never appears.
+  TYPE &withDeviceClass(const __FlashStringHelper *deviceClass)
+  {
+    if (auto *e = _entry())
+      e->deviceClass = deviceClass;
+    return _self();
+  }
+
+  // Registers the entity but leaves it switched off until someone enables it.
+  TYPE &disabledByDefault(bool on = true)
+  {
+    if (auto *e = _entry())
+      e->disabledByDefault = on;
+    return _self();
+  }
+
+  // Report every value, even one identical to the last. A host otherwise collapses a repeat
+  // into the entry it already has, so a channel that says the same thing each time leaves no
+  // trace of having been written.
+  TYPE &forceUpdate(bool on = true)
+  {
+    if (auto *e = _entry())
+      e->forceUpdate = on;
+    return _self();
+  }
+
+protected:
+  BlaeckStateRefShared(BlaeckSerial *owner, int16_t index) : BlaeckStateRefBase(owner, index) {}
+
+private:
+  TYPE &_self() { return *static_cast<TYPE *>(this); }
+};
 
 // A channel carrying a number. Mirrors BlaeckNumericSignalRef: the same value becomes the same
 // Home Assistant entity whichever way it arrives, so they carry the same fields. Change one,
 // change the other. What differs is not the entity but the cadence - a signal is sampled into
 // every logged row, a channel is pushed when it changes and never stored.
-class BlaeckNumericStateRef : public BlaeckStateRefBase
+class BlaeckNumericStateRef : public BlaeckStateRefShared<BlaeckNumericStateRef>
 {
 public:
-  BlaeckNumericStateRef(BlaeckSerial *owner, int16_t index) : BlaeckStateRefBase(owner, index) {}
-  BLAECK_STATE_REF_SHARED(BlaeckNumericStateRef)
+  BlaeckNumericStateRef(BlaeckSerial *owner, int16_t index) : BlaeckStateRefShared<BlaeckNumericStateRef>(owner, index) {}
 
   // Symbol shown after the value, e.g. F("Hz"). Non-ASCII must be UTF-8:
   // F("\xC2\xB0" "C") is the degree sign followed by C.
@@ -2468,11 +2599,10 @@ public:
 // A channel carrying text. Mirrors BlaeckTextSignalRef: no unit, no decimals to round and
 // nothing to keep statistics on: all three tell Home Assistant the state is a number, and it
 // then refuses the text.
-class BlaeckTextStateRef : public BlaeckStateRefBase
+class BlaeckTextStateRef : public BlaeckStateRefShared<BlaeckTextStateRef>
 {
 public:
-  BlaeckTextStateRef(BlaeckSerial *owner, int16_t index) : BlaeckStateRefBase(owner, index) {}
-  BLAECK_STATE_REF_SHARED(BlaeckTextStateRef)
+  BlaeckTextStateRef(BlaeckSerial *owner, int16_t index) : BlaeckStateRefShared<BlaeckTextStateRef>(owner, index) {}
 
   // Makes the channel report a current value: the library calls the getter while building the
   // 0x90 catalog, so a host that polls learns the value as it is at that moment and the sketch
@@ -2510,11 +2640,10 @@ public:
 // takes F("door"), F("motion"), F("smoke"), F("window") and the like, not F("temperature").
 // Some names appear in both lists meaning different things - battery is a percentage on a
 // numeric channel and low/normal on this one.
-class BlaeckBoolStateRef : public BlaeckStateRefBase
+class BlaeckBoolStateRef : public BlaeckStateRefShared<BlaeckBoolStateRef>
 {
 public:
-  BlaeckBoolStateRef(BlaeckSerial *owner, int16_t index) : BlaeckStateRefBase(owner, index) {}
-  BLAECK_STATE_REF_SHARED(BlaeckBoolStateRef)
+  BlaeckBoolStateRef(BlaeckSerial *owner, int16_t index) : BlaeckStateRefShared<BlaeckBoolStateRef>(owner, index) {}
 };
 
 

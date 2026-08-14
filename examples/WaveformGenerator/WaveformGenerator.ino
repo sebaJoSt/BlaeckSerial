@@ -9,7 +9,7 @@
   built by hand.
 
   Log fast enough to resolve the wave: at the default 1 Hz, a 20 ms interval gives 50 points
-  per cycle. Sample slower than that and Output aliases into a shape the device never made.
+  per cycle. Sample slower than that and Output aliases into a waveform the device never made.
 
   Signals, state channels and events are three different jobs:
     signal   a value that is sampled and logged       -> Output, Frequency, Uptime
@@ -78,9 +78,7 @@ unsigned long Uptime = 0; // [s]
 //---GENERATOR STATE (never leaves the sketch)
 float phase = 0.0f; // normalized phase 0..1
 unsigned long lastMicros = 0;
-// The shape, as the index SET_WAVE speaks in. Its control reports itself from this: the
-// library resolves the index against the option list and sends the name, so the sketch keeps
-// no text and nothing has to be refreshed when the selection changes.
+// The wave, as an index: what onSetWave() is handed and what UpdateWaveform() switches on.
 byte waveIndex = 0; // 0=Sine, 1=Square, 2=Triangle, 3=Sawtooth
 
 void setup()
@@ -137,11 +135,7 @@ void setup()
       .config();
   BlaeckSerial.onButtonCommand("STATUS", onStatus);
 
-  // Declared up-front so the host can announce one text sensor per channel before
-  // the first line is written.
-  // forceUpdate: the heartbeat repeats the same line, which a host would otherwise collapse
-  // into the entry it already holds.
-  BlaeckSerial.addStateChannel(F("Status")).withIcon(F("mdi:pulse")).diagnostic().forceUpdate();
+  BlaeckSerial.addStateChannel(F("Status")).withIcon(F("mdi:pulse")).diagnostic();
   BlaeckSerial.addStateChannel(F("StatusOnDemand")).withIcon(F("mdi:message-text")).diagnostic();
 
   // Each event channel declares up-front the closed set of events it can report.
@@ -161,7 +155,7 @@ void loop()
   Uptime = millis() / 1000;
   UpdateWaveform();
   BlaeckSerial.tick();
-  SendStatusLine();
+  StatusEvery10s();
   CheckActivity();
 }
 
@@ -201,7 +195,7 @@ void UpdateWaveform()
   Output = Offset + Amplitude * w;
 }
 
-void SendStatusLine()
+void StatusEvery10s()
 {
   static unsigned long lastStatusMs = 0;
   static bool first = true;
@@ -215,17 +209,13 @@ void SendStatusLine()
 }
 
 // The same status line on two channels, each driving its own Home Assistant sensor:
-// a 10 s heartbeat on "Status", and the STATUS button on "StatusOnDemand".
+// every 10 s on "Status", and on the STATUS button for "StatusOnDemand".
 void WriteStatus(const __FlashStringHelper *channel)
 {
   char freqText[10] = ""; // fits "2.00"
   BlaeckSerial.toText(Frequency, 2, freqText, sizeof(freqText));
-  // Fills waveName with the option that waveIndex stands for: 2 becomes "Triangle". The names
-  // live in the list SET_WAVE declared, so they sit in flash once instead of being repeated
-  // here. Left blank if the lookup fails, which takes BLAECK_ENABLE_COMMAND_META=0 - and in
-  // that build nothing else names the shape either.
   char waveName[12] = ""; // fits the longest option, "Triangle"
-  BlaeckSerial.getSelectOption("SET_WAVE", waveIndex, waveName, sizeof(waveName));
+  BlaeckSerial.getSelectOptionNameAt("SET_WAVE", waveIndex, waveName, sizeof(waveName));
   const char *runState = Enabled ? "running" : "stopped";
 
   char text[80]; // fits "stopped Triangle @ 2.00 Hz"
@@ -284,8 +274,7 @@ void onSetOffset(const char *command, const char *const *params, byte paramCount
 
 void onSetWave(const char *command, const char *const *params, byte paramCount)
 {
-  // atoi even though Home Assistant sends the option NAME: the library resolves it against
-  // the list declared above and rewrites the parameter to that index before calling this.
+  // params[0] is always the option index, whatever the host sent.
   waveIndex = (byte)atoi(params[0]);
   BlaeckSerial.writeCommandState(command);
 }
@@ -299,15 +288,13 @@ void onSetEnable(const char *command, const char *const *params, byte paramCount
 
 void onSetLabel(const char *command, const char *const *params, byte paramCount)
 {
-  // params[0] is always present, already percent-decoded and length-checked by the
-  // library. An empty one clears the label.
-  strncpy(DeviceLabel, params[0], sizeof(DeviceLabel) - 1);
-  DeviceLabel[sizeof(DeviceLabel) - 1] = '\0';
+  // Never longer than withMaxLength(sizeof(DeviceLabel) - 1) above; empty clears the label.
+  strcpy(DeviceLabel, params[0]);
   BlaeckSerial.writeCommandState(command);
 }
 
 void onStatus(const char *command, const char *const *params, byte paramCount)
 {
-  // Updates only on button press, independent of the 10 s "Status" heartbeat.
+  // Updates only on button press, independent of the 10 s writes to "Status".
   WriteStatus(F("StatusOnDemand"));
 }
