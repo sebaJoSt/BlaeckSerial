@@ -424,10 +424,11 @@ public:
   // Shorthand for begin(Ref).withSignals(Size).
   BlaeckBeginRef begin(Stream *Ref, unsigned int Size);
 
-  // Set these variables in your Arduino sketch
-  String DeviceName = "Unknown";
-  String DeviceHWVersion = "n/a";
-  String DeviceFWVersion = "n/a";
+  // Set these variables in your Arduino sketch. Unlike a signal name, these are not
+  // copied - what they point at must outlive them, which a string literal does.
+  const char *DeviceName = "Unknown";
+  const char *DeviceHWVersion = "n/a";
+  const char *DeviceFWVersion = "n/a";
 
   // ----- Signals -----
   // Add a Signal. The returned handle describes how the signal is presented and
@@ -443,17 +444,17 @@ public:
   // wire. When the signal table is full the handle is dead: the chain still
   // compiles and runs, and stores nothing - the missing signal is the real
   // problem and hasRejectedSignals() already reports it.
-  BlaeckBoolSignalRef addSignal(String signalName, bool *value);
-  BlaeckNumericSignalRef addSignal(String signalName, byte *value);
-  BlaeckNumericSignalRef addSignal(String signalName, short *value);
-  BlaeckNumericSignalRef addSignal(String signalName, unsigned short *value);
-  BlaeckNumericSignalRef addSignal(String signalName, int *value);
-  BlaeckNumericSignalRef addSignal(String signalName, unsigned int *value);
-  BlaeckNumericSignalRef addSignal(String signalName, long *value);
-  BlaeckNumericSignalRef addSignal(String signalName, unsigned long *value);
-  BlaeckNumericSignalRef addSignal(String signalName, float *value);
-  BlaeckNumericSignalRef addSignal(String signalName, double *value);
-  BlaeckTextSignalRef addSignal(String signalName, const char *value);
+  BlaeckBoolSignalRef addSignal(const char *signalName, bool *value);
+  BlaeckNumericSignalRef addSignal(const char *signalName, byte *value);
+  BlaeckNumericSignalRef addSignal(const char *signalName, short *value);
+  BlaeckNumericSignalRef addSignal(const char *signalName, unsigned short *value);
+  BlaeckNumericSignalRef addSignal(const char *signalName, int *value);
+  BlaeckNumericSignalRef addSignal(const char *signalName, unsigned int *value);
+  BlaeckNumericSignalRef addSignal(const char *signalName, long *value);
+  BlaeckNumericSignalRef addSignal(const char *signalName, unsigned long *value);
+  BlaeckNumericSignalRef addSignal(const char *signalName, float *value);
+  BlaeckNumericSignalRef addSignal(const char *signalName, double *value);
+  BlaeckTextSignalRef addSignal(const char *signalName, const char *value);
 
   // The same eleven, named with F(). The name then stays in flash and the signal keeps a
   // 2-byte pointer to it instead of a copy, which is most of what a signal costs in SRAM:
@@ -634,46 +635,46 @@ public:
   // Both edges then reach every consumer alike - a dashboard, the logged table, a second host -
   // and the stored data says how long the value was true. A host-side timer would leave the
   // table holding one reading and the duration existing nowhere but that host.
-  void write(String signalName, bool value);
-  void write(String signalName, byte value);
-  void write(String signalName, short value);
-  void write(String signalName, unsigned short value);
-  void write(String signalName, int value);
-  void write(String signalName, unsigned int value);
-  void write(String signalName, long value);
-  void write(String signalName, unsigned long value);
-  void write(String signalName, float value);
-  void write(String signalName, double value);
-  void write(String signalName, const char *value);
+  void write(const char *signalName, bool value);
+  void write(const char *signalName, byte value);
+  void write(const char *signalName, short value);
+  void write(const char *signalName, unsigned short value);
+  void write(const char *signalName, int value);
+  void write(const char *signalName, unsigned int value);
+  void write(const char *signalName, long value);
+  void write(const char *signalName, unsigned long value);
+  void write(const char *signalName, float value);
+  void write(const char *signalName, double value);
+  void write(const char *signalName, const char *value);
 
-  void write(String signalName, bool value, unsigned long messageID);
-  void write(String signalName, byte value, unsigned long messageID);
-  void write(String signalName, short value, unsigned long messageID);
-  void write(String signalName, unsigned short value, unsigned long messageID);
-  void write(String signalName, int value, unsigned long messageID);
-  void write(String signalName, unsigned int value, unsigned long messageID);
-  void write(String signalName, long value, unsigned long messageID);
-  void write(String signalName, unsigned long value, unsigned long messageID);
-  void write(String signalName, float value, unsigned long messageID);
-  void write(String signalName, double value, unsigned long messageID);
-  void write(String signalName, const char *value, unsigned long messageID);
+  void write(const char *signalName, bool value, unsigned long messageID);
+  void write(const char *signalName, byte value, unsigned long messageID);
+  void write(const char *signalName, short value, unsigned long messageID);
+  void write(const char *signalName, unsigned short value, unsigned long messageID);
+  void write(const char *signalName, int value, unsigned long messageID);
+  void write(const char *signalName, unsigned int value, unsigned long messageID);
+  void write(const char *signalName, long value, unsigned long messageID);
+  void write(const char *signalName, unsigned long value, unsigned long messageID);
+  void write(const char *signalName, float value, unsigned long messageID);
+  void write(const char *signalName, double value, unsigned long messageID);
+  void write(const char *signalName, const char *value, unsigned long messageID);
 
-  void write(String signalName, bool value, unsigned long messageID, unsigned long long timestamp);
-  void write(String signalName, byte value, unsigned long messageID, unsigned long long timestamp);
-  void write(String signalName, short value, unsigned long messageID, unsigned long long timestamp);
-  void write(String signalName, unsigned short value, unsigned long messageID, unsigned long long timestamp);
-  void write(String signalName, int value, unsigned long messageID, unsigned long long timestamp);
-  void write(String signalName, unsigned int value, unsigned long messageID, unsigned long long timestamp);
-  void write(String signalName, long value, unsigned long messageID, unsigned long long timestamp);
-  void write(String signalName, unsigned long value, unsigned long messageID, unsigned long long timestamp);
-  void write(String signalName, float value, unsigned long messageID, unsigned long long timestamp);
-  void write(String signalName, double value, unsigned long messageID, unsigned long long timestamp);
-  void write(String signalName, const char *value, unsigned long messageID, unsigned long long timestamp);
+  void write(const char *signalName, bool value, unsigned long messageID, unsigned long long timestamp);
+  void write(const char *signalName, byte value, unsigned long messageID, unsigned long long timestamp);
+  void write(const char *signalName, short value, unsigned long messageID, unsigned long long timestamp);
+  void write(const char *signalName, unsigned short value, unsigned long messageID, unsigned long long timestamp);
+  void write(const char *signalName, int value, unsigned long messageID, unsigned long long timestamp);
+  void write(const char *signalName, unsigned int value, unsigned long messageID, unsigned long long timestamp);
+  void write(const char *signalName, long value, unsigned long messageID, unsigned long long timestamp);
+  void write(const char *signalName, unsigned long value, unsigned long messageID, unsigned long long timestamp);
+  void write(const char *signalName, float value, unsigned long messageID, unsigned long long timestamp);
+  void write(const char *signalName, double value, unsigned long messageID, unsigned long long timestamp);
+  void write(const char *signalName, const char *value, unsigned long messageID, unsigned long long timestamp);
 
   // Index of a registered signal, or -1 if there is none by that name. Resolve once in setup()
-  // and use the by-index calls below on anything that runs often: the by-name calls build a
-  // temporary String from their argument on every call, which is a heap allocation per write.
-  int findSignalIndex(String signalName);
+  // and use the by-index calls below on anything that runs often: the by-name calls walk every
+  // signal and compare its name, which costs more the more signals there are.
+  int findSignalIndex(const char *signalName);
 
   // Update value and write directly - by index
   void write(int signalIndex, bool value);
@@ -714,16 +715,16 @@ public:
 
   // ----- Data Update -----
   // Update value and mark Signal as updated - by name
-  void update(String signalName, bool value);
-  void update(String signalName, byte value);
-  void update(String signalName, short value);
-  void update(String signalName, unsigned short value);
-  void update(String signalName, int value);
-  void update(String signalName, unsigned int value);
-  void update(String signalName, long value);
-  void update(String signalName, unsigned long value);
-  void update(String signalName, float value);
-  void update(String signalName, double value);
+  void update(const char *signalName, bool value);
+  void update(const char *signalName, byte value);
+  void update(const char *signalName, short value);
+  void update(const char *signalName, unsigned short value);
+  void update(const char *signalName, int value);
+  void update(const char *signalName, unsigned int value);
+  void update(const char *signalName, long value);
+  void update(const char *signalName, unsigned long value);
+  void update(const char *signalName, float value);
+  void update(const char *signalName, double value);
 
   // Update value and mark Signal as updated - by index
   void update(int signalIndex, bool value);
@@ -740,7 +741,7 @@ public:
   // ----- Mark Signals as Updated -----
   // Use these mark functions for cases where you don't want to change the value
   void markSignalUpdated(int signalIndex);
-  void markSignalUpdated(String signalName);
+  void markSignalUpdated(const char *signalName);
   void markAllSignalsUpdated();
   void clearAllUpdateFlags();
   // Check if any Signals are marked as updated
@@ -879,7 +880,7 @@ public:
 
 private:
   unsigned long long getTimeStamp();
-  void setSignalName(int signalIndex, String signalName);
+  void setSignalName(int signalIndex, const char *signalName);
   // Points a slot at its name: a copy when ram is given, the flash address itself when
   // flash is. Frees whatever copy the slot held, so a reused slot cannot leak and the two
   // kinds cannot be mixed up. One of the two arguments is null.
@@ -950,7 +951,7 @@ private:
   // The one place a signal is appended. The eleven public overloads differ only in
   // the datatype they record, so they all land here rather than repeating the
   // capacity check and the overflow bookkeeping eleven times.
-  int _registerSignal(const String &signalName, dataType type, void *address);
+  int _registerSignal(const char *signalName, dataType type, void *address);
   // The flash-named half of the same thing. Separate rather than a flag on the one above,
   // because the two names are read differently everywhere they are read.
   int _registerSignal(const __FlashStringHelper *signalName, dataType type, void *address);
@@ -1198,6 +1199,10 @@ private:
   }
   void _bufStr(const char *s)
   {
+    // Null reads as empty, the same as Arduino's Print does with a null char* - so a
+    // DeviceName left unset writes an empty field rather than walking off address zero.
+    if (s == nullptr)
+      return;
     size_t n = strlen(s);
     if (_bufEnsure(n))
     {
@@ -1210,11 +1215,6 @@ private:
   void _bufStr0(const char *s)
   {
     _bufStr(s);
-    _bufByte(0);
-  }
-  void _bufStr0(const String &s)
-  {
-    _bufStr(s.c_str());
     _bufByte(0);
   }
   void _bufFlashStr(const __FlashStringHelper *s)
@@ -1250,8 +1250,7 @@ private:
   {
     _bufStr("/BLAECK>\r\n");
   }
-  void _bufDevice(const String &name,
-                  const String &hw, const String &fw);
+  void _bufDevice(const char *name, const char *hw, const char *fw);
 
   static unsigned long long _microsWrapper()
   {

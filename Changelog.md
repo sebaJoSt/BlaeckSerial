@@ -41,8 +41,26 @@ without being configured for that board in advance.
   and slave-ID bytes are still emitted (always `0`), so existing Blaeck hosts
   (e.g. Loggbok) need no changes.
 
-- **Command parameters are no longer trimmed.** A leading space is part of the value:
-  `<SET_LABEL, hi>` sets `" hi"`, and `<SET_ENABLE, 1>` is rejected.
+- **Command parameters are no longer trimmed.** A leading space is part of the value, so
+  `<SET_LABEL, hi>` sets `" hi"` rather than `"hi"`. Write `<SET_LABEL,hi>` to send the
+  value alone. Most commands are unaffected in practice — a number or a select index
+  parses the same either way, and an untyped `onCommand` handler simply receives the space
+  — but a switch compares its value exactly, so `<SET_ENABLE, 1>` is rejected where
+  `<SET_ENABLE,1>` is accepted.
+
+- **`String` is gone from the API; names are `const char *`.** Every overload that took a
+  signal name as a `String` — `addSignal`, `write`, `update`, `findSignalIndex`,
+  `markSignalUpdated`, `setSignalName` — now takes a `const char *`, as do the
+  `DeviceName`, `DeviceHWVersion` and `DeviceFWVersion` members. Each of them only ever
+  called `.c_str()` on its argument and copied the result, so the `String` bought nothing
+  and cost a heap allocation, a copy and a free on every single call.
+  Sketches that pass string literals — every example in this library, unmodified — need
+  no change. A sketch holding a `String` passes `name.c_str()`, which saves it the
+  allocation too. Worth 850–1050 bytes of flash for a typical sketch and about 3.1 KB for
+  one that writes many signals by name, plus 12 bytes of SRAM and roughly 22 bytes of heap.
+  A name is still copied, so a `char` buffer built with `snprintf` can be reused the
+  moment the call returns, exactly as before. The three device members are the exception:
+  they are not copied, so whatever they point at must outlive them — a string literal does.
 
 ### Added
 - **`withNameSuffix(n)` ends a signal's name in a number.**
@@ -104,9 +122,8 @@ without being configured for that board in advance.
 - **A signal no longer keeps its name in a `String`.** The entry holds a pointer the
   library owns (or the flash address, for an `F()` name), which takes a signal entry from
   22 bytes to 19 on AVR and removes a heap allocation per signal per `0xB0` frame — the
-  catalog writer used to copy the whole entry, `String` and all, once per signal. The
-  public API is unchanged: every `addSignal`, `write`, `update` and `findSignalIndex`
-  overload still takes a `String`, and a name is still copied unless it came from `F()`.
+  catalog writer used to copy the whole entry, `String` and all, once per signal. A name
+  is still copied unless it came from `F()`.
 - **A signal only pays for metadata once it has some.** `unit`, `device class`, `icon`,
   `options`, the flags word and the display precision used to sit in every signal entry
   whether or not the sketch set them; they now live in a record allocated by the first
@@ -131,8 +148,8 @@ without being configured for that board in advance.
   96), still 48 on Uno/Nano. Below 128 a percent-encoded 32-byte text value cannot fit its own
   frame. Costs ~240 bytes of SRAM.
 - **`findSignalIndex()` is public.** Resolve an index once in `setup()` and use the by-index
-  `write()` / `update()` calls on anything that runs often — the by-name ones build a temporary
-  `String` per call. Returns `-1` when no signal has that name.
+  `write()` / `update()` calls on anything that runs often — the by-name ones compare against
+  every signal in the table. Returns `-1` when no signal has that name.
 
 ### Fixed
 - **`setSignalName()` left the schema hash stale.** Renaming a signal changed what the
