@@ -1034,49 +1034,49 @@ void BlaeckSerial::read()
       _debugStream->println(">");
     }
 
-    if (strcmp(_parsedCommand, "BLAECK.WRITE_SYMBOLS") == 0)
+    if (strcmp(_parsedCommand, BLAECK_BUILTIN_WRITE_SYMBOLS) == 0)
     {
       unsigned long msg_id = _parsedMsgId();
 
       this->writeSymbols(msg_id);
     }
-    else if (strcmp(_parsedCommand, "BLAECK.WRITE_SIGNAL_CONFIG") == 0)
+    else if (strcmp(_parsedCommand, BLAECK_BUILTIN_WRITE_SIGNAL_CONFIG) == 0)
     {
       unsigned long msg_id = _parsedMsgId();
 
       this->writeSignalConfig(msg_id);
     }
-    else if (strcmp(_parsedCommand, "BLAECK.WRITE_DATA") == 0)
+    else if (strcmp(_parsedCommand, BLAECK_BUILTIN_WRITE_DATA) == 0)
     {
       unsigned long msg_id = _parsedMsgId();
 
       this->writeAllData(msg_id);
     }
-    else if (strcmp(_parsedCommand, "BLAECK.GET_DEVICES") == 0)
+    else if (strcmp(_parsedCommand, BLAECK_BUILTIN_GET_DEVICES) == 0)
     {
       unsigned long msg_id = _parsedMsgId();
 
       this->writeDevices(msg_id);
     }
-    else if (strcmp(_parsedCommand, "BLAECK.WRITE_COMMANDS") == 0)
+    else if (strcmp(_parsedCommand, BLAECK_BUILTIN_WRITE_COMMANDS) == 0)
     {
       unsigned long msg_id = _parsedMsgId();
 
       this->writeCommands(msg_id);
     }
-    else if (strcmp(_parsedCommand, "BLAECK.WRITE_STATE_CHANNELS") == 0)
+    else if (strcmp(_parsedCommand, BLAECK_BUILTIN_WRITE_STATE_CHANNELS) == 0)
     {
       unsigned long msg_id = _parsedMsgId();
 
       this->writeStateChannels(msg_id);
     }
-    else if (strcmp(_parsedCommand, "BLAECK.WRITE_EVENT_CHANNELS") == 0)
+    else if (strcmp(_parsedCommand, BLAECK_BUILTIN_WRITE_EVENT_CHANNELS) == 0)
     {
       unsigned long msg_id = _parsedMsgId();
 
       this->writeEventChannels(msg_id);
     }
-    else if (strcmp(_parsedCommand, "BLAECK.ACTIVATE") == 0)
+    else if (strcmp(_parsedCommand, BLAECK_BUILTIN_ACTIVATE) == 0)
     {
       if (_fixedInterval_ms == BLAECK_INTERVAL_CLIENT)
       {
@@ -1084,7 +1084,7 @@ void BlaeckSerial::read()
         this->_setTimedDataState(true, timedInterval_ms);
       }
     }
-    else if (strcmp(_parsedCommand, "BLAECK.DEACTIVATE") == 0)
+    else if (strcmp(_parsedCommand, BLAECK_BUILTIN_DEACTIVATE) == 0)
     {
       if (_fixedInterval_ms == BLAECK_INTERVAL_CLIENT)
       {

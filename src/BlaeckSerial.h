@@ -182,6 +182,32 @@
 // with BLAECK.begin(&Serial).withEventTypes(n).
 
 
+// Every built-in command name, written once. read() dispatches on these rather than on
+// literals of its own, and MAX_BUILTIN_COMMAND_COUNT is checked against this same list,
+// so a name too long for the parse buffer fails the build instead of arriving truncated
+// and matching nothing - a device deaf to one of its own commands.
+// Adding a built-in means adding it here, which is also what makes it reachable.
+#define BLAECK_BUILTIN_WRITE_SYMBOLS "BLAECK.WRITE_SYMBOLS"
+#define BLAECK_BUILTIN_WRITE_SIGNAL_CONFIG "BLAECK.WRITE_SIGNAL_CONFIG"
+#define BLAECK_BUILTIN_WRITE_DATA "BLAECK.WRITE_DATA"
+#define BLAECK_BUILTIN_GET_DEVICES "BLAECK.GET_DEVICES"
+#define BLAECK_BUILTIN_WRITE_COMMANDS "BLAECK.WRITE_COMMANDS"
+#define BLAECK_BUILTIN_WRITE_STATE_CHANNELS "BLAECK.WRITE_STATE_CHANNELS"
+#define BLAECK_BUILTIN_WRITE_EVENT_CHANNELS "BLAECK.WRITE_EVENT_CHANNELS"
+#define BLAECK_BUILTIN_ACTIVATE "BLAECK.ACTIVATE"
+#define BLAECK_BUILTIN_DEACTIVATE "BLAECK.DEACTIVATE"
+
+#define BLAECK_BUILTIN_COMMAND_LIST(X)  \
+  X(BLAECK_BUILTIN_WRITE_SYMBOLS)       \
+  X(BLAECK_BUILTIN_WRITE_SIGNAL_CONFIG) \
+  X(BLAECK_BUILTIN_WRITE_DATA)          \
+  X(BLAECK_BUILTIN_GET_DEVICES)         \
+  X(BLAECK_BUILTIN_WRITE_COMMANDS)      \
+  X(BLAECK_BUILTIN_WRITE_STATE_CHANNELS)\
+  X(BLAECK_BUILTIN_WRITE_EVENT_CHANNELS)\
+  X(BLAECK_BUILTIN_ACTIVATE)            \
+  X(BLAECK_BUILTIN_DEACTIVATE)
+
 // Eleven values, so the underlying type is pinned to a byte rather than left as the int
 // a compiler picks by default: this type is a field in every signal entry and every state
 // channel entry, and a byte there is a byte per entry. The enumerators are unchanged, so
@@ -1134,15 +1160,21 @@ private:
 #endif
   // The parse buffer is compared against two kinds of name: a registered command, which
   // _registerCommand refuses outright above MAX_COMMAND_NAME_COUNT, and a built-in, of
-  // which BLAECK.WRITE_STATE_CHANNELS is the longest. It has to fit whichever is larger -
-  // a built-in truncated on the way in would match nothing, and the device would go deaf
-  // to it. The assert below keeps that true if a longer built-in is ever added.
+  // which BLAECK.WRITE_STATE_CHANNELS is currently the longest at 27 characters. It has to
+  // fit whichever is larger. Sizing it off the user-facing limit instead would cost four
+  // bytes in every handler table entry rather than four once, and would widen how long a
+  // name a sketch may register - a promise that could not be taken back.
   static const byte MAX_BUILTIN_COMMAND_COUNT = 28;
+  // Measured against the list itself, not a copy of one name, so adding a longer built-in
+  // fails the build here rather than going quietly unreachable.
+#define BLAECK_ASSERT_BUILTIN_FITS(name)                        \
+  static_assert(sizeof(name) <= MAX_BUILTIN_COMMAND_COUNT,      \
+                "MAX_BUILTIN_COMMAND_COUNT must fit every name in BLAECK_BUILTIN_COMMAND_LIST");
+  BLAECK_BUILTIN_COMMAND_LIST(BLAECK_ASSERT_BUILTIN_FITS)
+#undef BLAECK_ASSERT_BUILTIN_FITS
   static const byte MAX_PARSED_COMMAND_COUNT =
       MAX_COMMAND_NAME_COUNT > MAX_BUILTIN_COMMAND_COUNT ? MAX_COMMAND_NAME_COUNT
                                                          : MAX_BUILTIN_COMMAND_COUNT;
-  static_assert(sizeof("BLAECK.WRITE_STATE_CHANNELS") <= MAX_BUILTIN_COMMAND_COUNT,
-                "MAX_BUILTIN_COMMAND_COUNT must fit the longest BLAECK.* command name");
 // Declared whether or not state channels are compiled in, because StateChannelEntry
 // is - see there.
 #if defined(__AVR__)
