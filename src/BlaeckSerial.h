@@ -182,7 +182,11 @@
 // with BLAECK.begin(&Serial).withEventTypes(n).
 
 
-typedef enum DataType
+// Eleven values, so the underlying type is pinned to a byte rather than left as the int
+// a compiler picks by default: this type is a field in every signal entry and every state
+// channel entry, and a byte there is a byte per entry. The enumerators are unchanged, so
+// nothing that names one is affected.
+typedef enum DataType : uint8_t
 {
   Blaeck_bool,
   Blaeck_byte,
@@ -283,8 +287,12 @@ struct Signal
   const char *SignalName = nullptr;
   dataType DataType;
   void *Address;
-  bool Updated = false;
-  bool NameInFlash = false;
+  // Two bits, not two bytes: this pair is one byte per signal, and a signal table is the
+  // biggest thing most sketches ask this library for. Neither can carry an initializer
+  // here - C++11 forbids one on a bit-field - so both are set when a signal is
+  // registered, alongside DataType and Address, which have never had one either.
+  uint8_t Updated : 1;
+  uint8_t NameInFlash : 1;
 #if BLAECK_ENABLE_SIGNAL_META
   // Null until the sketch describes this signal. Owned by the entry; see _ensureSignalMeta.
   SignalMeta *Meta = nullptr;

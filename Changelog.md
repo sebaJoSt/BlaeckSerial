@@ -108,6 +108,11 @@ without being configured for that board in advance.
   Metadata frame and the public API are unchanged. If the heap cannot hold a record the
   description is dropped and the signal itself keeps working; `printRejections()` says
   how many.
+- **A signal entry is 8 bytes on AVR, down from 19.** Metadata moved out (above), the
+  datatype enum is pinned to a byte instead of the `int` a compiler picks by default, and
+  the two flags a signal carries share one byte rather than taking one each. The datatype
+  change shrinks a state channel entry too. Nothing about it is visible from a sketch: the
+  enumerators, the wire format and the schema hash are unchanged.
 - `deleteSignals()` now gives back the names and metadata the signal table held instead
   of only rewinding the index.
 - `BlaeckSerial.h` includes the `CRC.h` umbrella header instead of `<CRC32.h>` and

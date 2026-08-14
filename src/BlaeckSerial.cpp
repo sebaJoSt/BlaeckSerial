@@ -380,6 +380,9 @@ int BlaeckSerial::_registerSignalCommon(const char *ram, const __FlashStringHelp
   _setSignalName(_signalIndex, ram, flash);
   Signals[_signalIndex].DataType = type;
   Signals[_signalIndex].Address = address;
+  // No initializer on a bit-field, so this is where a fresh signal - or a slot being
+  // written a second time after deleteSignals() - is told it holds nothing new yet.
+  Signals[_signalIndex].Updated = 0;
 #if BLAECK_ENABLE_SIGNAL_META
   // deleteSignals() only rewinds the index, so a slot can be written twice. Cleared on
   // registration rather than on deletion, which covers both - and the record the slot
@@ -567,15 +570,18 @@ void BlaeckSerial::_setSignalName(int signalIndex, const char *ram, const __Flas
   Signal &s = Signals[signalIndex];
   // Whatever the slot held: a copy is freed, a flash name owns nothing. deleteSignals()
   // only rewinds the index, so a slot is written twice whenever signals are re-declared.
-  if (!s.NameInFlash && s.SignalName != nullptr)
+  // The pointer is tested first so a slot that has never been named short-circuits before
+  // NameInFlash is read: a bit-field takes no initializer, so on a fresh table that bit
+  // means nothing until a name has been set.
+  if (s.SignalName != nullptr && !s.NameInFlash)
     free((void *)s.SignalName);
   s.SignalName = nullptr;
-  s.NameInFlash = false;
+  s.NameInFlash = 0;
 
   if (flash != nullptr)
   {
     s.SignalName = reinterpret_cast<const char *>(flash);
-    s.NameInFlash = true;
+    s.NameInFlash = 1;
     return;
   }
   if (ram == nullptr)
@@ -599,10 +605,13 @@ void BlaeckSerial::_freeSignalOwned()
     return;
   for (unsigned int i = 0; i < _signalCapacity; i++)
   {
-    if (!Signals[i].NameInFlash && Signals[i].SignalName != nullptr)
+    // Pointer first, so an unnamed slot short-circuits before the bit is read - see
+    // _setSignalName. This walks the whole capacity, most of which may never have held
+    // a signal at all.
+    if (Signals[i].SignalName != nullptr && !Signals[i].NameInFlash)
       free((void *)Signals[i].SignalName);
     Signals[i].SignalName = nullptr;
-    Signals[i].NameInFlash = false;
+    Signals[i].NameInFlash = 0;
 #if BLAECK_ENABLE_SIGNAL_META
     delete Signals[i].Meta;
     Signals[i].Meta = nullptr;
