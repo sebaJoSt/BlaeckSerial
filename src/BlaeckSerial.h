@@ -511,28 +511,52 @@ public:
   BlaeckNumericSignalRef addSignal(const __FlashStringHelper *signalName, double *value);
   BlaeckTextSignalRef addSignal(const __FlashStringHelper *signalName, const char *value);
 
-  // Delete all Signals
+  // Empties the signal table so it can be filled again, for a device whose set of signals
+  // changes at runtime. The table keeps its capacity; what it held is freed, along with the
+  // rejection counts and the schema hash. Call writeSymbols() once refilled - a host is
+  // otherwise decoding data against the old catalog.
   void deleteSignals();
   // Signals that could not be added - past the capacity the table was given, or all of them
   // when the board had no RAM for the table at all. Both surface at the first addSignal(),
   // which is where the table is built. Named like hasRejectedCommands() and
   // hasRejectedChannels(): three tables, one question, one shape of answer.
   bool hasRejectedSignals() const { return _signalRegistrationFailed; }
+  // How many were rejected, where hasRejectedSignals() only says whether any were. Counted
+  // even with no debug stream attached, so a sketch can report the shortfall itself.
   uint16_t getRejectedSignalCount() const { return _rejectedSignalCount; }
 
   // Signal Count
   int SignalCount;
 
   // ----- Device Restarted -----
+
+  // The 0xC0 restart notice, which is how a host tells a rebooted device from one that
+  // has simply gone quiet. Sent once per boot, by read() on its first call, so a sketch
+  // needs this only to get it out before it starts reading.
   void writeRestarted();
+
+  // As writeRestarted(), with messageID stamped into the frame header.
   void writeRestarted(unsigned long messageID);
 
   // ----- Devices -----
+
+  // The 0xB3 device frame - name, hardware version, firmware version - which is what
+  // <BLAECK.GET_DEVICES> answers with. Normally driven by the host asking, so call it
+  // only to announce the device unprompted.
   void writeDevices();
+
+  // As writeDevices(), with messageID stamped into the frame header.
   void writeDevices(unsigned long messageID);
 
   // ----- Symbols -----
+
+  // The 0xB0 symbol list: every signal's name, datatype and position in the data frame,
+  // which is what lets a host decode 0xD2 at all. Answers <BLAECK.WRITE_SYMBOLS>. Call
+  // it after adding, deleting or renaming a signal, so a host is not left reading data
+  // against a catalog that no longer describes it.
   void writeSymbols();
+
+  // As writeSymbols(), with messageID stamped into the frame header.
   void writeSymbols(unsigned long messageID);
 
   // ----- Signal Config (Home Assistant discovery catalog, 0xF0) -----
@@ -591,6 +615,16 @@ public:
   BlaeckNumericStateRef addStateChannel(const __FlashStringHelper *channelName, unsigned long *value);
   BlaeckNumericStateRef addStateChannel(const __FlashStringHelper *channelName, float *value);
   BlaeckNumericStateRef addStateChannel(const __FlashStringHelper *channelName, double *value);
+  // Forgets every declared state channel, leaving the table empty and its capacity untouched.
+  // A host addresses a channel by its position in the 0x90 catalog, so re-declaring changes
+  // what those positions mean: follow with writeStateChannels(), or the host files values
+  // against the wrong channels.
+  //
+  // This clears the channels a command claimed with withOwnState() too, and those cannot be
+  // declared again - withOwnState() builds on the handle onNumberCommand() and its siblings
+  // return, so it only runs where the command is registered. writeCommandState() then finds
+  // no channel and quietly publishes nothing. For a device that re-declares its controls,
+  // clear the commands as well and register both together.
   void clearAllStateChannels();
 
   // Send the 0x90 "State Channel List" frame (the declared-channel catalog).
@@ -662,6 +696,10 @@ public:
   // already has is dropped, reported on DebugRef, and counted by hasRejectedEventChannels().
   bool addEventType(const char *channelName, const __FlashStringHelper *eventType);
   bool addEventType(const __FlashStringHelper *channelName, const __FlashStringHelper *eventType);
+  // Forgets every declared event channel and, with them, every event type - the types share one
+  // pool, so emptying the channels empties it. Both tables keep their capacity. A host addresses
+  // a channel and a type by their positions in the 0x80 catalog, so follow with
+  // writeEventChannels() or reported events land under the wrong names.
   void clearAllEventChannels();
 
   // Send the 0x80 "Event Channel List" frame (the declared-channel catalog).
@@ -810,25 +848,66 @@ public:
   // Use these mark functions for cases where you don't want to change the value
   void markSignalUpdated(int signalIndex);
   void markSignalUpdated(const char *signalName);
+
+  // Marks every signal, so the next writeUpdatedData() carries the lot. For the first write
+  // after a host connects, where "what changed" is not yet a question it can have an answer to.
   void markAllSignalsUpdated();
+
+  // Clears every mark, so the next writeUpdatedData() carries nothing until something is
+  // marked again. Discards changes rather than sending them.
   void clearAllUpdateFlags();
   // Check if any Signals are marked as updated
   bool hasUpdatedSignals();
 
   // ----- Data Write All -----
+
+  // The 0xD2 data frame carrying every signal, written now whatever the interval says.
+  // Answers <BLAECK.WRITE_DATA>, and is what a sketch calls to send on an occasion of its
+  // own - on a threshold crossing, say - rather than on a schedule.
   void writeAllData();
+
+  // As writeAllData(), with messageID stamped into the frame header so a host can match
+  // the frame against the request that asked for it.
   void writeAllData(unsigned long messageID);
+
+  // As writeAllData(), with the timestamp supplied by the caller instead of read from the
+  // timestamp callback. For a sketch that holds a better clock than the callback reaches,
+  // or that is writing values it recorded earlier.
   void writeAllData(unsigned long messageID, unsigned long long timestamp);
+
+  // As writeAllData(), but writes only once the interval has elapsed, and returns having
+  // done nothing until it has. Safe to call every pass of loop(): this is what tick() uses,
+  // and what to call directly for a device that writes data but answers no commands.
+  // The interval is whatever setIntervalMs() fixed, or whatever the host set.
   void timedWriteAllData();
+
+  // As timedWriteAllData(), with messageID stamped into the frame header.
   void timedWriteAllData(unsigned long msg_id);
+
+  // As timedWriteAllData(), with the timestamp supplied by the caller.
   void timedWriteAllData(unsigned long messageID, unsigned long long timestamp);
 
   // ----- Data Write Updated -----
+
+  // As writeAllData(), but carries only the signals marked with markSignalUpdated() since
+  // the last write, and clears those marks. For a device whose values change rarely: an
+  // unchanged signal costs nothing on the wire.
   void writeUpdatedData();
+
+  // As writeUpdatedData(), with messageID stamped into the frame header.
   void writeUpdatedData(unsigned long messageID);
+
+  // As writeUpdatedData(), with the timestamp supplied by the caller.
   void writeUpdatedData(unsigned long messageID, unsigned long long timestamp);
+
+  // As writeUpdatedData(), but writes only once the interval has elapsed. What tickUpdated()
+  // uses, and safe to call every pass of loop().
   void timedWriteUpdatedData();
+
+  // As timedWriteUpdatedData(), with messageID stamped into the frame header.
   void timedWriteUpdatedData(unsigned long msg_id);
+
+  // As timedWriteUpdatedData(), with the timestamp supplied by the caller.
   void timedWriteUpdatedData(unsigned long messageID, unsigned long long timestamp);
 
   // ----- Tick -----
@@ -859,9 +938,17 @@ public:
   //   BLAECK_INTERVAL_CLIENT  client-controlled mode (default)
   // Invalid values are rejected and the previous mode remains active.
   void setIntervalMs(long interval_ms);
+  // The interval as set, in ms, or one of the BLAECK_INTERVAL_* modes above - so a negative
+  // return is a mode rather than a duration. In client-controlled mode this reports the mode,
+  // not whatever interval the host has since asked for.
   long getIntervalMs() const { return _fixedInterval_ms; }
 
   // ----- Read  -----
+
+  // Reads whatever has arrived and dispatches it: the built-in BLAECK.* commands, and the
+  // handlers a sketch registered. Writes no data of its own, so this is what a device that
+  // answers commands but logs nothing calls in loop(), where anything logging calls tick().
+  // Returns as soon as there is nothing to read, so it is safe every pass.
   void read();
 
   // ----- Command callback  -----
@@ -869,9 +956,24 @@ public:
   // DebugRef and counted; see hasRejectedCommands(). No registration returns a value to check,
   // so one look after them all answers for every command whichever helper declared it.
   void onCommand(const char *command, BlaeckCommandHandler handler);
+  // Runs for every command, on top of whichever registered handler matched - not instead of
+  // one, and not only for the unmatched. For logging or forwarding what arrives.
+  //
+  // It also decides how an unknown command is answered: with a catch-all installed, one that
+  // matched nothing is acknowledged as accepted, on the grounds that this handler saw it.
+  // Without one it is answered as unknown, so a host can tell.
   void onAnyCommand(BlaeckAnyCommandHandler handler);
+
+  // Forgets every registered command, the catch-all included, leaving the table empty and its
+  // capacity untouched. For a device that re-declares what it offers at runtime; the host is
+  // still holding the old list, so follow with writeCommands().
   void clearAllCommandHandlers();
+
+  // Whether any command failed to register - see the note above for the three reasons. One
+  // question after all of them answers for the lot, whichever helper declared them.
   bool hasRejectedCommands() const { return _rejectedCommandCount > 0; }
+
+  // How many failed to register, where hasRejectedCommands() only says whether any did.
   uint16_t getRejectedCommandCount() const { return _rejectedCommandCount; }
 
   // Compares a string in RAM against one kept in flash, copying neither.
@@ -931,6 +1033,7 @@ public:
   // withOwnState() channel counts too: when it cannot be declared the command keeps no state at
   // all, so a full state channel table costs a control's value, not just a channel.
   bool hasRejectedStateChannels() const { return _rejectedStateChannelCount > 0; }
+  // How many were rejected, where hasRejectedStateChannels() only says whether any were.
   uint16_t getRejectedStateChannelCount() const { return _rejectedStateChannelCount; }
 
   // Event channels and event types that could not be declared. Counted together because both
@@ -941,6 +1044,8 @@ public:
   {
     return _rejectedEventChannelCount > 0 || _rejectedEventTypeCount > 0;
   }
+  // Channels and types added together, for the reason they are asked about together. A debug
+  // stream is what separates them, and printRejections() names the begin() call to raise.
   uint16_t getRejectedEventChannelCount() const
   {
     return (uint16_t)(_rejectedEventChannelCount + _rejectedEventTypeCount);
@@ -1027,10 +1132,28 @@ public:
   // (safe to use Serial, delay, etc.).
   void setBeforeWriteCallback(void (*callback)());
 
-  // Timestamp configuration methods
+  // What stamps each data frame. BLAECK_NO_TIMESTAMP is the default and sends none, leaving
+  // the host to time the arrival. BLAECK_MICROS needs nothing further - the library supplies
+  // micros() itself, tracking the overflow so the count keeps climbing past the ~71 minutes a
+  // uint32 of microseconds holds. That tracking happens as frames are written, so a device
+  // writing less often than that wants BLAECK_UNIX and a real clock instead.
+  // BLAECK_UNIX needs a clock only the sketch can reach, so pass one to setTimestampCallback().
+  //
+  // Switching mode restarts the overflow tracking, so call it in setup() rather than partway
+  // through a log: the timestamps either side of the change do not belong on one axis.
   void setTimestampMode(BlaeckTimestampMode mode);
+
+  // The clock read for BLAECK_UNIX - an RTC, an NTP-backed time, whatever the board has - as
+  // microseconds. Set it either side of setTimestampMode(BLAECK_UNIX): that mode keeps a
+  // callback already given rather than replacing it.
   void setTimestampCallback(unsigned long long (*callback)());
+
+  // The mode in force, as last set. Reports what was asked for, not whether it can be
+  // honoured - a BLAECK_UNIX with no callback still reads back as BLAECK_UNIX.
   BlaeckTimestampMode getTimestampMode() const { return _timestampMode; }
+
+  // Whether a frame will actually carry a timestamp: a mode is set and a callback exists to
+  // read. This is the one to check, since BLAECK_UNIX without a callback silently stamps zero.
   bool hasValidTimestampCallback() const;
 
   // Buffered writes: assemble entire frame in RAM before sending.
@@ -1038,6 +1161,8 @@ public:
   // Override at compile time with BLAECK_BUFFERED_WRITES_DEFAULT,
   // or at runtime with setBufferedWrites().
   void setBufferedWrites(bool enabled);
+  // Whether frames are assembled in RAM before sending, as set by setBufferedWrites() or by
+  // the platform default. Worth checking on AVR, where it is off unless asked for.
   bool isBufferedWrites() const { return _bufferedWrites; }
 
 private:
@@ -1720,19 +1845,28 @@ private:
 // Raising a capacity after its table already exists is refused, not silently
 // ignored: the table is sized once, and a sketch that asks late is asking for
 // slots that cannot appear.
+//
+// Every table starts from a default sized for the board - generous on a 32-bit
+// core, careful on an Uno - so these are only needed to go past it. The state
+// and event calls remain when those features are compiled out: the call still
+// builds and the number is simply not stored, so a feature switch never breaks
+// a chain.
 class BlaeckBeginRef
 {
 public:
   explicit BlaeckBeginRef(BlaeckSerial *owner) : _owner(owner) {}
 
+  // Room for the signals added with addSignal(). Takes an unsigned int where the
+  // rest take a byte: signals are the one table that may go past 255 entries.
   BlaeckBeginRef &withSignals(unsigned int count)
   {
     if (_owner != nullptr)
       _owner->_setTableCapacity(BlaeckSerial::TABLE_SIGNALS, count);
     return *this;
   }
-  // Kept even when the feature is compiled out, so a sketch that sizes the table
-  // still builds; the number is then simply not stored.
+  // Room for the channels added with addStateChannel(), and for the one a command
+  // builds with withOwnState() - that channel is counted here rather than against
+  // withCommands().
   BlaeckBeginRef &withStateChannels(byte count)
   {
 #if BLAECK_ENABLE_STATE_CHANNELS
@@ -1743,6 +1877,7 @@ public:
 #endif
     return *this;
   }
+  // Room for the channels added with addEventChannel().
   BlaeckBeginRef &withEventChannels(byte count)
   {
 #if BLAECK_ENABLE_EVENTS
@@ -1753,6 +1888,9 @@ public:
 #endif
     return *this;
   }
+  // Room for the event types, counted across every channel rather than per
+  // channel: they share one table, each entry tagged with the channel that
+  // declared it. Four channels of five types each need withEventTypes(20).
   BlaeckBeginRef &withEventTypes(byte count)
   {
 #if BLAECK_ENABLE_EVENTS
@@ -1763,6 +1901,8 @@ public:
 #endif
     return *this;
   }
+  // Room for the commands registered with onCommand() and with the typed
+  // onNumberCommand(), onSelectCommand() and friends. Both kinds share the table.
   BlaeckBeginRef &withCommands(byte count)
   {
     if (_owner != nullptr)
@@ -1995,6 +2135,9 @@ public:
     return *this;
   }
 
+  // Symbol shown beside the input, e.g. F("Hz"). Non-ASCII must be UTF-8:
+  // F("\xC2\xB0" "C") is the degree sign followed by C. A label only - nothing is
+  // converted, and the handler is passed whatever number was sent.
   BlaeckNumberCommandRef &withUnit(const __FlashStringHelper *unit)
   {
     _setUnit(unit);
@@ -2389,6 +2532,9 @@ public:
     return *this;
   }
 
+  // How the value accumulates over time, which is what lets a host keep statistics
+  // on it - see BlaeckStateClass for the four kinds. A signal that never calls this
+  // carries NONE, and a host keeps no statistics on it.
   BlaeckNumericSignalRef &withStateClass(BlaeckStateClass stateClass)
   {
     _setStateClass(stateClass);

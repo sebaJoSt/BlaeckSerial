@@ -32,14 +32,27 @@ def is_doc(raw):
     editor shows it as the documentation. Stripping the punctuation leaves a
     word or two, which is not a description of anything.
     """
+    return len(_words(raw)) >= 6
+
+
+def _words(raw):
+    """The words a comment carries once its punctuation and dividers are stripped."""
     if not raw:
-        return False
+        return []
     words = []
     for line in raw.splitlines():
         line = line.strip().lstrip("/*").strip().strip("-").strip()
         if line and not SECTION.match(line):
             words.extend(line.split())
-    return len(words) >= 6
+    return words
+
+
+def why_not_doc(raw):
+    """Which of the two ways a comment can attach and still say nothing."""
+    words = _words(raw)
+    if not words:
+        return "section divider only - hovers with decoration"
+    return "only %d words - restates the name rather than describing it" % len(words)
 
 
 def owner(c):
@@ -76,7 +89,7 @@ def show(tu, path, needle):
         if not raw:
             print("    <nothing - hovers blank>")
         elif not is_doc(raw):
-            print("    <section divider only - hovers with decoration>")
+            print("    <%s>" % why_not_doc(raw))
         for line in (raw or "").splitlines():
             print("    | " + line.strip())
         print()
