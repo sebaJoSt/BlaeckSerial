@@ -150,20 +150,21 @@ void UpdateLoggingSignals()
   BlaeckSerial.deleteSignals();
 
   // Re-added first: deleteSignals() drops these too, and the typed number
-  // commands above refer to them by name.
-  BlaeckSerial.addSignal("Signal_First", &signalFirst);
-  BlaeckSerial.addSignal("Signal_Last", &signalLast);
+  // commands above refer to them by name. F() keeps the two names in flash, so
+  // re-registering costs no heap for them either.
+  BlaeckSerial.addSignal(F("Signal_First"), &signalFirst);
+  BlaeckSerial.addSignal(F("Signal_Last"), &signalLast);
 
-  // The name is a literal plus a counter, so one reused stack buffer builds it without a
-  // String per signal - this runs again on every range change, and the churn is what
-  // fragments the heap.
-  char signalName[10]; // fits "Sine_" plus MAXIMUM_SIGNALS
+  // The name is a literal plus a counter, which withNameSuffix() says without building
+  // it: the prefix stays in flash and the digits are produced when the name is sent. That
+  // matters most here, where this runs again on every range change - a name copied to the
+  // heap would be freed and allocated afresh each time, and that churn is what fragments
+  // the heap.
   for (int i = 1; i <= MAXIMUM_SIGNALS; i++)
   {
     if (sine[i].isActivated)
     {
-      snprintf(signalName, sizeof(signalName), "Sine_%d", i);
-      BlaeckSerial.addSignal(signalName, &sine[i].value);
+      BlaeckSerial.addSignal(F("Sine_"), &sine[i].value).withNameSuffix(i);
     }
   }
 }
