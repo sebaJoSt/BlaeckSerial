@@ -55,8 +55,8 @@ void setup()
   BlaeckSerial.DeviceHWVersion = "Arduino Mega 2560 Rev3";
   BlaeckSerial.DeviceFWVersion = ExampleVersion;
 
-  BlaeckSerial.addSignal("Temperature [°C]", &temperature);
-  BlaeckSerial.addSignal("Humidity [%]", &humidity);
+  BlaeckSerial.addSignal(F("Temperature [°C]"), &temperature);
+  BlaeckSerial.addSignal(F("Humidity [%]"), &humidity);
 }
 
 void loop()

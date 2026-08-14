@@ -140,7 +140,7 @@ void onStatus(const char *command, const char *const *params, byte paramCount)
   }
   char text[48];
   snprintf(text, sizeof(text), "%u of %u signals active", (unsigned)active, (unsigned)MAXIMUM_SIGNALS);
-  BlaeckSerial.writeState("Status", text);
+  BlaeckSerial.writeState(F("Status"), text);
 }
 
 // Catch-all handler for help commands (?) and LS

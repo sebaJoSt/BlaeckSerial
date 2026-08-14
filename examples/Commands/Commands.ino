@@ -75,6 +75,8 @@
         Your own commands:
         <SwitchLED,1>                 Turn on the LED   (plain)
         <SwitchLED,0>                 Turn off the LED  (plain)
+        <SwitchLED,ON>                Also accepts text: a plain command
+        <SwitchLED,OFF>               parses its value itself
         <SwitchLED,>                  Empty param -> uses default (OFF)
         <LED,1>                       Turn on the LED   (typed switch)
         <LED,0>                       Turn off the LED  (typed switch)
@@ -134,7 +136,7 @@ void setup()
   BlaeckSerial.DeviceFWVersion = ExampleVersion;
 
   // The state signal the typed switch below refers to
-  BlaeckSerial.addSignal("LED_State", &ledState);
+  BlaeckSerial.addSignal(F("LED_State"), &ledState);
 
   // Plain: you parse the parameters yourself. Listed by name only, so a host
   // knows the command exists but cannot build a control for it.
@@ -149,7 +151,7 @@ void setup()
 
   // State channels are declared up-front so the host can announce a text
   // sensor for "Status" before the first line is written.
-  BlaeckSerial.addStateChannel("Status").withIcon(F("mdi:message-text"));
+  BlaeckSerial.addStateChannel(F("Status")).withIcon(F("mdi:message-text"));
 }
 
 void loop()
@@ -180,6 +182,22 @@ void onSwitchLED(const char *command, const char *const *params, byte paramCount
     setLed(false);
     return;
   }
+  // A plain command parses its own value, so it can accept whatever spelling suits it.
+  // equalsFlash() compares the parameter against a name kept in flash: written as a plain
+  // literal, "ON" and "OFF" would each sit in SRAM for the life of the sketch.
+  if (BlaeckSerial.equalsFlash(params[0], F("ON")))
+  {
+    setLed(true);
+    Serial.println("LED is ON.");
+    return;
+  }
+  if (BlaeckSerial.equalsFlash(params[0], F("OFF")))
+  {
+    setLed(false);
+    Serial.println("LED is OFF.");
+    return;
+  }
+
   int state = atoi(params[0]);
   if (state == 1)
   {
@@ -230,7 +248,7 @@ void onPing(const char *command, const char *const *params, byte paramCount)
   char text[40];
   unsigned long seconds = millis() / 1000UL;
   snprintf(text, sizeof(text), "alive, running for %lu s", seconds);
-  BlaeckSerial.writeState("Status", text);
+  BlaeckSerial.writeState(F("Status"), text);
 }
 
 /* Exemplary command using string parameters:

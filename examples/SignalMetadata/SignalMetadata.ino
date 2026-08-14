@@ -50,7 +50,7 @@ void setup()
 
   // A measurement: goes up and down, meaningful at any instant. The device class is what lets
   // a host convert it - without one the unit is only a label.
-  BlaeckSerial.addSignal("Temperature", &Temperature)
+  BlaeckSerial.addSignal(F("Temperature"), &Temperature)
       .withUnit(F("\xC2\xB0" "C"))
       .withDeviceClass(F("temperature"))
       .withStateClass(BLAECK_STATE_CLASS_MEASUREMENT)
@@ -58,20 +58,20 @@ void setup()
 
   // A running total that only ever grows. Reported as total_increasing so a host can build
   // consumption from it rather than averaging it.
-  BlaeckSerial.addSignal("EnergyTotal", &EnergyTotal)
+  BlaeckSerial.addSignal(F("EnergyTotal"), &EnergyTotal)
       .withUnit(F("kWh"))
       .withDeviceClass(F("energy"))
       .withStateClass(BLAECK_STATE_CLASS_TOTAL_INCREASING)
       .withDisplayPrecision(3);
 
-  BlaeckSerial.addSignal("Uptime", &Uptime)
+  BlaeckSerial.addSignal(F("Uptime"), &Uptime)
       .withUnit(F("s"))
       .withDeviceClass(F("duration"))
       .withStateClass(BLAECK_STATE_CLASS_MEASUREMENT);
 
   // Describes the device rather than what it measures, and stays switched off until someone
   // asks for it.
-  BlaeckSerial.addSignal("SignalStrength", &SignalStrength)
+  BlaeckSerial.addSignal(F("SignalStrength"), &SignalStrength)
       .withUnit(F("dBm"))
       .withDeviceClass(F("signal_strength"))
       .withStateClass(BLAECK_STATE_CLASS_MEASUREMENT)
@@ -84,25 +84,25 @@ void setup()
   //
   // The more-info dialog is where to see this. A history timeline merges neighbouring identical
   // states into one band, so both versions look the same there.
-  BlaeckSerial.addSignal("Heartbeat", &Heartbeat)
+  BlaeckSerial.addSignal(F("Heartbeat"), &Heartbeat)
       .forceUpdate();
 
   // Declares nothing: no unit, no statistics, no icon. There for comparison.
-  BlaeckSerial.addSignal("Plain", &Plain);
+  BlaeckSerial.addSignal(F("Plain"), &Plain);
 
   // A bool becomes a binary sensor. The device class says what the on-state means - without
   // one it reads as a plain On/Off.
-  BlaeckSerial.addSignal("Running", &Running)
+  BlaeckSerial.addSignal(F("Running"), &Running)
       .withDeviceClass(F("running"));
-  BlaeckSerial.addSignal("Fault", &Fault);
+  BlaeckSerial.addSignal(F("Fault"), &Fault);
 
   // A string whose values come from a fixed set. Every value reported must be in the list, so
   // this only suits a signal that cannot report anything else.
-  BlaeckSerial.addSignal("PumpState", PumpState)
+  BlaeckSerial.addSignal(F("PumpState"), PumpState)
       .withOptions(F("idle,priming,running,fault"))
       .withDeviceClass(F("enum"));
 
-  BlaeckSerial.addSignal("Note", Note)
+  BlaeckSerial.addSignal(F("Note"), Note)
       .withIcon(F("mdi:note-text"));
 
   // One look covers every addSignal() above.

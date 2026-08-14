@@ -47,35 +47,35 @@ void setup()
   BlaeckSerial.DeviceHWVersion = "Arduino Mega 2560 Rev3";
   BlaeckSerial.DeviceFWVersion = "1.0";
 
-  BlaeckSerial.addSignal("Uptime", &Uptime)
+  BlaeckSerial.addSignal(F("Uptime"), &Uptime)
       .withUnit(F("s"))
       .withDeviceClass(F("duration"))
       .withStateClass(BLAECK_STATE_CLASS_MEASUREMENT);
-  BlaeckSerial.addSignal("EventCount", &EventCount)
+  BlaeckSerial.addSignal(F("EventCount"), &EventCount)
       .withStateClass(BLAECK_STATE_CLASS_TOTAL_INCREASING);
 
   // A doorbell must be able to report "ring". Home Assistant warns about a doorbell without it
   // today and stops accepting one in 2027.4.
-  BlaeckSerial.addEventChannel("Doorbell", F("ring"))
+  BlaeckSerial.addEventChannel(F("Doorbell"), F("ring"))
       .withIcon(F("mdi:doorbell"))
       .withDeviceClass(F("doorbell"));
 
   // Home Assistant publishes standard names for a button, and says none of them are required:
   // declare only the interactions the hardware can actually produce. These four are a press
   // and a hold, each with a start and an end.
-  BlaeckSerial.addEventChannel("Button",
+  BlaeckSerial.addEventChannel(F("Button"),
                                F("press_start,press_end,long_press_start,long_press_end"))
       .withIcon(F("mdi:gesture-tap-button"))
       .withDeviceClass(F("button"));
 
   // A device class does not fix the type names - only doorbell requires one. A motion channel
   // reports whatever it declares.
-  BlaeckSerial.addEventChannel("Motion", F("motion_detected,motion_cleared"))
+  BlaeckSerial.addEventChannel(F("Motion"), F("motion_detected,motion_cleared"))
       .withDeviceClass(F("motion"));
 
   // No device class: a plain event channel, filed under Diagnostic and switched off until
   // someone enables it.
-  BlaeckSerial.addEventChannel("System", F("started,config_changed"))
+  BlaeckSerial.addEventChannel(F("System"), F("started,config_changed"))
       .withIcon(F("mdi:cog"))
       .diagnostic()
       .disabledByDefault();
@@ -84,13 +84,13 @@ void setup()
   // at compile time. It is the only way to build one conditionally: the types passed to
   // addEventChannel() are a flash literal, so they cannot be assembled at runtime.
   if (HAS_OVERHEAT_SENSOR)
-    BlaeckSerial.addEventType("System", F("overheated"));
+    BlaeckSerial.addEventType(F("System"), F("overheated"));
 
   // One summary for every table, printed only if something was dropped. Safe here: nothing
   // has been written to Serial as a Blaeck frame yet.
   BlaeckSerial.printRejections(&Serial);
 
-  BlaeckSerial.writeEvent("System", F("started"));
+  BlaeckSerial.writeEvent(F("System"), F("started"));
   EventCount++;
 }
 
@@ -113,24 +113,24 @@ void FireEvents()
 
   switch (step)
   {
-  case 0: BlaeckSerial.writeEvent("Doorbell", F("ring")); break;
-  case 1: BlaeckSerial.writeEvent("Button", F("press_start")); break;
-  case 2: BlaeckSerial.writeEvent("Button", F("press_end")); break;
-  case 3: BlaeckSerial.writeEvent("Button", F("long_press_start")); break;
-  case 4: BlaeckSerial.writeEvent("Button", F("long_press_end")); break;
-  case 5: BlaeckSerial.writeEvent("Motion", F("motion_detected")); break;
-  case 6: BlaeckSerial.writeEvent("Motion", F("motion_cleared")); break;
-  case 7: BlaeckSerial.writeEvent("System", F("config_changed")); break;
+  case 0: BlaeckSerial.writeEvent(F("Doorbell"), F("ring")); break;
+  case 1: BlaeckSerial.writeEvent(F("Button"), F("press_start")); break;
+  case 2: BlaeckSerial.writeEvent(F("Button"), F("press_end")); break;
+  case 3: BlaeckSerial.writeEvent(F("Button"), F("long_press_start")); break;
+  case 4: BlaeckSerial.writeEvent(F("Button"), F("long_press_end")); break;
+  case 5: BlaeckSerial.writeEvent(F("Motion"), F("motion_detected")); break;
+  case 6: BlaeckSerial.writeEvent(F("Motion"), F("motion_cleared")); break;
+  case 7: BlaeckSerial.writeEvent(F("System"), F("config_changed")); break;
   case 8:
     if (HAS_OVERHEAT_SENSOR)
-      BlaeckSerial.writeEvent("System", F("overheated"));
+      BlaeckSerial.writeEvent(F("System"), F("overheated"));
     break;
   }
 
   // A type the channel never declared is dropped by the device: writeEvent() resolves the name
   // against the 0x80 catalog and sends nothing when it does not match. Uncomment to watch it
   // produce no event at all, rather than an event a host has to reject.
-  // BlaeckSerial.writeEvent("Motion", F("motion_maybe"));
+  // BlaeckSerial.writeEvent(F("Motion"), F("motion_maybe"));
 
   EventCount++;
   step = (step + 1) % 9;

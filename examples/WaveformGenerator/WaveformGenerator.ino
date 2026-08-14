@@ -93,19 +93,19 @@ void setup()
   BlaeckSerial.DeviceFWVersion = "1.0";
 
   // addSignal() returns a handle describing how a host shows the signal. Every call is optional.
-  BlaeckSerial.addSignal("Output", &Output)
+  BlaeckSerial.addSignal(F("Output"), &Output)
       .withStateClass(BLAECK_STATE_CLASS_MEASUREMENT)
       .withDisplayPrecision(3)
       .withIcon(F("mdi:sine-wave"));
-  BlaeckSerial.addSignal("Frequency", &Frequency);
-  BlaeckSerial.addSignal("Amplitude", &Amplitude);
-  BlaeckSerial.addSignal("Enabled", &Enabled);
-  BlaeckSerial.addSignal("WaveName", WaveName);
-  BlaeckSerial.addSignal("DeviceLabel", DeviceLabel);
+  BlaeckSerial.addSignal(F("Frequency"), &Frequency);
+  BlaeckSerial.addSignal(F("Amplitude"), &Amplitude);
+  BlaeckSerial.addSignal(F("Enabled"), &Enabled);
+  BlaeckSerial.addSignal(F("WaveName"), WaveName);
+  BlaeckSerial.addSignal(F("DeviceLabel"), DeviceLabel);
 
   // Describes the board rather than the waveform, so it is filed as diagnostic. The device
   // class is what lets a host offer minutes or hours - without one the unit is only a label.
-  BlaeckSerial.addSignal("Uptime", &Uptime)
+  BlaeckSerial.addSignal(F("Uptime"), &Uptime)
       .withUnit(F("s"))
       .withDeviceClass(F("duration"))
       .withStateClass(BLAECK_STATE_CLASS_MEASUREMENT)
@@ -137,12 +137,12 @@ void setup()
   // the first line is written.
   // forceUpdate: the heartbeat repeats the same line, which a host would otherwise collapse
   // into the entry it already holds.
-  BlaeckSerial.addStateChannel("Status").withIcon(F("mdi:pulse")).diagnostic().forceUpdate();
-  BlaeckSerial.addStateChannel("StatusOnDemand").withIcon(F("mdi:message-text")).diagnostic();
+  BlaeckSerial.addStateChannel(F("Status")).withIcon(F("mdi:pulse")).diagnostic().forceUpdate();
+  BlaeckSerial.addStateChannel(F("StatusOnDemand")).withIcon(F("mdi:message-text")).diagnostic();
 
   // Each event channel declares up-front the closed set of events it can report.
   // addEventType() does the same one name at a time, for a list built conditionally.
-  BlaeckSerial.addEventChannel("Activity", F("idle_warning,resumed"))
+  BlaeckSerial.addEventChannel(F("Activity"), F("idle_warning,resumed"))
       .withIcon(F("mdi:sine-wave"));
 
   // Everything is declared: one summary of anything a table had no room for, naming the
@@ -207,12 +207,12 @@ void SendStatusMessage()
 
   first = false;
   lastStatusMs = millis();
-  WriteStatus("Status");
+  WriteStatus(F("Status"));
 }
 
 // The same status line on two channels, each driving its own Home Assistant sensor:
 // a 10 s heartbeat on "Status", and the STATUS button on "StatusOnDemand".
-void WriteStatus(const char *channel)
+void WriteStatus(const __FlashStringHelper *channel)
 {
   char hz[10]; // fits "2.00"
   String(Frequency, 2).toCharArray(hz, sizeof(hz));
@@ -235,14 +235,14 @@ void CheckActivity()
 
     if (!warned && (millis() - idleSinceMs) >= 5000UL)
     {
-      BlaeckSerial.writeEvent("Activity", F("idle_warning"));
+      BlaeckSerial.writeEvent(F("Activity"), F("idle_warning"));
       warned = true;
     }
     return;
   }
 
   if (warned)
-    BlaeckSerial.writeEvent("Activity", F("resumed"));
+    BlaeckSerial.writeEvent(F("Activity"), F("resumed"));
 
   idleSinceMs = 0;
   warned = false;
@@ -315,5 +315,5 @@ void onSetLabel(const char *command, const char *const *params, byte paramCount)
 void onStatus(const char *command, const char *const *params, byte paramCount)
 {
   // Updates only on button press, independent of the 10 s "Status" heartbeat.
-  WriteStatus("StatusOnDemand");
+  WriteStatus(F("StatusOnDemand"));
 }

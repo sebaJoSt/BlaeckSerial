@@ -55,33 +55,33 @@ void setup()
   BlaeckSerial.DeviceFWVersion = ExampleVersion;
 
   // Add signals to BlaeckSerial
-  BlaeckSerial.addSignal("Bool_false", &boolTest[0]);
-  BlaeckSerial.addSignal("Bool_true", &boolTest[1]);
-  BlaeckSerial.addSignal("Byte_min", &byteTest[0]);
-  BlaeckSerial.addSignal("Byte_max", &byteTest[1]);
-  BlaeckSerial.addSignal("Short_min", &shortTest[0]);
-  BlaeckSerial.addSignal("Short_max", &shortTest[1]);
-  BlaeckSerial.addSignal("UShort_min", &ushortTest[0]);
-  BlaeckSerial.addSignal("UShort_max", &ushortTest[1]);
-  BlaeckSerial.addSignal("Int_min", &intTest[0]);
-  BlaeckSerial.addSignal("Int_max", &intTest[1]);
-  BlaeckSerial.addSignal("UInt_min", &uintTest[0]);
-  BlaeckSerial.addSignal("UInt_max", &uintTest[1]);
-  BlaeckSerial.addSignal("Long_min", &longTest[0]);
-  BlaeckSerial.addSignal("Long_max", &longTest[1]);
-  BlaeckSerial.addSignal("ULong_min", &ulongTest[0]);
-  BlaeckSerial.addSignal("ULong_max", &ulongTest[1]);
-  BlaeckSerial.addSignal("Float_min", &floatTest[0]);
-  BlaeckSerial.addSignal("Float_max", &floatTest[1]);
-  BlaeckSerial.addSignal("Float_NaN", &floatNaN);
-  BlaeckSerial.addSignal("Float_Inf", &floatInfinity);
-  BlaeckSerial.addSignal("Float_NegInf", &floatNegativeInfinity);
-  BlaeckSerial.addSignal("Double_min", &doubleTest[0]);
-  BlaeckSerial.addSignal("Double_max", &doubleTest[1]);
-  BlaeckSerial.addSignal("Double_NaN", &doubleNaN);
-  BlaeckSerial.addSignal("Double_Inf", &doubleInfinity);
-  BlaeckSerial.addSignal("Double_NegInf", &doubleNegativeInfinity);
-  BlaeckSerial.addSignal("String_test", stringTest);
+  BlaeckSerial.addSignal(F("Bool_false"), &boolTest[0]);
+  BlaeckSerial.addSignal(F("Bool_true"), &boolTest[1]);
+  BlaeckSerial.addSignal(F("Byte_min"), &byteTest[0]);
+  BlaeckSerial.addSignal(F("Byte_max"), &byteTest[1]);
+  BlaeckSerial.addSignal(F("Short_min"), &shortTest[0]);
+  BlaeckSerial.addSignal(F("Short_max"), &shortTest[1]);
+  BlaeckSerial.addSignal(F("UShort_min"), &ushortTest[0]);
+  BlaeckSerial.addSignal(F("UShort_max"), &ushortTest[1]);
+  BlaeckSerial.addSignal(F("Int_min"), &intTest[0]);
+  BlaeckSerial.addSignal(F("Int_max"), &intTest[1]);
+  BlaeckSerial.addSignal(F("UInt_min"), &uintTest[0]);
+  BlaeckSerial.addSignal(F("UInt_max"), &uintTest[1]);
+  BlaeckSerial.addSignal(F("Long_min"), &longTest[0]);
+  BlaeckSerial.addSignal(F("Long_max"), &longTest[1]);
+  BlaeckSerial.addSignal(F("ULong_min"), &ulongTest[0]);
+  BlaeckSerial.addSignal(F("ULong_max"), &ulongTest[1]);
+  BlaeckSerial.addSignal(F("Float_min"), &floatTest[0]);
+  BlaeckSerial.addSignal(F("Float_max"), &floatTest[1]);
+  BlaeckSerial.addSignal(F("Float_NaN"), &floatNaN);
+  BlaeckSerial.addSignal(F("Float_Inf"), &floatInfinity);
+  BlaeckSerial.addSignal(F("Float_NegInf"), &floatNegativeInfinity);
+  BlaeckSerial.addSignal(F("Double_min"), &doubleTest[0]);
+  BlaeckSerial.addSignal(F("Double_max"), &doubleTest[1]);
+  BlaeckSerial.addSignal(F("Double_NaN"), &doubleNaN);
+  BlaeckSerial.addSignal(F("Double_Inf"), &doubleInfinity);
+  BlaeckSerial.addSignal(F("Double_NegInf"), &doubleNegativeInfinity);
+  BlaeckSerial.addSignal(F("String_test"), stringTest);
 }
 
 void loop()

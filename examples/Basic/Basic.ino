@@ -50,18 +50,20 @@ void setup()
   BlaeckSerial.DeviceHWVersion = "Arduino Mega 2560 Rev3";
   BlaeckSerial.DeviceFWVersion = ExampleVersion;
 
-  // Add signals to BlaeckSerial
-  BlaeckSerial.addSignal("Small Number", &randomSmallNumber);
-  BlaeckSerial.addSignal("Big Number", &randomBigNumber);
+  // Add signals to BlaeckSerial. F() keeps the names in flash: a plain literal is copied
+  // into RAM at startup and copied again into the name the signal keeps, while F() leaves
+  // it where it is and the signal stores a 2-byte pointer. That is most of what a signal
+  // costs in SRAM on an Uno or Nano.
+  BlaeckSerial.addSignal(F("Small Number"), &randomSmallNumber);
+  BlaeckSerial.addSignal(F("Big Number"), &randomBigNumber);
 
-  /* On AVR, wrapping the name in F() costs almost no RAM at all:
-       BlaeckSerial.addSignal(F("Small Number"), &randomSmallNumber);
-     A plain literal is copied into RAM at startup AND copied again into the
-     name the signal keeps; F() leaves it in flash and the signal stores a
-     2-byte pointer to it. Worth doing on an Uno or Nano with many signals;
-     other architectures (ESP32, SAMD, ...) handle RAM differently and gain
-     little. A name built at runtime cannot use F() - pass the buffer, which
-     is copied. */
+  /* A name built at runtime cannot use F() - pass the buffer instead, which is
+     copied:
+       char name[16];
+       snprintf(name, sizeof(name), "Sensor_%d", i);
+       BlaeckSerial.addSignal(name, &value);
+     Other architectures (ESP32, SAMD, ...) handle RAM differently and gain
+     little from F(), but it costs them nothing either. */
 
   /*Uncomment for fixed interval lock (ms)
     - ignores ACTIVATE/DEACTIVATE while locked */

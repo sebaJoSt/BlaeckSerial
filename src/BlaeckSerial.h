@@ -564,6 +564,23 @@ public:
   BlaeckNumericStateRef addStateChannel(const char *channelName, unsigned long *value);
   BlaeckNumericStateRef addStateChannel(const char *channelName, float *value);
   BlaeckNumericStateRef addStateChannel(const char *channelName, double *value);
+
+  // The same twelve, named with F(). The name is copied into the channel exactly as a RAM
+  // name is - a channel always holds its own copy - so F() keeps the literal out of SRAM
+  // rather than changing how the channel stores it. Truncated at MAX_STATE_NAME_COUNT, the
+  // same limit the const char* form applies.
+  BlaeckTextStateRef addStateChannel(const __FlashStringHelper *channelName);
+  BlaeckTextStateRef addStateChannel(const __FlashStringHelper *channelName, const char *value);
+  BlaeckBoolStateRef addStateChannel(const __FlashStringHelper *channelName, bool *value);
+  BlaeckNumericStateRef addStateChannel(const __FlashStringHelper *channelName, byte *value);
+  BlaeckNumericStateRef addStateChannel(const __FlashStringHelper *channelName, short *value);
+  BlaeckNumericStateRef addStateChannel(const __FlashStringHelper *channelName, unsigned short *value);
+  BlaeckNumericStateRef addStateChannel(const __FlashStringHelper *channelName, int *value);
+  BlaeckNumericStateRef addStateChannel(const __FlashStringHelper *channelName, unsigned int *value);
+  BlaeckNumericStateRef addStateChannel(const __FlashStringHelper *channelName, long *value);
+  BlaeckNumericStateRef addStateChannel(const __FlashStringHelper *channelName, unsigned long *value);
+  BlaeckNumericStateRef addStateChannel(const __FlashStringHelper *channelName, float *value);
+  BlaeckNumericStateRef addStateChannel(const __FlashStringHelper *channelName, double *value);
   void clearAllStateChannels();
 
   // Send the 0x90 "State Channel List" frame (the declared-channel catalog).
@@ -587,6 +604,12 @@ public:
   // for the caller to pass: the value already lives where the channel was told to look.
   void writeState(const char *channelName);
   void writeState(const char *channelName, unsigned long messageID);
+
+  // The same four, named with F().
+  void writeState(const __FlashStringHelper *channelName, const char *text);
+  void writeState(const __FlashStringHelper *channelName, const char *text, unsigned long messageID);
+  void writeState(const __FlashStringHelper *channelName);
+  void writeState(const __FlashStringHelper *channelName, unsigned long messageID);
 
   // Publish a command's own state now: asks the getter it was registered with and sends the
   // value on the channel the command owns. The push is what makes a change visible at once -
@@ -617,6 +640,10 @@ public:
   // one could neither emit nor be shown. Use addEventType() to append more conditionally.
   BlaeckEventChannelRef addEventChannel(const char *channelName, const __FlashStringHelper *eventTypes);
 
+  // The same, named with F(). The channel name is copied as it is from a RAM name;
+  // eventTypes was already flash-only.
+  BlaeckEventChannelRef addEventChannel(const __FlashStringHelper *channelName, const __FlashStringHelper *eventTypes);
+
   // Append an event type to a declared channel. Call order defines the index used on the wire:
   // the first type added to a channel is index 0, the next 1. addEventChannel() declares the set
   // known at compile time; use this to append to it conditionally. `eventType`
@@ -624,6 +651,7 @@ public:
   // A type that does not fit, names an undeclared channel, or duplicates one the channel
   // already has is dropped, reported on DebugRef, and counted by hasRejectedEventChannels().
   bool addEventType(const char *channelName, const __FlashStringHelper *eventType);
+  bool addEventType(const __FlashStringHelper *channelName, const __FlashStringHelper *eventType);
   void clearAllEventChannels();
 
   // Send the 0x80 "Event Channel List" frame (the declared-channel catalog).
@@ -638,6 +666,10 @@ public:
   // CRC. Events on channels or types that were never declared are dropped.
   void writeEvent(const char *channelName, const __FlashStringHelper *eventType);
   void writeEvent(const char *channelName, const __FlashStringHelper *eventType, unsigned long messageID);
+
+  // The same two, named with F().
+  void writeEvent(const __FlashStringHelper *channelName, const __FlashStringHelper *eventType);
+  void writeEvent(const __FlashStringHelper *channelName, const __FlashStringHelper *eventType, unsigned long messageID);
 
   // ----- Data Write -----
   // Update value and write directly - by name. Independent of the timed interval, so a sketch
@@ -816,6 +848,32 @@ public:
   void clearAllCommandHandlers();
   bool hasRejectedCommands() const { return _rejectedCommandCount > 0; }
   uint16_t getRejectedCommandCount() const { return _rejectedCommandCount; }
+
+  // Compares a string in RAM against one kept in flash, copying neither.
+  //
+  // A command handler is handed plain const char*, and comparing one with a literal puts that
+  // literal in SRAM for the life of the sketch. F() leaves it in flash, and this reads it a
+  // byte at a time:
+  //
+  //   BlaeckSerial.onAnyCommand([](const char *command, const char *const *params, byte count)
+  //   {
+  //     if (BlaeckSerial.equalsFlash(command, F("RESET"))) { ... }
+  //   });
+  //
+  // Called through the object, not the class: a sketch usually names its object BlaeckSerial
+  // too, and that hides the type name.
+  //
+  // Byte-wise through pgm_read_byte rather than strcmp_P, which not every core provides. Where
+  // flash is directly addressable that read is a plain one, so this costs nothing there. The
+  // library uses it for its own BLAECK.* names, which is ~196 bytes of SRAM on AVR - a tenth of
+  // an Uno - kept out of RAM for text that never changes.
+  static bool equalsFlash(const char *ram, const __FlashStringHelper *flash);
+
+  // Copies a flash name into `out`, truncating at outSize - 1 and always terminating.
+  // Returns the length written. Used by the F() overloads below, which hand the result
+  // to the const char* form: a channel always keeps its own copy of its name, so F()
+  // saves the literal from SRAM rather than changing how the name is stored.
+  static byte copyFlashName(const __FlashStringHelper *flash, char *out, byte outSize);
 
   // State channels that could not be declared - a full table, a name too long, a name a
   // command already owns - each reported on DebugRef and counted here. A command's
@@ -1182,12 +1240,12 @@ private:
 #else
   static const byte MAX_STATE_NAME_COUNT = 32;
 #endif
-#if BLAECK_ENABLE_EVENTS
-  #if defined(__AVR__)
-    static const byte MAX_EVENT_NAME_COUNT = 16;
-  #else
-    static const byte MAX_EVENT_NAME_COUNT = 32;
-  #endif
+// Declared whether or not events are compiled in: the F() overloads size a buffer from
+// it and stay callable either way, the same as the state constant above.
+#if defined(__AVR__)
+  static const byte MAX_EVENT_NAME_COUNT = 16;
+#else
+  static const byte MAX_EVENT_NAME_COUNT = 32;
 #endif
   char receivedChars[MAXIMUM_CHAR_COUNT];
 
@@ -2443,5 +2501,6 @@ private:
   BlaeckSerial *_owner;
   int16_t _index;
 };
+
 
 #endif //  BLAECKSERIAL_H
