@@ -218,7 +218,7 @@ compile rather than quietly doing nothing.
 
 `withStateSignal` names the signal that mirrors the command's value, so a dashboard shows what the
 device holds rather than what was last sent. `withOwnState` has the command carry its own value
-instead, on a message channel it owns — for a control with no signal behind it.
+instead, on a state channel it owns — for a control with no signal behind it.
 
 All metadata strings must be `F()` literals: they are stored as pointers, never copied.
 

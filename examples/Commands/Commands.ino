@@ -32,8 +32,8 @@
     <SwitchLED>   Serial.println(...)      Serial Monitor only. A Blaeck host
                                            skips anything that is not a frame.
     <LED>         its state signal         The dashboard follows LED_State.
-    <Ping>        writeState(...)        A button has no state signal, so it
-                                           pushes a line to a named message
+    <Ping>        writeState(...)          A button has no state signal, so it
+                                           pushes a line to a named state
                                            channel ("Status"). It is written
                                            only on a press, so the host gets an
                                            answer when it asks for one.

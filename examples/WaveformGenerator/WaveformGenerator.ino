@@ -4,45 +4,50 @@
   A dashboard-friendly demo: BlaeckSerial -> Loggbok (MQTT bridge) -> Home Assistant (MQTT Discovery).
 
   One fully controllable waveform, driven entirely over MQTT. The device describes what it
-  exposes - its signals, controls, messages and events - and Loggbok turns that into Home
+  exposes - its signals, controls, state channels and events - and Loggbok turns that into Home
   Assistant MQTT Discovery entities, so a dashboard comes from the sketch rather than being
   built by hand.
 
   Log fast enough to resolve the wave: at the default 1 Hz, a 20 ms interval gives 50 points
   per cycle. Sample slower than that and Output aliases into a shape the device never made.
 
-  Signals, messages and events are three different jobs:
-    signal   a value that is sampled and logged       -> Output, Frequency, ...
-    message  a line of free text, not logged          -> "running Sine @ 1.00 Hz"
+  Signals, state channels and events are three different jobs:
+    signal   a value that is sampled and logged       -> Output, Frequency, Uptime
+    state    what a control is set to, not logged     -> Amplitude, Wave, "running Sine @ 1.00 Hz"
     event    a discrete event from a fixed list       -> idle_warning, resumed
 
   Controls:
     SET_FREQ    number  0..2 Hz, step 0.01              state: Frequency signal
-    SET_AMP     number  0..100, step 0.1                state: Amplitude signal
+    SET_AMP     number  0..100, step 0.1                state: its own state channel
     SET_OFFSET  number  -100..100, step 0.1             state: its own state channel
-    SET_WAVE    select  Sine/Square/Triangle/Sawtooth   state: WaveName signal
-    SET_ENABLE  switch  off -> Output = Offset          state: Enabled signal
-    SET_LABEL   text    max 32 bytes, config category   state: DeviceLabel signal
+    SET_WAVE    select  Sine/Square/Triangle/Sawtooth   state: its own state channel
+    SET_ENABLE  switch  off -> Output = Offset          state: its own state channel
+    SET_LABEL   text    max 32 bytes, config category   state: its own state channel
     STATUS      button  writes the StatusOnDemand channel
 
-  Signals that describe themselves (the other five declare nothing, and cost nothing):
+  Signals that describe themselves (Frequency declares nothing, and costs nothing):
     Output      measurement, 3 decimals, mdi:sine-wave
     Uptime      seconds since boot, which a host may show in minutes or hours instead
 
   --- HOW A CONTROL GETS ITS VALUE BACK ---
 
-   Home Assistant          MQTT broker           Loggbok         this sketch
-          |                     |                   |                 |
-          | .../_cmd/SET_FREQ   |      "1.5"        | <SET_FREQ,1.5>  |
-  command |-------------------->|------------------>|---------------->|  onSetFreq()
-          |                     |                   |                 |    Frequency = 1.5
-          |   ../Frequency      |      "1.5"        |  signal frame   |
-    state |<--------------------|<------------------|<----------------|  write("Frequency", Frequency)
-
   Sending a value is a request, not a fact: it can be clamped, rejected, lost on the way, or
   replaced by the device on its next boot. So every control reports its state back, and what a
-  dashboard shows is the device's value rather than its own guess. SET_OFFSET makes the same
-  trip from a state channel instead of a signal.
+  dashboard shows is the device's value rather than its own guess.
+
+   Home Assistant          MQTT broker           Loggbok         this sketch
+          |                     |                   |                 |
+          | .../_cmd/SET_AMP    |      "40"         | <SET_AMP,40>    |
+  command |-------------------->|------------------>|---------------->|  onSetAmp()
+          |                     |                   |                 |    Amplitude = 40
+          | ../_state/Amplitude |      "40.00"      |  0x95 State     |
+    state |<--------------------|<------------------|<----------------|  writeCommandState(command)
+
+  That is the usual shape: the command owns a state channel and reports on it. SET_FREQ points
+  at the Frequency signal instead, so its value is logged - one control that way, so both are
+  shown in the example here.
+
+  
 
   Author: Sebastian Strobl, https://github.com/sebaJoSt/BlaeckSerial
 */
@@ -52,20 +57,20 @@
 
 BlaeckSerial BlaeckSerial;
 
-//---PUBLISHED AS SIGNALS
-// addSignal() keeps a pointer to these, so they have to be globals.
+//---PUBLISHED AS SIGNALS, AND SO LOGGED
+// addSignal() keeps a pointer to these, so they have to be globals. What the waveform is
+// doing (Output) and the one setting worth a history (Frequency).
 float Output = 0.0;
 float Frequency = 1.0; // [Hz]
+
+//---PUBLISHED AS THEIR COMMANDS' OWN STATE, AND SO NOT LOGGED
+// A control reports what it is set to, which is not a measurement: it changes when someone
+// changes it and is worth nothing between times. withOwnState() points the command straight
+// at the variable, so the value travels typed and the sketch never formats it.
 float Amplitude = 1.0;
+float Offset = 0.0;
 bool Enabled = true;
 char DeviceLabel[33] = "wave-gen"; // free-text label set via SET_LABEL
-// Current shape as text. Starts on option 0 of SET_WAVE's list, so the control has a state
-// before the first command; RefreshWaveName() keeps it in step from then on.
-char WaveName[12] = "Sine"; // fits the longest option, "Triangle"
-
-//---PUBLISHED AS A COMMAND'S OWN STATE
-// Not a signal and not logged: SET_OFFSET carries this itself, rendered by OffsetState().
-float Offset = 0.0;
 
 //---PUBLISHED AS A SIGNAL, BUT ABOUT THE BOARD RATHER THAN THE WAVE
 unsigned long Uptime = 0; // [s]
@@ -73,19 +78,22 @@ unsigned long Uptime = 0; // [s]
 //---GENERATOR STATE (never leaves the sketch)
 float phase = 0.0f; // normalized phase 0..1
 unsigned long lastMicros = 0;
-byte waveIndex = 0; // 0=Sine, 1=Square, 2=Triangle, 3=Sawtooth; WaveName is what ships
+// The shape, as the index SET_WAVE speaks in. Its control reports itself from this: the
+// library resolves the index against the option list and sends the name, so the sketch keeps
+// no text and nothing has to be refreshed when the selection changes.
+byte waveIndex = 0; // 0=Sine, 1=Square, 2=Triangle, 3=Sawtooth
 
 void setup()
 {
   Serial.begin(115200);
 
-  // Sizing every table the sketch fills, so nothing is left to a default: seven signals, seven
-  // commands, two state channels (a third is declared by SET_OFFSET's withOwnState), three
-  // event channels. Every one of these calls is optional.
+  // Sizing every table the sketch fills, so nothing is left to a default: three signals, seven
+  // commands, seven state channels (two declared here, five by the commands' withOwnState),
+  // three event channels. Every one of these calls is optional.
   BlaeckSerial.begin(&Serial)
-      .withSignals(7)
+      .withSignals(3)
       .withCommands(7)
-      .withStateChannels(3)
+      .withStateChannels(7)
       .withEventChannels(3);
 
   BlaeckSerial.DeviceName = "Waveform Generator Demo";
@@ -98,10 +106,6 @@ void setup()
       .withDisplayPrecision(3)
       .withIcon(F("mdi:sine-wave"));
   BlaeckSerial.addSignal(F("Frequency"), &Frequency);
-  BlaeckSerial.addSignal(F("Amplitude"), &Amplitude);
-  BlaeckSerial.addSignal(F("Enabled"), &Enabled);
-  BlaeckSerial.addSignal(F("WaveName"), WaveName);
-  BlaeckSerial.addSignal(F("DeviceLabel"), DeviceLabel);
 
   // Describes the board rather than the waveform, so it is filed as diagnostic. The device
   // class is what lets a host offer minutes or hours - without one the unit is only a label.
@@ -117,19 +121,19 @@ void setup()
       .withStateSignal(F("Frequency"));
   BlaeckSerial.onNumberCommand("SET_AMP", onSetAmp)
       .withRange(0.0f, 100.0f, 0.1f)
-      .withStateSignal(F("Amplitude"));
+      .withOwnState(F("Amplitude"), &Amplitude);
   BlaeckSerial.onNumberCommand("SET_OFFSET", onSetOffset)
       .withRange(-100.0f, 100.0f, 0.1f)
-      .withOwnState(F("Offset"), OffsetState);
+      .withOwnState(F("Offset"), &Offset);
   BlaeckSerial.onSelectCommand("SET_WAVE", onSetWave)
       .withOptions(F("Sine,Square,Triangle,Sawtooth"))
-      .withStateSignal(F("WaveName"));
+      .withOwnState(F("Wave"), &waveIndex);
   BlaeckSerial.onSwitchCommand("SET_ENABLE", onSetEnable)
-      .withStateSignal(F("Enabled"));
+      .withOwnState(F("Enabled"), &Enabled);
   // Host percent-encodes the value; the device decodes it and enforces the 32-byte max.
   BlaeckSerial.onTextCommand("SET_LABEL", onSetLabel)
       .withMaxLength(sizeof(DeviceLabel) - 1)
-      .withStateSignal(F("DeviceLabel"))
+      .withOwnState(F("DeviceLabel"), DeviceLabel)
       .config();
   BlaeckSerial.onButtonCommand("STATUS", onStatus);
 
@@ -157,7 +161,7 @@ void loop()
   Uptime = millis() / 1000;
   UpdateWaveform();
   BlaeckSerial.tick();
-  SendStatusMessage();
+  SendStatusLine();
   CheckActivity();
 }
 
@@ -197,7 +201,7 @@ void UpdateWaveform()
   Output = Offset + Amplitude * w;
 }
 
-void SendStatusMessage()
+void SendStatusLine()
 {
   static unsigned long lastStatusMs = 0;
   static bool first = true;
@@ -214,10 +218,18 @@ void SendStatusMessage()
 // a 10 s heartbeat on "Status", and the STATUS button on "StatusOnDemand".
 void WriteStatus(const __FlashStringHelper *channel)
 {
-  char hz[10]; // fits "2.00"
-  String(Frequency, 2).toCharArray(hz, sizeof(hz));
+  char freqText[10] = ""; // fits "2.00"
+  BlaeckSerial.toText(Frequency, 2, freqText, sizeof(freqText));
+  // Fills waveName with the option that waveIndex stands for: 2 becomes "Triangle". The names
+  // live in the list SET_WAVE declared, so they sit in flash once instead of being repeated
+  // here. Left blank if the lookup fails, which takes BLAECK_ENABLE_COMMAND_META=0 - and in
+  // that build nothing else names the shape either.
+  char waveName[12] = ""; // fits the longest option, "Triangle"
+  BlaeckSerial.getSelectOption("SET_WAVE", waveIndex, waveName, sizeof(waveName));
+  const char *runState = Enabled ? "running" : "stopped";
+
   char text[80]; // fits "stopped Triangle @ 2.00 Hz"
-  snprintf(text, sizeof(text), "%s %s @ %s Hz", Enabled ? "running" : "stopped", WaveName, hz);
+  snprintf(text, sizeof(text), "%s %s @ %s Hz", runState, waveName, freqText);
   BlaeckSerial.writeState(channel, text);
 }
 
@@ -248,42 +260,25 @@ void CheckActivity()
   warned = false;
 }
 
-// The current shape's name, read back from the option list SET_WAVE declared, so those names
-// live in flash once instead of being repeated in the sketch. The lookup fails if the command
-// was never registered or its metadata is compiled out; the bare index then at least says which
-// shape was asked for, where a stale name would say nothing.
-void RefreshWaveName()
-{
-  if (!BlaeckSerial.getSelectOption("SET_WAVE", waveIndex, WaveName, sizeof(WaveName)))
-    snprintf(WaveName, sizeof(WaveName), "%u", (unsigned)waveIndex);
-}
-
-// Offset as text for its state channel: one decimal (SET_OFFSET's step) and no unit, since a
-// Home Assistant number reads its state as a bare numeric.
-const char *OffsetState()
-{
-  static char text[12]; // fits "-100.0"
-  String(Offset, 1).toCharArray(text, sizeof(text));
-  return text;
-}
-
 void onSetFreq(const char *command, const char *const *params, byte paramCount)
 {
   Frequency = (float)atof(params[0]);
+  // The one control backed by a signal, so it reports by writing that signal - and the value
+  // is logged. The others carry their own state instead, which is not; see onSetAmp().
   BlaeckSerial.write("Frequency", Frequency);
 }
 
 void onSetAmp(const char *command, const char *const *params, byte paramCount)
 {
   Amplitude = (float)atof(params[0]);
-  BlaeckSerial.write("Amplitude", Amplitude);
+  // Publishes the command's own state. Pushing is what makes the new value visible at once -
+  // the channel is otherwise only read when a host polls the catalog.
+  BlaeckSerial.writeCommandState(command);
 }
 
 void onSetOffset(const char *command, const char *const *params, byte paramCount)
 {
   Offset = (float)atof(params[0]);
-  // The others write their signal back; this one publishes the command's own state. Pushing
-  // is what makes it visible at once - the getter is only read when a host polls the catalog.
   BlaeckSerial.writeCommandState(command);
 }
 
@@ -292,15 +287,14 @@ void onSetWave(const char *command, const char *const *params, byte paramCount)
   // atoi even though Home Assistant sends the option NAME: the library resolves it against
   // the list declared above and rewrites the parameter to that index before calling this.
   waveIndex = (byte)atoi(params[0]);
-  RefreshWaveName();
-  BlaeckSerial.write("WaveName", WaveName);
+  BlaeckSerial.writeCommandState(command);
 }
 
 void onSetEnable(const char *command, const char *const *params, byte paramCount)
 {
   // The library has already rejected anything that is not 0 or 1.
   Enabled = atoi(params[0]) == 1;
-  BlaeckSerial.write("Enabled", Enabled);
+  BlaeckSerial.writeCommandState(command);
 }
 
 void onSetLabel(const char *command, const char *const *params, byte paramCount)
@@ -309,7 +303,7 @@ void onSetLabel(const char *command, const char *const *params, byte paramCount)
   // library. An empty one clears the label.
   strncpy(DeviceLabel, params[0], sizeof(DeviceLabel) - 1);
   DeviceLabel[sizeof(DeviceLabel) - 1] = '\0';
-  BlaeckSerial.write("DeviceLabel", DeviceLabel);
+  BlaeckSerial.writeCommandState(command);
 }
 
 void onStatus(const char *command, const char *const *params, byte paramCount)

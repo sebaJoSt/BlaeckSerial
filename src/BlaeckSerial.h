@@ -212,6 +212,12 @@
 // a compiler picks by default: this type is a field in every signal entry and every state
 // channel entry, and a byte there is a byte per entry. The enumerators are unchanged, so
 // nothing that names one is affected.
+// Room for one resolved select option while a frame is built - a stack buffer for the length
+// of that frame, not storage per channel.
+#ifndef BLAECK_STATE_MAX_OPTION_CHARS
+  #define BLAECK_STATE_MAX_OPTION_CHARS 24
+#endif
+
 typedef enum DataType : uint8_t
 {
   Blaeck_bool,
@@ -227,20 +233,9 @@ typedef enum DataType : uint8_t
   Blaeck_string
 } dataType;
 
-// The enumerators are the wire codes, and the library relies on that in one place: the schema
-// hash feeds the enum value (_computeSchemaHash) where the symbol list writes the code that
-// _dtypeCode() maps. Reorder this list or insert a type in the middle and the two disagree -
-// the device hashes one schema and describes another, which a host sees as a schema that is
-// perpetually stale, re-requesting symbols that never settle. Nothing about that failure
-// points here, so it is caught at build time instead.
-static_assert((uint8_t)Blaeck_bool == 0x0 && (uint8_t)Blaeck_byte == 0x1 &&
-              (uint8_t)Blaeck_short == 0x2 && (uint8_t)Blaeck_ushort == 0x3 &&
-              (uint8_t)Blaeck_int == 0x4 && (uint8_t)Blaeck_uint == 0x5 &&
-              (uint8_t)Blaeck_long == 0x6 && (uint8_t)Blaeck_ulong == 0x7 &&
-              (uint8_t)Blaeck_float == 0x8 && (uint8_t)Blaeck_double == 0x9 &&
-              (uint8_t)Blaeck_string == 0xA,
-              "DataType must keep the order of the wire codes: the schema hash feeds the enum "
-              "value where the symbol list writes the mapped code");
+// The enumerators are not the wire codes and nothing treats them as such: _dtypeCode() is
+// the one mapping, and the schema hash, the symbol list and the state frames all go through
+// it. Reorder this list or insert a type and nothing on the wire moves.
 
 // How a signal's value accumulates over time, for Home Assistant statistics
 // (0xF0 SignalMetaFlags bits 3-5). MEASUREMENT is a value that goes up and down
@@ -884,11 +879,37 @@ public:
   // an Uno - kept out of RAM for text that never changes.
   static bool equalsFlash(const char *ram, const __FlashStringHelper *flash);
 
+  // Writes `value` into `out` with `decimals` places and returns `out`, so it can be handed
+  // straight to snprintf(). No heap, and no dependence on printf float support - avr-libc
+  // leaves that out unless it is linked in, so "%f" prints "?" on AVR, and dtostrf() is not on
+  // every core either.
+  //
+  // For a value a host should render, prefer a typed state channel or a signal and let the host
+  // format it. This is for text a sketch composes itself - a status line carrying several
+  // values in one string.
+  //
+  // Gives the same three answers the Arduino core does when digits cannot say it: "nan", "inf",
+  // and "ovf" beyond what an unsigned long can hold. A buffer too small for the result is
+  // truncated and always terminated - which is why outSize is here and dtostrf() has no
+  // equivalent: that one cannot be told how much room it has.
+  //
+  // Exact to about seven significant digits, which is all a float holds: asking for more, as
+  // toText(1234.5678f, 4, ...) does, may differ from printf in the last place. The same is true
+  // of the core on AVR, where double is float.
+  static char *toText(float value, byte decimals, char *out, byte outSize);
+
   // Copies a flash name into `out`, truncating at outSize - 1 and always terminating.
   // Returns the length written. Used by the F() overloads below, which hand the result
   // to the const char* form: a channel always keeps its own copy of its name, so F()
   // saves the literal from SRAM rather than changing how the name is stored.
   static byte copyFlashName(const __FlashStringHelper *flash, char *out, byte outSize);
+
+  // Stores a channel name: a flash pointer as it stands, a RAM name as a copy this library
+  // owns. Mirrors _setSignalName, including why the pointer is tested before the flag.
+  static void _setChannelName(const char *&slot, bool &inFlash, const char *ram, const __FlashStringHelper *flash);
+  // Equality against a stored channel name, whichever memory it lives in.
+  static bool _channelNameEquals(const char *stored, bool inFlash, const char *candidate);
+  static bool _channelNameEqualsFlash(const char *stored, bool inFlash, const __FlashStringHelper *candidate);
 
   // State channels that could not be declared - a full table, a name too long, a name a
   // command already owns - each reported on DebugRef and counted here. A command's
@@ -1078,9 +1099,13 @@ private:
   // The type and the variable are settled at registration because they come from which
   // overload the sketch called, not from a modifier a handle could offer - which is what
   // keeps a channel from ever holding a type its value does not match.
-  int _registerStateChannel(const char *channelName, dataType valueType = Blaeck_string,
+  // Takes the name in whichever memory the caller has it: exactly one of channelName and
+  // flashName is set. A flash name is stored as a pointer, so it costs the entry nothing
+  // and never truncates; a RAM name is copied, and still cannot exceed the old limit.
+  int _registerStateChannel(const char *channelName, const __FlashStringHelper *flashName, dataType valueType = Blaeck_string,
                               const void *value = nullptr);
-  int _registerEventChannel(const char *channelName, const __FlashStringHelper *eventTypes);
+  // Exactly one of channelName and flashName is set; see _registerStateChannel.
+  int _registerEventChannel(const char *channelName, const __FlashStringHelper *flashName, const __FlashStringHelper *eventTypes);
   // Appends one pool entry per field of a comma-separated list, in order, so a field's position
   // is its wire index - the same rule call order gives addEventType().
   void _addEventTypesCsv(byte channelIndex, const __FlashStringHelper *eventTypes);
@@ -1096,7 +1121,8 @@ private:
   // False when the channel could not be declared, so withOwnState() can leave the command
   // without state rather than advertising a channel absent from the 0x90 catalog.
   bool _declareOwnState(byte handlerIndex, const __FlashStringHelper *channelName,
-                        BlaeckStateTextGetter getStateText, dataType valueType, const void *value);
+                        BlaeckStateTextGetter getStateText, dataType valueType, const void *value,
+                        bool selectIndex = false);
   bool _declareOwnState(byte handlerIndex, const __FlashStringHelper *channelName,
                         BlaeckStateTextGetter getStateText);
 
@@ -1111,11 +1137,13 @@ private:
   void writeStateChannelsFrame(unsigned long MessageID);
   // Index of a declared channel, or -1 when the name was never declared.
   int _findStateChannel(const char *channelName) const;
+  int _findStateChannel(const __FlashStringHelper *channelName) const;
 #endif
 #if BLAECK_ENABLE_EVENTS
   void writeEventChannelsFrame(unsigned long MessageID);
   // Index of a declared event channel, or -1 when the name was never declared.
   int _findEventChannel(const char *channelName) const;
+  int _findEventChannel(const __FlashStringHelper *channelName) const;
   // Position of an event type within its own channel's list, or -1 when that
   // channel never declared it.
   int _findEventType(byte channelIndex, const __FlashStringHelper *eventType) const;
@@ -1408,7 +1436,13 @@ private:
   // costs nothing; only the table below is compiled away.
   struct StateChannelEntry
   {
-    char name[MAX_STATE_NAME_COUNT];
+    // Either a copy this library owns, or a pointer into flash when the channel was named
+    // with F(). nameInFlash says which, and nothing reads this field directly - the helpers
+    // do, because reading a flash address as if it were RAM is silent garbage on AVR rather
+    // than a crash. A pointer where a fixed array used to be: 14 bytes an entry on AVR, and
+    // an F() name now costs the entry nothing at all.
+    const char *name = nullptr;
+    bool nameInFlash = false;
     const __FlashStringHelper *icon = nullptr;
     // Asked for the channel's value while the 0x90 catalog is built, so what the
     // catalog reports cannot lag behind the sketch - there is no stored copy to
@@ -1437,6 +1471,11 @@ private:
     bool forceUpdate = false;
     // Said once per channel, not once per push: a value that is too long is usually too
     // long every time, and a warning on every push would bury the log it is trying to help.
+    // stateValue points at a byte holding an option index rather than at text, and the
+    // channel reports the option that index names. Set only by a select command's
+    // withOwnState(), which is the one case where the two cannot be told apart: both are
+    // a string channel with a pointer.
+    bool stateIsSelectIndex = false;
     bool truncationWarned = false;
     bool inUse = false;
   };
@@ -1445,6 +1484,10 @@ private:
   byte _stateChannelCapacity = DEFAULT_STATE_CHANNELS;
   byte _stateChannelSlots() const { return _stateChannels != nullptr ? _stateChannelCapacity : 0; }
   bool _ensureStateChannelTable();
+  // The text a channel reports, or nullptr when it has none: its getter, the text its
+  // stateValue points at, or the option an index names. Resolved into `buf` only in the
+  // last case; the others hand back a pointer they already had.
+  const char *_channelText(const StateChannelEntry &e, char *buf, byte bufSize) const;
 
   // The 0x90 flag word for one channel. Both writer paths call this so the bits are decided
   // once: the buffered and unbuffered writers are otherwise the same code twice, and a flag
@@ -1472,7 +1515,13 @@ private:
 #if BLAECK_ENABLE_EVENTS
   struct EventChannelEntry
   {
-    char name[MAX_EVENT_NAME_COUNT];
+    // Either a copy this library owns, or a pointer into flash when the channel was named
+    // with F(). nameInFlash says which, and nothing reads this field directly - the helpers
+    // do, because reading a flash address as if it were RAM is silent garbage on AVR rather
+    // than a crash. A pointer where a fixed array used to be: 14 bytes an entry on AVR, and
+    // an F() name now costs the entry nothing at all.
+    const char *name = nullptr;
+    bool nameInFlash = false;
     const __FlashStringHelper *icon = nullptr;
     const __FlashStringHelper *deviceClass = nullptr;
     bool diagnostic = false;
@@ -1731,12 +1780,13 @@ protected:
   // Typed own state: the command reports a variable rather than text a getter builds. Same
   // path as the getter form, so the channel is declared, claimed and announced identically -
   // only where the value comes from differs.
-  void _setOwnState(const __FlashStringHelper *channelName, dataType valueType, const void *value)
+  void _setOwnState(const __FlashStringHelper *channelName, dataType valueType, const void *value,
+                    bool selectIndex = false)
   {
 #if BLAECK_ENABLE_COMMAND_META
     if (auto *e = _entry())
     {
-      if (_owner->_declareOwnState((byte)_index, channelName, nullptr, valueType, value))
+      if (_owner->_declareOwnState((byte)_index, channelName, nullptr, valueType, value, selectIndex))
       {
         e->stateSignal = channelName;
         e->stateSource = BLAECK_STATE_CHANNEL;
@@ -1980,13 +2030,29 @@ public:
     return *this;
   }
 
-  // The buffer this control's state lives in. No getter and no formatting: the library reads
-  // the characters where they sit, so a value the sketch already keeps needs no second copy.
+  // Where this control reports its state from - one of two, and the index is the usual one.
+  // A handler is handed the option index (the library resolves the name the host sent before
+  // calling it), so that is what a sketch already has; pass a buffer instead only if it keeps
+  // the name for its own reasons. Either way the channel reports the option NAME, which is what
+  // a host expects of a select.
+
+  // The byte the sketch switches on. The library resolves it against the list declared above,
+  // so nothing has to hold that text or refresh it when the selection changes.
+  BlaeckSelectCommandRef &withOwnState(const __FlashStringHelper *channelName, byte *index)
+  {
+    _setOwnState(channelName, Blaeck_string, index, true);
+    return *this;
+  }
+
+  // The buffer the name already lives in. No getter and no formatting: the library reads the
+  // characters where they sit, so a name the sketch keeps anyway needs no second copy. Keeping
+  // it in step is then the sketch's job - the index form above has nothing to keep in step.
   BlaeckSelectCommandRef &withOwnState(const __FlashStringHelper *channelName, const char *value)
   {
     _setOwnState(channelName, Blaeck_string, value);
     return *this;
   }
+
 };
 
 class BlaeckButtonCommandRef : public BlaeckCommandRefBase

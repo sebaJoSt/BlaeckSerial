@@ -552,7 +552,7 @@ uint16_t BlaeckSerial::_computeSchemaHash()
   for (int j = 0; j < _signalIndex; j++)
   {
     _signalNameFeedHash(Signals[j]);
-    _schemaHashFeedByte((byte)Signals[j].DataType);
+    _schemaHashFeedByte(_dtypeCode(Signals[j].DataType));
   }
   uint16_t crc = _schemaHashAccum;
   _schemaHashAccum = saved;
@@ -1233,7 +1233,7 @@ void BlaeckSerial::writeCommandState(const char *command, unsigned long messageI
     {
       if (!_stateChannels[c].inUse || !_stateChannels[c].ownedByCommand)
         continue;
-      if (!_flashStringEqualsName(e.stateSignal, _stateChannels[c].name))
+      if (!_channelNameEqualsFlash(_stateChannels[c].name, _stateChannels[c].nameInFlash, e.stateSignal))
         continue;
 
       BlaeckStateTextGetter getter = _stateChannels[c].getStateText;
@@ -1262,20 +1262,12 @@ bool BlaeckSerial::_addOwnedStateChannel(const __FlashStringHelper *channelName,
   if (channelName == nullptr)
     return false;
 
-  char name[MAX_STATE_NAME_COUNT];
-  PGM_P p = reinterpret_cast<PGM_P>(channelName);
-  byte len = 0;
-  byte c;
-  while ((c = pgm_read_byte(p + len)) != 0 && len + 1 < MAX_STATE_NAME_COUNT)
-  {
-    name[len] = (char)c;
-    len++;
-  }
-  name[len] = '\0';
-  if (len == 0)
+  // The name stays where it is: withOwnState() is flash-only, and a channel now holds a
+  // pointer, so there is nothing to copy and no length to truncate to.
+  if (pgm_read_byte(reinterpret_cast<PGM_P>(channelName)) == 0)
     return false;
 
-  int existing = _findStateChannel(name);
+  int existing = _findStateChannel(channelName);
   if (existing >= 0 && !_stateChannels[existing].ownedByCommand)
   {
     // The sketch declared this name itself. The command takes it, because its state has to
@@ -1283,7 +1275,7 @@ bool BlaeckSerial::_addOwnedStateChannel(const __FlashStringHelper *channelName,
     if (_debugStream != nullptr)
     {
       _debugStream->print(F("Channel taken over by a command's own state; drop the addStateChannel() for: "));
-      _debugStream->println(name);
+      _debugStream->println(channelName);
     }
   }
 
@@ -1308,8 +1300,7 @@ bool BlaeckSerial::_addOwnedStateChannel(const __FlashStringHelper *channelName,
   {
     if (_stateChannels[i].inUse)
       continue;
-    strncpy(_stateChannels[i].name, name, MAX_STATE_NAME_COUNT - 1);
-    _stateChannels[i].name[MAX_STATE_NAME_COUNT - 1] = '\0';
+    _setChannelName(_stateChannels[i].name, _stateChannels[i].nameInFlash, nullptr, channelName);
     _stateChannels[i].icon = nullptr;
     // Diagnostic on principle: a host that announces a sensor for it anyway should file it
     // away, since the control already shows this value.
@@ -1323,7 +1314,7 @@ bool BlaeckSerial::_addOwnedStateChannel(const __FlashStringHelper *channelName,
     return true;
   }
 
-  _warnTableFull(F("withStateChannels"), _stateChannelCapacity, name);
+  _warnTableFull(F("withStateChannels"), _stateChannelCapacity, channelName);
   _rejectedStateChannelCount++;
   return false;
 #endif
@@ -1337,7 +1328,7 @@ bool BlaeckSerial::_declareOwnState(byte handlerIndex, const __FlashStringHelper
 
 bool BlaeckSerial::_declareOwnState(byte handlerIndex, const __FlashStringHelper *channelName,
                                    BlaeckStateTextGetter getStateText, dataType valueType,
-                                   const void *value)
+                                   const void *value, bool selectIndex)
 {
   // One or the other has to supply the value: a getter that builds text, or a variable the
   // library reads. Neither means the control would sit at unknown forever, so refuse it here
@@ -1347,6 +1338,18 @@ bool BlaeckSerial::_declareOwnState(byte handlerIndex, const __FlashStringHelper
 
   if (!_addOwnedStateChannel(channelName, getStateText, valueType, value))
     return false;
+
+  // A select hands its option list to the channel: it is what a host needs to show the control
+  // as a list rather than free text, and what lets the channel report an index as the option
+  // it names. Both come from the command, so neither is asked of the sketch.
+  const CommandHandlerEntry &cmd = _commandHandlers[handlerIndex];
+  int ch = _findStateChannel(channelName);
+  if (ch >= 0)
+  {
+    _stateChannels[ch].stateIsSelectIndex = selectIndex;
+    if (cmd.kind == BLAECK_CMD_SELECT && cmd.options != nullptr)
+      _stateChannels[ch].options = cmd.options;
+  }
 
   // Announce once, here. A host connecting later reads the value from the channel catalog,
   // but one already connected when the board reset has no reason to re-read a catalog it
@@ -1565,6 +1568,65 @@ unsigned long BlaeckSerial::_parsedMsgId() const
   }
   return v;
 }
+void BlaeckSerial::_setChannelName(const char *&slot, bool &inFlash, const char *ram, const __FlashStringHelper *flash)
+{
+  // Whatever the slot held: a copy is freed, a flash name owns nothing. A slot is written
+  // twice whenever a channel is re-declared or taken over by a command.
+  if (slot != nullptr && !inFlash)
+    free((void *)slot);
+  slot = nullptr;
+  inFlash = false;
+
+  if (flash != nullptr)
+  {
+    slot = reinterpret_cast<const char *>(flash);
+    inFlash = true;
+    return;
+  }
+  if (ram == nullptr)
+    return;
+
+  // Copied, so the caller's buffer is free the moment this returns.
+  size_t needed = strlen(ram) + 1;
+  char *copy = (char *)malloc(needed);
+  if (copy != nullptr)
+  {
+    memcpy(copy, ram, needed);
+    slot = copy;
+  }
+  // Out of RAM leaves the name empty rather than the channel missing, as it does for a signal.
+}
+
+bool BlaeckSerial::_channelNameEquals(const char *stored, bool inFlash, const char *candidate)
+{
+  if (stored == nullptr || candidate == nullptr)
+    return false;
+  if (!inFlash)
+    return strcmp(stored, candidate) == 0;
+  return equalsFlash(candidate, reinterpret_cast<const __FlashStringHelper *>(stored));
+}
+
+bool BlaeckSerial::_channelNameEqualsFlash(const char *stored, bool inFlash, const __FlashStringHelper *candidate)
+{
+  if (stored == nullptr || candidate == nullptr)
+    return false;
+  if (!inFlash)
+    return equalsFlash(stored, candidate);
+
+  // Both in flash: neither may be read as RAM, so both go through pgm_read_byte.
+  PGM_P a = reinterpret_cast<PGM_P>(stored);
+  PGM_P b = reinterpret_cast<PGM_P>(candidate);
+  byte ca, cb;
+  do
+  {
+    ca = pgm_read_byte(a++);
+    cb = pgm_read_byte(b++);
+    if (ca != cb)
+      return false;
+  } while (ca != 0);
+  return true;
+}
+
 byte BlaeckSerial::copyFlashName(const __FlashStringHelper *flash, char *out, byte outSize)
 {
   if (out == nullptr || outSize == 0)
@@ -1585,6 +1647,74 @@ byte BlaeckSerial::copyFlashName(const __FlashStringHelper *flash, char *out, by
   // an empty one is refused by the const char* form exactly as it would have been.
   out[len] = '\0';
   return len;
+}
+
+char *BlaeckSerial::toText(float value, byte decimals, char *out, byte outSize)
+{
+  if (out == nullptr || outSize == 0)
+    return out;
+  out[0] = '\0';
+
+  // Said in words rather than digits, because no digits are right.
+  const char *word = nullptr;
+  if (isnan(value))
+    word = "nan";
+  else if (isinf(value))
+    word = "inf";
+  else if (value > 4294967040.0f || value < -4294967040.0f)
+    word = "ovf"; // past what the unsigned long below can hold
+  if (word != nullptr)
+  {
+    byte w = 0;
+    while (word[w] != '\0' && w + 1 < outSize)
+    {
+      out[w] = word[w];
+      w++;
+    }
+    out[w] = '\0';
+    return out;
+  }
+
+  byte at = 0;
+  if (value < 0.0f)
+  {
+    if (at + 1 < outSize)
+      out[at++] = '-';
+    value = -value;
+  }
+
+  // Rounded before the split, so a carry lands in the integer part: 9.999 at two decimals is
+  // 10.00, not 9.100.
+  float rounding = 0.5f;
+  for (byte i = 0; i < decimals; i++)
+    rounding /= 10.0f;
+  value += rounding;
+
+  unsigned long whole = (unsigned long)value;
+  float frac = value - (float)whole;
+
+  // Digits come out least-significant first, so they are staged and written back to front.
+  char digits[11];
+  byte n = 0;
+  do
+  {
+    digits[n++] = (char)('0' + (whole % 10UL));
+    whole /= 10UL;
+  } while (whole > 0UL && n < sizeof(digits));
+  while (n > 0 && at + 1 < outSize)
+    out[at++] = digits[--n];
+
+  if (decimals > 0 && at + 1 < outSize)
+    out[at++] = '.';
+  for (byte i = 0; i < decimals && at + 1 < outSize; i++)
+  {
+    frac *= 10.0f;
+    byte d = (byte)frac;
+    out[at++] = (char)('0' + d);
+    frac -= d;
+  }
+  out[at] = '\0';
+  return out;
 }
 
 bool BlaeckSerial::equalsFlash(const char *ram, const __FlashStringHelper *flash)
@@ -1809,10 +1939,15 @@ void BlaeckSerial::writeState(const char *channelName, const char *text)
   this->writeState(channelName, text, _stateMsgId++);
 }
 
-int BlaeckSerial::_registerStateChannel(const char *channelName, dataType valueType,
-                                         const void *value)
+int BlaeckSerial::_registerStateChannel(const char *channelName, const __FlashStringHelper *flashName,
+                                         dataType valueType, const void *value)
 {
-  if (channelName == nullptr || channelName[0] == '\0')
+  // A flash name is measured where it lives; only a RAM name is copied, so only it can
+  // be too long for the copy.
+  char probe[2];
+  bool emptyFlash = flashName != nullptr && copyFlashName(flashName, probe, sizeof(probe)) == 0;
+  if ((channelName == nullptr && flashName == nullptr) || emptyFlash ||
+      (channelName != nullptr && channelName[0] == '\0'))
   {
     _rejectedStateChannelCount++;
     return -1;
@@ -1832,7 +1967,7 @@ int BlaeckSerial::_registerStateChannel(const char *channelName, dataType valueT
     return -1;
   }
 
-  if (strlen(channelName) >= MAX_STATE_NAME_COUNT)
+  if (channelName != nullptr && strlen(channelName) >= MAX_STATE_NAME_COUNT)
   {
     if (_debugStream != nullptr)
     {
@@ -1845,7 +1980,7 @@ int BlaeckSerial::_registerStateChannel(const char *channelName, dataType valueT
 
   // Re-declaring a channel updates it rather than consuming a slot, so the metadata starts
   // empty: what the previous declaration said must not survive a chain that says less.
-  int existing = _findStateChannel(channelName);
+  int existing = flashName != nullptr ? _findStateChannel(flashName) : _findStateChannel(channelName);
   if (existing >= 0)
   {
     _stateChannels[existing].icon = nullptr;
@@ -1873,8 +2008,7 @@ int BlaeckSerial::_registerStateChannel(const char *channelName, dataType valueT
   {
     if (!_stateChannels[i].inUse)
     {
-      strncpy(_stateChannels[i].name, channelName, MAX_STATE_NAME_COUNT - 1);
-      _stateChannels[i].name[MAX_STATE_NAME_COUNT - 1] = '\0';
+      _setChannelName(_stateChannels[i].name, _stateChannels[i].nameInFlash, channelName, flashName);
       _stateChannels[i].icon = nullptr;
       _stateChannels[i].diagnostic = false;
       _stateChannels[i].deviceClass = nullptr;
@@ -1900,62 +2034,62 @@ int BlaeckSerial::_registerStateChannel(const char *channelName, dataType valueT
 
 BlaeckTextStateRef BlaeckSerial::addStateChannel(const char *channelName)
 {
-  return BlaeckTextStateRef(this, (int16_t)_registerStateChannel(channelName));
+  return BlaeckTextStateRef(this, (int16_t)_registerStateChannel(channelName, nullptr));
 }
 
 BlaeckTextStateRef BlaeckSerial::addStateChannel(const char *channelName, const char *value)
 {
-  return BlaeckTextStateRef(this, (int16_t)_registerStateChannel(channelName, Blaeck_string, value));
+  return BlaeckTextStateRef(this, (int16_t)_registerStateChannel(channelName, nullptr, Blaeck_string, value));
 }
 
 BlaeckBoolStateRef BlaeckSerial::addStateChannel(const char *channelName, bool *value)
 {
-  return BlaeckBoolStateRef(this, (int16_t)_registerStateChannel(channelName, Blaeck_bool, value));
+  return BlaeckBoolStateRef(this, (int16_t)_registerStateChannel(channelName, nullptr, Blaeck_bool, value));
 }
 
 BlaeckNumericStateRef BlaeckSerial::addStateChannel(const char *channelName, byte *value)
 {
-  return BlaeckNumericStateRef(this, (int16_t)_registerStateChannel(channelName, Blaeck_byte, value));
+  return BlaeckNumericStateRef(this, (int16_t)_registerStateChannel(channelName, nullptr, Blaeck_byte, value));
 }
 
 BlaeckNumericStateRef BlaeckSerial::addStateChannel(const char *channelName, short *value)
 {
-  return BlaeckNumericStateRef(this, (int16_t)_registerStateChannel(channelName, Blaeck_short, value));
+  return BlaeckNumericStateRef(this, (int16_t)_registerStateChannel(channelName, nullptr, Blaeck_short, value));
 }
 
 BlaeckNumericStateRef BlaeckSerial::addStateChannel(const char *channelName, unsigned short *value)
 {
-  return BlaeckNumericStateRef(this, (int16_t)_registerStateChannel(channelName, Blaeck_ushort, value));
+  return BlaeckNumericStateRef(this, (int16_t)_registerStateChannel(channelName, nullptr, Blaeck_ushort, value));
 }
 
 BlaeckNumericStateRef BlaeckSerial::addStateChannel(const char *channelName, int *value)
 {
-  return BlaeckNumericStateRef(this, (int16_t)_registerStateChannel(channelName, Blaeck_int, value));
+  return BlaeckNumericStateRef(this, (int16_t)_registerStateChannel(channelName, nullptr, Blaeck_int, value));
 }
 
 BlaeckNumericStateRef BlaeckSerial::addStateChannel(const char *channelName, unsigned int *value)
 {
-  return BlaeckNumericStateRef(this, (int16_t)_registerStateChannel(channelName, Blaeck_uint, value));
+  return BlaeckNumericStateRef(this, (int16_t)_registerStateChannel(channelName, nullptr, Blaeck_uint, value));
 }
 
 BlaeckNumericStateRef BlaeckSerial::addStateChannel(const char *channelName, long *value)
 {
-  return BlaeckNumericStateRef(this, (int16_t)_registerStateChannel(channelName, Blaeck_long, value));
+  return BlaeckNumericStateRef(this, (int16_t)_registerStateChannel(channelName, nullptr, Blaeck_long, value));
 }
 
 BlaeckNumericStateRef BlaeckSerial::addStateChannel(const char *channelName, unsigned long *value)
 {
-  return BlaeckNumericStateRef(this, (int16_t)_registerStateChannel(channelName, Blaeck_ulong, value));
+  return BlaeckNumericStateRef(this, (int16_t)_registerStateChannel(channelName, nullptr, Blaeck_ulong, value));
 }
 
 BlaeckNumericStateRef BlaeckSerial::addStateChannel(const char *channelName, float *value)
 {
-  return BlaeckNumericStateRef(this, (int16_t)_registerStateChannel(channelName, Blaeck_float, value));
+  return BlaeckNumericStateRef(this, (int16_t)_registerStateChannel(channelName, nullptr, Blaeck_float, value));
 }
 
 BlaeckNumericStateRef BlaeckSerial::addStateChannel(const char *channelName, double *value)
 {
-  return BlaeckNumericStateRef(this, (int16_t)_registerStateChannel(channelName, Blaeck_double, value));
+  return BlaeckNumericStateRef(this, (int16_t)_registerStateChannel(channelName, nullptr, Blaeck_double, value));
 }
 
 bool BlaeckSerial::_flashStringEqualsName(const __FlashStringHelper *flashName, const char *name)
@@ -1983,8 +2117,19 @@ void BlaeckSerial::clearAllStateChannels()
     _stateChannels[i].inUse = false;
     _stateChannels[i].icon = nullptr;
     _stateChannels[i].diagnostic = false;
-    _stateChannels[i].name[0] = '\0';
+    _setChannelName(_stateChannels[i].name, _stateChannels[i].nameInFlash, nullptr, nullptr);
   }
+}
+
+int BlaeckSerial::_findStateChannel(const __FlashStringHelper *channelName) const
+{
+  for (byte i = 0; i < _stateChannelSlots(); i++)
+  {
+    if (_stateChannels[i].inUse &&
+        _channelNameEqualsFlash(_stateChannels[i].name, _stateChannels[i].nameInFlash, channelName))
+      return i;
+  }
+  return -1;
 }
 
 int BlaeckSerial::_findStateChannel(const char *channelName) const
@@ -1994,7 +2139,7 @@ int BlaeckSerial::_findStateChannel(const char *channelName) const
 
   for (byte i = 0; i < _stateChannelSlots(); i++)
   {
-    if (_stateChannels[i].inUse && strcmp(_stateChannels[i].name, channelName) == 0)
+    if (_stateChannels[i].inUse && _channelNameEquals(_stateChannels[i].name, _stateChannels[i].nameInFlash, channelName))
       return (int)i;
   }
   return -1;
@@ -2090,7 +2235,8 @@ void BlaeckSerial::writeState(const char *channelName, unsigned long messageID)
   }
 
   const StateChannelEntry &e = _stateChannels[channelIndex];
-  const char *text = (e.getStateText != nullptr) ? e.getStateText() : nullptr;
+  char optionBuf[BLAECK_STATE_MAX_OPTION_CHARS];
+  const char *text = _channelText(e, optionBuf, sizeof(optionBuf));
   _writeStateFrame(channelIndex, text, messageID);
 }
 
@@ -2122,7 +2268,10 @@ void BlaeckSerial::_writeStateFrame(int channelIndex, const char *text, unsigned
     if (_debugStream != nullptr)
     {
       _debugStream->print(F("State text truncated to 255 bytes on channel: "));
-      _debugStream->println(e.name);
+      if (e.nameInFlash)
+        _debugStream->println(reinterpret_cast<const __FlashStringHelper *>(e.name));
+      else
+        _debugStream->println(e.name);
     }
   }
 
@@ -2204,6 +2353,49 @@ byte BlaeckSerial::_dtypeCode(dataType t)
   default:              return 0x8;
   }
 }
+
+#if BLAECK_ENABLE_STATE_CHANNELS
+const char *BlaeckSerial::_channelText(const StateChannelEntry &e, char *buf, byte bufSize) const
+{
+  if (e.getStateText != nullptr)
+    return e.getStateText();
+
+  // Only a string channel keeps text here; _channelValueBytes() reads every other type and
+  // never touches this pointer.
+  if (e.valueType != Blaeck_string || e.stateValue == nullptr)
+    return nullptr;
+
+  if (!e.stateIsSelectIndex)
+    return (const char *)e.stateValue;
+
+  if (e.options == nullptr || buf == nullptr || bufSize == 0)
+    return nullptr;
+
+  // Same field-walk getSelectOption() does, on the list the command handed the channel.
+  byte index = *((const byte *)e.stateValue);
+  PGM_P p = reinterpret_cast<PGM_P>(e.options);
+  byte seen = 0;
+  unsigned int at = 0;
+  while (seen < index)
+  {
+    byte c = pgm_read_byte(p + at);
+    if (c == 0)
+      return nullptr; // fewer options than the index asked for
+    if (c == ',')
+      seen++;
+    at++;
+  }
+  byte len = 0;
+  byte c;
+  while ((c = pgm_read_byte(p + at + len)) != 0 && c != ',' && len + 1 < bufSize)
+  {
+    buf[len] = (char)c;
+    len++;
+  }
+  buf[len] = '\0';
+  return len > 0 ? buf : nullptr;
+}
+#endif
 
 #if BLAECK_ENABLE_STATE_CHANNELS
 byte BlaeckSerial::_channelValueBytes(const StateChannelEntry &e, byte *out)
@@ -2298,7 +2490,8 @@ void BlaeckSerial::writeStateChannelsFrame(unsigned long msg_id)
 
       // Fetched once, before the flag is decided: the getter may return nullptr, and
       // calling it twice could hand the two uses different text.
-      const char *stateText = (e.getStateText != nullptr) ? e.getStateText() : nullptr;
+      char optionBuf[BLAECK_STATE_MAX_OPTION_CHARS];
+      const char *stateText = _channelText(e, optionBuf, sizeof(optionBuf));
       byte valueBytes[8];
       byte valueLen = _channelValueBytes(e, valueBytes);
 
@@ -2306,7 +2499,10 @@ void BlaeckSerial::writeStateChannelsFrame(unsigned long msg_id)
 
       _bufByte((byte)0);
       _bufByte((byte)0);
-      _bufStr0(e.name);
+      if (e.nameInFlash)
+        _bufFlashStr0(reinterpret_cast<const __FlashStringHelper *>(e.name));
+      else
+        _bufStr0(e.name);
       _bufByte((byte)(flags & 0xFF));
       _bufByte((byte)((flags >> 8) & 0xFF));
       _bufByte(_dtypeCode(e.valueType));
@@ -2354,7 +2550,8 @@ void BlaeckSerial::writeStateChannelsFrame(unsigned long msg_id)
       // Fetched before any of this entry's bytes go out: in this unbuffered path the frame
       // is streamed as it is built, so the getter runs mid-transmission and a slow one
       // stalls a half-sent frame.
-      const char *stateText = (e.getStateText != nullptr) ? e.getStateText() : nullptr;
+      char optionBuf[BLAECK_STATE_MAX_OPTION_CHARS];
+      const char *stateText = _channelText(e, optionBuf, sizeof(optionBuf));
       byte valueBytes[8];
       byte valueLen = _channelValueBytes(e, valueBytes);
 
@@ -2362,7 +2559,10 @@ void BlaeckSerial::writeStateChannelsFrame(unsigned long msg_id)
 
       StreamRef->write((byte)0);
       StreamRef->write((byte)0);
-      StreamRef->print(e.name);
+      if (e.nameInFlash)
+        StreamRef->print(reinterpret_cast<const __FlashStringHelper *>(e.name));
+      else
+        StreamRef->print(e.name);
       StreamRef->write((byte)0);
       StreamRef->write((byte)(flags & 0xFF));
       StreamRef->write((byte)((flags >> 8) & 0xFF));
@@ -2438,9 +2638,12 @@ void BlaeckSerial::writeState(const char *, const char *, unsigned long) {}
 #endif
 
 #if BLAECK_ENABLE_EVENTS
-int BlaeckSerial::_registerEventChannel(const char *channelName, const __FlashStringHelper *eventTypes)
+int BlaeckSerial::_registerEventChannel(const char *channelName, const __FlashStringHelper *flashName, const __FlashStringHelper *eventTypes)
 {
-  if (channelName == nullptr || channelName[0] == '\0')
+  char probe[2];
+  bool emptyFlash = flashName != nullptr && copyFlashName(flashName, probe, sizeof(probe)) == 0;
+  if ((channelName == nullptr && flashName == nullptr) || emptyFlash ||
+      (channelName != nullptr && channelName[0] == '\0'))
   {
     _rejectedEventChannelCount++;
     return -1;
@@ -2459,7 +2662,7 @@ int BlaeckSerial::_registerEventChannel(const char *channelName, const __FlashSt
     return -1;
   }
 
-  if (strlen(channelName) >= MAX_EVENT_NAME_COUNT)
+  if (channelName != nullptr && strlen(channelName) >= MAX_EVENT_NAME_COUNT)
   {
     if (_debugStream != nullptr)
     {
@@ -2493,8 +2696,7 @@ int BlaeckSerial::_registerEventChannel(const char *channelName, const __FlashSt
   {
     if (!_eventChannels[i].inUse)
     {
-      strncpy(_eventChannels[i].name, channelName, MAX_EVENT_NAME_COUNT - 1);
-      _eventChannels[i].name[MAX_EVENT_NAME_COUNT - 1] = '\0';
+      _setChannelName(_eventChannels[i].name, _eventChannels[i].nameInFlash, channelName, flashName);
       _eventChannels[i].icon = nullptr;
       _eventChannels[i].deviceClass = nullptr;
       _eventChannels[i].diagnostic = false;
@@ -2512,7 +2714,7 @@ int BlaeckSerial::_registerEventChannel(const char *channelName, const __FlashSt
 
 BlaeckEventChannelRef BlaeckSerial::addEventChannel(const char *channelName, const __FlashStringHelper *eventTypes)
 {
-  return BlaeckEventChannelRef(this, (int16_t)_registerEventChannel(channelName, eventTypes));
+  return BlaeckEventChannelRef(this, (int16_t)_registerEventChannel(channelName, nullptr, eventTypes));
 }
 
 void BlaeckSerial::_addEventTypesCsv(byte channelIndex, const __FlashStringHelper *eventTypes)
@@ -2525,8 +2727,12 @@ void BlaeckSerial::_addEventTypesCsv(byte channelIndex, const __FlashStringHelpe
   {
     if (!_ensureEventTypeTable() || _eventTypeCount >= _eventTypeSlots())
     {
-      _warnTableFull(F("withEventTypes"), _eventTypeCapacity,
-                     _eventChannels[channelIndex].name);
+      if (_eventChannels[channelIndex].nameInFlash)
+        _warnTableFull(F("withEventTypes"), _eventTypeCapacity,
+                       reinterpret_cast<const __FlashStringHelper *>(_eventChannels[channelIndex].name));
+      else
+        _warnTableFull(F("withEventTypes"), _eventTypeCapacity,
+                       _eventChannels[channelIndex].name);
       // Every remaining field is lost too, and each is a type a host will never hear about.
       _rejectedEventTypeCount += (uint16_t)(fieldCount - f);
       break;
@@ -2651,10 +2857,21 @@ void BlaeckSerial::clearAllEventChannels()
     _eventChannels[i].inUse = false;
     _eventChannels[i].icon = nullptr;
     _eventChannels[i].diagnostic = false;
-    _eventChannels[i].name[0] = '\0';
+    _setChannelName(_eventChannels[i].name, _eventChannels[i].nameInFlash, nullptr, nullptr);
   }
   // The count gates every read of the pool, so the entries need no cleanup.
   _eventTypeCount = 0;
+}
+
+int BlaeckSerial::_findEventChannel(const __FlashStringHelper *channelName) const
+{
+  for (byte i = 0; i < _eventChannelSlots(); i++)
+  {
+    if (_eventChannels[i].inUse &&
+        _channelNameEqualsFlash(_eventChannels[i].name, _eventChannels[i].nameInFlash, channelName))
+      return i;
+  }
+  return -1;
 }
 
 int BlaeckSerial::_findEventChannel(const char *channelName) const
@@ -2664,7 +2881,7 @@ int BlaeckSerial::_findEventChannel(const char *channelName) const
 
   for (byte i = 0; i < _eventChannelSlots(); i++)
   {
-    if (_eventChannels[i].inUse && strcmp(_eventChannels[i].name, channelName) == 0)
+    if (_eventChannels[i].inUse && _channelNameEquals(_eventChannels[i].name, _eventChannels[i].nameInFlash, channelName))
       return (int)i;
   }
   return -1;
@@ -2771,7 +2988,10 @@ void BlaeckSerial::writeEventChannelsFrame(unsigned long msg_id)
 
       _bufByte((byte)0);
       _bufByte((byte)0);
-      _bufStr0(e.name);
+      if (e.nameInFlash)
+        _bufFlashStr0(reinterpret_cast<const __FlashStringHelper *>(e.name));
+      else
+        _bufStr0(e.name);
       _bufByte((byte)(flags & 0xFF));
       _bufByte((byte)((flags >> 8) & 0xFF));
 
@@ -2826,7 +3046,10 @@ void BlaeckSerial::writeEventChannelsFrame(unsigned long msg_id)
 
       StreamRef->write((byte)0);
       StreamRef->write((byte)0);
-      StreamRef->print(e.name);
+      if (e.nameInFlash)
+        StreamRef->print(reinterpret_cast<const __FlashStringHelper *>(e.name));
+      else
+        StreamRef->print(e.name);
       StreamRef->write((byte)0);
       StreamRef->write((byte)(flags & 0xFF));
       StreamRef->write((byte)((flags >> 8) & 0xFF));
@@ -4241,22 +4464,7 @@ void BlaeckSerial::writeSymbolsFrame(unsigned long msg_id)
       _signalNameFeedHash(signal);
       _bufSignalName0(signal);
 
-      byte dtCode;
-      switch (signal.DataType)
-      {
-      case (Blaeck_bool):   dtCode = 0x0; break;
-      case (Blaeck_byte):   dtCode = 0x1; break;
-      case (Blaeck_short):  dtCode = 0x2; break;
-      case (Blaeck_ushort): dtCode = 0x3; break;
-      case (Blaeck_int):    dtCode = 0x4; break;
-      case (Blaeck_uint):   dtCode = 0x5; break;
-      case (Blaeck_long):   dtCode = 0x6; break;
-      case (Blaeck_ulong):  dtCode = 0x7; break;
-      case (Blaeck_float):  dtCode = 0x8; break;
-      case (Blaeck_double): dtCode = 0x9; break;
-      case (Blaeck_string): dtCode = 0xA; break;
-      default:              dtCode = 0x8; break;
-      }
+      byte dtCode = _dtypeCode(signal.DataType);
       _bufByte(dtCode);
       _schemaHashFeedByte(dtCode);
     }
@@ -4285,22 +4493,7 @@ void BlaeckSerial::writeSymbolsFrame(unsigned long msg_id)
       _printSignalName(signal);
       StreamRef->print('\0');
 
-      byte dtCode;
-      switch (signal.DataType)
-      {
-      case (Blaeck_bool):   dtCode = 0x0; break;
-      case (Blaeck_byte):   dtCode = 0x1; break;
-      case (Blaeck_short):  dtCode = 0x2; break;
-      case (Blaeck_ushort): dtCode = 0x3; break;
-      case (Blaeck_int):    dtCode = 0x4; break;
-      case (Blaeck_uint):   dtCode = 0x5; break;
-      case (Blaeck_long):   dtCode = 0x6; break;
-      case (Blaeck_ulong):  dtCode = 0x7; break;
-      case (Blaeck_float):  dtCode = 0x8; break;
-      case (Blaeck_double): dtCode = 0x9; break;
-      case (Blaeck_string): dtCode = 0xA; break;
-      default:              dtCode = 0x8; break;
-      }
+      byte dtCode = _dtypeCode(signal.DataType);
       StreamRef->write(dtCode);
       _schemaHashFeedByte(dtCode);
     }
@@ -4778,86 +4971,62 @@ void BlaeckSerial::validatePlatformSizes()
 
 BlaeckTextStateRef BlaeckSerial::addStateChannel(const __FlashStringHelper *channelName)
 {
-  char n[MAX_STATE_NAME_COUNT];
-  copyFlashName(channelName, n, sizeof(n));
-  return addStateChannel(n);
+  return BlaeckTextStateRef(this, (int16_t)_registerStateChannel(nullptr, channelName, Blaeck_string, nullptr));
 }
 
 BlaeckTextStateRef BlaeckSerial::addStateChannel(const __FlashStringHelper *channelName, const char *value)
 {
-  char n[MAX_STATE_NAME_COUNT];
-  copyFlashName(channelName, n, sizeof(n));
-  return addStateChannel(n, value);
+  return BlaeckTextStateRef(this, (int16_t)_registerStateChannel(nullptr, channelName, Blaeck_string, value));
 }
 
 BlaeckBoolStateRef BlaeckSerial::addStateChannel(const __FlashStringHelper *channelName, bool *value)
 {
-  char n[MAX_STATE_NAME_COUNT];
-  copyFlashName(channelName, n, sizeof(n));
-  return addStateChannel(n, value);
+  return BlaeckBoolStateRef(this, (int16_t)_registerStateChannel(nullptr, channelName, Blaeck_bool, value));
 }
 
 BlaeckNumericStateRef BlaeckSerial::addStateChannel(const __FlashStringHelper *channelName, byte *value)
 {
-  char n[MAX_STATE_NAME_COUNT];
-  copyFlashName(channelName, n, sizeof(n));
-  return addStateChannel(n, value);
+  return BlaeckNumericStateRef(this, (int16_t)_registerStateChannel(nullptr, channelName, Blaeck_byte, value));
 }
 
 BlaeckNumericStateRef BlaeckSerial::addStateChannel(const __FlashStringHelper *channelName, short *value)
 {
-  char n[MAX_STATE_NAME_COUNT];
-  copyFlashName(channelName, n, sizeof(n));
-  return addStateChannel(n, value);
+  return BlaeckNumericStateRef(this, (int16_t)_registerStateChannel(nullptr, channelName, Blaeck_short, value));
 }
 
 BlaeckNumericStateRef BlaeckSerial::addStateChannel(const __FlashStringHelper *channelName, unsigned short *value)
 {
-  char n[MAX_STATE_NAME_COUNT];
-  copyFlashName(channelName, n, sizeof(n));
-  return addStateChannel(n, value);
+  return BlaeckNumericStateRef(this, (int16_t)_registerStateChannel(nullptr, channelName, Blaeck_ushort, value));
 }
 
 BlaeckNumericStateRef BlaeckSerial::addStateChannel(const __FlashStringHelper *channelName, int *value)
 {
-  char n[MAX_STATE_NAME_COUNT];
-  copyFlashName(channelName, n, sizeof(n));
-  return addStateChannel(n, value);
+  return BlaeckNumericStateRef(this, (int16_t)_registerStateChannel(nullptr, channelName, Blaeck_int, value));
 }
 
 BlaeckNumericStateRef BlaeckSerial::addStateChannel(const __FlashStringHelper *channelName, unsigned int *value)
 {
-  char n[MAX_STATE_NAME_COUNT];
-  copyFlashName(channelName, n, sizeof(n));
-  return addStateChannel(n, value);
+  return BlaeckNumericStateRef(this, (int16_t)_registerStateChannel(nullptr, channelName, Blaeck_uint, value));
 }
 
 BlaeckNumericStateRef BlaeckSerial::addStateChannel(const __FlashStringHelper *channelName, long *value)
 {
-  char n[MAX_STATE_NAME_COUNT];
-  copyFlashName(channelName, n, sizeof(n));
-  return addStateChannel(n, value);
+  return BlaeckNumericStateRef(this, (int16_t)_registerStateChannel(nullptr, channelName, Blaeck_long, value));
 }
 
 BlaeckNumericStateRef BlaeckSerial::addStateChannel(const __FlashStringHelper *channelName, unsigned long *value)
 {
-  char n[MAX_STATE_NAME_COUNT];
-  copyFlashName(channelName, n, sizeof(n));
-  return addStateChannel(n, value);
+  return BlaeckNumericStateRef(this, (int16_t)_registerStateChannel(nullptr, channelName, Blaeck_ulong, value));
 }
 
 BlaeckNumericStateRef BlaeckSerial::addStateChannel(const __FlashStringHelper *channelName, float *value)
 {
-  char n[MAX_STATE_NAME_COUNT];
-  copyFlashName(channelName, n, sizeof(n));
-  return addStateChannel(n, value);
+  return BlaeckNumericStateRef(this, (int16_t)_registerStateChannel(nullptr, channelName, Blaeck_float, value));
 }
 
 BlaeckNumericStateRef BlaeckSerial::addStateChannel(const __FlashStringHelper *channelName, double *value)
 {
-  char n[MAX_STATE_NAME_COUNT];
-  copyFlashName(channelName, n, sizeof(n));
-  return addStateChannel(n, value);
+  return BlaeckNumericStateRef(this, (int16_t)_registerStateChannel(nullptr, channelName, Blaeck_double, value));
 }
 
 void BlaeckSerial::writeState(const __FlashStringHelper *channelName, const char *text)
@@ -4890,13 +5059,12 @@ void BlaeckSerial::writeState(const __FlashStringHelper *channelName, unsigned l
 
 BlaeckEventChannelRef BlaeckSerial::addEventChannel(const __FlashStringHelper *channelName, const __FlashStringHelper *eventTypes)
 {
-  char n[MAX_EVENT_NAME_COUNT];
-  copyFlashName(channelName, n, sizeof(n));
-  return addEventChannel(n, eventTypes);
+  return BlaeckEventChannelRef(this, (int16_t)_registerEventChannel(nullptr, channelName, eventTypes));
 }
 
 bool BlaeckSerial::addEventType(const __FlashStringHelper *channelName, const __FlashStringHelper *eventType)
 {
+  // Looked up, not stored: the buffer lives for the call. Declaration-time only.
   char n[MAX_EVENT_NAME_COUNT];
   copyFlashName(channelName, n, sizeof(n));
   return addEventType(n, eventType);
@@ -4904,9 +5072,7 @@ bool BlaeckSerial::addEventType(const __FlashStringHelper *channelName, const __
 
 void BlaeckSerial::writeEvent(const __FlashStringHelper *channelName, const __FlashStringHelper *eventType)
 {
-  char n[MAX_EVENT_NAME_COUNT];
-  copyFlashName(channelName, n, sizeof(n));
-  writeEvent(n, eventType);
+  writeEvent(channelName, eventType, _eventMsgId++);
 }
 
 void BlaeckSerial::writeEvent(const __FlashStringHelper *channelName, const __FlashStringHelper *eventType, unsigned long messageID)
