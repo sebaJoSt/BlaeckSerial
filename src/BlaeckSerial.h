@@ -918,6 +918,12 @@ private:
   void _printSignalName(const Signal &s);
   void _setTimedDataState(bool timedActivated, unsigned long timedInterval_ms);
   void _parseCommandTokens(const char *raw);
+  // The four little-endian bytes a built-in BLAECK.* command carries, as one number:
+  // a message id on most of them, the interval on BLAECK.ACTIVATE. A field the frame
+  // did not carry counts as 0, which is what the old fixed parameter array held.
+  unsigned long _parsedMsgId() const;
+  // Acts on what _parseCommandTokens() last produced; read() parses each frame once and
+  // both the built-in commands and the registered handlers work from that.
   void _dispatchRegisteredHandlers(bool sendAck = true);
 
   // Send a 0xA5 Command Ack frame (cmdHash + status + reason) to the serial host.
@@ -1126,6 +1132,17 @@ private:
 #else
   static const byte MAX_COMMAND_NAME_COUNT = 40;
 #endif
+  // The parse buffer is compared against two kinds of name: a registered command, which
+  // _registerCommand refuses outright above MAX_COMMAND_NAME_COUNT, and a built-in, of
+  // which BLAECK.WRITE_STATE_CHANNELS is the longest. It has to fit whichever is larger -
+  // a built-in truncated on the way in would match nothing, and the device would go deaf
+  // to it. The assert below keeps that true if a longer built-in is ever added.
+  static const byte MAX_BUILTIN_COMMAND_COUNT = 28;
+  static const byte MAX_PARSED_COMMAND_COUNT =
+      MAX_COMMAND_NAME_COUNT > MAX_BUILTIN_COMMAND_COUNT ? MAX_COMMAND_NAME_COUNT
+                                                         : MAX_BUILTIN_COMMAND_COUNT;
+  static_assert(sizeof("BLAECK.WRITE_STATE_CHANNELS") <= MAX_BUILTIN_COMMAND_COUNT,
+                "MAX_BUILTIN_COMMAND_COUNT must fit the longest BLAECK.* command name");
 // Declared whether or not state channels are compiled in, because StateChannelEntry
 // is - see there.
 #if defined(__AVR__)
@@ -1141,11 +1158,6 @@ private:
   #endif
 #endif
   char receivedChars[MAXIMUM_CHAR_COUNT];
-  char COMMAND[MAXIMUM_CHAR_COUNT] = {0};
-  int PARAMETER[10];
-  // STRING_01: Max. 15 chars allowed  + Null Terminator '\0' = 16
-  // In case more than 15 chars are sent, the rest is cut off in function void parseData()
-  char STRING_01[16];
 
   CRC32 _crc;
   uint16_t _schemaHash = 0;
@@ -1400,7 +1412,7 @@ private:
 #endif
   BlaeckAnyCommandHandler _anyCommandHandler = nullptr;
   char _parsedTokenBuffer[MAXIMUM_CHAR_COUNT] = {0};
-  char _parsedCommand[MAX_COMMAND_NAME_COUNT] = {0};
+  char _parsedCommand[MAX_PARSED_COMMAND_COUNT] = {0};
   const char *_parsedParamPtrs[MAX_COMMAND_PARAM_COUNT] = {0};
   byte _parsedParamCount = 0;
   // Set when the frame did not fit: strncpy shortened it, or the argument list hit the cap.
@@ -1426,7 +1438,6 @@ private:
   char _selectIndexScratch[8] = {0};
 #endif
   bool recvWithStartEndMarkers();
-  void parseData();
 
   void (*_beforeWriteCallback)() = nullptr;
 

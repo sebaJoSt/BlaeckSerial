@@ -139,6 +139,20 @@ without being configured for that board in advance.
   takes the ninth. The datatype change shrinks a state channel entry too. Nothing about it
   is visible from a sketch: the enumerators, the wire format and the schema hash are
   unchanged.
+- **An incoming frame is parsed once instead of twice.** `read()` ran two parsers over the
+  same bytes: the 6.x one filling `COMMAND`, `PARAMETER[]` and `STRING_01`, and the 7.0 one
+  filling the token pointers the registered handlers use. The built-in `BLAECK.*` commands
+  now read the same parse as everything else, and the 6.x parser is gone with its buffers —
+  160 bytes of SRAM on a Mega, 80 on an Uno, about 1 KB of flash, 128 bytes less stack while
+  parsing, and half the work per command. All four buffers were private, so nothing about
+  this is visible from a sketch, and message ids are assembled from the same fields in the
+  same order.
+- **A `BLAECK.*` command is no longer truncated before it is matched.** The parse buffer was
+  sized for a registered command name (24 characters on AVR), which is shorter than
+  `BLAECK.WRITE_STATE_CHANNELS`. It now holds whichever of the two is longer — 4 bytes on
+  AVR — and a static assertion fails the build if a longer built-in is ever added. As a
+  side effect an over-long unknown command can no longer be truncated onto a shorter
+  registered one and run it.
 - `deleteSignals()` now gives back the names and metadata the signal table held instead
   of only rewinding the index.
 - `BlaeckSerial.h` includes the `CRC.h` umbrella header instead of `<CRC32.h>` and

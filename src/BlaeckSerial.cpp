@@ -1024,7 +1024,9 @@ void BlaeckSerial::read()
 
   if (recvWithStartEndMarkers() == true)
   {
-    parseData();
+    // Parsed once, here: the built-in commands below and the registered handlers that
+    // follow all read the same parse, rather than each running its own over the same bytes.
+    _parseCommandTokens(receivedChars);
     if (_debugStream != nullptr)
     {
       _debugStream->print("<");
@@ -1032,57 +1034,57 @@ void BlaeckSerial::read()
       _debugStream->println(">");
     }
 
-    if (strcmp(COMMAND, "BLAECK.WRITE_SYMBOLS") == 0)
+    if (strcmp(_parsedCommand, "BLAECK.WRITE_SYMBOLS") == 0)
     {
-      unsigned long msg_id = ((unsigned long)PARAMETER[3] << 24) | ((unsigned long)PARAMETER[2] << 16) | ((unsigned long)PARAMETER[1] << 8) | ((unsigned long)PARAMETER[0]);
+      unsigned long msg_id = _parsedMsgId();
 
       this->writeSymbols(msg_id);
     }
-    else if (strcmp(COMMAND, "BLAECK.WRITE_SIGNAL_CONFIG") == 0)
+    else if (strcmp(_parsedCommand, "BLAECK.WRITE_SIGNAL_CONFIG") == 0)
     {
-      unsigned long msg_id = ((unsigned long)PARAMETER[3] << 24) | ((unsigned long)PARAMETER[2] << 16) | ((unsigned long)PARAMETER[1] << 8) | ((unsigned long)PARAMETER[0]);
+      unsigned long msg_id = _parsedMsgId();
 
       this->writeSignalConfig(msg_id);
     }
-    else if (strcmp(COMMAND, "BLAECK.WRITE_DATA") == 0)
+    else if (strcmp(_parsedCommand, "BLAECK.WRITE_DATA") == 0)
     {
-      unsigned long msg_id = ((unsigned long)PARAMETER[3] << 24) | ((unsigned long)PARAMETER[2] << 16) | ((unsigned long)PARAMETER[1] << 8) | ((unsigned long)PARAMETER[0]);
+      unsigned long msg_id = _parsedMsgId();
 
       this->writeAllData(msg_id);
     }
-    else if (strcmp(COMMAND, "BLAECK.GET_DEVICES") == 0)
+    else if (strcmp(_parsedCommand, "BLAECK.GET_DEVICES") == 0)
     {
-      unsigned long msg_id = ((unsigned long)PARAMETER[3] << 24) | ((unsigned long)PARAMETER[2] << 16) | ((unsigned long)PARAMETER[1] << 8) | ((unsigned long)PARAMETER[0]);
+      unsigned long msg_id = _parsedMsgId();
 
       this->writeDevices(msg_id);
     }
-    else if (strcmp(COMMAND, "BLAECK.WRITE_COMMANDS") == 0)
+    else if (strcmp(_parsedCommand, "BLAECK.WRITE_COMMANDS") == 0)
     {
-      unsigned long msg_id = ((unsigned long)PARAMETER[3] << 24) | ((unsigned long)PARAMETER[2] << 16) | ((unsigned long)PARAMETER[1] << 8) | ((unsigned long)PARAMETER[0]);
+      unsigned long msg_id = _parsedMsgId();
 
       this->writeCommands(msg_id);
     }
-    else if (strcmp(COMMAND, "BLAECK.WRITE_STATE_CHANNELS") == 0)
+    else if (strcmp(_parsedCommand, "BLAECK.WRITE_STATE_CHANNELS") == 0)
     {
-      unsigned long msg_id = ((unsigned long)PARAMETER[3] << 24) | ((unsigned long)PARAMETER[2] << 16) | ((unsigned long)PARAMETER[1] << 8) | ((unsigned long)PARAMETER[0]);
+      unsigned long msg_id = _parsedMsgId();
 
       this->writeStateChannels(msg_id);
     }
-    else if (strcmp(COMMAND, "BLAECK.WRITE_EVENT_CHANNELS") == 0)
+    else if (strcmp(_parsedCommand, "BLAECK.WRITE_EVENT_CHANNELS") == 0)
     {
-      unsigned long msg_id = ((unsigned long)PARAMETER[3] << 24) | ((unsigned long)PARAMETER[2] << 16) | ((unsigned long)PARAMETER[1] << 8) | ((unsigned long)PARAMETER[0]);
+      unsigned long msg_id = _parsedMsgId();
 
       this->writeEventChannels(msg_id);
     }
-    else if (strcmp(COMMAND, "BLAECK.ACTIVATE") == 0)
+    else if (strcmp(_parsedCommand, "BLAECK.ACTIVATE") == 0)
     {
       if (_fixedInterval_ms == BLAECK_INTERVAL_CLIENT)
       {
-        unsigned long timedInterval_ms = ((unsigned long)PARAMETER[3] << 24) | ((unsigned long)PARAMETER[2] << 16) | ((unsigned long)PARAMETER[1] << 8) | ((unsigned long)PARAMETER[0]);
+        unsigned long timedInterval_ms = _parsedMsgId();
         this->_setTimedDataState(true, timedInterval_ms);
       }
     }
-    else if (strcmp(COMMAND, "BLAECK.DEACTIVATE") == 0)
+    else if (strcmp(_parsedCommand, "BLAECK.DEACTIVATE") == 0)
     {
       if (_fixedInterval_ms == BLAECK_INTERVAL_CLIENT)
       {
@@ -1548,79 +1550,21 @@ bool BlaeckSerial::recvWithStartEndMarkers()
   return newData;
 }
 
-void BlaeckSerial::parseData()
+// The four little-endian bytes a built-in BLAECK.* command carries, as one number. A field
+// the frame did not carry reads as 0, which is what the fixed parameter array it replaced
+// held for an absent token. The value goes through int exactly as that array did, so a
+// field outside 0-255 lands on the wire the same way it always has rather than being
+// quietly masked into a different number.
+unsigned long BlaeckSerial::_parsedMsgId() const
 {
-  // split the data into its parts
-  char tempChars[sizeof(receivedChars)];
-  strncpy(tempChars, receivedChars, sizeof(tempChars) - 1);
-  tempChars[sizeof(tempChars) - 1] = '\0';
-
-  // Manual comma-scanner that preserves empty fields between consecutive commas.
-  char *p = tempChars;
-  char *tokenStart;
-  bool hasComma;
-
-  STRING_01[0] = '\0';
-  for (int i = 0; i < 10; i++)
-    PARAMETER[i] = 0;
-
-  // --- COMMAND (first token) ---
-  tokenStart = p;
-  while (*p != ',' && *p != '\0')
-    p++;
-  hasComma = (*p == ',');
-  if (hasComma)
+  unsigned long v = 0;
+  for (byte i = 0; i < 4; i++)
   {
-    *p = '\0';
-    p++;
+    if (i < _parsedParamCount && _parsedParamPtrs[i] != nullptr)
+      v |= ((unsigned long)(int)atoi(_parsedParamPtrs[i])) << (8 * i);
   }
-  if (tokenStart[0] != '\0')
-  {
-    strncpy(COMMAND, tokenStart, sizeof(COMMAND) - 1);
-    COMMAND[sizeof(COMMAND) - 1] = '\0';
-  }
-  else
-  {
-    COMMAND[0] = '\0';
-  }
-
-  if (!hasComma)
-    return;
-
-  // --- STRING_01 / PARAMETER[0] ---
-  tokenStart = p;
-  while (*p != ',' && *p != '\0')
-    p++;
-  if (*p == ',')
-  {
-    *p = '\0';
-    p++;
-  }
-  while (*tokenStart == ' ')
-    tokenStart++;
-  strncpy(STRING_01, tokenStart, 15);
-  STRING_01[15] = '\0';
-  PARAMETER[0] = atoi(tokenStart);
-
-  // --- PARAMETER[1] through PARAMETER[9] ---
-  for (int i = 1; i <= 9; i++)
-  {
-    if (*p == '\0')
-      break;
-    tokenStart = p;
-    while (*p != ',' && *p != '\0')
-      p++;
-    if (*p == ',')
-    {
-      *p = '\0';
-      p++;
-    }
-    while (*tokenStart == ' ')
-      tokenStart++;
-    PARAMETER[i] = atoi(tokenStart);
-  }
+  return v;
 }
-
 void BlaeckSerial::_parseCommandTokens(const char *raw)
 {
   _parsedCommand[0] = '\0';
@@ -1659,8 +1603,8 @@ void BlaeckSerial::_parseCommandTokens(const char *raw)
   {
     return;
   }
-  strncpy(_parsedCommand, tokenStart, MAX_COMMAND_NAME_COUNT - 1);
-  _parsedCommand[MAX_COMMAND_NAME_COUNT - 1] = '\0';
+  strncpy(_parsedCommand, tokenStart, MAX_PARSED_COMMAND_COUNT - 1);
+  _parsedCommand[MAX_PARSED_COMMAND_COUNT - 1] = '\0';
 
   if (!hasComma)
     return;
@@ -1692,7 +1636,6 @@ void BlaeckSerial::_parseCommandTokens(const char *raw)
 
 void BlaeckSerial::_dispatchRegisteredHandlers(bool sendAck)
 {
-  _parseCommandTokens(receivedChars);
   if (_parsedCommand[0] == '\0')
   {
     return;
