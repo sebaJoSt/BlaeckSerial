@@ -45,6 +45,14 @@ without being configured for that board in advance.
   `<SET_LABEL, hi>` sets `" hi"`, and `<SET_ENABLE, 1>` is rejected.
 
 ### Added
+- **`withNameSuffix(n)` ends a signal's name in a number.**
+  `addSignal(F("Sine_"), &v).withNameSuffix(i + 1)` names a signal `Sine_1` without
+  storing the name anywhere: the prefix stays in flash and the digits are produced when
+  the name is sent. A hundred such signals save about a kilobyte of heap against building
+  the names with `snprintf`, which copies each one. The suffix is 0–255, and `0` is a
+  number like any other rather than "no suffix". It works on a copied name too, though
+  there it saves only the digits. Available on every signal handle, so it composes with
+  the metadata calls in any order.
 - **`addSignal(F("Name"), &value)`.** Eleven new overloads that take the name as a flash
   string. The name then stays in flash and the signal keeps a 2-byte pointer to it instead
   of a copy, which is most of what a signal costs in SRAM on AVR: about 18 bytes per signal
@@ -108,11 +116,12 @@ without being configured for that board in advance.
   Metadata frame and the public API are unchanged. If the heap cannot hold a record the
   description is dropped and the signal itself keeps working; `printRejections()` says
   how many.
-- **A signal entry is 8 bytes on AVR, down from 19.** Metadata moved out (above), the
-  datatype enum is pinned to a byte instead of the `int` a compiler picks by default, and
-  the two flags a signal carries share one byte rather than taking one each. The datatype
-  change shrinks a state channel entry too. Nothing about it is visible from a sketch: the
-  enumerators, the wire format and the schema hash are unchanged.
+- **A signal entry is 9 bytes on AVR, down from 19.** Metadata moved out (above), the
+  datatype enum is pinned to a byte instead of the `int` a compiler picks by default, the
+  two flags a signal carries share a byte with the name-suffix bit, and the suffix itself
+  takes the ninth. The datatype change shrinks a state channel entry too. Nothing about it
+  is visible from a sketch: the enumerators, the wire format and the schema hash are
+  unchanged.
 - `deleteSignals()` now gives back the names and metadata the signal table held instead
   of only rewinding the index.
 - `BlaeckSerial.h` includes the `CRC.h` umbrella header instead of `<CRC32.h>` and
@@ -126,6 +135,9 @@ without being configured for that board in advance.
   `String` per call. Returns `-1` when no signal has that name.
 
 ### Fixed
+- **`setSignalName()` left the schema hash stale.** Renaming a signal changed what the
+  `0xB0` catalog says without changing the hash a host uses to notice, so the host went on
+  using the catalog it already had — under the old names. The hash is now recomputed.
 - **`BLAECK_ENABLE_STATE_CHANNELS=0` compiles again.** The state channel handle names
   `StateChannelEntry` in a return type and its fields in the `withIcon()`/`diagnostic()`
   chain, but the type was itself compiled away with the feature, so a sketch that turned

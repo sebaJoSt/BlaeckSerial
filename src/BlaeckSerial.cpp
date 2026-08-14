@@ -383,6 +383,8 @@ int BlaeckSerial::_registerSignalCommon(const char *ram, const __FlashStringHelp
   // No initializer on a bit-field, so this is where a fresh signal - or a slot being
   // written a second time after deleteSignals() - is told it holds nothing new yet.
   Signals[_signalIndex].Updated = 0;
+  Signals[_signalIndex].HasSuffix = 0;
+  Signals[_signalIndex].NameSuffix = 0;
 #if BLAECK_ENABLE_SIGNAL_META
   // deleteSignals() only rewinds the index, so a slot can be written twice. Cleared on
   // registration rather than on deletion, which covers both - and the record the slot
@@ -560,6 +562,10 @@ uint16_t BlaeckSerial::_computeSchemaHash()
 void BlaeckSerial::setSignalName(int signalIndex, String signalName)
 {
   _setSignalName(signalIndex, signalName.c_str(), nullptr);
+  // A renamed signal is a changed schema. This used to leave the hash as registration
+  // computed it, so a host was told nothing had moved and went on using the catalog it
+  // already had - under the old names.
+  _schemaHash = _computeSchemaHash();
 }
 
 void BlaeckSerial::_setSignalName(int signalIndex, const char *ram, const __FlashStringHelper *flash)
@@ -643,68 +649,126 @@ bool BlaeckSerial::_signalNameEquals(const Signal &s, const char *name) const
 {
   if (name == nullptr)
     return false;
-  if (s.SignalName == nullptr)
-    return name[0] == '\0';
-  if (s.NameInFlash)
+  const char *q = name;
+  if (s.SignalName != nullptr)
   {
-    // Compared byte by byte through pgm_read_byte rather than strcmp_P, which not every
-    // core provides; on a core where flash is directly addressable pgm_read_byte is a
-    // plain read, so this costs nothing there.
-    PGM_P p = reinterpret_cast<PGM_P>(s.SignalName);
-    const char *q = name;
-    byte c;
-    while ((c = pgm_read_byte(p++)) != 0)
+    if (s.NameInFlash)
     {
-      if (*q++ != (char)c)
+      // Compared byte by byte through pgm_read_byte rather than strcmp_P, which not every
+      // core provides; on a core where flash is directly addressable pgm_read_byte is a
+      // plain read, so this costs nothing there.
+      PGM_P p = reinterpret_cast<PGM_P>(s.SignalName);
+      byte c;
+      while ((c = pgm_read_byte(p++)) != 0)
+      {
+        if (*q++ != (char)c)
+          return false;
+      }
+    }
+    else
+    {
+      const char *p = s.SignalName;
+      while (*p)
+      {
+        if (*q++ != *p++)
+          return false;
+      }
+    }
+  }
+  // The digits the name ends in are never stored, so they are matched as they would be
+  // written rather than compared against anything.
+  if (s.HasSuffix)
+  {
+    char digits[4];
+    byte n = _signalSuffixDigits(s, digits);
+    for (byte i = 0; i < n; i++)
+    {
+      if (*q++ != digits[i])
         return false;
     }
-    return *q == '\0';
   }
-  return strcmp(name, s.SignalName) == 0;
+  return *q == '\0';
+}
+
+// The suffix as decimal text, without a terminator. Returns how many digits were written;
+// out must hold three. One place produces them, so a name cannot be matched one way and
+// hashed or sent another.
+byte BlaeckSerial::_signalSuffixDigits(const Signal &s, char *out)
+{
+  uint8_t v = s.NameSuffix;
+  byte n = 0;
+  if (v >= 100)
+    out[n++] = (char)('0' + (v / 100));
+  if (v >= 10)
+    out[n++] = (char)('0' + ((v / 10) % 10));
+  out[n++] = (char)('0' + (v % 10));
+  return n;
 }
 
 void BlaeckSerial::_signalNameFeedHash(const Signal &s)
 {
-  if (s.SignalName == nullptr)
-    return;
-  if (s.NameInFlash)
+  if (s.SignalName != nullptr)
   {
-    PGM_P p = reinterpret_cast<PGM_P>(s.SignalName);
-    byte c;
-    while ((c = pgm_read_byte(p++)) != 0)
-      _schemaHashFeedByte(c);
-    return;
+    if (s.NameInFlash)
+    {
+      PGM_P p = reinterpret_cast<PGM_P>(s.SignalName);
+      byte c;
+      while ((c = pgm_read_byte(p++)) != 0)
+        _schemaHashFeedByte(c);
+    }
+    else
+    {
+      const char *p = s.SignalName;
+      while (*p)
+        _schemaHashFeedByte((byte)*p++);
+    }
   }
-  const char *p = s.SignalName;
-  while (*p)
-    _schemaHashFeedByte((byte)*p++);
+  if (s.HasSuffix)
+  {
+    char digits[4];
+    byte n = _signalSuffixDigits(s, digits);
+    for (byte i = 0; i < n; i++)
+      _schemaHashFeedByte((byte)digits[i]);
+  }
 }
 
 void BlaeckSerial::_bufSignalName0(const Signal &s)
 {
-  if (s.SignalName == nullptr)
+  if (s.SignalName != nullptr)
   {
-    _bufByte(0);
-    return;
+    if (s.NameInFlash)
+      _bufFlashStr(reinterpret_cast<const __FlashStringHelper *>(s.SignalName));
+    else
+      _bufStr(s.SignalName);
   }
-  if (s.NameInFlash)
+  if (s.HasSuffix)
   {
-    _bufFlashStr0(reinterpret_cast<const __FlashStringHelper *>(s.SignalName));
-    return;
+    char digits[4];
+    byte n = _signalSuffixDigits(s, digits);
+    for (byte i = 0; i < n; i++)
+      _bufByte((byte)digits[i]);
   }
-  _bufStr0(s.SignalName);
+  // The terminator comes last, after whatever the two halves contributed - a name with a
+  // suffix is one string on the wire, not two.
+  _bufByte(0);
 }
 
 void BlaeckSerial::_printSignalName(const Signal &s)
 {
-  if (s.SignalName == nullptr)
-    return;
-  if (s.NameInFlash)
+  if (s.SignalName != nullptr)
   {
-    StreamRef->print(reinterpret_cast<const __FlashStringHelper *>(s.SignalName));
-    return;
+    if (s.NameInFlash)
+      StreamRef->print(reinterpret_cast<const __FlashStringHelper *>(s.SignalName));
+    else
+      StreamRef->print(s.SignalName);
   }
-  StreamRef->print(s.SignalName);
+  if (s.HasSuffix)
+  {
+    char digits[4];
+    byte n = _signalSuffixDigits(s, digits);
+    for (byte i = 0; i < n; i++)
+      StreamRef->write((byte)digits[i]);
+  }
 }
 
 void BlaeckSerial::update(int signalIndex, bool value)

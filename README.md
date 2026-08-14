@@ -56,8 +56,16 @@ instead of a copy — worth doing on an Uno or Nano with many signals:
 ```CPP
  BlaeckSerial.addSignal(F("Test Signal 1"), &someGlobalVariable);
 ```
-A name built at runtime cannot use `F()`; pass the buffer and it is copied, so the buffer
-may be reused straight away:
+A run of signals that share a prefix and end in a number needs neither: `withNameSuffix()`
+keeps the prefix in flash and produces the digits when the name is sent, so the names cost
+no SRAM at all. The suffix is 0–255, and `0` is a number like any other:
+```CPP
+ for (int i = 0; i < 8; i++) {
+   BlaeckSerial.addSignal(F("Sine_"), &sine[i]).withNameSuffix(i + 1);
+ }
+```
+Any other name built at runtime cannot use `F()`; pass the buffer and it is copied, so the
+buffer may be reused straight away:
 ```CPP
  char signalName[10];
  for (int i = 0; i < 8; i++) {

@@ -32,12 +32,13 @@ void setup()
   BlaeckSerial.DeviceHWVersion = "Arduino Mega 2560 Rev3";
   BlaeckSerial.DeviceFWVersion = ExampleVersion;
 
-  // One reused buffer builds the names, rather than a String per signal.
-  char signalName[10]; // fits "Sine_" plus SIGNAL_COUNT
+  // The prefix stays in flash and the number is produced when the name is sent, so
+  // "Sine_1".."Sine_5" cost no SRAM at all. Building them with snprintf into a reused
+  // buffer works too, and is what you need for a name that is not a prefix plus a
+  // number - but every such name is then copied to the heap.
   for (int i = 0; i < SIGNAL_COUNT; i++)
   {
-    snprintf(signalName, sizeof(signalName), "Sine_%d", i + 1);
-    BlaeckSerial.addSignal(signalName, &sine[i]);
+    BlaeckSerial.addSignal(F("Sine_"), &sine[i]).withNameSuffix(i + 1);
   }
 
   // One look covers every addSignal() above.

@@ -289,10 +289,17 @@ struct Signal
   void *Address;
   // Two bits, not two bytes: this pair is one byte per signal, and a signal table is the
   // biggest thing most sketches ask this library for. Neither can carry an initializer
-  // here - C++11 forbids one on a bit-field - so both are set when a signal is
+  // here - C++11 forbids one on a bit-field - so all three are set when a signal is
   // registered, alongside DataType and Address, which have never had one either.
   uint8_t Updated : 1;
   uint8_t NameInFlash : 1;
+  // Whether NameSuffix means anything, which is what lets a suffix of 0 be a real name
+  // - Sine_0 - rather than the absence of one.
+  uint8_t HasSuffix : 1;
+  // Appended to the name as decimal digits when HasSuffix, so a run of signals sharing a
+  // prefix can name themselves from one flash string instead of a heap copy each. Never
+  // stored as text: the digits are produced where the name is read.
+  uint8_t NameSuffix;
 #if BLAECK_ENABLE_SIGNAL_META
   // Null until the sketch describes this signal. Owned by the entry; see _ensureSignalMeta.
   SignalMeta *Meta = nullptr;
@@ -892,6 +899,9 @@ private:
   // The two kinds, read the one way that is right for each. Every use of a name goes
   // through these: the schema hash, both catalog writers, and the by-name lookups.
   bool _signalNameEquals(const Signal &s, const char *name) const;
+  // The suffix as decimal text; out must hold three chars. Static because it reads only
+  // the entry, and shared so a name is matched, hashed and sent as the same bytes.
+  static byte _signalSuffixDigits(const Signal &s, char *out);
   void _signalNameFeedHash(const Signal &s);
   void _bufSignalName0(const Signal &s);
   void _printSignalName(const Signal &s);
@@ -1994,6 +2004,19 @@ protected:
 #endif
   }
 
+  void _setNameSuffix(uint8_t suffix)
+  {
+    if (_owner == nullptr || _index < 0 || _owner->Signals == nullptr ||
+        static_cast<unsigned int>(_index) >= _owner->_signalCapacity)
+      return;
+    Signal &s = _owner->Signals[_index];
+    s.NameSuffix = suffix;
+    s.HasSuffix = 1;
+    // The name is part of the schema, and this changed it after registration computed
+    // the hash. Without this a host would be told the schema had not moved.
+    _owner->_schemaHash = _owner->_computeSchemaHash();
+  }
+
   BlaeckSerial *_owner;
   int16_t _index;
 };
@@ -2001,6 +2024,16 @@ protected:
 // What every signal accepts, whatever it holds. Repeated per handle so the chain keeps its
 // datatype all the way down, and so an editor offers exactly what applies when the dot is typed.
 #define BLAECK_SIGNAL_REF_SHARED(TYPE)                                                    \
+  /* Ends the name in a number, e.g. addSignal(F("Sine_"), &v).withNameSuffix(i + 1) */   \
+  /* names a signal Sine_1. 0-255, and 0 is a number like any other. Worth doing for a */ \
+  /* run of signals sharing a prefix: the prefix stays in flash and the digits are */     \
+  /* produced when the name is sent, so nothing is copied to the heap - which is what */  \
+  /* a name built with snprintf costs instead. */                                         \
+  TYPE &withNameSuffix(uint8_t suffix)                                                    \
+  {                                                                                       \
+    _setNameSuffix(suffix);                                                               \
+    return *this;                                                                         \
+  }                                                                                       \
   /* What the value measures, e.g. F("temperature"). Home Assistant's vocabulary, */      \
   /* carried as written: this library does not hold the list, because the list grows */   \
   /* faster than firmware is reflashed. */                                                \
