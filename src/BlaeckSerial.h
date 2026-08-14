@@ -227,6 +227,21 @@ typedef enum DataType : uint8_t
   Blaeck_string
 } dataType;
 
+// The enumerators are the wire codes, and the library relies on that in one place: the schema
+// hash feeds the enum value (_computeSchemaHash) where the symbol list writes the code that
+// _dtypeCode() maps. Reorder this list or insert a type in the middle and the two disagree -
+// the device hashes one schema and describes another, which a host sees as a schema that is
+// perpetually stale, re-requesting symbols that never settle. Nothing about that failure
+// points here, so it is caught at build time instead.
+static_assert((uint8_t)Blaeck_bool == 0x0 && (uint8_t)Blaeck_byte == 0x1 &&
+              (uint8_t)Blaeck_short == 0x2 && (uint8_t)Blaeck_ushort == 0x3 &&
+              (uint8_t)Blaeck_int == 0x4 && (uint8_t)Blaeck_uint == 0x5 &&
+              (uint8_t)Blaeck_long == 0x6 && (uint8_t)Blaeck_ulong == 0x7 &&
+              (uint8_t)Blaeck_float == 0x8 && (uint8_t)Blaeck_double == 0x9 &&
+              (uint8_t)Blaeck_string == 0xA,
+              "DataType must keep the order of the wire codes: the schema hash feeds the enum "
+              "value where the symbol list writes the mapped code");
+
 // How a signal's value accumulates over time, for Home Assistant statistics
 // (0xF0 SignalMetaFlags bits 3-5). MEASUREMENT is a value that goes up and down
 // and is meaningful at any instant; TOTAL and TOTAL_INCREASING are running sums,
