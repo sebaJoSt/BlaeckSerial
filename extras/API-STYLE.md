@@ -170,6 +170,15 @@ python extras/scripts/checkdocs.py src/BlaeckSerial.h --extract                 
 `--show` reads `Cursor.raw_comment`, the same attachment clangd hovers, so a doc can
 be checked against what an editor will display without opening one.
 
+When something in `preamble.h` breaks, every block fails at once and the same error
+repeats once per block — which reads as one cause, not many, because each names its
+own line in the header. To see only the first:
+
+```
+arduino-cli compile --fqbn arduino:avr:mega \
+  --build-property compiler.cpp.extra_flags=-fmax-errors=1 extras/DocExamples
+```
+
 CI runs the first (fails on an undocumented public name) and builds the third.
 
 What the tools catch: a missing comment, a section divider standing in for one, a
