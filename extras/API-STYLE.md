@@ -85,6 +85,15 @@ literal satisfies is a note, however true it is.
 **13. A blank line before `@code`.** Prose stops, code starts; it reads as a change
 of register only when it is set apart.
 
+**14. Say what it buys before what it costs.** Where a design was chosen, explaining
+it only through its risks makes it read as a defect nobody fixed. The shared
+event-type table was documented as something that accumulates — true, and entirely
+downside, when the reason it exists is that a channel with two types costs two slots
+instead of reserving room for the largest.
+
+Only where there *is* a tradeoff. A plain limit — a capacity clamped at 255 — buys
+nothing, and inventing an upside for it would be worse than saying nothing.
+
 ## Format
 
 Doxygen `/*!` blocks, in the Adafruit house style, because it renders structured
