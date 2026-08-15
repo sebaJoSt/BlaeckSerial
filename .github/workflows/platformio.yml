@@ -63,7 +63,20 @@ jobs:
             echo "::endgroup::"
           done
 
-      # A manifest that parses is not a manifest that packages. This is what the
-      # registry would build, and it is where export.include is proved to work.
+      # pkg pack validates the manifest's fields and builds what the registry would
+      # distribute. It does NOT check that export.include names files that exist -
+      # a stale entry packs silently, shipping without the file. Renaming
+      # Changelog.md to CHANGELOG.md created exactly that, so it is checked here.
+      - name: Check the export list
+        run: |
+          python - <<'PY'
+          import json, os, sys
+          m = json.load(open('library.json'))
+          missing = [f for f in m['export']['include'] if not os.path.exists(f)]
+          if missing:
+              sys.exit('export.include names files that do not exist: ' + ', '.join(missing))
+          print('export.include: all %d entries present' % len(m['export']['include']))
+          PY
+
       - name: Pack the library
         run: pio pkg pack --output /tmp/pkg
