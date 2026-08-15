@@ -1102,7 +1102,7 @@ public:
                          indices follow.
     @return  The same handle, for chaining.
 
-    @warning Do not name an option "none" in any casing. A host may read that state as
+    @note    Do not name an option "none" in any casing. A host may read that state as
              "no option selected" and blank the control instead of showing it.
 
     @code
@@ -1473,7 +1473,7 @@ public:
     @param   optionsCsv  Comma-separated names as an F() literal.
     @return  The same handle, for chaining.
 
-    @warning A host may require withDeviceClass(F("enum")) alongside this and reject
+    @note    A host may require withDeviceClass(F("enum")) alongside this and reject
              the list without it. Every value reported has to be in the list; one that
              is not raises rather than being shown.
 
@@ -1779,7 +1779,7 @@ public:
     @param   optionsCsv  Comma-separated names as an F() literal.
     @return  The same handle, for chaining.
 
-    @warning A host may require withDeviceClass(F("enum")) alongside this and reject
+    @note    A host may require withDeviceClass(F("enum")) alongside this and reject
              the list without it. Every value reported has to be in the list; one that
              is not raises rather than being shown.
 
@@ -1853,7 +1853,7 @@ public:
                           as an F() literal.
     @return  The same handle, for chaining.
 
-    @warning F("doorbell") also requires the channel to declare a "ring" event type.
+    @note    F("doorbell") also requires the channel to declare a "ring" event type.
              A host may warn without it now and refuse it later.
 
     @note    F("button") has standard type names - press_start, press_end,
@@ -2253,9 +2253,6 @@ public:
                           may be reused straight away.
     @return  Handle describing how a host should present the channel.
 
-    @warning Declare every channel before writing to it, typically in setup(). A
-             value on a channel that was never declared is dropped, silently.
-
     @code
       Blaeck.addStateChannel(F("Status")).withIcon(F("mdi:pulse")).diagnostic();
       Blaeck.addStateChannel(F("Amplitude"), &Amplitude).withUnit(F("V"));
@@ -2340,8 +2337,8 @@ public:
                           truncation is reported once per channel on the debug
                           stream.
 
-    @warning Dropped without a word: an undeclared channel, one carrying a number
-             (use writeState(channelName)), or one a command owns (use
+    @warning Dropped without a word for two more reasons: a channel carrying a
+             number (use writeState(channelName)), or one a command owns (use
              writeCommandState()). A debug stream says which.
 
     @warning The channel list has to reach the host first, since a value names its
@@ -3226,10 +3223,9 @@ public:
     @param   handler  Called once a value has been accepted.
     @return  Handle describing the control. Chainable.
 
-    @warning Give it a range with withRange(). The firmware validates against it, so
-             without one nothing is checked - and a host with nothing to go on may
-             assume a default like 0..100, which quietly caps a control meant to
-             reach 500 and gives one meant for 0..1 far too much room.
+    @warning Give it a range with withRange(). Without one the accepted window is
+             0 to 0, so every value but zero is refused and the handler never runs.
+             A debug stream reports it as allowed [0.00, 0.00].
 
     @code
       Blaeck.onNumberCommand("SET_FREQ", onSetFreq)

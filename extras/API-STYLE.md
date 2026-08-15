@@ -129,6 +129,23 @@ rename could quietly survive.
 A name that is not a call is invisible to the checker — inside `@code`, in a
 parenthetical like *"a float (32-bit)"*, or spelled out in words.
 
+**16. State a hazard once, on the call that can commit it.** *"A value on a channel
+that was never declared is dropped"* was written on `addStateChannel`, where the
+reader is already declaring one; on `writeState`, where the mistake is actually made;
+and again in that method's `@param`. Three hovers for one fact, and the two on the
+wrong name teach nothing — nobody hovers `addStateChannel` wondering whether to skip
+it.
+
+An `@code` block usually settles the ordering on its own. Every warning here that
+names a prerequisite — `deleteSignals` needing `writeSymbols()`, `onNumberCommand`
+needing `withRange()` — has a block directly beneath it that shows the two calls in
+order. Where the block already demonstrates it, the warning is repeating what the
+next two lines show.
+
+What a block cannot show is a path it does not take: a three-line example of
+`writeState()` has no room for "and this vanishes if you skipped setup()". So the
+ordering facts stay — once each, on the call that drops the value.
+
 ## Format
 
 Doxygen `/*!` blocks, in the Adafruit house style, because it renders structured
