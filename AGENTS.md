@@ -59,6 +59,22 @@ So bump the version as the last step before tagging, never while developing. Bum
 it early is how 7.0.0 reached PlatformIO users on 2026-08-08 mid-development, while
 Arduino stayed on 6.0.1 — and why 7.0.0 cannot be reused for the real 7.0.0.
 
+**The crawler can be switched off, once.** This library was registered in 2020, under
+PlatformIO's old system, where a repository is polled a few hours after each push.
+Publishing a single version by hand ends that permanently — PlatformIO's founder:
+*"Auto-crawler is enabled for legacy libraries. [Once] you published the new version
+manually, auto-crawling will be disabled forever."*
+
+Do it from the local folder before pushing, or the crawler may take the version while
+you work:
+
+```
+pio account login
+# bump both manifests locally, do not push yet
+pio pkg publish
+# then push and tag — publishing is manual from here on
+```
+
 Published versions are listed at
 [registry.platformio.org/libraries/sebajost/BlaeckSerial](https://registry.platformio.org/libraries/sebajost/BlaeckSerial).
 Check it before choosing a number; several bumps were never tagged, so it holds
