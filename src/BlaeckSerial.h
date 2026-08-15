@@ -454,6 +454,15 @@ class BlaeckSerial;
 // builds and the number is simply not stored, so a feature switch never breaks
 // a chain.
 //
+// Everything but the signals caps at 255 entries, and asking for more is clamped
+// there with a line on the debug stream. The cap is the wire: a state value or an
+// event names its channel by a one-byte index, so a 256th channel could be declared
+// and never addressed. Signals have no such index - a data frame carries values in
+// catalog order - which is why withSignals() alone is unbounded.
+//
+// Long before any of that, RAM decides. A state entry is around 25 bytes, so 255 of
+// them is most of a Mega's SRAM; on an Uno the arithmetic never gets that far.
+//
 // Declared here rather than after BlaeckSerial, where the bodies live, so that the
 // type is complete where begin() names it as a return type. A forward declaration
 // is enough for the compiler, but an editor that binds the return type at the
@@ -464,26 +473,27 @@ class BlaeckBeginRef
 public:
   explicit BlaeckBeginRef(BlaeckSerial *owner) : _owner(owner) {}
 
-  // Room for the signals added with addSignal(). Takes an unsigned int where the
-  // rest take a byte: signals are the one table that may go past 255 entries.
+  // Room for the signals added with addSignal(). The one table with no ceiling of its
+  // own: a data frame carries values in catalog order rather than naming each one, so
+  // there is no per-signal index to run out of. RAM is the only limit.
   BlaeckBeginRef &withSignals(unsigned int count);
 
   // Room for the channels added with addStateChannel(), and for the one a command
   // builds with withOwnState() - that channel is counted here rather than against
   // withCommands().
-  BlaeckBeginRef &withStateChannels(byte count);
+  BlaeckBeginRef &withStateChannels(unsigned int count);
 
   // Room for the channels added with addEventChannel().
-  BlaeckBeginRef &withEventChannels(byte count);
+  BlaeckBeginRef &withEventChannels(unsigned int count);
 
   // Room for the event types, counted across every channel rather than per
   // channel: they share one table, each entry tagged with the channel that
   // declared it. Four channels of five types each need withEventTypes(20).
-  BlaeckBeginRef &withEventTypes(byte count);
+  BlaeckBeginRef &withEventTypes(unsigned int count);
 
   // Room for the commands registered with onCommand() and with the typed
   // onNumberCommand(), onSelectCommand() and friends. Both kinds share the table.
-  BlaeckBeginRef &withCommands(byte count);
+  BlaeckBeginRef &withCommands(unsigned int count);
 
   // Where the library says what it rejected and why. Without one, a full table
   // is silent apart from hasRejectedSignals() and its siblings.
@@ -3037,7 +3047,7 @@ inline BlaeckBeginRef &BlaeckBeginRef::withSignals(unsigned int count)
   return *this;
 }
 
-inline BlaeckBeginRef &BlaeckBeginRef::withStateChannels(byte count)
+inline BlaeckBeginRef &BlaeckBeginRef::withStateChannels(unsigned int count)
 {
 #if BLAECK_ENABLE_STATE_CHANNELS
   if (_owner != nullptr)
@@ -3048,7 +3058,7 @@ inline BlaeckBeginRef &BlaeckBeginRef::withStateChannels(byte count)
   return *this;
 }
 
-inline BlaeckBeginRef &BlaeckBeginRef::withEventChannels(byte count)
+inline BlaeckBeginRef &BlaeckBeginRef::withEventChannels(unsigned int count)
 {
 #if BLAECK_ENABLE_EVENTS
   if (_owner != nullptr)
@@ -3059,7 +3069,7 @@ inline BlaeckBeginRef &BlaeckBeginRef::withEventChannels(byte count)
   return *this;
 }
 
-inline BlaeckBeginRef &BlaeckBeginRef::withEventTypes(byte count)
+inline BlaeckBeginRef &BlaeckBeginRef::withEventTypes(unsigned int count)
 {
 #if BLAECK_ENABLE_EVENTS
   if (_owner != nullptr)
@@ -3070,7 +3080,7 @@ inline BlaeckBeginRef &BlaeckBeginRef::withEventTypes(byte count)
   return *this;
 }
 
-inline BlaeckBeginRef &BlaeckBeginRef::withCommands(byte count)
+inline BlaeckBeginRef &BlaeckBeginRef::withCommands(unsigned int count)
 {
   if (_owner != nullptr)
     _owner->_setTableCapacity(BlaeckSerial::TABLE_COMMANDS, count);

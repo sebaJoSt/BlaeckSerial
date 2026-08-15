@@ -198,6 +198,22 @@ void BlaeckSerial::_setTableCapacity(TableId table, unsigned int count)
     return;
   }
 
+  // Every table but the signals is addressed on the wire by a one-byte index, so a
+  // 256th entry could be declared and never named. The capacity is clamped rather
+  // than the entry silently aliasing onto the first one at runtime - and it says so,
+  // because a sketch that asked for 300 and got 255 has a design to revisit, not a
+  // typo. Signals carry no per-entry index (a data frame is positional), so they are
+  // not capped here.
+  if (count > 255 && table != TABLE_SIGNALS && _debugStream != nullptr)
+  {
+    _debugStream->print(F("BLAECK."));
+    _debugStream->print(chainCall);
+    _debugStream->print(F("("));
+    _debugStream->print(count);
+    _debugStream->println(F("): clamped to 255. Entries past that cannot be addressed "
+                            "on the wire, where the channel index is a single byte."));
+  }
+
   switch (table)
   {
   case TABLE_SIGNALS:
