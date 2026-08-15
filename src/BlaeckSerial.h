@@ -2131,9 +2131,17 @@ public:
 
   // ----- Device Restarted -----
 
-  // The 0xC0 restart notice, which is how a host tells a rebooted device from one that
-  // has simply gone quiet. Sent once per boot, by read() on its first call, so a sketch
-  // needs this only to get it out before it starts reading.
+  /*!
+    @brief   Announces that the device has restarted.
+
+    Lets a host tell a rebooted device from one that has simply gone quiet - the
+    values look identical otherwise. Sent once per boot, by read() on its first
+    call, so a sketch needs this only to get it out before it starts reading.
+
+    @code
+      Blaeck.writeRestarted();
+    @endcode
+  */
   void writeRestarted();
 
   // As writeRestarted(), with messageID stamped into the frame header.
@@ -2141,9 +2149,16 @@ public:
 
   // ----- Devices -----
 
-  // The 0xB3 device frame - name, hardware version, firmware version - which is what
-  // <BLAECK.GET_DEVICES> answers with. Normally driven by the host asking, so call it
-  // only to announce the device unprompted.
+  /*!
+    @brief   Sends the device's name and versions.
+
+    What <BLAECK.GET_DEVICES> answers with, so it is normally driven by the host
+    asking. Call it to announce the device unprompted.
+
+    @code
+      Blaeck.writeDevices();
+    @endcode
+  */
   void writeDevices();
 
   // As writeDevices(), with messageID stamped into the frame header.
@@ -2151,23 +2166,62 @@ public:
 
   // ----- Symbols -----
 
-  // The 0xB0 symbol list: every signal's name, datatype and position in the data frame,
-  // which is what lets a host decode 0xD2 at all. Answers <BLAECK.WRITE_SYMBOLS>. Call
-  // it after adding, deleting or renaming a signal, so a host is not left reading data
-  // against a catalog that no longer describes it.
+  /*!
+    @brief   Sends the list of what this device measures.
+
+    Every signal's name, datatype and position, which is what lets a host make sense
+    of the values at all. Answers <BLAECK.WRITE_SYMBOLS>.
+
+    @warning Call it after adding, deleting or renaming a signal. Until then a host
+             is reading values against a list that no longer describes them, and
+             files them under the wrong names rather than failing.
+
+    @code
+      Blaeck.deleteSignals();
+      Blaeck.addSignal(F("Temperature"), &Temperature);
+      Blaeck.writeSymbols();
+    @endcode
+  */
   void writeSymbols();
 
   // As writeSymbols(), with messageID stamped into the frame header.
   void writeSymbols(unsigned long messageID);
 
-  // ----- Signal Config (Home Assistant discovery catalog, 0xF0) -----
-  // Carries only the signals that describe something, so a device where none do
-  // answers with an empty frame. With BLAECK_ENABLE_SIGNAL_META=0 that is always
-  // the case.
+  // ----- Signal Config -----
+
+  /*!
+    @brief   Sends what the signals declare about how they are presented.
+
+    Units, icons, device classes and the rest - meaningless to a host that only
+    records values, and everything to one that builds controls and displays.
+    Answers <BLAECK.WRITE_SIGNAL_CONFIG>.
+
+    Carries only the signals that describe something, so a device where none do
+    answers with an empty reply rather than nothing at all - which is what keeps a
+    polling host from waiting out its timeout. With BLAECK_ENABLE_SIGNAL_META=0
+    that is always the case.
+
+    @code
+      Blaeck.writeSignalConfig();
+    @endcode
+  */
   void writeSignalConfig();
   void writeSignalConfig(unsigned long messageID);
 
-  // ----- Commands (Home Assistant discovery catalog, 0xA0) -----
+  // ----- Commands -----
+
+  /*!
+    @brief   Sends the list of commands this device accepts.
+
+    Every registered command, plain and typed. A plain one carries only its name; a
+    typed one carries what it controls - its kind, its range, its options - which is
+    what lets a host build a control for it rather than just list it.
+    Answers <BLAECK.WRITE_COMMANDS>.
+
+    @code
+      Blaeck.writeCommands();
+    @endcode
+  */
   void writeCommands();
   void writeCommands(unsigned long messageID);
 
