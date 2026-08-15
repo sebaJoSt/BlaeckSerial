@@ -1,37 +1,16 @@
-// The globals that the @code blocks in BlaeckSerial.h are written against.
+// Globals the @code blocks in BlaeckSerial.h are written against - the snippets an
+// editor shows on hover, not the sketches under examples/.
 //
-// "Example" means three things in this repository, so to be exact: this file serves
-// the @code blocks inside doc comments - the two or three lines an editor shows when
-// someone hovers a method. Not the sketches under examples/, which are unrelated.
+// Only one file includes this, and it does not exist until it is generated:
+// extras/scripts/checkdocs.py --extract writes DocExamples.ino beside it, and CI
+// compiles the result. Nothing in src/ or examples/ includes this, and no sketch of
+// yours should. DocExamples.ino is generated and gitignored - do not edit or commit it.
 //
-// --- How this file is reached ---
+// This folder cannot be renamed: arduino-cli ties a sketch folder to its .ino, and
+// the #include resolves against that sketch.
 //
-// Only one thing includes it, and that thing does not exist until it is generated:
-//
-//   extras/scripts/checkdocs.py --extract  pulls every @code block out of the header,
-//   writes each one into DocExamples.ino as a function body, and puts an
-//   #include of this file at the top. CI then compiles that sketch.
-//
-// So a @code block calling a method that has since been renamed fails the build,
-// instead of being shown on hover as instructions that do not work. That is the whole
-// point: a comment is invisible to the compiler until something puts it in front of one.
-//
-// DocExamples.ino is generated and gitignored - never edit it, and never commit it.
-// Nothing in src/ or examples/ includes this file, and no sketch of yours should.
-//
-// This folder cannot be renamed or moved: arduino-cli requires a sketch folder to
-// match its .ino, and the #include resolves relative to that sketch.
-//
-// --- Why the names are shared ---
-//
-// An example has to compile, but it also has to read well in a hover, and a snippet
-// that declares two globals before it can say anything reads badly. So the names below
-// are shared and an example uses them without introducing them - the way the Arduino
-// reference assumes a pin is already set up.
-//
-// Add a name when an example needs one that is genuinely new, and reach for an existing
-// one first: examples that all speak of Temperature and Frequency teach the library
-// faster than examples that each invent a cast of characters.
+// Before adding a name, read extras/API-STYLE.md. It explains why these are shared
+// and when a new one is warranted; repeating it here would be a second copy to drift.
 
 #pragma once
 
