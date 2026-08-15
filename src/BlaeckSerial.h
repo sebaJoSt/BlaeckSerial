@@ -484,35 +484,94 @@ class BlaeckBeginRef
 public:
   explicit BlaeckBeginRef(BlaeckSerial *owner) : _owner(owner) {}
 
-  // Room for the signals added with addSignal(). The one table with no ceiling of its
-  // own: a data frame carries values in catalog order rather than naming each one, so
-  // there is no per-signal index to run out of. RAM is the only limit.
+  /*!
+    @brief   Makes room for a number of signals.
+
+    The one table with no ceiling of its own: values are sent in catalog order rather
+    than named one by one, so there is no per-signal index to run out of. RAM is the
+    only limit.
+
+    @param   count  Signals to make room for.
+    @return  The same handle, for chaining.
+
+    @code
+      Blaeck.begin(&Serial).withSignals(50);
+    @endcode
+  */
   BlaeckBeginRef &withSignals(unsigned int count);
 
-  // Room for the channels added with addStateChannel(), and for the one a command
-  // builds with withOwnState() - that channel is counted here rather than against
-  // withCommands().
+  /*!
+    @brief   Makes room for a number of state channels.
+
+    Counts the channels declared with addStateChannel() and the one a command builds
+    with withOwnState() - that channel comes out of this table, not withCommands().
+
+    @param   count  State channels to make room for. Clamped to 255.
+    @return  The same handle, for chaining.
+
+    @code
+      Blaeck.begin(&Serial).withStateChannels(12);
+    @endcode
+  */
   BlaeckBeginRef &withStateChannels(unsigned int count);
 
-  // Room for the channels added with addEventChannel().
+  /*!
+    @brief   Makes room for a number of event channels.
+
+    @param   count  Event channels to make room for. Clamped to 255.
+    @return  The same handle, for chaining.
+
+    @code
+      Blaeck.begin(&Serial).withEventChannels(4);
+    @endcode
+  */
   BlaeckBeginRef &withEventChannels(unsigned int count);
 
-  // Room for the event types, counted across every channel rather than per
-  // channel: they share one table, each entry tagged with the channel that
-  // declared it. Four channels of five types each need withEventTypes(20).
-  //
-  // The only one of these tables with no ceiling but RAM. It is also the only one
-  // that accumulates - thirteen channels averaging twenty types each is 260 - and
-  // nothing addresses the pool itself, since a type's wire index is counted within
-  // its channel. Costs two bytes of SRAM over a byte-wide count.
+  /*!
+    @brief   Makes room for a number of event types, across all channels.
+
+    Types share one table rather than having one per channel, so four channels of
+    five types each need withEventTypes(20). This is the table that accumulates -
+    thirteen channels averaging twenty types is already 260 - and the only one
+    besides the signals with no ceiling but RAM.
+
+    @param   count  Event types to make room for, added up across every channel.
+    @return  The same handle, for chaining.
+
+    @code
+      Blaeck.begin(&Serial).withEventChannels(4).withEventTypes(20);
+    @endcode
+  */
   BlaeckBeginRef &withEventTypes(unsigned int count);
 
-  // Room for the commands registered with onCommand() and with the typed
-  // onNumberCommand(), onSelectCommand() and friends. Both kinds share the table.
+  /*!
+    @brief   Makes room for a number of commands.
+
+    Plain onCommand() registrations and the typed onNumberCommand(),
+    onSelectCommand() and friends share this table.
+
+    @param   count  Commands to make room for. Clamped to 255.
+    @return  The same handle, for chaining.
+
+    @code
+      Blaeck.begin(&Serial).withCommands(8);
+    @endcode
+  */
   BlaeckBeginRef &withCommands(unsigned int count);
 
-  // Where the library says what it rejected and why. Without one, a full table
-  // is silent apart from hasRejectedSignals() and its siblings.
+  /*!
+    @brief   Names a stream for the library to report problems on.
+
+    Where it says what it rejected and why. Without one, a full table is silent
+    apart from hasRejectedSignals() and its siblings.
+
+    @param   debugStream  Stream to write to. May be the same one the data goes to.
+    @return  The same handle, for chaining.
+
+    @code
+      Blaeck.begin(&Serial).withSignals(50).withDebugStream(&Serial);
+    @endcode
+  */
   BlaeckBeginRef &withDebugStream(Stream *debugStream);
 
 private:
