@@ -17,11 +17,22 @@ import clang.cindex as ci
 
 # Constructors are left out: the handle types are returned by the library, never
 # constructed by a sketch, so nobody hovers them.
+#
+# Data members are in: DeviceName and its neighbours are assigned by every sketch
+# and hovered like anything else, and a comment written for a group of them shows
+# the group's text whichever one is hovered - the same defect the methods had.
 KINDS = {
     ci.CursorKind.CXX_METHOD,
     ci.CursorKind.FUNCTION_DECL,
     ci.CursorKind.FUNCTION_TEMPLATE,
+    ci.CursorKind.FIELD_DECL,
 }
+
+# A data member counts only on a type the library presents as its API - BlaeckSerial
+# and the handles it returns. The record structs behind them (Signal, SignalMeta,
+# CommandHandlerEntry) are public only because struct makes them so, and a sketch
+# never names one.
+FIELD_OWNER = "Blaeck"
 
 SECTION = re.compile(r"^[\s/*-]*$")
 
@@ -70,6 +81,8 @@ def public_api(tu, path):
             continue
         if c.spelling.startswith("_"):
             continue
+        if c.kind == ci.CursorKind.FIELD_DECL and not owner(c).startswith(FIELD_OWNER):
+            continue
         yield c
 
 def show(tu, path, needle):
@@ -83,8 +96,12 @@ def show(tu, path, needle):
         if needle.lower() not in c.spelling.lower():
             continue
         found += 1
-        args = ", ".join(a.type.spelling for a in c.get_arguments())
-        print("%s(%s)   [line %d]" % (c.spelling, args, c.location.line))
+        if c.kind == ci.CursorKind.FIELD_DECL:
+            what = "%s %s" % (c.type.spelling, c.spelling)
+        else:
+            what = "%s(%s)" % (c.spelling,
+                               ", ".join(a.type.spelling for a in c.get_arguments()))
+        print("%s   [line %d]" % (what, c.location.line))
         raw = c.raw_comment
         if not raw:
             print("    <nothing - hovers blank>")

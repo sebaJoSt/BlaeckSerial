@@ -460,10 +460,17 @@ public:
   // Shorthand for begin(Ref).withSignals(Size).
   BlaeckBeginRef begin(Stream *Ref, unsigned int Size);
 
-  // Set these variables in your Arduino sketch. Unlike a signal name, these are not
-  // copied - what they point at must outlive them, which a string literal does.
+  // What the device calls itself, sent in the 0xB3 device frame: the name a host lists it by,
+  // and groups its signals and controls under. Defaults to "Unknown". Not copied - what it
+  // points at has to outlive the device, which a string literal does and a local buffer does not.
   const char *DeviceName = "Unknown";
+
+  // The board this firmware runs on, e.g. "Arduino Mega 2560 Rev3". Shown alongside the device;
+  // nothing is inferred from it. Defaults to "n/a". Not copied, as DeviceName is not.
   const char *DeviceHWVersion = "n/a";
+
+  // The sketch's own version, e.g. "1.0" - what tells one firmware from another across a fleet
+  // that is half updated. Defaults to "n/a". Not copied, as DeviceName is not.
   const char *DeviceFWVersion = "n/a";
 
   // ----- Signals -----
@@ -525,7 +532,10 @@ public:
   // even with no debug stream attached, so a sketch can report the shortfall itself.
   uint16_t getRejectedSignalCount() const { return _rejectedSignalCount; }
 
-  // Signal Count
+  // How many signals are registered, which is also one past the highest index write() and
+  // update() accept. Counts what was added, so a signal the table had no room for is not in
+  // it - see getRejectedSignalCount() for those. Maintained by the library: assigning to it
+  // does not resize anything and leaves the count disagreeing with the table.
   int SignalCount;
 
   // ----- Device Restarted -----
