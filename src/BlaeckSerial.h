@@ -237,8 +237,8 @@ typedef enum DataType : uint8_t
 // the one mapping, and the schema hash, the symbol list and the state frames all go through
 // it. Reorder this list or insert a type and nothing on the wire moves.
 
-// How a signal's value accumulates over time, for Home Assistant statistics
-// (0xF0 SignalMetaFlags bits 3-5). MEASUREMENT is a value that goes up and down
+// How a signal's value accumulates over time, which is what lets a host keep
+// statistics on it (0xF0 SignalMetaFlags bits 3-5). MEASUREMENT is a value that goes up and down
 // and is meaningful at any instant; TOTAL and TOTAL_INCREASING are running sums,
 // the latter one that only ever grows and may reset to zero. MEASUREMENT_ANGLE is
 // a measurement that wraps, averaged the short way round.
@@ -1101,8 +1101,8 @@ public:
                          indices follow.
     @return  The same handle, for chaining.
 
-    @warning Do not name an option "none" in any casing. Home Assistant reads that
-             state as "no option selected" and blanks the control instead of showing it.
+    @warning Do not name an option "none" in any casing. A host may read that state as
+             "no option selected" and blank the control instead of showing it.
 
     @code
       Blaeck.onSelectCommand("SET_WAVE", onSetWave)
@@ -1454,10 +1454,10 @@ public:
 };
 
 // A string signal. No unit, no decimals to round and nothing to keep statistics on: all three
-// tell Home Assistant the state is a number, and it then refuses the text.
+// say the state is a number, and a host then refuses the text.
 //
-// Mirrors BlaeckTextStateRef: a string signal and a state channel become the same Home
-// Assistant entity, so they carry the same fields. Change one, change the other.
+// Mirrors BlaeckTextStateRef: a string signal and a state channel become the same entity on a
+// host, so they carry the same fields. Change one, change the other.
 class BlaeckTextSignalRef : public BlaeckSignalRefShared<BlaeckTextSignalRef>
 {
 public:
@@ -1472,9 +1472,9 @@ public:
     @param   optionsCsv  Comma-separated names as an F() literal.
     @return  The same handle, for chaining.
 
-    @warning Home Assistant needs withDeviceClass(F("enum")) alongside this and
-             rejects the list without it. Every value reported must be in the list;
-             one that is not raises rather than being shown.
+    @warning A host may require withDeviceClass(F("enum")) alongside this and reject
+             the list without it. Every value reported has to be in the list; one that
+             is not raises rather than being shown.
 
     @note    A unit is ignored alongside options rather than refused.
 
@@ -1512,8 +1512,8 @@ public:
 //
 // Three kinds, mirroring the three signal handles, because a channel's value now has a type and
 // the wrong modifier on the wrong type is a bug a host cannot report. Unit, state class and
-// display precision each tell Home Assistant the state is a number, so on a text channel they
-// do not merely do nothing - they make it refuse the text and show nothing at all. Splitting
+// display precision each say the state is a number, so on a text channel they do not merely
+// do nothing - they make a host refuse the text and show nothing at all. Splitting
 // the handles turns that into a compile error.
 class BlaeckStateRefBase
 {
@@ -1666,7 +1666,7 @@ private:
 };
 
 // A channel carrying a number. Mirrors BlaeckNumericSignalRef: the same value becomes the same
-// Home Assistant entity whichever way it arrives, so they carry the same fields. Change one,
+// entity on a host whichever way it arrives, so they carry the same fields. Change one,
 // change the other. What differs is not the entity but the cadence - a signal is sampled into
 // every logged row, a channel is pushed when it changes and never stored.
 class BlaeckNumericStateRef : public BlaeckStateRefShared<BlaeckNumericStateRef>
@@ -1735,8 +1735,8 @@ public:
 };
 
 // A channel carrying text. Mirrors BlaeckTextSignalRef: no unit, no decimals to round and
-// nothing to keep statistics on: all three tell Home Assistant the state is a number, and it
-// then refuses the text.
+// nothing to keep statistics on: all three say the state is a number, and a host then refuses
+// the text.
 class BlaeckTextStateRef : public BlaeckStateRefShared<BlaeckTextStateRef>
 {
 public:
@@ -1778,9 +1778,9 @@ public:
     @param   optionsCsv  Comma-separated names as an F() literal.
     @return  The same handle, for chaining.
 
-    @warning Home Assistant needs withDeviceClass(F("enum")) alongside this and
-             rejects the list without it. Every value reported must be in the list;
-             one that is not raises rather than being shown.
+    @warning A host may require withDeviceClass(F("enum")) alongside this and reject
+             the list without it. Every value reported has to be in the list; one that
+             is not raises rather than being shown.
 
     @note    A unit is ignored alongside options rather than refused.
 
@@ -1844,16 +1844,16 @@ public:
   /*!
     @brief   Declares what kind of thing the channel reports.
 
-    Unlike a signal's device class, this one is checked: Home Assistant validates it
-    against an enum of exactly three names, so anything else fails discovery and the
-    entity never appears at all.
+    Unlike a signal's device class, this one is a closed set: a host validates it
+    against exactly three names, so anything else fails discovery and the entity never
+    appears at all.
 
     @param   deviceClass  F("button"), F("doorbell") or F("motion"). Those three,
                           as an F() literal.
     @return  The same handle, for chaining.
 
     @warning F("doorbell") also requires the channel to declare a "ring" event type.
-             Home Assistant warns without it today and stops accepting it in 2027.4.
+             A host may warn without it now and refuse it later.
 
     @note    F("button") has standard type names - press_start, press_end,
              long_press_start, long_press_end, multi_press_ongoing, multi_press_end -

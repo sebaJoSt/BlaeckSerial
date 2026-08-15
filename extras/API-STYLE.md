@@ -42,6 +42,12 @@ reads this header is writing a sketch.
 `<BLAECK.WRITE_DATA>` and friends are an exception — a user types those into
 Serial Monitor, so they are interface, not encoding.
 
+**And no host by name.** Say "a host", not "Home Assistant". It is one consumer,
+reached through a bridge, and naming it makes the library sound like it serves only
+that — while tying the docs to someone else's release schedule. A `@warning` that
+read *"stops accepting it in 2027.4"* had to be rewritten the moment that date
+moved. Where behaviour genuinely varies, "a host may" is both shorter and true.
+
 **4. Numbers, not adjectives.** Ranges, caps, defaults, per-board differences,
 costs. *"up to 255"*, *"about 25 bytes"*, *"24 on a Mega, 8 on an Uno"* — never
 *"a reasonable number"*. A number you cannot support is worse than none: check it
