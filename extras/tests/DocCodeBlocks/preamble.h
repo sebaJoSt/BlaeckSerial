@@ -51,6 +51,12 @@ const int addr = 0;
 // value arriving without dragging a sensor library in with it.
 inline float readSensor() { return 21.5f; }
 
+// Stands in for whatever a sketch samples before a write.
+inline void readAllSensors() {}
+
+// Stands in for a real clock, for the BLAECK_UNIX timestamp block.
+inline unsigned long long unixMicros() { return 0; }
+
 // Reports a value as text, for the withOwnState() getter form.
 inline const char *offsetText()
 {

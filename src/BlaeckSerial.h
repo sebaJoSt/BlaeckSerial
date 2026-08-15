@@ -2449,16 +2449,35 @@ public:
   */
   void clearAllEventChannels();
 
-  // Send the 0x80 "Event Channel List" frame (the declared-channel catalog).
-  // Sent automatically in response to BLAECK.WRITE_EVENT_CHANNELS.
+  /*!
+    @brief   Sends the list of declared event channels and their types.
+
+    Answers <BLAECK.WRITE_EVENT_CHANNELS>, and is what a host needs before any event
+    means anything - an event names its channel and type by position in this list.
+
+    @code
+      Blaeck.writeEventChannels();
+    @endcode
+  */
   void writeEventChannels();
   void writeEventChannels(unsigned long messageID);
 
-  // Report that an event occurred on a declared channel. Fire-and-forget: a host
-  // may surface it (e.g. a Home Assistant event entity per channel) but it is
-  // never stored as signal data. The frame carries only the channel and event
-  // type indices from the 0x80 catalog, which must reach the host first, and no
-  // CRC. Events on channels or types that were never declared are dropped.
+  /*!
+    @brief   Reports that something happened on a declared channel.
+
+    Fire and forget: a host may show it, but it is never stored as logged data.
+
+    @param   channelName  A channel already passed to addEventChannel().
+    @param   eventType    One of the types that channel declared.
+
+    @warning An event on a channel or type that was never declared is dropped,
+             silently. The list has to reach the host first, too, since an event
+             names both by position rather than by name.
+
+    @code
+      Blaeck.writeEvent(F("Activity"), F("idle_warning"));
+    @endcode
+  */
   void writeEvent(const char *channelName, const __FlashStringHelper *eventType);
   void writeEvent(const char *channelName, const __FlashStringHelper *eventType, unsigned long messageID);
 
@@ -2524,9 +2543,21 @@ public:
   void write(const char *signalName, double value, unsigned long messageID, unsigned long long timestamp);
   void write(const char *signalName, const char *value, unsigned long messageID, unsigned long long timestamp);
 
-  // Index of a registered signal, or -1 if there is none by that name. Resolve once in setup()
-  // and use the by-index calls below on anything that runs often: the by-name calls walk every
-  // signal and compare its name, which costs more the more signals there are.
+  /*!
+    @brief   Finds a registered signal's index by name.
+
+    Resolve once in setup() and use the by-index calls on anything that runs often:
+    a by-name call walks every signal comparing names, which costs more the more
+    signals there are.
+
+    @param   signalName  The name the signal was added with.
+    @return  Its index, or -1 if there is no signal by that name.
+
+    @code
+      int tempIndex = Blaeck.findSignalIndex("Temperature");
+      Blaeck.write(tempIndex, readSensor());
+    @endcode
+  */
   int findSignalIndex(const char *signalName);
 
   // Update value and write directly - by index
@@ -2567,7 +2598,21 @@ public:
   void write(int signalIndex, const char *value, unsigned long messageID, unsigned long long timestamp);
 
   // ----- Data Update -----
-  // Update value and mark Signal as updated - by name
+
+  /*!
+    @brief   Stores a new value and marks the signal as changed, without sending.
+
+    What writeUpdatedData() and tickUpdated() then carry. Use it where values change
+    rarely and sending an unchanged one is waste; use write() to send immediately.
+
+    @param   signalName  The name the signal was added with.
+    @param   value       The new value. One overload per type.
+
+    @code
+      Blaeck.update("Temperature", readSensor());
+      Blaeck.tickUpdated();
+    @endcode
+  */
   void update(const char *signalName, bool value);
   void update(const char *signalName, byte value);
   void update(const char *signalName, short value);
@@ -3000,29 +3045,51 @@ public:
   // an Uno - kept out of RAM for text that never changes.
   static bool equalsFlash(const char *ram, const __FlashStringHelper *flash);
 
-  // Writes `value` into `out` with `decimals` places and returns `out`, so it can be handed
-  // straight to snprintf(). No heap, and no dependence on printf float support - avr-libc
-  // leaves that out unless it is linked in, so "%f" prints "?" on AVR, and dtostrf() is not on
-  // every core either.
-  //
-  // For a value a host should render, prefer a typed state channel or a signal and let the host
-  // format it. This is for text a sketch composes itself - a status line carrying several
-  // values in one string.
-  //
-  // Gives the same three answers the Arduino core does when digits cannot say it: "nan", "inf",
-  // and "ovf" beyond what an unsigned long can hold. A buffer too small for the result is
-  // truncated and always terminated - which is why outSize is here and dtostrf() has no
-  // equivalent: that one cannot be told how much room it has.
-  //
-  // Exact to about seven significant digits, which is all a float holds: asking for more, as
-  // toText(1234.5678f, 4, ...) does, may differ from printf in the last place. The same is true
-  // of the core on AVR, where double is float.
+  /*!
+    @brief   Formats a float into a buffer, without printf or the heap.
+
+    For text a sketch composes itself - a status line carrying several values in one
+    string. For a value a host should render, prefer a signal or a typed state
+    channel and let the host format it.
+
+    Needed because "%f" prints "?" on AVR unless float support is linked in, and
+    dtostrf() is not on every core. Unlike dtostrf() this takes the buffer size, so
+    it cannot be made to overrun.
+
+    @param   value     The number to format.
+    @param   decimals  Places after the point.
+    @param   out       Buffer to write into.
+    @param   outSize   Size of that buffer, terminator included.
+    @return  out, so it can be handed straight to snprintf().
+
+    @note    Exact to about seven significant digits, which is all a float holds.
+             Asking for more may differ from printf in the last place - the same is
+             true of the core on AVR, where double is float.
+
+    @code
+      char freq[10];
+      Blaeck.toText(Frequency, 2, freq, sizeof(freq));
+    @endcode
+  */
   static char *toText(float value, byte decimals, char *out, byte outSize);
 
-  // Copies a flash name into `out`, truncating at outSize - 1 and always terminating.
-  // Returns the length written. Used by the F() overloads below, which hand the result
-  // to the const char* form: a channel always keeps its own copy of its name, so F()
-  // saves the literal from SRAM rather than changing how the name is stored.
+  /*!
+    @brief   Copies a name out of flash into a buffer.
+
+    Public because a sketch has the same problem the library does: reading a flash
+    address as if it were RAM gives silent rubbish on AVR rather than failing.
+
+    @param   flash    The F() literal to read.
+    @param   out      Buffer to copy into. Truncated at outSize - 1, always
+                      terminated.
+    @param   outSize  Size of that buffer, terminator included.
+    @return  How many characters were written.
+
+    @code
+      char name[16];
+      Blaeck.copyFlashName(F("Temperature"), name, sizeof(name));
+    @endcode
+  */
   static byte copyFlashName(const __FlashStringHelper *flash, char *out, byte outSize);
 
   // Stores a channel name: a flash pointer as it stands, a RAM name as a copy this library
@@ -3032,30 +3099,81 @@ public:
   static bool _channelNameEquals(const char *stored, bool inFlash, const char *candidate);
   static bool _channelNameEqualsFlash(const char *stored, bool inFlash, const __FlashStringHelper *candidate);
 
-  // State channels that could not be declared - a full table, a name too long, a name a
-  // command already owns - each reported on DebugRef and counted here. A command's
-  // withOwnState() channel counts too: when it cannot be declared the command keeps no state at
-  // all, so a full state channel table costs a control's value, not just a channel.
+  /*!
+    @brief   Reports whether any state channel could not be declared.
+
+    A full table, a name too long, or a name a command already owns.
+
+    @return  True if at least one was dropped.
+
+    @note    A command's withOwnState() channel counts here. When it cannot be
+             declared the command keeps no state at all, so a full state channel
+             table costs a control's value rather than just a channel.
+
+    @code
+      if (Blaeck.hasRejectedStateChannels())
+        Serial.println(F("Raise withStateChannels() on the begin() chain."));
+    @endcode
+  */
   bool hasRejectedStateChannels() const { return _rejectedStateChannelCount > 0; }
-  // How many were rejected, where hasRejectedStateChannels() only says whether any were.
+  /*!
+    @brief   Counts the state channels that could not be declared.
+
+    @return  How many were dropped, where hasRejectedStateChannels() only says
+             whether any were.
+
+    @code
+      Serial.println(Blaeck.getRejectedStateChannelCount());
+    @endcode
+  */
   uint16_t getRejectedStateChannelCount() const { return _rejectedStateChannelCount; }
 
-  // Event channels and event types that could not be declared. Counted together because both
-  // sit behind BLAECK_ENABLE_EVENTS and a type belongs to a channel, so either answer sends you
-  // to the same place - withEventChannels() or withEventTypes() on the begin() chain, and a
-  // debug stream says which.
+  /*!
+    @brief   Reports whether any event channel or type could not be declared.
+
+    Counted together because a type belongs to a channel, so either answer sends you
+    to the same place: withEventChannels() or withEventTypes() on the begin() chain.
+    A debug stream says which.
+
+    @return  True if at least one channel or type was dropped.
+
+    @code
+      if (Blaeck.hasRejectedEventChannels())
+        Blaeck.printRejections(&Serial);
+    @endcode
+  */
   bool hasRejectedEventChannels() const
   {
     return _rejectedEventChannelCount > 0 || _rejectedEventTypeCount > 0;
   }
-  // Channels and types added together, for the reason they are asked about together. A debug
-  // stream is what separates them, and printRejections() names the begin() call to raise.
+  /*!
+    @brief   Counts the event channels and types that could not be declared.
+
+    @return  Channels and types added together, for the reason they are asked about
+             together. printRejections() names the begin() call to raise.
+
+    @code
+      Serial.println(Blaeck.getRejectedEventChannelCount());
+    @endcode
+  */
   uint16_t getRejectedEventChannelCount() const
   {
     return (uint16_t)(_rejectedEventChannelCount + _rejectedEventTypeCount);
   }
 
-  // Anything at all that a table had no room for, across all five tables.
+  /*!
+    @brief   Reports whether anything at all was dropped, across every table.
+
+    One question covering signals, state channels, event channels, event types and
+    commands.
+
+    @return  True if any table had no room for something.
+
+    @code
+      if (Blaeck.hasRejections())
+        Blaeck.printRejections(&Serial);
+    @endcode
+  */
   bool hasRejections() const;
   // Says what was dropped and the exact begin() call that would have kept it, one line per
   // table, and prints nothing at all when there is nothing to report - so a sketch can end
@@ -3221,42 +3339,115 @@ public:
   //   waveIndex = (i >= 0) ? (byte)i : 0;
   long getSelectOptionIndexOf(const char *command, const char *optionName) const;
 
-  // ----- Before data write callback  -----
-  // Called just before signal data is sent, in normal loop context
-  // (safe to use Serial, delay, etc.).
+  /*!
+    @brief   Names a function to call just before signal data is written.
+
+    Runs in normal loop context, so Serial and delay() are safe. For sampling
+    something at the moment it is about to be sent rather than on a timer of its own.
+
+    @param   callback  Called before each data write.
+
+    @code
+      Blaeck.setBeforeWriteCallback(readAllSensors);
+    @endcode
+  */
   void setBeforeWriteCallback(void (*callback)());
 
-  // What stamps each data frame. BLAECK_NO_TIMESTAMP is the default and sends none, leaving
-  // the host to time the arrival. BLAECK_MICROS needs nothing further - the library supplies
-  // micros() itself, tracking the overflow so the count keeps climbing past the ~71 minutes a
-  // uint32 of microseconds holds. That tracking happens as frames are written, so a device
-  // writing less often than that wants BLAECK_UNIX and a real clock instead.
-  // BLAECK_UNIX needs a clock only the sketch can reach, so pass one to setTimestampCallback().
-  //
-  // Switching mode restarts the overflow tracking, so call it in setup() rather than partway
-  // through a log: the timestamps either side of the change do not belong on one axis.
+  /*!
+    @brief   Chooses what timestamps the data a device sends.
+
+    BLAECK_NO_TIMESTAMP is the default and sends none, leaving a host to time the
+    arrival. BLAECK_MICROS needs nothing further - the library supplies micros()
+    itself, tracking the overflow so the count keeps climbing past the ~71 minutes a
+    uint32 of microseconds holds. BLAECK_UNIX needs a clock only the sketch can
+    reach, so pass one to setTimestampCallback().
+
+    @param   mode  One of the three; see BlaeckTimestampMode.
+
+    @warning Switching mode restarts the overflow tracking, so call it in setup()
+             rather than partway through a log: the timestamps either side of the
+             change do not belong on one axis.
+
+    @note    BLAECK_MICROS tracks the wrap as data is written, so a device
+             writing less often than every ~71 minutes misses one and wants
+             BLAECK_UNIX with a real clock instead.
+
+    @code
+      Blaeck.setTimestampMode(BLAECK_MICROS);
+    @endcode
+  */
   void setTimestampMode(BlaeckTimestampMode mode);
 
-  // The clock read for BLAECK_UNIX - an RTC, an NTP-backed time, whatever the board has - as
-  // microseconds. Set it either side of setTimestampMode(BLAECK_UNIX): that mode keeps a
-  // callback already given rather than replacing it.
+  /*!
+    @brief   Names the clock to read for BLAECK_UNIX.
+
+    An RTC, an NTP-backed time, whatever the board has.
+
+    @param   callback  Returns microseconds since the Unix epoch.
+
+    @note    Set it either side of setTimestampMode(BLAECK_UNIX) - that mode keeps a
+             callback already given rather than replacing it.
+
+    @code
+      Blaeck.setTimestampCallback(unixMicros);
+      Blaeck.setTimestampMode(BLAECK_UNIX);
+    @endcode
+  */
   void setTimestampCallback(unsigned long long (*callback)());
 
-  // The mode in force, as last set. Reports what was asked for, not whether it can be
-  // honoured - a BLAECK_UNIX with no callback still reads back as BLAECK_UNIX.
+  /*!
+    @brief   Reports the timestamp mode in force.
+
+    @return  The mode as last set. What was asked for, not whether it can be
+             honoured - a BLAECK_UNIX with no callback still reads back as
+             BLAECK_UNIX.
+
+    @code
+      if (Blaeck.getTimestampMode() == BLAECK_NO_TIMESTAMP)
+        Serial.println(F("data carries no time"));
+    @endcode
+  */
   BlaeckTimestampMode getTimestampMode() const { return _timestampMode; }
 
-  // Whether a frame will actually carry a timestamp: a mode is set and a callback exists to
-  // read. This is the one to check, since BLAECK_UNIX without a callback silently stamps zero.
+  /*!
+    @brief   Reports whether the data will actually carry a timestamp.
+
+    @return  True if a mode is set and a callback exists to read.
+
+    @warning This is the one to check. BLAECK_UNIX without a callback stamps zero
+             rather than failing, so every value lands at the epoch.
+
+    @code
+      if (!Blaeck.hasValidTimestampCallback())
+        Serial.println(F("no clock - timestamps will be zero"));
+    @endcode
+  */
   bool hasValidTimestampCallback() const;
 
-  // Buffered writes: assemble entire frame in RAM before sending.
-  // Default: OFF on AVR (saves SRAM), ON everywhere else.
-  // Override at compile time with BLAECK_BUFFERED_WRITES_DEFAULT,
-  // or at runtime with setBufferedWrites().
+  /*!
+    @brief   Chooses whether data is assembled in RAM before being sent.
+
+    Buffering costs SRAM and sends each write in one go; writing straight out costs
+    nothing and sends it piecemeal. Off by default on AVR, on everywhere else.
+
+    @param   enabled  True to assemble in RAM first.
+
+    @code
+      Blaeck.setBufferedWrites(true);
+    @endcode
+  */
   void setBufferedWrites(bool enabled);
-  // Whether frames are assembled in RAM before sending, as set by setBufferedWrites() or by
-  // the platform default. Worth checking on AVR, where it is off unless asked for.
+  /*!
+    @brief   Reports whether data is assembled in RAM before sending.
+
+    @return  True if buffering is on, whether set by setBufferedWrites() or by the
+             platform default - worth checking on AVR, where it is off unless asked
+             for.
+
+    @code
+      Serial.println(Blaeck.isBufferedWrites() ? F("buffered") : F("direct"));
+    @endcode
+  */
   bool isBufferedWrites() const { return _bufferedWrites; }
 
 private:
