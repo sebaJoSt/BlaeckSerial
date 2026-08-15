@@ -1,0 +1,69 @@
+name: PlatformIO
+
+# A second toolchain, for what the first one hides. arduino-cli compiles with
+# -fpermissive, so gcc downgrades some errors to warnings and prints them where
+# nobody looks. PlatformIO does not, and found a repeated default argument that
+# six boards of the arduino-cli matrix had compiled without a word.
+#
+# It also checks the half of distribution that library.properties does not cover:
+# whether library.json actually resolves and builds for a PlatformIO user.
+
+on:
+  push:
+    paths:
+      - ".github/workflows/platformio.yml"
+      - "examples/**"
+      - "src/**"
+      - "library.json"
+  pull_request:
+    paths:
+      - ".github/workflows/platformio.yml"
+      - "examples/**"
+      - "src/**"
+      - "library.json"
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Examples build under PlatformIO
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      # The toolchain and framework packages are the slow part, not the build.
+      - name: Cache PlatformIO
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.platformio
+            ~/.cache/pip
+          key: pio-${{ runner.os }}-${{ hashFiles('library.json') }}
+          restore-keys: pio-${{ runner.os }}-
+
+      - name: Install PlatformIO
+        run: pip install --upgrade platformio
+
+      # Only the examples that need nothing beyond CRC. SHT31TempHumiditySensor
+      # wants Adafruit SHT31, SineGeneratorAdvanced wants EEPROMEx, and
+      # TimeStampModes wants RTC.h - the arduino-cli matrix covers those.
+      - name: Build examples
+        run: |
+          for ex in Basic Commands DatatypeTest EventChannels SignalMetadata \
+                    SineGeneratorBasic WriteModes WaveformGenerator; do
+            echo "::group::$ex"
+            pio ci --board=megaatmega2560 \
+                   --lib="." \
+                   --project-option="lib_deps=robtillaart/CRC@^1.0.4" \
+                   "examples/$ex/$ex.ino"
+            echo "::endgroup::"
+          done
+
+      # A manifest that parses is not a manifest that packages. This is what the
+      # registry would build, and it is where export.include is proved to work.
+      - name: Pack the library
+        run: pio pkg pack --output /tmp/pkg
