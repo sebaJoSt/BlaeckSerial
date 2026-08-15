@@ -118,10 +118,15 @@ not take.
 
 ## Examples
 
-Every example is extracted and compiled, so an example that names a method that
-has since been renamed fails the build instead of shipping as instructions that do
-not work. This is the only reason rule 7 is affordable; Rust requires an example
-everywhere for the same reason, and checks them the same way.
+Throughout this document, an *example* is the `@code` block inside a doc comment —
+the two or three lines an editor shows when someone hovers a method. Not the
+sketches under `examples/`, which are a separate thing that happens to share the
+word.
+
+Every one of them is extracted and compiled, so a block calling a method that has
+since been renamed fails the build instead of being shown on hover as instructions
+that do not work. This is the only reason rule 7 is affordable; Rust requires an
+example everywhere for the same reason, and checks them the same way.
 
 That imposes three things:
 

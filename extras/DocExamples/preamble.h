@@ -1,4 +1,8 @@
-// The globals that the @code examples in BlaeckSerial.h are written against.
+// The globals that the @code blocks in BlaeckSerial.h are written against.
+//
+// "Example" means three things in this repository, so to be exact: this file serves
+// the @code blocks inside doc comments - the two or three lines an editor shows when
+// someone hovers a method. Not the sketches under examples/, which are unrelated.
 //
 // --- How this file is reached ---
 //
@@ -8,9 +12,9 @@
 //   writes each one into DocExamples.ino as a function body, and puts an
 //   #include of this file at the top. CI then compiles that sketch.
 //
-// So an example naming a method that has since been renamed fails the build, instead
-// of shipping as instructions that do not work. That is the whole point: a comment is
-// invisible to the compiler until something like this puts it in front of one.
+// So a @code block calling a method that has since been renamed fails the build,
+// instead of being shown on hover as instructions that do not work. That is the whole
+// point: a comment is invisible to the compiler until something puts it in front of one.
 //
 // DocExamples.ino is generated and gitignored - never edit it, and never commit it.
 // Nothing in src/ or examples/ includes this file, and no sketch of yours should.
