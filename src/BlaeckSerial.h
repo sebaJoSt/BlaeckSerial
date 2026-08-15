@@ -444,20 +444,47 @@ public:
   ~BlaeckSerial();
 
   // ----- Initialize -----
-  // The returned handle sizes the tables and names a debug stream, and may be
-  // ignored:
-  //
-  //   BlaeckSerial.begin(&Serial)
-  //       .withSignals(50)
-  //       .withStateChannels(12)
-  //       .withDebugStream(&Serial1);
-  //
-  // Every number is optional and starts at a per-board default; a table is
-  // allocated in full by the first entry added to it, so a table a sketch never
-  // uses costs nothing. The chain may run after begin() returns because nothing
-  // is allocated until the first add.
+
+  /*!
+    @brief   Starts BlaeckSerial on a stream and returns a handle that sizes its tables.
+
+    The first call a sketch makes, after opening the stream itself. What a device
+    publishes afterwards comes in three kinds: a signal is a value sampled and logged
+    over time; a state channel reports a current value that is shown but not logged,
+    whether that is a status line or what a control is set to; an event channel reports
+    discrete occurrences from a list named up front. The WaveformGenerator example
+    uses all three.
+
+    @param   Ref  Stream the device talks over - Serial, Serial1, or any other Stream.
+    @return  Handle for sizing the tables and naming a debug stream. Chainable, and
+             safe to ignore entirely.
+    @note    Every capacity on the handle is optional and starts at a per-board
+             default. A table is allocated in full by the first entry added to it, so
+             a table the sketch never uses costs nothing - which is also why the chain
+             may run after begin() has returned.
+    @code
+      Serial.begin(115200);
+      BlaeckSerial.begin(&Serial)
+          .withSignals(50)
+          .withStateChannels(12)
+          .withDebugStream(&Serial1);
+    @endcode
+  */
   BlaeckBeginRef begin(Stream *Ref);
-  // Shorthand for begin(Ref).withSignals(Size).
+
+  /*!
+    @brief   Starts BlaeckSerial and sizes the signal table in one call.
+
+    Shorthand for begin(Ref).withSignals(Size), for a sketch that adds signals and
+    nothing else.
+
+    @param   Ref   Stream the device talks over.
+    @param   Size  Signals to make room for.
+    @return  Handle for sizing the remaining tables, as begin(Stream *) returns.
+    @code
+      BlaeckSerial.begin(&Serial, 8);
+    @endcode
+  */
   BlaeckBeginRef begin(Stream *Ref, unsigned int Size);
 
   // What the device calls itself, sent in the 0xB3 device frame: the name a host lists it by,
@@ -672,7 +699,10 @@ public:
   // Pass the handler's own `command` parameter and there is no literal to keep in step:
   //
   //   void onSetOffset(const char *command, const char *const *params, byte paramCount)
-  //   { Offset = ...; BlaeckSerial.writeCommandState(command); }
+  //   {
+  //     Offset = (float)atof(params[0]);
+  //     BlaeckSerial.writeCommandState(command);
+  //   }
   //
   // Does nothing for a command with no state of its own, or one whose state is a signal -
   // there the signal's own write is what reports it.
@@ -994,7 +1024,8 @@ public:
   //
   //   BlaeckSerial.onAnyCommand([](const char *command, const char *const *params, byte count)
   //   {
-  //     if (BlaeckSerial.equalsFlash(command, F("RESET"))) { ... }
+  //     if (BlaeckSerial.equalsFlash(command, F("RESET")))
+  //       Uptime = 0;
   //   });
   //
   // Called through the object, not the class: a sketch usually names its object BlaeckSerial
@@ -1113,12 +1144,24 @@ public:
   // Free text. The handler receives it percent-decoded and no longer than withMaxLength() said.
   BlaeckTextCommandRef onTextCommand(const char *command, BlaeckCommandHandler handler);
 
-  // Copies option `index` of a select command's declared list into `out`, so a sketch can
-  // render the option it just selected without keeping a second copy of the names. The
-  // list already lives in flash; this is the only way to read it back.
-  // Returns false and leaves `out` empty if the command is not a declared select, the
-  // index is past the end, or the option would not fit - a truncated name is no use,
-  // since a host matches state against the declared options exactly.
+  /*!
+    @brief   Copies the option at a given position from a select command's list.
+
+    Lets a sketch show what is selected without keeping its own copy of the names.
+
+    @param   command  Name the select command was registered with.
+    @param   index    Position in the list given to withOptions(), counting from 0.
+    @param   out      Buffer the name is copied into. Left empty unless true is returned.
+    @param   outSize  Size of that buffer, terminator included.
+    @return  True if the name was copied. False if the command is not a select, the
+             index is past the end of the list, or the name would not fit.
+    @note    A name too long for the buffer is refused rather than shortened: a
+             truncated name would not match any option the device declared.
+    @code
+      char name[12];
+      BlaeckSerial.getSelectOptionNameAt("SET_WAVE", waveIndex, name, sizeof(name));
+    @endcode
+  */
   bool getSelectOptionNameAt(const char *command, byte index, char *out, byte outSize) const;
 
   // The other direction: the index of a named option, or -1 if that command is not a declared

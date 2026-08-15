@@ -38,3 +38,38 @@ jobs:
 
       - name: Check BlaeckSerial.h
         run: python extras/checkdocs.py src/BlaeckSerial.h
+
+  # An example in a comment is invisible to the compiler, so one naming a method that
+  # has since been renamed ships as instructions that do not build. Rust compiles its
+  # doc examples for this reason - it is what lets it require one on every public item.
+  # Every @code block is pulled into one sketch here and built.
+  #
+  # One board is enough: this checks that the examples use the API correctly, not that
+  # they are portable - the sketches under examples/ cover portability across four cores.
+  doctest:
+    name: Doc examples compile
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Install libclang
+        run: pip install libclang
+
+      - name: Extract the examples from the header
+        run: python extras/checkdocs.py src/BlaeckSerial.h --extract extras/DocExamples/DocExamples.ino
+
+      - uses: arduino/compile-sketches@v1
+        with:
+          fqbn: arduino:avr:mega
+          platforms: |
+            - name: arduino:avr
+          libraries: |
+            - source-path: ./
+            - name: CRC
+          sketch-paths: |
+            - extras/DocExamples
