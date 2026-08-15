@@ -1,7 +1,7 @@
 {
   "name": "BlaeckSerial",
   "version": "7.0.0",
-  "description": "Send binary sensor data over Serial using the Blaeck protocol. Values can be sent on an interval or requested on demand, and a device describes its own signals, controls, state channels and events so a host can build a dashboard from the sketch.",
+  "description": "A simple library to send binary (sensor) data via Serial port to your PC. The data can be sent periodically or requested on demand with serial commands. A device describes its own signals, controls and events, so a host can build a dashboard from it.",
   "keywords": "serial, binary, sensor, telemetry, logging, protocol, home-assistant",
   "homepage": "https://github.com/sebaJoSt/BlaeckSerial",
   "repository": {
