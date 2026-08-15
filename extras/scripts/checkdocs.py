@@ -295,12 +295,11 @@ def main(argv):
                                  options=ci.TranslationUnit.PARSE_SKIP_FUNCTION_BODIES)
 
     if "--extract" in argv:
-        # The destination is barely a choice: the generated sketch does
-        # #include "preamble.h", which resolves against the sketch, and preamble.h
-        # exists in one place. Extract anywhere else and the result cannot build.
-        # So the path is optional, and defaults to the only one that works.
-        i = argv.index("--extract") + 1
-        dest = argv[i] if i < len(argv) and not argv[i].startswith("-") else DEFAULT_EXTRACT
+        # No destination to pass. The generated sketch does #include "preamble.h",
+        # which resolves against the sketch, and preamble.h exists in one place -
+        # so anywhere else produces a file that cannot build. An option with one
+        # correct value is not an option; it is a way to get it wrong.
+        dest = DEFAULT_EXTRACT
         text, n = extract(tu, path, dest)
         io.open(dest, "w", encoding="utf-8", newline=NL).write(text)
         print("%d example(s) -> %s" % (n, dest))
