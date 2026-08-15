@@ -48,15 +48,20 @@ that — while tying the docs to someone else's release schedule. A `@warning` t
 read *"stops accepting it in 2027.4"* had to be rewritten the moment that date
 moved. Where behaviour genuinely varies, "a host may" is both shorter and true.
 
-"A host" deliberately covers both the program reading the frames and anything it
-feeds — the term is defined above `class BlaeckSerial`. They are not separated
-because the library cannot tell which layer enforces a given rule, and neither can
-a sketch: whether Loggbok rejects a malformed device class or the dashboard it
-feeds does, the sketch sees one thing, which is that the entity never appeared.
+There is one distinction worth drawing, and the library already draws it: a host
+that **records** values needs only names and types, while one that **presents**
+them also reads what the device declares about itself. `withUnit`, `withIcon`,
+`withDeviceClass`, `withStateClass`, `diagnostic` and their neighbours mean
+something only to the second kind — which is why `BLAECK_ENABLE_SIGNAL_META`
+can remove all of them and everything else keeps working. Say so where it matters,
+rather than implying every host cares.
 
-So **describe the effect, not the actor**. "The entity never appears" is
-observable and stays true; "Loggbok validates it" is a guess about someone else's
-code unless you have opened it.
+What not to claim is **which program enforces a rule**. A device class from the
+wrong list may be refused by whatever reads the frames or by whatever that feeds,
+and a sketch sees one thing either way: the entity never appears. So describe the
+effect, not the actor — "the entity never appears" is observable and stays true,
+where "Loggbok validates it" is a guess about someone else's code unless you have
+opened it. The term is defined above `class BlaeckSerial`.
 
 **4. Numbers, not adjectives.** Ranges, caps, defaults, per-board differences,
 costs. *"up to 255"*, *"about 25 bytes"*, *"24 on a Mega, 8 on an Uno"* — never

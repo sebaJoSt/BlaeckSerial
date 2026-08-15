@@ -1882,15 +1882,21 @@ private:
   int16_t _index;
 };
 
-// A word these comments use throughout: a HOST is whatever is on the other end of the
-// link - Loggbok, blaecktcpy, or something of your own - together with anything it feeds,
-// such as a dashboard built from what this device declares.
+// A word these comments use throughout: a HOST is whatever is on the other end of the link -
+// Loggbok, blaecktcpy, or something of your own.
 //
-// They are not distinguished, because this library cannot tell them apart and neither can
-// a sketch. A rule may be enforced by the program reading the frames or by whatever it
-// hands them to; what a sketch observes is the same either way. So these comments describe
-// the effect - the entity does not appear, the value is not kept - rather than naming who
-// is responsible for it.
+// Hosts come in two kinds, and the difference decides which half of this API means anything.
+// One reads the signals and records the values, and needs nothing but their names and types.
+// The other also builds controls and displays from what the device declares about itself -
+// units, icons, ranges, options - and it is only to that kind that withUnit(), withIcon(),
+// withDeviceClass(), withStateClass(), diagnostic() and their neighbours say anything at all.
+// Setting BLAECK_ENABLE_SIGNAL_META to 0 removes that half outright, which is the clearest
+// statement of how separable it is: everything else keeps working.
+//
+// What these comments do not do is name which program enforces a given rule. A device class
+// from the wrong list may be refused by the program reading the frames or by whatever it
+// hands them to, and a sketch sees the same thing either way - the entity never appears. So
+// the effect is described rather than the culprit.
 class BlaeckSerial
 {
 public:
