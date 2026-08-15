@@ -175,15 +175,16 @@ repeats once per block — which reads as one cause, not many, because each name
 own line in the header. To see only the first:
 
 ```
-arduino-cli compile --fqbn arduino:avr:mega \
-  --build-property compiler.cpp.extra_flags=-fmax-errors=1 extras/DocExamples
+arduino-cli compile --fqbn arduino:avr:mega --build-property compiler.cpp.extra_flags=-fmax-errors=1 extras/DocExamples
 ```
 
-CI runs the first (fails on an undocumented public name) and builds the third.
+CI runs the first and builds the third.
 
-What the tools catch: a missing comment, a section divider standing in for one, a
-comment too short to say anything, a missing blank line before `@code`, a missing
-`@code` block, and a block that does not compile.
+Two things fail a build: a public name with no comment, and a block that does not
+compile. The rest are reported and counted - a section divider standing in for a
+comment, a comment too short to say anything, a missing blank line before `@code`,
+and a missing `@code` block. Rule 7 is not a gate yet because the header does not
+meet it: that count is the backlog, and it becomes a gate when it reaches zero.
 
 What they cannot catch: whether any of it is **true**. Every rule above is about
 form. Accuracy comes from reading the implementation before writing the comment,

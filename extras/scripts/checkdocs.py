@@ -2,13 +2,19 @@
 
 Parses with libclang and reads Cursor.raw_comment - the same attachment clangd
 uses - so this answers "will hover show anything" rather than guessing from line
-positions. Needs: pip install libclang
+positions.
 
 Overloads are judged as a group: one comment above the first of a set that
 differs only by argument type is the normal C++ shape, and an editor shows it
 whichever member it resolves to. A group with no comment anywhere is the defect.
 
-Usage: python extras/scripts/checkdocs.py src/BlaeckSerial.h [-- <extra clang args>]
+Usage:
+  checkdocs.py src/BlaeckSerial.h                 what has no comment (exit 1 if any)
+  checkdocs.py src/BlaeckSerial.h --show tick     what an editor will attach
+  checkdocs.py src/BlaeckSerial.h --extract       every @code block -> DocExamples.ino
+
+Append "-- <clang args>" to any of them to add include paths.
+Needs: pip install libclang
 """
 import sys
 import io
@@ -67,7 +73,7 @@ def _words(raw):
     return words
 
 
-# An example is an indented code line inside the comment - the convention the
+# Before Doxygen, a @code block was just an indented code line - the convention the
 # header already uses:
 #
 #   // Adds a signal ...
@@ -75,10 +81,10 @@ def _words(raw):
 #   //   BlaeckSerial.addSignal(F("Temperature"), &Temperature);
 #
 # Rust requires one on every public item, on the grounds that a signature says
-# what a call looks like and only an example says why you would make it.
-EXAMPLE = re.compile(r"^\s*(?://+|\*)\s{2,}\S")
+# what a call looks like and only a worked call says why you would make it.
+INDENTED_CODE = re.compile(r"^\s*(?://+|\*)\s{2,}\S")
 
-def has_example(raw):
+def has_code_block(raw):
     if not raw:
         return False
     # Doxygen says so outright; the indent heuristic below is for the plain-comment
@@ -86,19 +92,19 @@ def has_example(raw):
     if "@code" in raw:
         return True
     for line in raw.splitlines():
-        if not EXAMPLE.match(line):
+        if not INDENTED_CODE.match(line):
             continue
         body = line.strip().lstrip("/*").strip()
-        # Prose that happens to be indented is not an example; code has syntax.
+        # Prose that happens to be indented is not code; code has syntax.
         if any(t in body for t in ("(", ";", "=", ".", "->")):
             return True
     return False
 
 
 def code_needs_air(raw):
-    """True when an example is jammed against the line above it.
+    """True when a @code block is jammed against the line above it.
 
-    An example is a change of register - prose stops, code starts - and reads as
+    A block is a change of register - prose stops, code starts - and reads as
     one when it is set off. Doxygen does not require the blank line, so nothing
     but this notices when it is missing.
     """
@@ -166,7 +172,7 @@ def show(tu, path, needle):
         print("no public declaration matching %r" % needle)
 
 
-def example_lines(raw):
+def code_block_lines(raw):
     """The code a @code block is made of, and its offset within the comment.
 
     The offset is what lets the generated sketch carry #line directives back to
@@ -175,7 +181,7 @@ def example_lines(raw):
 
     Doxygen delimits it, so that is read exactly. The plain-comment style is
     inferred from the indent, and stops at the first prose line after the block -
-    a comment may explain something below its example, and that prose is not code.
+    a comment may explain something below its block, and that prose is not code.
     """
     lines, inside, seen_any, first = [], False, False, None
     for i, line in enumerate(raw.splitlines()):
@@ -191,7 +197,7 @@ def example_lines(raw):
                 first = i
             lines.append(line.strip().lstrip("/*").rstrip())
         elif not seen_any:
-            if EXAMPLE.match(line):
+            if INDENTED_CODE.match(line):
                 if first is None:
                     first = i
                 lines.append(line.strip().lstrip("/*").rstrip())
@@ -199,13 +205,13 @@ def example_lines(raw):
                 break
     if not seen_any and not any(l.rstrip().endswith((";", "{", "}")) for l in lines):
         # An indented block with no statement in it is a table, not code - the
-        # interval_ms table on setIntervalMs reads exactly like an example otherwise.
+        # interval_ms table on setIntervalMs reads exactly like one otherwise.
         return [], None
     return lines, first
 
 
 # A line that opens a definition rather than performing a step: it has to go at file
-# scope, because C++ has no nested functions and a handler is the natural example for
+# scope, because C++ has no nested functions and a handler is the natural shape for
 # a command callback.
 DEFINITION = re.compile(r"^(void|bool|byte|int|long|float|double|unsigned|char)\b.*\)\s*$")
 
@@ -245,13 +251,13 @@ def extract(tu, path, dest):
     n = 0
     for c in public_api(tu, path):
         raw = c.raw_comment
-        if not raw or not has_example(raw):
+        if not raw or not has_code_block(raw):
             continue
         key = (owner(c), c.spelling)
         if key in seen:
             continue
         seen.add(key)
-        lines, offset = example_lines(raw)
+        lines, offset = code_block_lines(raw)
         if not lines:
             continue
         n += 1
@@ -263,8 +269,8 @@ def extract(tu, path, dest):
         first = c.location.line - len(raw.splitlines()) + offset
         out.append("// %s  (%s:%d)" % (where, path.replace(chr(92), "/"), first))
         if DEFINITION.match(lines[0].strip()):
-            # "void loop()" is the clearest way for an example to say where a call
-            # belongs, and several examples rightly show it. They collide here, so
+            # "void loop()" is the clearest way for a block to say where a call
+            # belongs, and several rightly show it. They collide here, so
             # they are renamed on the way in - the header keeps what reads best.
             head = lines[0].rstrip()
             for name in ("loop", "setup"):
@@ -302,7 +308,7 @@ def main(argv):
         dest = DEFAULT_EXTRACT
         text, n = extract(tu, path, dest)
         io.open(dest, "w", encoding="utf-8", newline=NL).write(text)
-        print("%d example(s) -> %s" % (n, dest))
+        print("%d @code block(s) -> %s" % (n, dest))
         return 0
 
     if "--show" in argv:
@@ -313,15 +319,15 @@ def main(argv):
     for c in public_api(tu, path):
         groups.setdefault((owner(c), c.spelling), []).append(c)
 
-    bare, partial, noexample, jammed = [], [], [], []
+    bare, partial, no_block, jammed = [], [], [], []
     for key, members in groups.items():
         documented = [m for m in members if is_doc(m.raw_comment)]
         if not documented:
             bare.append((key, members))
         elif len(documented) < len(members):
             partial.append((key, members, len(documented)))
-        if documented and not any(has_example(m.raw_comment) for m in members):
-            noexample.append((key, members))
+        if documented and not any(has_code_block(m.raw_comment) for m in members):
+            no_block.append((key, members))
         if any(code_needs_air(m.raw_comment) for m in members):
             jammed.append((key, members))
 
@@ -339,15 +345,15 @@ def main(argv):
 
     if jammed:
         print()
-        print("%d name(s) with an example jammed against the line above it" % len(jammed))
+        print("%d name(s) with a @code block jammed against the line above it" % len(jammed))
         for (cls, name), members in jammed:
             print("  %5d  %s" % (members[0].location.line,
                                  "%s::%s" % (cls, name) if cls else name))
 
     print()
-    print("%d documented name(s) with no example" % len(noexample))
-    if noexample and "-v" in argv:
-        for (cls, name), members in noexample:
+    print("%d documented name(s) with no @code block" % len(no_block))
+    if no_block and "-v" in argv:
+        for (cls, name), members in no_block:
             where = "%s::%s" % (cls, name) if cls else name
             print("  %5d  %s" % (members[0].location.line, where))
     return 1 if bare else 0
