@@ -2015,10 +2015,8 @@ public:
              compiles and runs, and stores nothing. The missing signal is the real
              problem, and hasRejectedSignals() reports it.
 
-    @note    The first call describing a signal allocates the description. If that
-             allocation fails the signal keeps sending its value, undescribed, and
-             printRejections() says so - which is the right way round, since the
-             reading matters more than the icon.
+    @note    The first call describing a signal allocates. If that fails the signal
+             still sends its value, undescribed, and printRejections() says so.
 
     @code
       Blaeck.addSignal("Temperature", &Temperature)
@@ -2342,11 +2340,9 @@ public:
                           truncation is reported once per channel on the debug
                           stream.
 
-    @warning Three things are dropped without a word, and nothing fails: a channel
-             that was never declared, one carrying a number rather than text - use
-             writeState(channelName) there, which reports the variable - and one a
-             command owns through withOwnState(), where writeCommandState() is what
-             publishes it. A debug stream names which of the three it was.
+    @warning Dropped without a word: an undeclared channel, one carrying a number
+             (use writeState(channelName)), or one a command owns (use
+             writeCommandState()). A debug stream says which.
 
     @warning The channel list has to reach the host first, since a value names its
              channel by position in that list rather than by name.
