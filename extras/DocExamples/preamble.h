@@ -40,6 +40,10 @@ unsigned long pulseSince = 0;
 // --- Where a restored setting is kept, for the getSelectOptionIndexOf() example ---
 const int addr = 0;
 
+// Stands in for whatever a sketch actually reads, so an example can show a fresh
+// value arriving without dragging a sensor library in with it.
+inline float readSensor() { return 21.5f; }
+
 // --- Handlers, so a command example has something to point at ---
 inline void onSetFreq(const char *command, const char *const *params, byte paramCount) {}
 inline void onSetWave(const char *command, const char *const *params, byte paramCount) {}

@@ -214,7 +214,15 @@ def extract(tu, path):
         where = "%s::%s" % key if key[0] else key[1]
         out.append("// %s  (line %d)" % (where, c.location.line))
         if DEFINITION.match(lines[0].strip()):
-            out.extend(l.rstrip() for l in lines)
+            # "void loop()" is the clearest way for an example to say where a call
+            # belongs, and several examples rightly show it. They collide here, so
+            # they are renamed on the way in - the header keeps what reads best.
+            head = lines[0].rstrip()
+            for name in ("loop", "setup"):
+                if head.strip() == "void %s()" % name:
+                    head = "void _doc%s%d()" % (name.capitalize(), n)
+            out.append(head)
+            out.extend(l.rstrip() for l in lines[1:])
         else:
             out.append("void _docExample%d()" % n)
             out.append("{")

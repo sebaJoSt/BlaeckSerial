@@ -487,33 +487,70 @@ public:
   */
   BlaeckBeginRef begin(Stream *Ref, unsigned int Size);
 
-  // What the device calls itself, sent in the 0xB3 device frame: the name a host lists it by,
-  // and groups its signals and controls under. Defaults to "Unknown". Not copied - what it
-  // points at has to outlive the device, which a string literal does and a local buffer does not.
+  /*!
+    @brief  Names the device. Defaults to "Unknown".
+
+    The name a host lists the device by, and groups its signals and controls under.
+
+    @warning Not copied. What it points at has to outlive the device, which a string
+             literal does and a local buffer does not.
+    @code
+      BlaeckSerial.DeviceName = "Waveform Generator Demo";
+    @endcode
+  */
   const char *DeviceName = "Unknown";
 
-  // The board this firmware runs on, e.g. "Arduino Mega 2560 Rev3". Shown alongside the device;
-  // nothing is inferred from it. Defaults to "n/a". Not copied, as DeviceName is not.
+  /*!
+    @brief  Names the board this firmware runs on. Defaults to "n/a".
+
+    Shown alongside the device; nothing is inferred from it.
+
+    @warning Not copied, as DeviceName is not.
+    @code
+      BlaeckSerial.DeviceHWVersion = "Arduino Mega 2560 Rev3";
+    @endcode
+  */
   const char *DeviceHWVersion = "n/a";
 
-  // The sketch's own version, e.g. "1.0" - what tells one firmware from another across a fleet
-  // that is half updated. Defaults to "n/a". Not copied, as DeviceName is not.
+  /*!
+    @brief  Names the sketch's own version. Defaults to "n/a".
+
+    Tells one firmware from another across a fleet that is half updated.
+
+    @warning Not copied, as DeviceName is not.
+    @code
+      BlaeckSerial.DeviceFWVersion = "1.0";
+    @endcode
+  */
   const char *DeviceFWVersion = "n/a";
 
   // ----- Signals -----
-  // Add a Signal. The returned handle describes how the signal is presented and
-  // may be ignored:
-  //
-  //   BlaeckSerial.addSignal("Temperature", &Temperature)
-  //       .withUnit(F("\xC2\xB0" "C"))
-  //       .withDeviceClass(F("temperature"))
-  //       .withStateClass(BLAECK_STATE_CLASS_MEASUREMENT)
-  //       .withDisplayPrecision(1);
-  //
-  // A signal that describes nothing gets no 0xF0 entry and costs nothing on the
-  // wire. When the signal table is full the handle is dead: the chain still
-  // compiles and runs, and stores nothing - the missing signal is the real
-  // problem and hasRejectedSignals() already reports it.
+
+  /*!
+    @brief   Registers a value to be sampled and logged over time.
+
+    A signal is a reading, not a setting - it is read on every interval and kept as
+    history. What a control is set to belongs on a state channel instead, which is
+    shown but never logged.
+
+    The library keeps the pointer rather than the value, so it reads whatever the
+    variable holds at the moment it writes. The variable has to be a global.
+
+    @param   signalName  Name a host lists and logs the signal under.
+    @param   value       Address of the variable to read. One overload per type.
+    @return  Handle describing how a host should present the signal. Chainable, and
+             safe to ignore - a signal that describes nothing costs nothing.
+    @note    When the signal table is full the handle is dead: the chain still
+             compiles and runs, and stores nothing. The missing signal is the real
+             problem, and hasRejectedSignals() reports it.
+    @code
+      BlaeckSerial.addSignal("Temperature", &Temperature)
+          .withUnit(F("\xC2\xB0" "C"))
+          .withDeviceClass(F("temperature"))
+          .withStateClass(BLAECK_STATE_CLASS_MEASUREMENT)
+          .withDisplayPrecision(1);
+    @endcode
+  */
   BlaeckBoolSignalRef addSignal(const char *signalName, bool *value);
   BlaeckNumericSignalRef addSignal(const char *signalName, byte *value);
   BlaeckNumericSignalRef addSignal(const char *signalName, short *value);
@@ -526,13 +563,23 @@ public:
   BlaeckNumericSignalRef addSignal(const char *signalName, double *value);
   BlaeckTextSignalRef addSignal(const char *signalName, const char *value);
 
-  // The same eleven, named with F(). The name then stays in flash and the signal keeps a
-  // 2-byte pointer to it instead of a copy, which is most of what a signal costs in SRAM:
-  //
-  //   BlaeckSerial.addSignal(F("Temperature"), &Temperature);
-  //
-  // Only for a name fixed at compile time. A name built at runtime - snprintf into a
-  // buffer, say - must use the overloads above, which copy it.
+  /*!
+    @brief   Registers a signal whose name is kept in flash.
+
+    The same eleven overloads, named with F(). The name then stays in flash and the
+    signal holds a pointer to it rather than a copy, saving the length of the name
+    plus one byte of SRAM for every signal declared this way.
+
+    @param   signalName  Name as an F() literal, fixed at compile time.
+    @param   value       Address of the variable to read.
+    @return  Handle describing how a host should present the signal.
+    @note    Only for a name fixed at compile time. A name built at runtime -
+             snprintf into a buffer, say - needs the const char* overloads, which
+             copy it.
+    @code
+      BlaeckSerial.addSignal(F("Temperature"), &Temperature);
+    @endcode
+  */
   BlaeckBoolSignalRef addSignal(const __FlashStringHelper *signalName, bool *value);
   BlaeckNumericSignalRef addSignal(const __FlashStringHelper *signalName, byte *value);
   BlaeckNumericSignalRef addSignal(const __FlashStringHelper *signalName, short *value);
@@ -545,24 +592,65 @@ public:
   BlaeckNumericSignalRef addSignal(const __FlashStringHelper *signalName, double *value);
   BlaeckTextSignalRef addSignal(const __FlashStringHelper *signalName, const char *value);
 
-  // Empties the signal table so it can be filled again, for a device whose set of signals
-  // changes at runtime. The table keeps its capacity; what it held is freed, along with the
-  // rejection counts and the schema hash. Call writeSymbols() once refilled - a host is
-  // otherwise decoding data against the old catalog.
+  /*!
+    @brief   Empties the signal table so it can be filled again.
+
+    For a device whose set of signals changes while it runs. The table keeps the
+    capacity it was given; what it held is freed, along with the rejection counts
+    and the schema hash.
+
+    @warning Call writeSymbols() once the table is refilled. Until then a host is
+             reading the values against the old list and filing them under the
+             wrong names.
+    @code
+      BlaeckSerial.deleteSignals();
+      BlaeckSerial.addSignal(F("Temperature"), &Temperature);
+      BlaeckSerial.writeSymbols();
+    @endcode
+  */
   void deleteSignals();
-  // Signals that could not be added - past the capacity the table was given, or all of them
-  // when the board had no RAM for the table at all. Both surface at the first addSignal(),
-  // which is where the table is built. Named like hasRejectedCommands() and
-  // hasRejectedChannels(): three tables, one question, one shape of answer.
+
+  /*!
+    @brief   Reports whether any signal could not be added.
+
+    Either the table was already full, or the board had no RAM for it at all. Both
+    surface at the first addSignal(), which is where the table is built.
+
+    @return  True if at least one signal was dropped.
+    @code
+      if (BlaeckSerial.hasRejectedSignals())
+        Serial.println(F("Raise withSignals() on the begin() chain."));
+    @endcode
+  */
   bool hasRejectedSignals() const { return _signalRegistrationFailed; }
-  // How many were rejected, where hasRejectedSignals() only says whether any were. Counted
-  // even with no debug stream attached, so a sketch can report the shortfall itself.
+
+  /*!
+    @brief   Counts the signals that could not be added.
+
+    Where hasRejectedSignals() only says whether any were. Counted even with no
+    debug stream attached, so a sketch can report the shortfall itself.
+
+    @return  How many were dropped.
+    @code
+      Serial.println(BlaeckSerial.getRejectedSignalCount());
+    @endcode
+  */
   uint16_t getRejectedSignalCount() const { return _rejectedSignalCount; }
 
-  // How many signals are registered, which is also one past the highest index write() and
-  // update() accept. Counts what was added, so a signal the table had no room for is not in
-  // it - see getRejectedSignalCount() for those. Maintained by the library: assigning to it
-  // does not resize anything and leaves the count disagreeing with the table.
+  /*!
+    @brief   How many signals are registered.
+
+    Also one past the highest index write() and update() accept. Counts what was
+    added, so a signal the table had no room for is not in it - getRejectedSignalCount()
+    has those.
+
+    @warning Maintained by the library. Assigning to it resizes nothing and leaves
+             the count disagreeing with the table.
+    @code
+      for (int i = 0; i < BlaeckSerial.SignalCount; i++)
+        BlaeckSerial.markSignalUpdated(i);
+    @endcode
+  */
   int SignalCount;
 
   // ----- Device Restarted -----
@@ -885,90 +973,257 @@ public:
   void update(int signalIndex, double value);
 
   // ----- Mark Signals as Updated -----
-  // Use these mark functions for cases where you don't want to change the value
+
+  /*!
+    @brief   Marks a signal as changed without changing its value.
+
+    writeUpdatedData() carries only marked signals. update() marks one as it writes
+    the new value; this marks one whose variable the sketch has already set itself.
+
+    @param   signalIndex  Position of the signal, as findSignalIndex() returns it.
+    @code
+      Temperature = readSensor();
+      BlaeckSerial.markSignalUpdated("Temperature");
+    @endcode
+  */
   void markSignalUpdated(int signalIndex);
   void markSignalUpdated(const char *signalName);
 
-  // Marks every signal, so the next writeUpdatedData() carries the lot. For the first write
-  // after a host connects, where "what changed" is not yet a question it can have an answer to.
+  /*!
+    @brief   Marks every signal, so the next writeUpdatedData() carries them all.
+
+    For the first write after a host connects, where "what changed" is not yet a
+    question it can have an answer to.
+
+    @code
+      BlaeckSerial.markAllSignalsUpdated();
+      BlaeckSerial.writeUpdatedData();
+    @endcode
+  */
   void markAllSignalsUpdated();
 
-  // Clears every mark, so the next writeUpdatedData() carries nothing until something is
-  // marked again. Discards changes rather than sending them.
+  /*!
+    @brief   Clears every mark, discarding changes rather than sending them.
+
+    The next writeUpdatedData() then carries nothing until something is marked again.
+
+    @code
+      BlaeckSerial.clearAllUpdateFlags();
+    @endcode
+  */
   void clearAllUpdateFlags();
-  // Check if any Signals are marked as updated
+
+  /*!
+    @brief   Reports whether any signal is marked as changed.
+
+    @return  True if the next writeUpdatedData() would carry something.
+    @code
+      if (BlaeckSerial.hasUpdatedSignals())
+        BlaeckSerial.writeUpdatedData();
+    @endcode
+  */
   bool hasUpdatedSignals();
 
   // ----- Data Write All -----
 
-  // The 0xD2 data frame carrying every signal, written now whatever the interval says.
-  // Answers <BLAECK.WRITE_DATA>, and is what a sketch calls to send on an occasion of its
-  // own - on a threshold crossing, say - rather than on a schedule.
+  /*!
+    @brief   Sends every signal's current value now, whatever the interval says.
+
+    Answers <BLAECK.WRITE_DATA> when a host asks. A sketch calls it to send on an
+    occasion of its own - a threshold crossing, say - rather than on a schedule.
+
+    @code
+      if (Temperature > 40.0f)
+        BlaeckSerial.writeAllData();
+    @endcode
+  */
   void writeAllData();
 
-  // As writeAllData(), with messageID stamped into the frame header so a host can match
-  // the frame against the request that asked for it.
+  /*!
+    @brief   Sends every signal, tagged so a host can match it to a request.
+
+    @param   messageID  Number the host sent with its request, echoed back.
+    @code
+      BlaeckSerial.writeAllData(42);
+    @endcode
+  */
   void writeAllData(unsigned long messageID);
 
-  // As writeAllData(), with the timestamp supplied by the caller instead of read from the
-  // timestamp callback. For a sketch that holds a better clock than the callback reaches,
-  // or that is writing values it recorded earlier.
+  /*!
+    @brief   Sends every signal, timestamped by the caller.
+
+    For a sketch holding a better clock than the timestamp callback reaches, or one
+    writing values it recorded earlier.
+
+    @param   messageID  Number the host sent with its request, echoed back.
+    @param   timestamp  Microseconds, in whatever epoch setTimestampMode() implies.
+    @code
+      BlaeckSerial.writeAllData(42, 1723600000000000ULL);
+    @endcode
+  */
   void writeAllData(unsigned long messageID, unsigned long long timestamp);
 
-  // As writeAllData(), but writes only once the interval has elapsed, and returns having
-  // done nothing until it has. Safe to call every pass of loop(): this is what tick() uses,
-  // and what to call directly for a device that writes data but answers no commands.
-  // The interval is whatever setIntervalMs() fixed, or whatever the host set.
+  /*!
+    @brief   Sends every signal, but only once the interval has elapsed.
+
+    Returns having done nothing until it is due, so it is safe to call on every pass
+    of loop(). This is the half of tick() that writes; call it directly for a device
+    that sends data but answers no commands.
+
+    The interval is whatever setIntervalMs() fixed, or whatever the host asked for.
+
+    @code
+      void loop()
+      {
+        Temperature = readSensor();
+        BlaeckSerial.timedWriteAllData();
+      }
+    @endcode
+  */
   void timedWriteAllData();
 
-  // As timedWriteAllData(), with messageID stamped into the frame header.
+  /*!
+    @brief   Sends every signal when due, tagged so a host can match it to a request.
+    @param   msg_id  Number the host sent with its request, echoed back.
+    @code
+      BlaeckSerial.timedWriteAllData(42);
+    @endcode
+  */
   void timedWriteAllData(unsigned long msg_id);
 
-  // As timedWriteAllData(), with the timestamp supplied by the caller.
+  /*!
+    @brief   Sends every signal when due, timestamped by the caller.
+    @param   messageID  Number the host sent with its request, echoed back.
+    @param   timestamp  Microseconds, in whatever epoch setTimestampMode() implies.
+    @code
+      BlaeckSerial.timedWriteAllData(42, 1723600000000000ULL);
+    @endcode
+  */
   void timedWriteAllData(unsigned long messageID, unsigned long long timestamp);
 
   // ----- Data Write Updated -----
 
-  // As writeAllData(), but carries only the signals marked with markSignalUpdated() since
-  // the last write, and clears those marks. For a device whose values change rarely: an
-  // unchanged signal costs nothing on the wire.
+  /*!
+    @brief   Sends only the signals that changed, and clears their marks.
+
+    Carries the signals marked by update() or markSignalUpdated() since the last
+    write. For a device whose values change rarely: an unchanged signal costs
+    nothing, where writeAllData() sends all of them every time.
+
+    @code
+      BlaeckSerial.update("Temperature", readSensor());
+      BlaeckSerial.writeUpdatedData();
+    @endcode
+  */
   void writeUpdatedData();
 
-  // As writeUpdatedData(), with messageID stamped into the frame header.
+  /*!
+    @brief   Sends the changed signals, tagged so a host can match it to a request.
+    @param   messageID  Number the host sent with its request, echoed back.
+    @code
+      BlaeckSerial.writeUpdatedData(42);
+    @endcode
+  */
   void writeUpdatedData(unsigned long messageID);
 
-  // As writeUpdatedData(), with the timestamp supplied by the caller.
+  /*!
+    @brief   Sends the changed signals, timestamped by the caller.
+    @param   messageID  Number the host sent with its request, echoed back.
+    @param   timestamp  Microseconds, in whatever epoch setTimestampMode() implies.
+    @code
+      BlaeckSerial.writeUpdatedData(42, 1723600000000000ULL);
+    @endcode
+  */
   void writeUpdatedData(unsigned long messageID, unsigned long long timestamp);
 
-  // As writeUpdatedData(), but writes only once the interval has elapsed. What tickUpdated()
-  // uses, and safe to call every pass of loop().
+  /*!
+    @brief   Sends the changed signals, but only once the interval has elapsed.
+
+    Safe to call on every pass of loop(). This is the half of tickUpdated() that writes.
+
+    @code
+      void loop()
+      {
+        BlaeckSerial.timedWriteUpdatedData();
+      }
+    @endcode
+  */
   void timedWriteUpdatedData();
 
-  // As timedWriteUpdatedData(), with messageID stamped into the frame header.
+  /*!
+    @brief   Sends the changed signals when due, tagged for a host's request.
+    @param   msg_id  Number the host sent with its request, echoed back.
+    @code
+      BlaeckSerial.timedWriteUpdatedData(42);
+    @endcode
+  */
   void timedWriteUpdatedData(unsigned long msg_id);
 
-  // As timedWriteUpdatedData(), with the timestamp supplied by the caller.
+  /*!
+    @brief   Sends the changed signals when due, timestamped by the caller.
+    @param   messageID  Number the host sent with its request, echoed back.
+    @param   timestamp  Microseconds, in whatever epoch setTimestampMode() implies.
+    @code
+      BlaeckSerial.timedWriteUpdatedData(42, 1723600000000000ULL);
+    @endcode
+  */
   void timedWriteUpdatedData(unsigned long messageID, unsigned long long timestamp);
 
   // ----- Tick -----
 
-  // The one call a sketch needs in loop(): reads whatever arrived and dispatches it, then
-  // writes the signals if the interval is due. Equivalent to read() followed by
-  // timedWriteAllData(), so use read() alone for a device that answers commands and sends no
-  // data of its own.
+  /*!
+    @brief   Reads whatever arrived, then sends the signals if the interval is due.
+
+    The one call most sketches need in loop(). Equivalent to read() followed by
+    timedWriteAllData(), so a device that answers commands and sends no data of its
+    own wants read() alone.
+
+    @code
+      void loop()
+      {
+        Temperature = readSensor();
+        BlaeckSerial.tick();
+      }
+    @endcode
+  */
   void tick();
 
-  // As tick(), with messageID stamped into the frame header so a host can match a response
-  // against its request. Left to tick(), the library supplies one that says whether the
-  // interval was fixed by the sketch or set by the host.
+  /*!
+    @brief   Reads and sends as tick(), tagged so a host can match the response.
+
+    Left to tick(), the library supplies a number saying whether the interval was
+    fixed by the sketch or set by the host.
+
+    @param   messageID  Number the host sent with its request, echoed back.
+    @code
+      BlaeckSerial.tick(42);
+    @endcode
+  */
   void tick(unsigned long messageID);
 
-  // As tick(), but writes only the signals marked with markSignalUpdated() since the last
-  // write. For a device whose values change rarely: an unchanged signal costs nothing on the
-  // wire, where tick() sends every signal on every interval.
+  /*!
+    @brief   Reads whatever arrived, then sends only the signals that changed.
+
+    As tick(), but an unchanged signal costs nothing - where tick() sends every
+    signal on every interval.
+
+    @code
+      void loop()
+      {
+        BlaeckSerial.update("Temperature", readSensor());
+        BlaeckSerial.tickUpdated();
+      }
+    @endcode
+  */
   void tickUpdated();
 
-  // As tickUpdated(), with messageID stamped into the frame header.
+  /*!
+    @brief   Reads and sends changed signals, tagged for a host's request.
+    @param   messageID  Number the host sent with its request, echoed back.
+    @code
+      BlaeckSerial.tickUpdated(42);
+    @endcode
+  */
   void tickUpdated(unsigned long messageID);
 
   // ----- Timed Data configuruation -----
