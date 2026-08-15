@@ -198,20 +198,31 @@ void BlaeckSerial::_setTableCapacity(TableId table, unsigned int count)
     return;
   }
 
-  // Every table but the signals is addressed on the wire by a one-byte index, so a
-  // 256th entry could be declared and never named. The capacity is clamped rather
-  // than the entry silently aliasing onto the first one at runtime - and it says so,
-  // because a sketch that asked for 300 and got 255 has a design to revisit, not a
-  // typo. Signals carry no per-entry index (a data frame is positional), so they are
-  // not capped here.
+  // Two different ceilings, and they are worth telling apart.
+  //
+  // A state or event CHANNEL is named on the wire by a one-byte index, so a 256th
+  // could be declared and never addressed - that cap is the protocol, and lifting it
+  // means changing 0x95 and 0x85.
+  //
+  // Event types and commands are capped only by this library's own counters. A type's
+  // wire index is counted within its channel, not across the pool, and a command is
+  // matched by the hash of its name rather than any index. Those two could be widened
+  // here alone, with nothing on the wire changing.
+  //
+  // Either way it is clamped and said aloud, rather than an entry silently aliasing
+  // onto the first one: a sketch that asked for 300 has a design to revisit, not a typo.
   if (count > 255 && table != TABLE_SIGNALS && _debugStream != nullptr)
   {
+    bool wireLimited = (table == TABLE_STATE_CHANNELS || table == TABLE_EVENT_CHANNELS);
     _debugStream->print(F("BLAECK."));
     _debugStream->print(chainCall);
     _debugStream->print(F("("));
     _debugStream->print(count);
-    _debugStream->println(F("): clamped to 255. Entries past that cannot be addressed "
-                            "on the wire, where the channel index is a single byte."));
+    if (wireLimited)
+      _debugStream->println(F("): clamped to 255. A channel is named on the wire by a "
+                              "single byte, so entries past that could never be addressed."));
+    else
+      _debugStream->println(F("): clamped to 255, which is the most this table can hold."));
   }
 
   switch (table)
