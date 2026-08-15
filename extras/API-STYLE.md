@@ -1,0 +1,165 @@
+# Documenting the public API
+
+How the doc comments in `src/BlaeckSerial.h` are written, and why.
+
+The audience is someone new to the library reading a hover in an editor, not
+someone reading the header top to bottom. Most of these rules follow from that:
+a hover is read in isolation, out of order, at the moment somebody is deciding
+what to type next.
+
+Drawn from four style guides that agree more than they differ — [Go Doc
+Comments](https://go.dev/doc/comment), the [Rust API
+Guidelines](https://rust-lang.github.io/api-guidelines/documentation.html),
+[Javadoc](https://www.oracle.com/technical-resources/articles/java/javadoc-tool.html),
+and the [Arduino Language Reference](https://docs.arduino.cc/language-reference/)
+— with the differences settled in favour of Arduino, since that is who reads this.
+
+## The rules
+
+**1. The first sentence stands alone.** It is what autocomplete shows and where
+most readers stop. No clause of context before it.
+
+**2. Verb first, third person, no "you".** *"Sends every signal's current value"*,
+not *"Send the signals"* or *"You can send"*. Booleans borrow Go's phrasing:
+*"Reports whether…"*.
+
+**3. No wire format.** No frame codes, no byte layout, not even the word "frame".
+Say what happens and what breaks if the order is wrong. Whoever implements a host
+reads the [protocol spec](https://sebajost.github.io/blaeck-protocol/); whoever
+reads this header is writing a sketch.
+
+`<BLAECK.WRITE_DATA>` and friends are an exception — a user types those into
+Serial Monitor, so they are interface, not encoding.
+
+**4. Numbers, not adjectives.** Ranges, caps, defaults, per-board differences,
+costs. *"up to 255"*, *"about 25 bytes"*, *"24 on a Mega, 8 on an Uno"* — never
+*"a reasonable number"*. A number you cannot support is worse than none: check it
+or leave it out.
+
+**5. Every public field gets its own comment, with its default.** One comment over
+a group shows the group's text whichever member is hovered, which is how
+`DeviceName` ended up documented as "set these variables".
+
+**6. Hazards go last, in their own paragraph.** Silent failures especially — the
+ones with no crash and no error, where the only symptom is something quietly not
+happening.
+
+**7. Every public name gets an example.** A signature says what a call looks like;
+only an example says why you would make one. See [Examples](#examples) below.
+
+**8. What it does for the caller, not how it works inside.** Cost is the licensed
+exception, and on a microcontroller it is often the point: SRAM, flash, blocking,
+allocation.
+
+**9. Description first, parameters after.** All four guides put the summary first;
+none lead with parameters. Name them inside the sentence where that reads
+naturally, and break them out only when there are three or more, or when one
+carries a constraint that would otherwise be guesswork.
+
+**10. Entry points explain the concept; everything else stays tight.** `begin()`,
+`addSignal()`, `onXCommand()`, `tick()` are where a beginner lands. Define by
+contrast — a beginner's question is not "what is a signal" but "which of the three
+do I want", and one clause of contrast answers it where a definition does not.
+
+**11. A reference may add to a doc, never carry it.** *"As `tick()`, with a
+messageID"* is fine — it still means something alone. *"Not copied, as DeviceName
+is not"* is not: it sends the reader somewhere else to find out what the warning
+was about.
+
+**12. Prominence tracks likelihood.** `@warning` for what the common path can
+reach. `@note` for what only an unusual one can. A lifetime rule that every quoted
+literal satisfies is a note, however true it is.
+
+**13. A blank line before `@code`.** Prose stops, code starts; it reads as a change
+of register only when it is set apart.
+
+## Format
+
+Doxygen `/*!` blocks, in the Adafruit house style, because it renders structured
+in hover and can generate a reference site later.
+
+Order: `@brief` → prose → `@param` → `@return` → `@note` / `@warning` → `@code`.
+
+Ceremony scales with the call. Full slots for entry points and anything taking
+three or more parameters; `@brief` plus `@code` for a one-line getter. The Arduino
+reference is not uniform either — short entries are short.
+
+```cpp
+  /*!
+    @brief   Copies the option at a given position from a select command's list.
+
+    Lets a sketch show what is selected without keeping its own copy of the names.
+
+    @param   command  Name the select command was registered with.
+    @param   index    Position in the list given to withOptions(), counting from 0.
+    @param   out      Buffer the name is copied into. Left empty unless true is returned.
+    @param   outSize  Size of that buffer, terminator included.
+    @return  True if the name was copied. False if the command is not a select, the
+             index is past the end of the list, or the name would not fit.
+    @note    A name too long for the buffer is refused rather than shortened: a
+             truncated name would not match any option the device declared.
+
+    @code
+      char name[12];
+      Blaeck.getSelectOptionNameAt("SET_WAVE", waveIndex, name, sizeof(name));
+    @endcode
+  */
+```
+
+### Overloads
+
+Share one comment where they differ only in the type of an argument — there is
+nothing different to say. Give one each where they differ in what they *do*,
+writing the second as a delta from the first.
+
+`tick()` is what settled this: it shared a comment with `tick(messageID)`, so
+hovering the no-arg form a sketch calls in `loop()` explained a parameter it does
+not take.
+
+## Examples
+
+Every example is extracted and compiled, so an example that names a method that
+has since been renamed fails the build instead of shipping as instructions that do
+not work. This is the only reason rule 7 is affordable; Rust requires an example
+everywhere for the same reason, and checks them the same way.
+
+That imposes three things:
+
+- **Complete statements, not fragments of a chain.** Each example becomes a
+  function body. A dangling `.withRange(...)` cannot compile, and would not teach
+  much anyway.
+- **Draw on the shared vocabulary.** `Temperature`, `Frequency`, `waveIndex`,
+  `readSensor()` and the rest live in `extras/DocExamples/preamble.h`. Reach for an
+  existing name before adding one: examples that all speak of `Temperature` teach
+  the library faster than examples that each invent a cast of characters.
+- **Call the instance `Blaeck`.** Never `BlaeckSerial` — a global variable with the
+  same name as its type switches off IntelliSense for everything derived from it
+  ([vscode-cpptools#4251](https://github.com/microsoft/vscode-cpptools/issues/4251)).
+  The examples were renamed for this; the docs have to agree with them.
+
+An example that shows a handler is written as a whole function — that is the
+natural shape for a command callback, and the extractor emits it at file scope.
+`void loop()` is welcome too; it is renamed on the way into the generated sketch so
+several examples can use it.
+
+## Checking
+
+```
+python extras/checkdocs.py src/BlaeckSerial.h                    # what is undocumented
+python extras/checkdocs.py src/BlaeckSerial.h --show tick        # what a hover will show
+python extras/checkdocs.py src/BlaeckSerial.h --extract out.ino  # every example, as a sketch
+```
+
+`--show` reads `Cursor.raw_comment`, the same attachment clangd hovers, so a doc can
+be checked against what an editor will display without opening one.
+
+CI runs the first (fails on an undocumented public name) and builds the third.
+
+What the tools catch: a missing comment, a section divider standing in for one, a
+comment too short to say anything, a missing blank line before `@code`, a missing
+example, and an example that does not compile.
+
+What they cannot catch: whether any of it is **true**. Every rule above is about
+form. Accuracy comes from reading the implementation before writing the comment,
+and several docs in this header were wrong on the first attempt in ways no checker
+would have flagged.
