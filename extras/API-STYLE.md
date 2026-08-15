@@ -48,6 +48,16 @@ that — while tying the docs to someone else's release schedule. A `@warning` t
 read *"stops accepting it in 2027.4"* had to be rewritten the moment that date
 moved. Where behaviour genuinely varies, "a host may" is both shorter and true.
 
+"A host" deliberately covers both the program reading the frames and anything it
+feeds — the term is defined above `class BlaeckSerial`. They are not separated
+because the library cannot tell which layer enforces a given rule, and neither can
+a sketch: whether Loggbok rejects a malformed device class or the dashboard it
+feeds does, the sketch sees one thing, which is that the entity never appeared.
+
+So **describe the effect, not the actor**. "The entity never appears" is
+observable and stays true; "Loggbok validates it" is a guess about someone else's
+code unless you have opened it.
+
 **4. Numbers, not adjectives.** Ranges, caps, defaults, per-board differences,
 costs. *"up to 255"*, *"about 25 bytes"*, *"24 on a Mega, 8 on an Uno"* — never
 *"a reasonable number"*. A number you cannot support is worse than none: check it

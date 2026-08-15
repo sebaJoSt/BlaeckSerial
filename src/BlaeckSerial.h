@@ -1882,6 +1882,15 @@ private:
   int16_t _index;
 };
 
+// A word these comments use throughout: a HOST is whatever is on the other end of the
+// link - Loggbok, blaecktcpy, or something of your own - together with anything it feeds,
+// such as a dashboard built from what this device declares.
+//
+// They are not distinguished, because this library cannot tell them apart and neither can
+// a sketch. A rule may be enforced by the program reading the frames or by whatever it
+// hands them to; what a sketch observes is the same either way. So these comments describe
+// the effect - the entity does not appear, the value is not kept - rather than naming who
+// is responsible for it.
 class BlaeckSerial
 {
 public:
