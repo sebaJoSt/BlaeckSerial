@@ -1,0 +1,29 @@
+{
+  "name": "BlaeckSerial",
+  "version": "7.0.0",
+  "description": "Send binary sensor data over Serial using the Blaeck protocol. Values can be sent on an interval or requested on demand, and a device describes its own signals, controls, state channels and events so a host can build a dashboard from the sketch.",
+  "keywords": "serial, binary, sensor, telemetry, logging, protocol, home-assistant",
+  "homepage": "https://sebajost.github.io/blaeck-protocol/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sebaJoSt/BlaeckSerial.git"
+  },
+  "authors": {
+    "name": "Sebastian Strobl",
+    "url": "https://github.com/sebaJoSt",
+    "maintainer": true
+  },
+  "license": "MIT",
+  "frameworks": "arduino",
+  "platforms": "*",
+  "dependencies": [
+    {
+      "owner": "robtillaart",
+      "name": "CRC",
+      "version": "^1.0.4"
+    }
+  ],
+  "export": {
+    "include": ["src", "examples", "README.md", "LICENSE.md", "Changelog.md"]
+  }
+}
