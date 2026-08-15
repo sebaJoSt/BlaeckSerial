@@ -3227,6 +3227,15 @@ void BlaeckSerial::writeEvent(const char *, const __FlashStringHelper *, unsigne
 #endif
 
 #if BLAECK_ENABLE_COMMAND_META
+// Whether withRange() was ever called on this entry. An entry that never got one keeps
+// meta_min == meta_max == 0, and 0 to 0 is not a window any value but zero fits through.
+// A text command already reads its own 0 as "no limit" (BLAECK_CMD_TEXT below), so this
+// is the same rule rather than a new one.
+static inline bool _rangeDeclared(const blaeck_detail::CommandHandlerEntry &e)
+{
+  return e.meta_max > e.meta_min;
+}
+
 byte BlaeckSerial::_validateTypedCommand(byte handlerIndex)
 {
   const CommandHandlerEntry &e = _commandHandlers[handlerIndex];
@@ -3248,7 +3257,9 @@ byte BlaeckSerial::_validateTypedCommand(byte handlerIndex)
   if (v[0] == '\0' && e.kind != BLAECK_CMD_TEXT)
     return BLAECK_ACK_MISSING_VALUE;
 
-  if (e.kind == BLAECK_CMD_NUMBER)
+  // No range declared, no limit: the handler decides what the value means. Checking
+  // against the 0 defaults would refuse every value but zero.
+  if (e.kind == BLAECK_CMD_NUMBER && _rangeDeclared(e))
   {
     float f = (float)atof(v);
     if (f < e.meta_min || f > e.meta_max)
@@ -4701,7 +4712,10 @@ void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
         continue;
 
       uint16_t flags = 0;
-      if (e.kind == BLAECK_CMD_NUMBER)
+      // Only when there is one to send. A number command with no withRange() leaves the
+      // bytes out entirely rather than announcing 0 to 0, which a host would build a
+      // control from - and that control would accept nothing but zero.
+      if (e.kind == BLAECK_CMD_NUMBER && _rangeDeclared(e))
         flags |= 0x0001;
       if (e.unit != nullptr)
         flags |= 0x0002;
@@ -4776,7 +4790,10 @@ void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
         continue;
 
       uint16_t flags = 0;
-      if (e.kind == BLAECK_CMD_NUMBER)
+      // Only when there is one to send. A number command with no withRange() leaves the
+      // bytes out entirely rather than announcing 0 to 0, which a host would build a
+      // control from - and that control would accept nothing but zero.
+      if (e.kind == BLAECK_CMD_NUMBER && _rangeDeclared(e))
         flags |= 0x0001;
       if (e.unit != nullptr)
         flags |= 0x0002;

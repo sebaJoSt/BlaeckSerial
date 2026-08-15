@@ -3223,9 +3223,8 @@ public:
     @param   handler  Called once a value has been accepted.
     @return  Handle describing the control. Chainable.
 
-    @warning Give it a range with withRange(). Without one the accepted window is
-             0 to 0, so every value but zero is refused and the handler never runs.
-             A debug stream reports it as allowed [0.00, 0.00].
+    @note    Without withRange() nothing is checked: the handler takes whatever
+             arrives, and the catalog carries no limits for a host to build from.
 
     @code
       Blaeck.onNumberCommand("SET_FREQ", onSetFreq)
