@@ -76,3 +76,5 @@ inline void onStatus(const char *command, const char *const *params, byte paramC
 inline void onLED(const char *command, const char *const *params, byte paramCount) {}
 inline void onReboot(const char *command, const char *const *params, byte paramCount) {}
 inline void onSetLabel(const char *command, const char *const *params, byte paramCount) {}
+inline void onSwitchLED(const char *command, const char *const *params, byte paramCount) {}
+inline void onAny(const char *command, const char *const *params, byte count) {}

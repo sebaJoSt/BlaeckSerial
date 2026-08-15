@@ -2864,42 +2864,119 @@ public:
   //   BLAECK_INTERVAL_CLIENT  client-controlled mode (default)
   // Invalid values are rejected and the previous mode remains active.
   void setIntervalMs(long interval_ms);
-  // The interval as set, in ms, or one of the BLAECK_INTERVAL_* modes above - so a negative
-  // return is a mode rather than a duration. In client-controlled mode this reports the mode,
-  // not whatever interval the host has since asked for.
+  /*!
+    @brief   Reports the interval as set, in milliseconds.
+
+    @return  The interval in ms, or one of the BLAECK_INTERVAL_* modes - so a
+             negative return is a mode rather than a duration. In client-controlled
+             mode this reports the mode, not whatever a host has since asked for.
+
+    @code
+      if (Blaeck.getIntervalMs() == BLAECK_INTERVAL_OFF)
+        Serial.println(F("timed data is locked off"));
+    @endcode
+  */
   long getIntervalMs() const { return _fixedInterval_ms; }
 
   // ----- Read  -----
 
-  // Reads whatever has arrived and dispatches it: the built-in BLAECK.* commands, and the
-  // handlers a sketch registered. Writes no data of its own, so this is what a device that
-  // answers commands but logs nothing calls in loop(), where anything logging calls tick().
-  // Returns as soon as there is nothing to read, so it is safe every pass.
+  /*!
+    @brief   Reads whatever has arrived and dispatches it.
+
+    Handles the built-in BLAECK.* commands and the handlers a sketch registered.
+    Writes no data of its own, so this is what a device that answers commands but
+    logs nothing calls in loop() - anything logging calls tick() instead.
+
+    Returns as soon as there is nothing to read, so it is safe on every pass.
+
+    @code
+      void loop()
+      {
+        Blaeck.read();
+      }
+    @endcode
+  */
   void read();
 
   // ----- Command callback  -----
-  // A command not registered - table full, name too long, or a null argument - is reported on
-  // DebugRef and counted; see hasRejectedCommands(). No registration returns a value to check,
-  // so one look after them all answers for every command whichever helper declared it.
+
+  /*!
+    @brief   Registers a command you parse yourself.
+
+    Nothing is declared about the value, so a host knows the command exists but
+    cannot build a control for it. Use a typed helper - onNumberCommand(),
+    onSwitchCommand() and the rest - where it should appear as a control.
+
+    @param   command  Name a host sends to invoke it.
+    @param   handler  Called with the raw parameters, whatever they are.
+
+    @note    No registration returns anything to check. A command that fails to
+             register - table full, name too long, a null argument - is reported on
+             the debug stream and counted, so one look at hasRejectedCommands()
+             after them all answers for every command, whichever helper declared it.
+
+    @code
+      Blaeck.onCommand("SwitchLED", onSwitchLED);
+    @endcode
+  */
   void onCommand(const char *command, BlaeckCommandHandler handler);
-  // Runs for every command, on top of whichever registered handler matched - not instead of
-  // one, and not only for the unmatched. For logging or forwarding what arrives.
-  //
-  // It also decides how an unknown command is answered: with a catch-all installed, one that
-  // matched nothing is acknowledged as accepted, on the grounds that this handler saw it.
-  // Without one it is answered as unknown, so a host can tell.
+  /*!
+    @brief   Registers a handler that runs for every command.
+
+    On top of whichever registered handler matched - not instead of one, and not
+    only for the unmatched. For logging or forwarding what arrives.
+
+    @param   handler  Called for every command, after any matching handler.
+
+    @note    It also decides how an unknown command is answered. With a catch-all
+             installed, one that matched nothing is acknowledged as accepted, on the
+             grounds that this handler saw it. Without one it is answered as
+             unknown, so a host can tell.
+
+    @code
+      Blaeck.onAnyCommand(onAny);
+    @endcode
+  */
   void onAnyCommand(BlaeckAnyCommandHandler handler);
 
-  // Forgets every registered command, the catch-all included, leaving the table empty and its
-  // capacity untouched. For a device that re-declares what it offers at runtime; the host is
-  // still holding the old list, so follow with writeCommands().
+  /*!
+    @brief   Forgets every registered command, the catch-all included.
+
+    Leaves the table empty and its capacity untouched, for a device that re-declares
+    what it offers while running.
+
+    @warning A host is still holding the old list, so follow with writeCommands().
+
+    @code
+      Blaeck.clearAllCommandHandlers();
+      Blaeck.onSwitchCommand("LED", onLED);
+      Blaeck.writeCommands();
+    @endcode
+  */
   void clearAllCommandHandlers();
 
-  // Whether any command failed to register - see the note above for the three reasons. One
-  // question after all of them answers for the lot, whichever helper declared them.
+  /*!
+    @brief   Reports whether any command failed to register.
+
+    @return  True if at least one was dropped.
+
+    @code
+      if (Blaeck.hasRejectedCommands())
+        Serial.println(F("Raise withCommands() on the begin() chain."));
+    @endcode
+  */
   bool hasRejectedCommands() const { return _rejectedCommandCount > 0; }
 
-  // How many failed to register, where hasRejectedCommands() only says whether any did.
+  /*!
+    @brief   Counts the commands that failed to register.
+
+    @return  How many were dropped, where hasRejectedCommands() only says whether
+             any were.
+
+    @code
+      Serial.println(Blaeck.getRejectedCommandCount());
+    @endcode
+  */
   uint16_t getRejectedCommandCount() const { return _rejectedCommandCount; }
 
   // Compares a string in RAM against one kept in flash, copying neither.
@@ -3014,20 +3091,97 @@ public:
   // to 0..100 step 1, so a command accepting 0..500 gets a control that stops at 100, and one
   // accepting 0..1 gets a control with only two positions.
 
-  // A number. Give it a range with withRange(); the handler reads atof(params[0]).
+  /*!
+    @brief   Registers a command taking a number.
+
+    The handler reads atof(params[0]).
+
+    @param   command  Name a host sends to invoke it.
+    @param   handler  Called once a value has been accepted.
+    @return  Handle describing the control. Chainable.
+
+    @warning Give it a range with withRange(). The firmware validates against it, so
+             without one nothing is checked - and a host with nothing to go on may
+             assume a default like 0..100, which quietly caps a control meant to
+             reach 500 and gives one meant for 0..1 far too much room.
+
+    @code
+      Blaeck.onNumberCommand("SET_FREQ", onSetFreq)
+          .withRange(0.0f, 2.0f, 0.01f)
+          .withUnit(F("Hz"));
+    @endcode
+  */
   BlaeckNumberCommandRef onNumberCommand(const char *command, BlaeckCommandHandler handler);
 
-  // On or off. The handler receives "0" or "1"; anything else is rejected before it runs.
+  /*!
+    @brief   Registers a command that is on or off.
+
+    The handler receives "0" or "1"; anything else is rejected before it runs, so
+    there is nothing to guard against.
+
+    @param   command  Name a host sends to invoke it.
+    @param   handler  Called once a value has been accepted.
+    @return  Handle describing the control. Chainable.
+
+    @code
+      Blaeck.onSwitchCommand("SET_ENABLE", onSetEnable)
+          .withOwnState(F("Enabled"), &Enabled);
+    @endcode
+  */
   BlaeckSwitchCommandRef onSwitchCommand(const char *command, BlaeckCommandHandler handler);
 
-  // A list, declared with withOptions(). A host may send an option by name or by index - the
-  // handler always receives the INDEX, so it reads atoi(params[0]).
+  /*!
+    @brief   Registers a command choosing from a list.
+
+    A host may send an option by name or by index; the handler always receives the
+    index, so it reads atoi(params[0]) either way.
+
+    @param   command  Name a host sends to invoke it.
+    @param   handler  Called once a value has been accepted.
+    @return  Handle describing the control. Chainable.
+
+    @warning Declare the list with withOptions(), or there is nothing to validate
+             against and nothing for a host to offer.
+
+    @code
+      Blaeck.onSelectCommand("SET_WAVE", onSetWave)
+          .withOptions(F("Sine,Square,Triangle,Sawtooth"))
+          .withOwnState(F("Wave"), &waveIndex);
+    @endcode
+  */
   BlaeckSelectCommandRef onSelectCommand(const char *command, BlaeckCommandHandler handler);
 
-  // A press. It carries no value, so the handler runs with no parameters.
+  /*!
+    @brief   Registers a command that is just a press.
+
+    It carries no value, so the handler runs with no parameters.
+
+    @param   command  Name a host sends to invoke it.
+    @param   handler  Called on each press.
+    @return  Handle describing the control. Chainable.
+
+    @code
+      Blaeck.onButtonCommand("STATUS", onStatus);
+    @endcode
+  */
   BlaeckButtonCommandRef onButtonCommand(const char *command, BlaeckCommandHandler handler);
 
-  // Free text. The handler receives it percent-decoded and no longer than withMaxLength() said.
+  /*!
+    @brief   Registers a command taking free text.
+
+    The handler receives it percent-decoded and no longer than withMaxLength() said,
+    so it can copy what it is given.
+
+    @param   command  Name a host sends to invoke it.
+    @param   handler  Called once a value has been accepted.
+    @return  Handle describing the control. Chainable.
+
+    @code
+      Blaeck.onTextCommand("SET_LABEL", onSetLabel)
+          .withMaxLength(sizeof(DeviceLabel) - 1)
+          .config();
+    @endcode
+  */
   BlaeckTextCommandRef onTextCommand(const char *command, BlaeckCommandHandler handler);
 
   /*!
