@@ -530,10 +530,10 @@ public:
   /*!
     @brief   Makes room for a number of event types, across all channels.
 
-    Types share one table rather than having one per channel, so four channels of
-    five types each need withEventTypes(20). This is the table that accumulates -
-    thirteen channels averaging twenty types is already 260 - and the only one
-    besides the signals with no ceiling but RAM.
+    Types share one table, so this is the sum across channels rather than the most
+    any one channel has: four channels of five types each need 20. Sharing is what
+    makes that cheap - a channel with two types costs two slots, where a table per
+    channel would give every channel room for the largest. RAM is the only ceiling.
 
     @param   count  Event types to make room for, added up across every channel.
     @return  The same handle, for chaining.
