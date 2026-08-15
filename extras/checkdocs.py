@@ -89,6 +89,21 @@ def has_example(raw):
     return False
 
 
+def code_needs_air(raw):
+    """True when an example is jammed against the line above it.
+
+    An example is a change of register - prose stops, code starts - and reads as
+    one when it is set off. Doxygen does not require the blank line, so nothing
+    but this notices when it is missing.
+    """
+    prev = None
+    for line in (raw or "").splitlines():
+        if line.strip() == "@code" and prev is not None and prev.strip() != "":
+            return True
+        prev = line
+    return False
+
+
 def why_not_doc(raw):
     """Which of the two ways a comment can attach and still say nothing."""
     words = _words(raw)
@@ -255,7 +270,7 @@ def main(argv):
     for c in public_api(tu, path):
         groups.setdefault((owner(c), c.spelling), []).append(c)
 
-    bare, partial, noexample = [], [], []
+    bare, partial, noexample, jammed = [], [], [], []
     for key, members in groups.items():
         documented = [m for m in members if is_doc(m.raw_comment)]
         if not documented:
@@ -264,6 +279,8 @@ def main(argv):
             partial.append((key, members, len(documented)))
         if documented and not any(has_example(m.raw_comment) for m in members):
             noexample.append((key, members))
+        if any(code_needs_air(m.raw_comment) for m in members):
+            jammed.append((key, members))
 
     print("%s: %d public names, %d with no comment on any overload"
           % (path, len(groups), len(bare)))
@@ -276,6 +293,13 @@ def main(argv):
         print()
         print("  (%d name(s) documented on some overloads only - normal for a type-overload set)"
               % len(partial))
+
+    if jammed:
+        print()
+        print("%d name(s) with an example jammed against the line above it" % len(jammed))
+        for (cls, name), members in jammed:
+            print("  %5d  %s" % (members[0].location.line,
+                                 "%s::%s" % (cls, name) if cls else name))
 
     print()
     print("%d documented name(s) with no example" % len(noexample))

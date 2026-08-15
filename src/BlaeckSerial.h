@@ -462,6 +462,7 @@ public:
              default. A table is allocated in full by the first entry added to it, so
              a table the sketch never uses costs nothing - which is also why the chain
              may run after begin() has returned.
+
     @code
       Serial.begin(115200);
       BlaeckSerial.begin(&Serial)
@@ -481,6 +482,7 @@ public:
     @param   Ref   Stream the device talks over.
     @param   Size  Signals to make room for.
     @return  Handle for sizing the remaining tables, as begin(Stream *) returns.
+
     @code
       BlaeckSerial.begin(&Serial, 8);
     @endcode
@@ -494,6 +496,7 @@ public:
 
     @note   Kept as a pointer, not copied. A quoted literal is always safe; a name
             built at runtime has to live in a global buffer, not one inside a function.
+
     @code
       BlaeckSerial.DeviceName = "Waveform Generator Demo";
     @endcode
@@ -507,6 +510,7 @@ public:
 
     @note   Kept as a pointer, not copied. A quoted literal is always safe; a name
             built at runtime has to live in a global buffer, not one inside a function.
+
     @code
       BlaeckSerial.DeviceHWVersion = "Arduino Mega 2560 Rev3";
     @endcode
@@ -520,6 +524,7 @@ public:
 
     @note   Kept as a pointer, not copied. A quoted literal is always safe; a name
             built at runtime has to live in a global buffer, not one inside a function.
+
     @code
       BlaeckSerial.DeviceFWVersion = "1.0";
     @endcode
@@ -545,6 +550,7 @@ public:
     @note    When the signal table is full the handle is dead: the chain still
              compiles and runs, and stores nothing. The missing signal is the real
              problem, and hasRejectedSignals() reports it.
+
     @code
       BlaeckSerial.addSignal("Temperature", &Temperature)
           .withUnit(F("\xC2\xB0" "C"))
@@ -578,6 +584,7 @@ public:
     @note    Only for a name fixed at compile time. A name built at runtime -
              snprintf into a buffer, say - needs the const char* overloads, which
              copy it.
+
     @code
       BlaeckSerial.addSignal(F("Temperature"), &Temperature);
     @endcode
@@ -604,6 +611,7 @@ public:
     @warning Call writeSymbols() once the table is refilled. Until then a host is
              reading the values against the old list and filing them under the
              wrong names.
+
     @code
       BlaeckSerial.deleteSignals();
       BlaeckSerial.addSignal(F("Temperature"), &Temperature);
@@ -619,6 +627,7 @@ public:
     surface at the first addSignal(), which is where the table is built.
 
     @return  True if at least one signal was dropped.
+
     @code
       if (BlaeckSerial.hasRejectedSignals())
         Serial.println(F("Raise withSignals() on the begin() chain."));
@@ -633,6 +642,7 @@ public:
     debug stream attached, so a sketch can report the shortfall itself.
 
     @return  How many were dropped.
+
     @code
       Serial.println(BlaeckSerial.getRejectedSignalCount());
     @endcode
@@ -648,6 +658,7 @@ public:
 
     @note    Maintained by the library. Assigning to it resizes nothing and leaves
              the count disagreeing with the table.
+
     @code
       for (int i = 0; i < BlaeckSerial.SignalCount; i++)
         BlaeckSerial.markSignalUpdated(i);
@@ -983,6 +994,7 @@ public:
     the new value; this marks one whose variable the sketch has already set itself.
 
     @param   signalIndex  Position of the signal, as findSignalIndex() returns it.
+
     @code
       Temperature = readSensor();
       BlaeckSerial.markSignalUpdated("Temperature");
@@ -1019,6 +1031,7 @@ public:
     @brief   Reports whether any signal is marked as changed.
 
     @return  True if the next writeUpdatedData() would carry something.
+
     @code
       if (BlaeckSerial.hasUpdatedSignals())
         BlaeckSerial.writeUpdatedData();
@@ -1045,6 +1058,7 @@ public:
     @brief   Sends every signal, tagged so a host can match it to a request.
 
     @param   messageID  Number the host sent with its request, echoed back.
+
     @code
       BlaeckSerial.writeAllData(42);
     @endcode
@@ -1059,6 +1073,7 @@ public:
 
     @param   messageID  Number the host sent with its request, echoed back.
     @param   timestamp  Microseconds, in whatever epoch setTimestampMode() implies.
+
     @code
       BlaeckSerial.writeAllData(42, 1723600000000000ULL);
     @endcode
@@ -1087,6 +1102,7 @@ public:
   /*!
     @brief   Sends every signal when due, tagged so a host can match it to a request.
     @param   msg_id  Number the host sent with its request, echoed back.
+
     @code
       BlaeckSerial.timedWriteAllData(42);
     @endcode
@@ -1097,6 +1113,7 @@ public:
     @brief   Sends every signal when due, timestamped by the caller.
     @param   messageID  Number the host sent with its request, echoed back.
     @param   timestamp  Microseconds, in whatever epoch setTimestampMode() implies.
+
     @code
       BlaeckSerial.timedWriteAllData(42, 1723600000000000ULL);
     @endcode
@@ -1122,6 +1139,7 @@ public:
   /*!
     @brief   Sends the changed signals, tagged so a host can match it to a request.
     @param   messageID  Number the host sent with its request, echoed back.
+
     @code
       BlaeckSerial.writeUpdatedData(42);
     @endcode
@@ -1132,6 +1150,7 @@ public:
     @brief   Sends the changed signals, timestamped by the caller.
     @param   messageID  Number the host sent with its request, echoed back.
     @param   timestamp  Microseconds, in whatever epoch setTimestampMode() implies.
+
     @code
       BlaeckSerial.writeUpdatedData(42, 1723600000000000ULL);
     @endcode
@@ -1155,6 +1174,7 @@ public:
   /*!
     @brief   Sends the changed signals when due, tagged for a host's request.
     @param   msg_id  Number the host sent with its request, echoed back.
+
     @code
       BlaeckSerial.timedWriteUpdatedData(42);
     @endcode
@@ -1165,6 +1185,7 @@ public:
     @brief   Sends the changed signals when due, timestamped by the caller.
     @param   messageID  Number the host sent with its request, echoed back.
     @param   timestamp  Microseconds, in whatever epoch setTimestampMode() implies.
+
     @code
       BlaeckSerial.timedWriteUpdatedData(42, 1723600000000000ULL);
     @endcode
@@ -1197,6 +1218,7 @@ public:
     fixed by the sketch or set by the host.
 
     @param   messageID  Number the host sent with its request, echoed back.
+
     @code
       BlaeckSerial.tick(42);
     @endcode
@@ -1222,6 +1244,7 @@ public:
   /*!
     @brief   Reads and sends changed signals, tagged for a host's request.
     @param   messageID  Number the host sent with its request, echoed back.
+
     @code
       BlaeckSerial.tickUpdated(42);
     @endcode
@@ -1414,6 +1437,7 @@ public:
              index is past the end of the list, or the name would not fit.
     @note    A name too long for the buffer is refused rather than shortened: a
              truncated name would not match any option the device declared.
+
     @code
       char name[12];
       BlaeckSerial.getSelectOptionNameAt("SET_WAVE", waveIndex, name, sizeof(name));
