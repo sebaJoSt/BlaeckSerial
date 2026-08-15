@@ -1055,8 +1055,22 @@ public:
   // scope, so nothing had to say this.
   using BlaeckCommandRefShared<BlaeckSwitchCommandRef>::withOwnState;
 
-  // A switch reports its own state as the bool it is: the host renders it as the on/off
-  // payloads it declared, so the sketch never has to know which spelling those use.
+  /*!
+    @brief   Carries this switch's state as the bool it already is.
+
+    The host renders it using the on and off payloads it declared, so the sketch
+    never has to know which spelling those use.
+
+    @param   channelName  Name for the channel. Takes a slot from the state channel
+                          table, so count it in withStateChannels().
+    @param   value        Address of the bool to read. Must be a global.
+    @return  The same handle, for chaining.
+
+    @code
+      Blaeck.onSwitchCommand("SET_ENABLE", onSetEnable)
+          .withOwnState(F("Enabled"), &Enabled);
+    @endcode
+  */
   BlaeckSwitchCommandRef &withOwnState(const __FlashStringHelper *channelName, bool *value)
   {
     _setOwnState(channelName, Blaeck_bool, value);
@@ -1074,28 +1088,55 @@ public:
   // scope, so nothing had to say this.
   using BlaeckCommandRefShared<BlaeckSelectCommandRef>::withOwnState;
 
-  // The closed list this control offers, comma-separated. The handler receives the option INDEX
-  // as text - atoi(params[0]) - whether the value arrived as a name or a number; anything that
-  // is neither is rejected before dispatch. getSelectOptionNameAt() reads a name back out when
-  // text is wanted, so the list lives in flash once instead of being repeated in the sketch.
-  //
-  // Avoid naming an option "none" in any casing: Home Assistant reads that state as "no option
-  // selected" and blanks the control rather than showing it.
+  /*!
+    @brief   Declares the closed set of values this control accepts.
+
+    The list lives in flash once instead of being repeated in the sketch, and the
+    library validates against it: a value that is neither a listed name nor a valid
+    index is rejected before the handler runs. The handler is always handed the
+    index as text, whichever form the host sent, so atoi(params[0]) is enough.
+    getSelectOptionNameAt() reads a name back out when one is wanted.
+
+    @param   optionsCsv  Comma-separated names as an F() literal, in the order their
+                         indices follow.
+    @return  The same handle, for chaining.
+
+    @warning Do not name an option "none" in any casing. Home Assistant reads that
+             state as "no option selected" and blanks the control instead of showing it.
+
+    @code
+      Blaeck.onSelectCommand("SET_WAVE", onSetWave)
+          .withOptions(F("Sine,Square,Triangle,Sawtooth"));
+    @endcode
+  */
   BlaeckSelectCommandRef &withOptions(const __FlashStringHelper *optionsCsv)
   {
     _setOptions(optionsCsv);
     return *this;
   }
 
-  // Where this control reports its state from - one of two, and the index is the usual one.
-  // A handler is handed the option index (the library resolves the name the host sent before
-  // calling it), so that is what a sketch already has; pass a buffer instead only if it keeps
-  // the name for its own reasons. Either way the channel reports the option NAME, which is what
-  // a host expects of a select.
-  //
-  // This overload: the byte the sketch switches on. The library resolves it against the
-  // list declared above, so nothing has to hold that text or refresh it when the selection
-  // changes.
+  /*!
+    @brief   Carries this select's state as the option index the sketch switches on.
+
+    The library resolves the index against the declared list and reports the option
+    NAME, which is what a host expects of a select - so nothing has to hold that text
+    or refresh it when the selection changes. A handler is already handed the index,
+    so this is usually the variable it just assigned.
+
+    Pass a buffer to the const char* form instead only if the sketch keeps the name
+    for its own reasons.
+
+    @param   channelName  Name for the channel. Takes a slot from the state channel
+                          table, so count it in withStateChannels().
+    @param   index        Address of the index variable. Must be a global.
+    @return  The same handle, for chaining.
+
+    @code
+      Blaeck.onSelectCommand("SET_WAVE", onSetWave)
+          .withOptions(F("Sine,Square,Triangle,Sawtooth"))
+          .withOwnState(F("Wave"), &waveIndex);
+    @endcode
+  */
   BlaeckSelectCommandRef &withOwnState(const __FlashStringHelper *channelName, byte *index)
   {
     _setOwnState(channelName, Blaeck_string, index, true);
@@ -1129,16 +1170,44 @@ public:
   // scope, so nothing had to say this.
   using BlaeckCommandRefShared<BlaeckTextCommandRef>::withOwnState;
 
-  // The buffer this control's state lives in. No getter and no formatting: the library reads
-  // the characters where they sit, so a value the sketch already keeps needs no second copy.
+  /*!
+    @brief   Carries this control's state as the buffer the text already lives in.
+
+    No getter and no formatting: the library reads the characters where they sit, so
+    a value the sketch already keeps needs no second copy.
+
+    @param   channelName  Name for the channel. Takes a slot from the state channel
+                          table, so count it in withStateChannels().
+    @param   value        The buffer. Must be a global, and must outlive the device.
+    @return  The same handle, for chaining.
+
+    @code
+      Blaeck.onTextCommand("SET_LABEL", onSetLabel)
+          .withMaxLength(sizeof(DeviceLabel) - 1)
+          .withOwnState(F("DeviceLabel"), DeviceLabel);
+    @endcode
+  */
   BlaeckTextCommandRef &withOwnState(const __FlashStringHelper *channelName, const char *value)
   {
     _setOwnState(channelName, Blaeck_string, value);
     return *this;
   }
 
-  // The advertised limit in decoded bytes, enforced before dispatch: a longer value is rejected
-  // with BLAECK_ACK_TOO_LONG. Left unsaid it is 255. sizeof(buffer) - 1 is usually what you want.
+  /*!
+    @brief   Declares the longest value this control accepts.
+
+    Enforced before the handler runs - a longer value is rejected with
+    BLAECK_ACK_TOO_LONG - so the handler can copy what it is given.
+
+    @param   maxLength  Limit in decoded bytes. Left unsaid it is 255.
+                        sizeof(buffer) - 1 is usually what you want.
+    @return  The same handle, for chaining.
+
+    @code
+      Blaeck.onTextCommand("SET_LABEL", onSetLabel)
+          .withMaxLength(sizeof(DeviceLabel) - 1);
+    @endcode
+  */
   BlaeckTextCommandRef &withMaxLength(unsigned int maxLength)
   {
     _setMaxLength(maxLength);
