@@ -211,7 +211,8 @@ void BlaeckSerial::_setTableCapacity(TableId table, unsigned int count)
   //
   // Either way it is clamped and said aloud, rather than an entry silently aliasing
   // onto the first one: a sketch that asked for 300 has a design to revisit, not a typo.
-  if (count > 255 && table != TABLE_SIGNALS && _debugStream != nullptr)
+  if (count > 255 && table != TABLE_SIGNALS && table != TABLE_EVENT_TYPES &&
+      _debugStream != nullptr)
   {
     bool wireLimited = (table == TABLE_STATE_CHANNELS || table == TABLE_EVENT_CHANNELS);
     _debugStream->print(F("BLAECK."));
@@ -240,7 +241,9 @@ void BlaeckSerial::_setTableCapacity(TableId table, unsigned int count)
     _eventChannelCapacity = (count > 255) ? 255 : (byte)count;
     break;
   case TABLE_EVENT_TYPES:
-    _eventTypeCapacity = (count > 255) ? 255 : (byte)count;
+    // Not clamped: a type's wire index is counted within its channel, so nothing
+    // addresses the pool itself and it may hold as many as RAM allows.
+    _eventTypeCapacity = count;
     break;
 #endif
   case TABLE_COMMANDS:
@@ -2951,7 +2954,7 @@ int BlaeckSerial::_findEventType(byte channelIndex, const __FlashStringHelper *e
   // neither strcmp() nor strcmp_P() applies (the latter reads its first
   // argument from RAM) — read both sides with pgm_read_byte().
   byte index = 0;
-  for (byte i = 0; i < _eventTypeCount; i++)
+  for (uint16_t i = 0; i < _eventTypeCount; i++)
   {
     if (_eventTypes[i].channelIndex != channelIndex)
       continue;
@@ -3053,14 +3056,14 @@ void BlaeckSerial::writeEventChannelsFrame(unsigned long msg_id)
         _bufFlashStr0(e.deviceClass);
 
       byte typeCount = 0;
-      for (byte t = 0; t < _eventTypeCount; t++)
+      for (uint16_t t = 0; t < _eventTypeCount; t++)
       {
         if (_eventTypes[t].channelIndex == i)
           typeCount++;
       }
       _bufByte(typeCount);
 
-      for (byte t = 0; t < _eventTypeCount; t++)
+      for (uint16_t t = 0; t < _eventTypeCount; t++)
       {
         if (_eventTypes[t].channelIndex == i)
           _bufEventType0(_eventTypes[t]);
@@ -3118,14 +3121,14 @@ void BlaeckSerial::writeEventChannelsFrame(unsigned long msg_id)
       }
 
       byte typeCount = 0;
-      for (byte t = 0; t < _eventTypeCount; t++)
+      for (uint16_t t = 0; t < _eventTypeCount; t++)
       {
         if (_eventTypes[t].channelIndex == i)
           typeCount++;
       }
       StreamRef->write(typeCount);
 
-      for (byte t = 0; t < _eventTypeCount; t++)
+      for (uint16_t t = 0; t < _eventTypeCount; t++)
       {
         if (_eventTypes[t].channelIndex == i)
         {

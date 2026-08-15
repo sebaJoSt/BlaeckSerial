@@ -454,19 +454,22 @@ class BlaeckSerial;
 // builds and the number is simply not stored, so a feature switch never breaks
 // a chain.
 //
-// Everything but the signals caps at 255 entries, and asking for more is clamped
-// there with a line on the debug stream. Where that 255 comes from differs:
+// Three of these cap at 255 entries, and asking for more is clamped there with a
+// line on the debug stream. Which three, and why, is worth knowing before sizing a
+// large device:
 //
 //   withStateChannels   the wire. A value names its channel with a one-byte index,
 //   withEventChannels   so a 256th channel could be declared and never addressed.
 //
-//   withEventTypes      this library's own counters. A type's index is counted
-//   withCommands        within its channel rather than across the pool, and a
-//                       command is matched by the hash of its name, so neither
-//                       has a wire index that could run out.
+//   withCommands        this library's own counter. A command is matched by the
+//                       hash of its name and carries no index on the wire, so this
+//                       255 could be lifted without the protocol noticing.
 //
 //   withSignals         nothing. A data frame carries values in catalog order and
 //                       names none of them, so there is no index at all.
+//
+//   withEventTypes      nothing. A type's index is counted within its channel, so
+//                       the pool is addressed by nothing and holds what RAM allows.
 //
 // Long before any of that, RAM decides. A state entry is around 25 bytes, so 255 of
 // them is most of a Mega's SRAM; on an Uno the arithmetic never gets that far.
@@ -498,10 +501,10 @@ public:
   // channel: they share one table, each entry tagged with the channel that
   // declared it. Four channels of five types each need withEventTypes(20).
   //
-  // The most reachable of these ceilings, being the only one that accumulates -
-  // thirteen channels averaging twenty types each would find it. On the wire a
-  // type's index is counted within its channel, so 255 is this library's limit
-  // rather than the protocol's.
+  // The only one of these tables with no ceiling but RAM. It is also the only one
+  // that accumulates - thirteen channels averaging twenty types each is 260 - and
+  // nothing addresses the pool itself, since a type's wire index is counted within
+  // its channel. Costs two bytes of SRAM over a byte-wide count.
   BlaeckBeginRef &withEventTypes(unsigned int count);
 
   // Room for the commands registered with onCommand() and with the typed
@@ -2939,10 +2942,10 @@ private:
   // beside the other _buf helpers because it needs EventTypeEntry, declared just above.
   void _bufEventType0(const EventTypeEntry &e);
   EventTypeEntry *_eventTypes = nullptr;
-  byte _eventTypeCapacity = DEFAULT_EVENT_TYPES;
-  byte _eventTypeSlots() const { return _eventTypes != nullptr ? _eventTypeCapacity : 0; }
+  uint16_t _eventTypeCapacity = DEFAULT_EVENT_TYPES;
+  uint16_t _eventTypeSlots() const { return _eventTypes != nullptr ? _eventTypeCapacity : 0; }
   bool _ensureEventTypeTable();
-  byte _eventTypeCount = 0;
+  uint16_t _eventTypeCount = 0;
 #endif
   BlaeckAnyCommandHandler _anyCommandHandler = nullptr;
   char _parsedTokenBuffer[MAXIMUM_CHAR_COUNT] = {0};
