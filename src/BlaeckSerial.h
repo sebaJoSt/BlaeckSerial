@@ -904,29 +904,68 @@ public:
   // scope, so nothing had to say this.
   using BlaeckCommandRefShared<BlaeckNumberCommandRef>::withOwnState;
 
-  // The range the firmware validates against: a value outside it is rejected before dispatch.
-  // A number command that never calls this accepts anything.
-  // step is display resolution only and is never rounded to - pass 0 to leave it unsaid and let
-  // Home Assistant apply its own. It refuses a step below 0.001, so a finer resolution cannot be
-  // shown; the host raises it rather than let the whole entity be rejected.
+  /*!
+    @brief   Declares the range the firmware accepts.
+
+    A value outside it is rejected before the handler runs, so the handler can take
+    what it is given. A number command that never calls this accepts anything.
+
+    @param   min   Lowest value accepted.
+    @param   max   Highest value accepted.
+    @param   step  Display resolution only - never rounded to, and not validated.
+                   Pass 0 to leave it unsaid and let the host choose. A host may
+                   refuse a step below 0.001 and raise it rather than reject the
+                   whole control, so a finer resolution cannot be shown.
+    @return  The same handle, for chaining.
+
+    @code
+      Blaeck.onNumberCommand("SET_FREQ", onSetFreq).withRange(0.0f, 2.0f, 0.01f);
+    @endcode
+  */
   BlaeckNumberCommandRef &withRange(float min, float max, float step = 0.0f)
   {
     _setRange(min, max, step);
     return *this;
   }
 
-  // Symbol shown beside the input, e.g. F("Hz"). Non-ASCII must be UTF-8:
-  // F("\xC2\xB0" "C") is the degree sign followed by C. A label only - nothing is
-  // converted, and the handler is passed whatever number was sent.
+  /*!
+    @brief   Declares the unit shown beside the input.
+
+    A label only: nothing is converted, and the handler is passed whatever number
+    was sent.
+
+    @param   unit  Symbol as an F() literal. Non-ASCII must be UTF-8:
+                   F("\xC2\xB0" "C") is the degree sign followed by C.
+    @return  The same handle, for chaining.
+
+    @code
+      Blaeck.onNumberCommand("SET_FREQ", onSetFreq).withUnit(F("Hz"));
+    @endcode
+  */
   BlaeckNumberCommandRef &withUnit(const __FlashStringHelper *unit)
   {
     _setUnit(unit);
     return *this;
   }
 
-  // Carries this command's state as a byte (unsigned 8-bit), read directly instead of asking a
-  // getter for text. Sent typed, so the host renders the number and the sketch never formats
-  // one. One overload per numeric type, as addSignal() has.
+  /*!
+    @brief   Carries this command's state as a number read straight from a variable.
+
+    Saves the sketch formatting anything: the value is sent typed and the host
+    renders it. One overload per numeric type, as addSignal() has, and the getter
+    form is still there for a value that has to be composed.
+
+    @param   channelName  Name for the channel. Takes a slot from the state channel
+                          table, so count it in withStateChannels().
+    @param   value        Address of the variable to read. Must be a global.
+    @return  The same handle, for chaining.
+
+    @code
+      Blaeck.onNumberCommand("SET_AMP", onSetAmp)
+          .withRange(0.0f, 100.0f, 0.1f)
+          .withOwnState(F("Amplitude"), &Amplitude);
+    @endcode
+  */
   BlaeckNumberCommandRef &withOwnState(const __FlashStringHelper *channelName, byte *value)
   {
     _setOwnState(channelName, Blaeck_byte, value);

@@ -56,6 +56,7 @@ void onSetOffset(const char *command, const char *const *params, byte paramCount
 
 // --- Handlers, so a command example has something to point at ---
 inline void onSetFreq(const char *command, const char *const *params, byte paramCount) {}
+inline void onSetAmp(const char *command, const char *const *params, byte paramCount) {}
 inline void onSetWave(const char *command, const char *const *params, byte paramCount) {}
 inline void onSetEnable(const char *command, const char *const *params, byte paramCount) {}
 inline void onStatus(const char *command, const char *const *params, byte paramCount) {}
