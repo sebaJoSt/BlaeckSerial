@@ -115,6 +115,20 @@ instead of reserving room for the largest.
 Only where there *is* a tradeoff. A plain limit — a capacity clamped at 255 — buys
 nothing, and inventing an upside for it would be worse than saying nothing.
 
+**15. Name a method in prose as a call.** `writeState(channelName)` or `tick()` —
+never "the channel form of writeState", never "the state writer". Written as a call,
+with no space before the parenthesis, the name is checked against the header on every
+build, so a rename that leaves the prose behind fails instead of shipping.
+
+This is what makes it safe to point a `@warning` at another method at all, and the
+pointing is usually the useful part: *"use writeState(channelName)"* saves a reader
+the search that *"send it as a number instead"* would cost them. `@code` blocks are
+compiled and cannot rot; before this check, prose was the one place in the header a
+rename could quietly survive.
+
+A name that is not a call is invisible to the checker — inside `@code`, in a
+parenthetical like *"a float (32-bit)"*, or spelled out in words.
+
 ## Format
 
 Doxygen `/*!` blocks, in the Adafruit house style, because it renders structured
@@ -223,10 +237,16 @@ arduino-cli compile --fqbn arduino:avr:mega --build-property compiler.cpp.extra_
 
 CI runs the first and builds the third.
 
-Three things fail a build: a public name with no comment, one with no `@code` block,
-and a block that does not compile. The rest are reported and counted - a section
-divider standing in for a comment, a comment too short to say anything, and a missing
-blank line before `@code`.
+Four things fail a build: a public name with no comment, one with no `@code` block, a
+block that does not compile, and prose naming a method the header does not declare.
+The rest are reported and counted - a section divider standing in for a comment, a
+comment too short to say anything, and a missing blank line before `@code`.
+
+The fourth reads names out of the parse, not out of the file's text. Deriving them
+from the source with a regex matches the mentions inside the comments too, so every
+reference declares itself and the check passes on anything - which it did, silently,
+until a deliberately broken name was fed to it. Names from `preamble.h` count as
+declared: prose naming `readSensor()` points at the blocks' cast, not at the library.
 
 Rule 7 became a gate once the header met it. It was only counted while 84 names
 lacked a block, because a red build nobody can fix is a red build everybody learns to

@@ -3331,20 +3331,29 @@ public:
   */
   bool getSelectOptionNameAt(const char *command, byte index, char *out, byte outSize) const;
 
-  // The other direction: the index of a named option, or -1 if that command is not a declared
-  // select or has no such option. Matching is case-insensitive, the same rule an incoming
-  // command value is matched by.
-  //
-  // Mainly for a setting restored from storage. An index is a position in the list declared
-  // with withOptions(), so it only means anything against that exact list: reorder the options
-  // in a later firmware and a stored index quietly selects something else. A stored NAME
-  // survives that, and a name that has since been removed returns -1 rather than landing
-  // somewhere arbitrary, so the sketch can choose its own fallback:
-  //
-  //   char saved[12];
-  //   EEPROM.get(addr, saved);
-  //   long i = Blaeck.getSelectOptionIndexOf("SET_WAVE", saved);
-  //   waveIndex = (i >= 0) ? (byte)i : 0;
+  /*!
+    @brief   Finds the position of a named option in a select command's list.
+
+    The other direction to getSelectOptionNameAt(). Matching is case-insensitive, the
+    same rule an incoming command value is matched by.
+
+    @param   command     Name the select command was registered with.
+    @param   optionName  Option to look for.
+    @return  Its position in the list given to withOptions(), counting from 0. -1 if
+             that command is not a declared select, or has no option of that name.
+    @note    Mainly for a setting restored from storage. An index means something only
+             against the exact list it came from: reorder the options in a later
+             firmware and a stored index quietly selects something else. A stored name
+             survives that, and one since removed returns -1 rather than landing on
+             whichever option took its place.
+
+    @code
+      char saved[12];
+      EEPROM.get(addr, saved);
+      long i = Blaeck.getSelectOptionIndexOf("SET_WAVE", saved);
+      waveIndex = (i >= 0) ? (byte)i : 0;
+    @endcode
+  */
   long getSelectOptionIndexOf(const char *command, const char *optionName) const;
 
   /*!

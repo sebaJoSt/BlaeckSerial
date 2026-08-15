@@ -116,6 +116,39 @@ def code_needs_air(raw):
     return False
 
 
+# Names a doc may mention that this header does not declare: the language, the
+# Arduino core, and the sketch's own entry points.
+KNOWN_ELSEWHERE = {
+    "setup", "loop", "millis", "micros", "delay", "sizeof", "F",
+    "snprintf", "sprintf", "printf", "atof", "atoi", "strcmp", "strlen", "dtostrf",
+}
+
+# A call, not an English parenthetical: no space before the paren. "a float (32-bit)"
+# and "in ms (ACTIVATE ignored)" are prose and would otherwise be read as calls.
+CALL = re.compile(r"\b([a-zA-Z_]\w*)\([^)\n]*\)")
+
+def stale_references(raw, declared):
+    """Method names in prose that this header no longer declares.
+
+    A @code block is compiled, so a rename breaks the build. Prose is not, so a
+    rename leaves it quietly wrong - getSelectOption() became
+    getSelectOptionNameAt() in one commit, and nothing would have noticed.
+    """
+    out, incode = [], False
+    for line in (raw or "").splitlines():
+        bare = line.strip().lstrip("/*").strip()
+        if bare.startswith("@code"):
+            incode = True; continue
+        if bare.startswith("@endcode"):
+            incode = False; continue
+        if incode:
+            continue
+        for name in CALL.findall(line):
+            if name not in declared and name not in KNOWN_ELSEWHERE:
+                out.append(name)
+    return out
+
+
 def why_not_doc(raw):
     """Which of the two ways a comment can attach and still say nothing."""
     words = _words(raw)
@@ -127,6 +160,36 @@ def why_not_doc(raw):
 def owner(c):
     p = c.semantic_parent
     return p.spelling if p is not None else ""
+
+PARSE_ARGS = ["-x", "c++", "-std=c++11", "-fparse-all-comments", "-ferror-limit=0"]
+
+CALLABLE = (
+    ci.CursorKind.CXX_METHOD,
+    ci.CursorKind.FUNCTION_DECL,
+    ci.CursorKind.FUNCTION_TEMPLATE,
+    ci.CursorKind.CONSTRUCTOR,
+)
+
+def declared_names(tu):
+    """Every callable the parse knows about, this header and everything it includes.
+
+    Taken from cursors rather than from the file's text: a regex over the source
+    also matches the mentions inside comments, so every reference would declare
+    itself and the check would pass on anything.
+    """
+    names = {c.spelling for c in tu.cursor.walk_preorder() if c.kind in CALLABLE}
+
+    # The blocks' shared vocabulary counts as declared: prose naming readSensor() or
+    # onSetOffset() is pointing at the example cast, not at the library.
+    pre = os.path.join(os.path.dirname(DEFAULT_EXTRACT), "preamble.h")
+    if os.path.exists(pre):
+        try:
+            ptu = ci.Index.create().parse(pre, args=PARSE_ARGS)
+            names |= {c.spelling for c in ptu.cursor.walk_preorder() if c.kind in CALLABLE}
+        except ci.TranslationUnitLoadError:
+            pass
+    return names
+
 
 def public_api(tu, path):
     want = path.replace('\\\\', "/").lower()
@@ -296,8 +359,7 @@ def extract(tu, path, dest):
 def main(argv):
     path = argv[0]
     extra = argv[argv.index("--") + 1:] if "--" in argv else []
-    args = ["-x", "c++", "-std=c++11", "-fparse-all-comments", "-ferror-limit=0"] + extra
-    tu = ci.Index.create().parse(path, args=args,
+    tu = ci.Index.create().parse(path, args=PARSE_ARGS + extra,
                                  options=ci.TranslationUnit.PARSE_SKIP_FUNCTION_BODIES)
 
     if "--extract" in argv:
@@ -319,7 +381,8 @@ def main(argv):
     for c in public_api(tu, path):
         groups.setdefault((owner(c), c.spelling), []).append(c)
 
-    bare, partial, no_block, jammed = [], [], [], []
+    declared = declared_names(tu)
+    bare, partial, no_block, jammed, stale = [], [], [], [], []
     for key, members in groups.items():
         documented = [m for m in members if is_doc(m.raw_comment)]
         if not documented:
@@ -330,6 +393,9 @@ def main(argv):
             no_block.append((key, members))
         if any(code_needs_air(m.raw_comment) for m in members):
             jammed.append((key, members))
+        for m in members:
+            for name in stale_references(m.raw_comment, declared):
+                stale.append((m.location.line, key, name))
 
     print("%s: %d public names, %d with no comment on any overload"
           % (path, len(groups), len(bare)))
@@ -362,7 +428,14 @@ def main(argv):
     # block leaves a reader with a signature and no worked call. The second was only
     # counted while 84 names lacked one, because a red build nobody can fix is a red
     # build everybody learns to ignore.
-    return 1 if (bare or no_block) else 0
+    if stale:
+        print()
+        print("%d reference(s) in prose to a name this header does not declare:" % len(stale))
+        for line, (cls, name), ref in stale:
+            where = "%s::%s" % (cls, name) if cls else name
+            print("  %5d  %-40s mentions %s()" % (line, where, ref))
+
+    return 1 if (bare or no_block or stale) else 0
 
 if __name__ == "__main__":
     sys.exit(main(sys.argv[1:]))

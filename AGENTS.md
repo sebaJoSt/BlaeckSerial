@@ -32,7 +32,9 @@ python extras/scripts/checkdocs.py src/BlaeckSerial.h --extract    # every block
 ```
 
 Examples in `@code` blocks are extracted and compiled by CI, so one naming a method
-that no longer exists breaks the build.
+that no longer exists breaks the build. The prose is checked the same way: write a
+method reference as a call — `writeState(channelName)`, not "the channel form" — and
+a rename that leaves it behind fails instead of shipping.
 
 ## Building
 
