@@ -38,8 +38,27 @@ const int addr = 0;
 // value arriving without dragging a sensor library in with it.
 inline float readSensor() { return 21.5f; }
 
+// Reports a value as text, for the withOwnState() getter form.
+inline const char *offsetText()
+{
+  static char buf[12];
+  Blaeck.toText(Offset, 1, buf, sizeof(buf));
+  return buf;
+}
+
+// --- A signal a switch command can mirror ---
+bool ledState = false;
+
+// Declared, not defined: a @code block on writeCommandState() shows this handler in
+// full, and the extractor emits it at file scope. Blocks are emitted in header order,
+// so one using the name earlier needs it declared here first.
+void onSetOffset(const char *command, const char *const *params, byte paramCount);
+
 // --- Handlers, so a command example has something to point at ---
 inline void onSetFreq(const char *command, const char *const *params, byte paramCount) {}
 inline void onSetWave(const char *command, const char *const *params, byte paramCount) {}
 inline void onSetEnable(const char *command, const char *const *params, byte paramCount) {}
 inline void onStatus(const char *command, const char *const *params, byte paramCount) {}
+inline void onLED(const char *command, const char *const *params, byte paramCount) {}
+inline void onReboot(const char *command, const char *const *params, byte paramCount) {}
+inline void onSetLabel(const char *command, const char *const *params, byte paramCount) {}

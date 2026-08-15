@@ -802,35 +802,85 @@ template <class TYPE>
 class BlaeckCommandRefShared : public BlaeckCommandRefBase
 {
 public:
-  // The signal that mirrors this command's value, so a host shows what the device holds rather
-  // than what was last sent. Leave it out for an optimistic control.
+  /*!
+    @brief   Points the command at a signal that mirrors its value.
+
+    A host then shows what the device holds rather than what was last sent, so a
+    value the firmware clamped or refused is visible. Leave it out for a control that
+    is assumed to have taken effect.
+
+    @param   signalName  A signal already added with addSignal().
+    @return  The same handle, for chaining.
+
+    @code
+      Blaeck.addSignal(F("LED_State"), &ledState);
+      Blaeck.onSwitchCommand("LED", onLED).withStateSignal(F("LED_State"));
+    @endcode
+  */
   TYPE &withStateSignal(const __FlashStringHelper *signalName)
   {
     _setStateSignal(signalName);
     return _self();
   }
 
-  // State the command carries itself: it declares a state channel of that name - taking a slot
-  // from the state channel table like any other - and asks the getter for the value, instead of
-  // mirroring a signal. The channel belongs to the command - addStateChannel() and writeState()
-  // both refuse the name - so what the catalog reports and what is pushed cannot disagree. Push
-  // a change with writeCommandState(). Independent of the signal table, so a device that adds no
-  // signals can still report what its controls are set to.
+  /*!
+    @brief   Gives the command a state channel of its own, filled by a getter.
+
+    An alternative to withStateSignal() for a control whose value is not a logged
+    measurement. The channel belongs to the command, so addStateChannel() and
+    writeState() both refuse the name and the value can only come from one place.
+    It needs no signals at all, so a device that logs nothing can still report what
+    its controls are set to.
+
+    Push a change with writeCommandState(); otherwise the channel is read only when
+    a host asks.
+
+    @param   channelName   Name for the channel. Takes a slot from the state channel
+                           table, so count it in withStateChannels().
+    @param   getStateText  Called to produce the current value as text.
+    @return  The same handle, for chaining.
+
+    @code
+      Blaeck.onNumberCommand("SET_OFFSET", onSetOffset)
+          .withOwnState(F("Offset"), offsetText);
+    @endcode
+  */
   TYPE &withOwnState(const __FlashStringHelper *channelName, BlaeckStateTextGetter getStateText)
   {
     _setOwnState(channelName, getStateText);
     return _self();
   }
 
-  // A device setting rather than a primary function. Home Assistant keeps both this and
-  // diagnostic() off its auto-generated dashboards.
+  /*!
+    @brief   Files the command as a setting rather than a primary function.
+
+    A host keeps configuration controls off the dashboard it generates, so the ones
+    that matter day to day are not buried among the ones set once.
+
+    @return  The same handle, for chaining.
+
+    @code
+      Blaeck.onTextCommand("SET_LABEL", onSetLabel).withMaxLength(32).config();
+    @endcode
+  */
   TYPE &config()
   {
     _setCategory((uint8_t)BLAECK_CAT_CONFIG);
     return _self();
   }
 
-  // Describes the board rather than what it does. Kept off auto-generated dashboards.
+  /*!
+    @brief   Files the command as describing the board rather than what it does.
+
+    Kept off a generated dashboard for the same reason as config(): a reboot button
+    is not what someone opens the dashboard to see.
+
+    @return  The same handle, for chaining.
+
+    @code
+      Blaeck.onButtonCommand("REBOOT", onReboot).diagnostic();
+    @endcode
+  */
   TYPE &diagnostic()
   {
     _setCategory((uint8_t)BLAECK_CAT_DIAGNOSTIC);
