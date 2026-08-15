@@ -145,9 +145,9 @@ several examples can use it.
 ## Checking
 
 ```
-python extras/checkdocs.py src/BlaeckSerial.h                    # what is undocumented
-python extras/checkdocs.py src/BlaeckSerial.h --show tick        # what a hover will show
-python extras/checkdocs.py src/BlaeckSerial.h --extract out.ino  # every example, as a sketch
+python extras/scripts/checkdocs.py src/BlaeckSerial.h                    # what is undocumented
+python extras/scripts/checkdocs.py src/BlaeckSerial.h --show tick        # what a hover will show
+python extras/scripts/checkdocs.py src/BlaeckSerial.h --extract out.ino  # every example, as a sketch
 ```
 
 `--show` reads `Cursor.raw_comment`, the same attachment clangd hovers, so a doc can

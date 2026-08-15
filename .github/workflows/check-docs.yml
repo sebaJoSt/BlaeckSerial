@@ -10,12 +10,12 @@ on:
   push:
     paths:
       - ".github/workflows/check-docs.yml"
-      - "extras/checkdocs.py"
+      - "extras/scripts/checkdocs.py"
       - "src/**"
   pull_request:
     paths:
       - ".github/workflows/check-docs.yml"
-      - "extras/checkdocs.py"
+      - "extras/scripts/checkdocs.py"
       - "src/**"
   workflow_dispatch:
 
@@ -37,7 +37,7 @@ jobs:
         run: pip install libclang
 
       - name: Check BlaeckSerial.h
-        run: python extras/checkdocs.py src/BlaeckSerial.h
+        run: python extras/scripts/checkdocs.py src/BlaeckSerial.h
 
   # An example in a comment is invisible to the compiler, so one naming a method that
   # has since been renamed ships as instructions that do not build. Rust compiles its
@@ -61,7 +61,7 @@ jobs:
         run: pip install libclang
 
       - name: Extract the examples from the header
-        run: python extras/checkdocs.py src/BlaeckSerial.h --extract extras/DocExamples/DocExamples.ino
+        run: python extras/scripts/checkdocs.py src/BlaeckSerial.h --extract extras/DocExamples/DocExamples.ino
 
       - uses: arduino/compile-sketches@v1
         with:
