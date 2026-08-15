@@ -16,11 +16,6 @@ Please:
    a variable sharing its type's name switches off autocomplete in VS Code. The
    README explains it under *Instantiate BlaeckSerial*.
 
-If a change touches the public API or the frames on the wire, mention it in the
-pull request. [BlaeckTCP](https://github.com/sebaJoSt/BlaeckTCP) is the same
-library over a network and sends byte-identical frames, so it usually needs the
-same change — but porting it is not something you have to do.
-
 ## Checking your work
 
 ```
@@ -43,3 +38,10 @@ SAMD — so a local build is only needed to answer a specific question.
 
 Sources are CRLF. The Arduino Library Manager strips dot-prefixed paths from what
 it distributes, so `.github/` and friends never reach a user; everything else does.
+
+## BlaeckTCP
+
+[BlaeckTCP](https://github.com/sebaJoSt/BlaeckTCP) is the same library over a
+network, sending byte-identical frames. A change to the public API or to the wire
+usually needs to land in both, so mention it in the pull request — porting is
+handled here, and is not something you have to do.
