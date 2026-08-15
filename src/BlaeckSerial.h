@@ -1516,7 +1516,16 @@ template <class TYPE>
 class BlaeckStateRefShared : public BlaeckStateRefBase
 {
 public:
-  // Material Design Icons name, e.g. F("mdi:pulse").
+  /*!
+    @brief   Declares the icon a host shows beside the channel.
+
+    @param   icon  Material Design Icons name, as an F() literal.
+    @return  The same handle, for chaining.
+
+    @code
+      Blaeck.addStateChannel(F("Status")).withIcon(F("mdi:pulse"));
+    @endcode
+  */
   TYPE &withIcon(const __FlashStringHelper *icon)
   {
     if (auto *e = _entry())
@@ -1524,7 +1533,19 @@ public:
     return _self();
   }
 
-  // Groups the entity under Home Assistant's diagnostic section.
+  /*!
+    @brief   Files the channel as describing the device rather than its work.
+
+    Keeps a status line out of the way of the controls and readings a dashboard is
+    opened for.
+
+    @param   on  Pass false to undo it, or a variable to decide at runtime.
+    @return  The same handle, for chaining.
+
+    @code
+      Blaeck.addStateChannel(F("Status")).withIcon(F("mdi:pulse")).diagnostic();
+    @endcode
+  */
   TYPE &diagnostic(bool on = true)
   {
     if (auto *e = _entry())
@@ -1532,9 +1553,21 @@ public:
     return _self();
   }
 
-  // What the value is, for a host that renders it. The list a host draws from depends on the
-  // value type: F("timestamp") or F("date") suit text, F("voltage") a number. A name from the
-  // wrong list fails discovery and the entity never appears.
+  /*!
+    @brief   Declares what the value is, for a host that renders it specially.
+
+    @param   deviceClass  The host's name for the kind of value, as an F() literal.
+    @return  The same handle, for chaining.
+
+    @warning The name has to come from the list for this channel's value type -
+             F("timestamp") or F("date") for text, F("voltage") for a number. One
+             from the wrong list fails discovery and the entity never appears at
+             all, rather than appearing unstyled.
+
+    @code
+      Blaeck.addStateChannel(F("LastSeen")).withDeviceClass(F("timestamp"));
+    @endcode
+  */
   TYPE &withDeviceClass(const __FlashStringHelper *deviceClass)
   {
     if (auto *e = _entry())
@@ -1542,7 +1575,16 @@ public:
     return _self();
   }
 
-  // Registers the entity but leaves it switched off until someone enables it.
+  /*!
+    @brief   Registers the channel but leaves it switched off until someone enables it.
+
+    @param   on  Pass false to undo it, or a variable to decide at runtime.
+    @return  The same handle, for chaining.
+
+    @code
+      Blaeck.addStateChannel(F("BuildInfo")).disabledByDefault();
+    @endcode
+  */
   TYPE &disabledByDefault(bool on = true)
   {
     if (auto *e = _entry())
@@ -1550,9 +1592,20 @@ public:
     return _self();
   }
 
-  // Report every value, even one identical to the last. A host otherwise collapses a repeat
-  // into the entry it already has, so a channel that says the same thing each time leaves no
-  // trace of having been written.
+  /*!
+    @brief   Reports every value, even one identical to the last.
+
+    A host otherwise collapses a repeat into the entry it already has, so a channel
+    that says the same thing each time leaves no trace of having been written - and
+    a device that stopped looks like one with nothing to report.
+
+    @param   on  Pass false to undo it, or a variable to decide at runtime.
+    @return  The same handle, for chaining.
+
+    @code
+      Blaeck.addStateChannel(F("Heartbeat")).forceUpdate();
+    @endcode
+  */
   TYPE &forceUpdate(bool on = true)
   {
     if (auto *e = _entry())
@@ -1663,23 +1716,64 @@ class BlaeckEventChannelRef
 public:
   BlaeckEventChannelRef(BlaeckSerial *owner, int16_t index) : _owner(owner), _index(index) {}
 
-  // Material Design Icons name, e.g. F("mdi:sine-wave").
+  /*!
+    @brief   Declares the icon a host shows beside the channel.
+
+    @param   icon  Material Design Icons name, as an F() literal.
+    @return  The same handle, for chaining.
+
+    @code
+      Blaeck.addEventChannel(F("Activity"), F("idle,resumed")).withIcon(F("mdi:pulse"));
+    @endcode
+  */
   BlaeckEventChannelRef withIcon(const __FlashStringHelper *icon);
 
-  // Groups the entity under Home Assistant's diagnostic section.
+  /*!
+    @brief   Files the channel as describing the device rather than its work.
+
+    @param   on  Pass false to undo it, or a variable to decide at runtime.
+    @return  The same handle, for chaining.
+
+    @code
+      Blaeck.addEventChannel(F("Faults"), F("brownout,watchdog")).diagnostic();
+    @endcode
+  */
   BlaeckEventChannelRef diagnostic(bool on = true);
 
-  // What the channel reports: F("button"), F("doorbell") or F("motion") - those three and no
-  // others. Carried as written, like a signal's, but Home Assistant validates this one against
-  // an enum, so a name it does not know fails discovery and the entity never appears.
-  //
-  // F("doorbell") also requires the channel to declare a "ring" event type. Home Assistant warns
-  // without it today and stops accepting it in 2027.4. F("button") has standard names too -
-  // press_start, press_end, long_press_start, long_press_end, multi_press_ongoing,
-  // multi_press_end - but none are required; declare only what the hardware can produce.
+  /*!
+    @brief   Declares what kind of thing the channel reports.
+
+    Unlike a signal's device class, this one is checked: Home Assistant validates it
+    against an enum of exactly three names, so anything else fails discovery and the
+    entity never appears at all.
+
+    @param   deviceClass  F("button"), F("doorbell") or F("motion"). Those three,
+                          as an F() literal.
+    @return  The same handle, for chaining.
+
+    @warning F("doorbell") also requires the channel to declare a "ring" event type.
+             Home Assistant warns without it today and stops accepting it in 2027.4.
+
+    @note    F("button") has standard type names - press_start, press_end,
+             long_press_start, long_press_end, multi_press_ongoing, multi_press_end -
+             but none are required. Declare only what the hardware can produce.
+
+    @code
+      Blaeck.addEventChannel(F("Doorbell"), F("ring")).withDeviceClass(F("doorbell"));
+    @endcode
+  */
   BlaeckEventChannelRef withDeviceClass(const __FlashStringHelper *deviceClass);
 
-  // Registers the entity but leaves it switched off until someone enables it.
+  /*!
+    @brief   Registers the channel but leaves it switched off until someone enables it.
+
+    @param   on  Pass false to undo it, or a variable to decide at runtime.
+    @return  The same handle, for chaining.
+
+    @code
+      Blaeck.addEventChannel(F("Debug"), F("trace")).disabledByDefault();
+    @endcode
+  */
   BlaeckEventChannelRef disabledByDefault(bool on = true);
 
 private:
