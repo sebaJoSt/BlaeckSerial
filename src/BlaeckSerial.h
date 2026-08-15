@@ -1200,7 +1200,7 @@ public:
     BLAECK_ACK_TOO_LONG - so the handler can copy what it is given.
 
     @param   maxLength  Limit in decoded bytes. Left unsaid it is 255.
-                        sizeof(buffer) - 1 is usually what you want.
+                        sizeof(buffer) - 1 is usually the right value.
     @return  The same handle, for chaining.
 
     @code
@@ -2236,7 +2236,7 @@ public:
     that is a status line or what a control is set to. A signal is the opposite - it
     is sampled on every interval and kept as history.
 
-    Which overload you call settles the channel's type, and the type settles the
+    Which overload is called settles the channel's type, and the type settles the
     handle: a numeric channel takes withUnit(), withStateClass() and
     withDisplayPrecision(), a text one takes withStateText() and withOptions(), and
     asking for the wrong one does not compile.
@@ -2946,7 +2946,7 @@ public:
   // ----- Command callback  -----
 
   /*!
-    @brief   Registers a command you parse yourself.
+    @brief   Registers a command whose parameters the sketch parses itself.
 
     Nothing is declared about the value, so a host knows the command exists but
     cannot build a control for it. Use a typed helper - onNumberCommand(),
@@ -3131,8 +3131,8 @@ public:
   /*!
     @brief   Reports whether any event channel or type could not be declared.
 
-    Counted together because a type belongs to a channel, so either answer sends you
-    to the same place: withEventChannels() or withEventTypes() on the begin() chain.
+    Counted together because a type belongs to a channel, so either answer points to
+    the same place: withEventChannels() or withEventTypes() on the begin() chain.
     A debug stream says which.
 
     @return  True if at least one channel or type was dropped.
