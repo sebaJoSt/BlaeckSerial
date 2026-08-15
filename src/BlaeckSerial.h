@@ -3281,7 +3281,7 @@ inline BlaeckEventChannelRef BlaeckEventChannelRef::withIcon(const __FlashString
   return *this;
 }
 
-inline BlaeckEventChannelRef BlaeckEventChannelRef::diagnostic(bool on = true)
+inline BlaeckEventChannelRef BlaeckEventChannelRef::diagnostic(bool on)
 {
 #if BLAECK_ENABLE_EVENTS
   if (_index >= 0 && _owner != nullptr)
@@ -3303,7 +3303,7 @@ inline BlaeckEventChannelRef BlaeckEventChannelRef::withDeviceClass(const __Flas
   return *this;
 }
 
-inline BlaeckEventChannelRef BlaeckEventChannelRef::disabledByDefault(bool on = true)
+inline BlaeckEventChannelRef BlaeckEventChannelRef::disabledByDefault(bool on)
 {
 #if BLAECK_ENABLE_EVENTS
   if (_index >= 0 && _owner != nullptr)
