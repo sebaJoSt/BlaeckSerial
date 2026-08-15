@@ -26,9 +26,9 @@ Rules: [extras/API-STYLE.md](extras/API-STYLE.md). Every public name needs a doc
 comment and an example, and CI fails without the comment.
 
 ```
-python extras/scripts/checkdocs.py src/BlaeckSerial.h                    # undocumented names
-python extras/scripts/checkdocs.py src/BlaeckSerial.h --show tick        # what a hover shows
-python extras/scripts/checkdocs.py src/BlaeckSerial.h --extract                 # @code blocks, as a sketch
+python extras/scripts/checkdocs.py src/BlaeckSerial.h              # undocumented names
+python extras/scripts/checkdocs.py src/BlaeckSerial.h --show tick  # what a hover shows
+python extras/scripts/checkdocs.py src/BlaeckSerial.h --extract    # every block -> extras/DocExamples/DocExamples.ino
 ```
 
 Examples in `@code` blocks are extracted and compiled by CI, so one naming a method
