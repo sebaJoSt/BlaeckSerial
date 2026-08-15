@@ -1,5 +1,5 @@
 // Globals the @code blocks in BlaeckSerial.h are written against.
-// Only one file includes this, and it does not exist until it is generated: DocExamples.ino
+// Only one file includes this, and it does not exist until it is generated: DocCodeBlocks.ino
 //
 // Before adding a name, read extras/API-STYLE.md - it explains why these are shared
 // and when a new one is warranted.

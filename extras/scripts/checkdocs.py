@@ -11,7 +11,7 @@ whichever member it resolves to. A group with no comment anywhere is the defect.
 Usage:
   checkdocs.py src/BlaeckSerial.h                 what has no comment (exit 1 if any)
   checkdocs.py src/BlaeckSerial.h --show tick     what an editor will attach
-  checkdocs.py src/BlaeckSerial.h --extract       every @code block -> DocExamples.ino
+  checkdocs.py src/BlaeckSerial.h --extract       every @code block -> DocCodeBlocks.ino
 
 Append "-- <clang args>" to any of them to add include paths.
 Needs: pip install libclang
@@ -44,10 +44,10 @@ FIELD_OWNER = "Blaeck"
 
 NL = chr(10)
 
-# extras/scripts/checkdocs.py -> extras/tests/DocExamples/DocExamples.ino, resolved
+# extras/scripts/checkdocs.py -> extras/tests/DocCodeBlocks/DocCodeBlocks.ino, resolved
 # this file rather than the working directory so it holds wherever it is run from.
 DEFAULT_EXTRACT = os.path.normpath(os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "..", "tests", "DocExamples", "DocExamples.ino"))
+    os.path.dirname(os.path.abspath(__file__)), "..", "tests", "DocCodeBlocks", "DocCodeBlocks.ino"))
 
 SECTION = re.compile(r"^[\s/*-]*$")
 

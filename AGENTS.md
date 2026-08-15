@@ -15,7 +15,7 @@ Arduino library sending binary sensor data over Serial using the Blaeck protocol
   name switches off IntelliSense for every builder chain
   ([vscode-cpptools#4251](https://github.com/microsoft/vscode-cpptools/issues/4251))
 - Sources are CRLF. Check after any scripted edit
-- `extras/tests/DocExamples/DocExamples.ino` is generated. It is gitignored; do not commit it
+- `extras/tests/DocCodeBlocks/DocCodeBlocks.ino` is generated. It is gitignored; do not commit it
 - Frame codes and byte layout belong in the
   [protocol spec](https://sebajost.github.io/blaeck-protocol/), not in the header.
   These doc comments describe what a sketch does
@@ -28,7 +28,7 @@ comment and an example, and CI fails without the comment.
 ```
 python extras/scripts/checkdocs.py src/BlaeckSerial.h              # undocumented names
 python extras/scripts/checkdocs.py src/BlaeckSerial.h --show tick  # what a hover shows
-python extras/scripts/checkdocs.py src/BlaeckSerial.h --extract    # every block -> extras/tests/DocExamples/DocExamples.ino
+python extras/scripts/checkdocs.py src/BlaeckSerial.h --extract    # every block -> extras/tests/DocCodeBlocks/DocCodeBlocks.ino
 ```
 
 Examples in `@code` blocks are extracted and compiled by CI, so one naming a method
