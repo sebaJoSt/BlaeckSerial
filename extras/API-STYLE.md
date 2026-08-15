@@ -44,8 +44,9 @@ a group shows the group's text whichever member is hovered, which is how
 ones with no crash and no error, where the only symptom is something quietly not
 happening.
 
-**7. Every public name gets an example.** A signature says what a call looks like;
-only an example says why you would make one. See [Examples](#examples) below.
+**7. Every public name gets a `@code` block.** A signature says what a call looks
+like; only a worked call says why you would make one. See [`@code` blocks](#code-blocks)
+below.
 
 **8. What it does for the caller, not how it works inside.** Cost is the licensed
 exception, and on a microcontroller it is often the point: SRAM, flash, blocking,
@@ -116,36 +117,32 @@ writing the second as a delta from the first.
 hovering the no-arg form a sketch calls in `loop()` explained a parameter it does
 not take.
 
-## Examples
+## `@code` blocks
 
-Throughout this document, an *example* is the `@code` block inside a doc comment —
-the two or three lines an editor shows when someone hovers a method. Not the
-sketches under `examples/`, which are a separate thing that happens to share the
-word.
-
-Every one of them is extracted and compiled, so a block calling a method that has
-since been renamed fails the build instead of being shown on hover as instructions
-that do not work. This is the only reason rule 7 is affordable; Rust requires an
-example everywhere for the same reason, and checks them the same way.
+Every one is extracted and compiled, so a block calling a method that has since been
+renamed fails the build instead of being shown on hover as instructions that do not
+work. This is the only reason rule 7 is affordable; Rust requires one on every public
+item for the same reason, and checks them the same way.
 
 That imposes three things:
 
-- **Complete statements, not fragments of a chain.** Each example becomes a
+- **Complete statements, not fragments of a chain.** Each block becomes a
   function body. A dangling `.withRange(...)` cannot compile, and would not teach
   much anyway.
 - **Draw on the shared vocabulary.** `Temperature`, `Frequency`, `waveIndex`,
   `readSensor()` and the rest live in `extras/DocExamples/preamble.h`. Reach for an
-  existing name before adding one: examples that all speak of `Temperature` teach
-  the library faster than examples that each invent a cast of characters.
+  existing name before adding one: blocks that all speak of `Temperature` teach the
+  library faster than blocks that each invent a cast of characters.
 - **Call the instance `Blaeck`.** Never `BlaeckSerial` — a global variable with the
   same name as its type switches off IntelliSense for everything derived from it
   ([vscode-cpptools#4251](https://github.com/microsoft/vscode-cpptools/issues/4251)).
-  The examples were renamed for this; the docs have to agree with them.
+  The sketches under `examples/` were renamed for this; the docs have to agree with
+  them.
 
-An example that shows a handler is written as a whole function — that is the
-natural shape for a command callback, and the extractor emits it at file scope.
-`void loop()` is welcome too; it is renamed on the way into the generated sketch so
-several examples can use it.
+A block that shows a handler is written as a whole function — that is the natural
+shape for a command callback, and the extractor emits it at file scope. `void loop()`
+is welcome too; it is renamed on the way into the generated sketch so several blocks
+can use it.
 
 `extras/DocExamples/` cannot be renamed. `arduino-cli` requires a sketch folder to
 match its `.ino`, and `preamble.h` is reached by an `#include` resolved against that
@@ -157,7 +154,7 @@ include rather than at the rename.
 ```
 python extras/scripts/checkdocs.py src/BlaeckSerial.h                    # what is undocumented
 python extras/scripts/checkdocs.py src/BlaeckSerial.h --show tick        # what a hover will show
-python extras/scripts/checkdocs.py src/BlaeckSerial.h --extract out.ino  # every example, as a sketch
+python extras/scripts/checkdocs.py src/BlaeckSerial.h --extract out.ino  # every block, as a sketch
 ```
 
 `--show` reads `Cursor.raw_comment`, the same attachment clangd hovers, so a doc can
@@ -167,7 +164,7 @@ CI runs the first (fails on an undocumented public name) and builds the third.
 
 What the tools catch: a missing comment, a section divider standing in for one, a
 comment too short to say anything, a missing blank line before `@code`, a missing
-example, and an example that does not compile.
+`@code` block, and a block that does not compile.
 
 What they cannot catch: whether any of it is **true**. Every rule above is about
 form. Accuracy comes from reading the implementation before writing the comment,
