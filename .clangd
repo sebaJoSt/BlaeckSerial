@@ -1,14 +1,21 @@
-# Points clangd at the Arduino core, so types like Stream and __FlashStringHelper
-# resolve. Without it a hover reads "begin(<error type> *Ref, ...)": clangd is
-# parsing the header with no core on the include path, so every Arduino type is
-# unknown and overloads are hard to tell apart.
+# Only the clangd extension reads this file. The Microsoft C/C++ extension
+# (ms-vscode.cpptools) ignores it and reads .vscode/c_cpp_properties.json instead,
+# which is gitignored - so on a fresh checkout that one has to be written by hand.
 #
-# The database is generated, machine-specific (absolute paths, one board), and
-# gitignored. Rebuild it after changing boards or adding a library - one line, so
-# it pastes into PowerShell and bash alike:
+# Either way the fix is the same: point the editor at a compilation database, so
+# types like Stream and __FlashStringHelper resolve. Without one a hover reads
+#
+#   BlaeckBeginRef begin(<error type> *Ref, unsigned int Size)
+#
+# and the overloads in signature help are hard to tell apart, which is the one
+# place the per-overload documentation is meant to be read.
+#
+# Generate the database - one line, so it pastes into PowerShell and bash alike:
 #
 #   arduino-cli compile --fqbn arduino:avr:mega --only-compilation-database --build-path "$PWD/.development/ccdb" examples/WaveformGenerator
 #
-# Then restart the language server: Ctrl+Shift+P, "clangd: Restart language server".
+# It is machine-specific (absolute paths, one board) and gitignored. Rebuild it
+# after switching boards or adding a library; a stale one is not an error, the
+# editor just falls back to guessing.
 CompileFlags:
   CompilationDatabase: .development/ccdb
