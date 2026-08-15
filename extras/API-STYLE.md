@@ -147,6 +147,11 @@ natural shape for a command callback, and the extractor emits it at file scope.
 `void loop()` is welcome too; it is renamed on the way into the generated sketch so
 several examples can use it.
 
+`extras/DocExamples/` cannot be renamed. `arduino-cli` requires a sketch folder to
+match its `.ino`, and `preamble.h` is reached by an `#include` resolved against that
+sketch — so renaming the folder fails the build with an error pointing at the
+include rather than at the rename.
+
 ## Checking
 
 ```
