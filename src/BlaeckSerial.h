@@ -1459,9 +1459,9 @@ public:
   BlaeckBeginRef begin(Stream *Ref, unsigned int Size);
 
   /*!
-    @brief  Names the device. Defaults to "Unknown".
+    @brief  The name the device calls itself. Defaults to "Unknown".
 
-    The name a host lists the device by, and groups its signals and controls under.
+    What a host lists it by, and groups its signals and controls under.
 
     @note   Kept as a pointer, not copied. A quoted literal is always safe; a name
             built at runtime has to live in a global buffer, not one inside a function.
@@ -1473,7 +1473,7 @@ public:
   const char *DeviceName = "Unknown";
 
   /*!
-    @brief  Names the board this firmware runs on. Defaults to "n/a".
+    @brief  The board this firmware runs on. Defaults to "n/a".
 
     Shown alongside the device; nothing is inferred from it.
 
@@ -1487,7 +1487,7 @@ public:
   const char *DeviceHWVersion = "n/a";
 
   /*!
-    @brief  Names the sketch's own version. Defaults to "n/a".
+    @brief  The sketch's own version. Defaults to "n/a".
 
     Tells one firmware from another across a fleet that is half updated.
 

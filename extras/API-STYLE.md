@@ -30,6 +30,10 @@ most readers stop. No clause of context before it.
 not *"Send the signals"* or *"You can send"*. Booleans borrow Go's phrasing:
 *"Reports whether…"*.
 
+A field is not an action, so it says what the value is: *"The board this firmware
+runs on"*, not *"Names the board this firmware runs on"*. Go does the same for
+variables — *"Version is the Unicode edition from which the tables are derived."*
+
 **3. No wire format.** No frame codes, no byte layout, not even the word "frame".
 Say what happens and what breaks if the order is wrong. Whoever implements a host
 reads the [protocol spec](https://sebajost.github.io/blaeck-protocol/); whoever
