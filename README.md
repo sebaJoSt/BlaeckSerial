@@ -21,15 +21,26 @@ a copy of this library. You can find more detail about installing libraries
 ```
 ### Instantiate BlaeckSerial
 ```CPP
-BlaeckSerial BlaeckSerial;
+BlaeckSerial Blaeck;
 ```
+
+Name the object something other than `BlaeckSerial`. Giving a global variable the
+same name as its type is legal C++ and compiles everywhere, but VS Code's IntelliSense
+then reads the type as the variable and stops offering members, so `Blaeck.addSignal(...)`
+gets no autocomplete and shows errors on calls that build fine
+([vscode-cpptools#4251](https://github.com/microsoft/vscode-cpptools/issues/4251), open
+since 2019 and closed as not planned). The examples all use `Blaeck`.
+
+Sketches that already name the object `BlaeckSerial` keep working - this costs nothing
+but editor support, and renaming the variable is the whole fix.
+
 ### Initialize Serial & BlaeckSerial
 ```CPP
 void setup()
 {
   Serial.begin(115200);
 
-  BlaeckSerial.begin(
+  Blaeck.begin(
     &Serial,   //Serial reference
     2          //Maxmimal signal count used;
   );
@@ -38,30 +49,30 @@ void setup()
 
 ### Add signals
 ```CPP
- BlaeckSerial.addSignal("Test Signal 1", &someGlobalVariable);
- BlaeckSerial.addSignal("Test Signal 2", &anotherGlobalVariable);
+ Blaeck.addSignal("Test Signal 1", &someGlobalVariable);
+ Blaeck.addSignal("Test Signal 2", &anotherGlobalVariable);
 ```
 
 If more signals are added than the configured capacity in `begin(...)`, extra signals are ignored.
 You can detect this in your sketch:
 ```CPP
-if (BlaeckSerial.hasRejectedSignals()) {
+if (Blaeck.hasRejectedSignals()) {
   Serial.print("Ignored signals: ");
-  Serial.println(BlaeckSerial.getRejectedSignalCount());
+  Serial.println(Blaeck.getRejectedSignalCount());
 }
 ```
 
 On AVR, wrapping a name in `F()` keeps it in flash and the signal stores a 2-byte pointer
 instead of a copy — worth doing on an Uno or Nano with many signals:
 ```CPP
- BlaeckSerial.addSignal(F("Test Signal 1"), &someGlobalVariable);
+ Blaeck.addSignal(F("Test Signal 1"), &someGlobalVariable);
 ```
 A run of signals that share a prefix and end in a number needs neither: `withNameSuffix()`
 keeps the prefix in flash and produces the digits when the name is sent, so the names cost
 no SRAM at all. The suffix is 0–255, and `0` is a number like any other:
 ```CPP
  for (int i = 0; i < 8; i++) {
-   BlaeckSerial.addSignal(F("Sine_"), &sine[i]).withNameSuffix(i + 1);
+   Blaeck.addSignal(F("Sine_"), &sine[i]).withNameSuffix(i + 1);
  }
 ```
 Any other name built at runtime cannot use `F()`; pass the buffer and it is copied, so the
@@ -70,7 +81,7 @@ buffer may be reused straight away:
  char signalName[10];
  for (int i = 0; i < 8; i++) {
    snprintf(signalName, sizeof(signalName), "Sine_%d", i + 1);
-   BlaeckSerial.addSignal(signalName, &sine[i]);
+   Blaeck.addSignal(signalName, &sine[i]);
  }
 ```
 
@@ -81,7 +92,7 @@ buffer may be reused straight away:
 reads from the `0xF0` Signal Config frame:
 
 ```CPP
- BlaeckSerial.addSignal("Temperature", &Temperature)
+ Blaeck.addSignal("Temperature", &Temperature)
      .withUnit(F("\xC2\xB0" "C"))
      .withDeviceClass(F("temperature"))
      .withStateClass(BLAECK_STATE_CLASS_MEASUREMENT)
@@ -121,7 +132,7 @@ void loop()
 
   /*Keeps watching for serial input (Serial.read) and
     transmits the data at the user-set interval (Serial.write)*/
-  BlaeckSerial.tick();
+  Blaeck.tick();
 }
 ```
 
@@ -136,13 +147,13 @@ You can lock interval behavior from sketch code:
 
 ```CPP
 // Fixed interval lock: always send every 500 ms, ignore ACTIVATE/DEACTIVATE
-BlaeckSerial.setIntervalMs(500);
+Blaeck.setIntervalMs(500);
 
 // Off lock: disable timed data and ignore ACTIVATE
-BlaeckSerial.setIntervalMs(BLAECK_INTERVAL_OFF);
+Blaeck.setIntervalMs(BLAECK_INTERVAL_OFF);
 
 // Back to client control (default behavior)
-BlaeckSerial.setIntervalMs(BLAECK_INTERVAL_CLIENT);
+Blaeck.setIntervalMs(BLAECK_INTERVAL_CLIENT);
 ```
 
 `setTimedData(...)` has been removed. Use `setIntervalMs(...)` instead.
@@ -175,8 +186,8 @@ void onAny(const char *command, const char *const *params, byte paramCount)
 void setup()
 {
   // ...
-  BlaeckSerial.onCommand("SwitchLED", onSwitchLED);
-  BlaeckSerial.onAnyCommand(onAny);
+  Blaeck.onCommand("SwitchLED", onSwitchLED);
+  Blaeck.onAnyCommand(onAny);
 }
 ```
 
@@ -187,16 +198,16 @@ can build an entity for it — a number with a range, a select with its options,
 with a length limit:
 
 ```CPP
- BlaeckSerial.onNumberCommand("SET_FREQ", onSetFreq)
+ Blaeck.onNumberCommand("SET_FREQ", onSetFreq)
      .withRange(0.0f, 2.0f, 0.01f)
      .withUnit(F("Hz"))
      .withStateSignal(F("Frequency"));
 
- BlaeckSerial.onSelectCommand("SET_WAVE", onSetWave)
+ Blaeck.onSelectCommand("SET_WAVE", onSetWave)
      .withOptions(F("Sine,Square,Triangle,Sawtooth"))
      .withStateSignal(F("WaveName"));
 
- BlaeckSerial.onTextCommand("SET_LABEL", onSetLabel)
+ Blaeck.onTextCommand("SET_LABEL", onSetLabel)
      .withMaxLength(sizeof(DeviceLabel) - 1)
      .withStateSignal(F("DeviceLabel"))
      .config();
@@ -239,10 +250,10 @@ can assemble entire frames in RAM and send them with a single write.
 Override at runtime:
 
 ```CPP
-BlaeckSerial.setBufferedWrites(true);   // force ON
-BlaeckSerial.setBufferedWrites(false);  // force OFF
+Blaeck.setBufferedWrites(true);   // force ON
+Blaeck.setBufferedWrites(false);  // force OFF
 
-Serial.println(BlaeckSerial.isBufferedWrites() ? "ON" : "OFF");
+Serial.println(Blaeck.isBufferedWrites() ? "ON" : "OFF");
 ```
 
 ## Configuration
@@ -259,7 +270,7 @@ first wins.
 
 > [!IMPORTANT]
 > An override **must reach every translation unit** — your sketch *and*
-> `BlaeckSerial.cpp`. These values size members of `class BlaeckSerial`, so a
+> `Blaeck.cpp`. These values size members of `class BlaeckSerial`, so a
 > setting seen by only one of them gives the class two different layouts (an ODR
 > violation) and corrupts memory silently. It is all-or-nothing, never half.
 >
@@ -349,7 +360,7 @@ for esp32, samd, renesas_uno, … Without this file the config is silently ignor
 > device holds is not set here. Say it in the sketch, on the `begin()` chain:
 >
 > ```CPP
-> BlaeckSerial.begin(&Serial)
+> Blaeck.begin(&Serial)
 >     .withSignals(50)
 >     .withStateChannels(12)
 >     .withCommands(16);
@@ -365,10 +376,10 @@ for esp32, samd, renesas_uno, … Without this file the config is silently ignor
 optional:
 
 ```CPP
-BlaeckSerial.begin(&Serial);              // per-board defaults for everything
-BlaeckSerial.begin(&Serial, 20);          // shorthand for .withSignals(20)
+Blaeck.begin(&Serial);              // per-board defaults for everything
+Blaeck.begin(&Serial, 20);          // shorthand for .withSignals(20)
 
-BlaeckSerial.begin(&Serial)
+Blaeck.begin(&Serial)
     .withSignals(50)
     .withStateChannels(12)
     .withEventChannels(6)

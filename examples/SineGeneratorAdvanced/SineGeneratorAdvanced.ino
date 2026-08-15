@@ -47,7 +47,7 @@ struct EEPROMaddress
 } eepromaddress;
 
 //---INSTANCES
-BlaeckSerial BlaeckSerial;
+BlaeckSerial Blaeck;
 
 //---SIGNALS
 #define MAXIMUM_SIGNALS 25
@@ -87,34 +87,34 @@ void setup()
 
   Serial.begin(115200);
   // +2 for the Signal_First / Signal_Last state signals
-  BlaeckSerial.begin(&Serial, MAXIMUM_SIGNALS + 2);
+  Blaeck.begin(&Serial, MAXIMUM_SIGNALS + 2);
 
-  BlaeckSerial.DeviceName = "Advanced Sine Number Generator";
-  BlaeckSerial.DeviceHWVersion = "Arduino Mega 2560 Rev3";
-  BlaeckSerial.DeviceFWVersion = FW_VERSION;
+  Blaeck.DeviceName = "Advanced Sine Number Generator";
+  Blaeck.DeviceHWVersion = "Arduino Mega 2560 Rev3";
+  Blaeck.DeviceFWVersion = FW_VERSION;
 
   // Typed: each becomes a dashboard control. The bounds are numbers with a
   // range and a mirrored signal; applying them is a button, as is STATUS.
-  BlaeckSerial.onNumberCommand("SIGNAL_FIRST", onSetSignalFirst)
+  Blaeck.onNumberCommand("SIGNAL_FIRST", onSetSignalFirst)
       .withRange(1.0f, (float)MAXIMUM_SIGNALS, 1.0f)
       .withStateSignal(F("Signal_First"));
-  BlaeckSerial.onNumberCommand("SIGNAL_LAST", onSetSignalLast)
+  Blaeck.onNumberCommand("SIGNAL_LAST", onSetSignalLast)
       .withRange(1.0f, (float)MAXIMUM_SIGNALS, 1.0f)
       .withStateSignal(F("Signal_Last"));
-  BlaeckSerial.onButtonCommand("SIGNAL_ACTIVATE_RANGE", onSignalActivateRange);
-  BlaeckSerial.onButtonCommand("SIGNAL_DEACTIVATE_RANGE", onSignalDeactivateRange);
-  BlaeckSerial.onButtonCommand("STATUS", onStatus);
+  Blaeck.onButtonCommand("SIGNAL_ACTIVATE_RANGE", onSignalActivateRange);
+  Blaeck.onButtonCommand("SIGNAL_DEACTIVATE_RANGE", onSignalDeactivateRange);
+  Blaeck.onButtonCommand("STATUS", onStatus);
 
   // State channels are declared up-front so the host can announce a text
   // sensor for "Status" before the first line is written.
-  BlaeckSerial.addStateChannel(F("Status")).withIcon(F("mdi:message-text"));
+  Blaeck.addStateChannel(F("Status")).withIcon(F("mdi:message-text"));
 
   // Plain catch-all: <LS> and <command?> answer with free-form help text,
   // which no dashboard control can represent, so it stays untyped.
-  BlaeckSerial.onAnyCommand(onHelpOrList);
+  Blaeck.onAnyCommand(onHelpOrList);
 
   // Signals for Logging with BlaeckSerial
-  // BlaeckSerial.addSignal..
+  // Blaeck.addSignal..
   UpdateLoggingSignals();
 
   PrintInfo(true);
@@ -127,7 +127,7 @@ void loop()
 
   /*Keeps watching for serial input (Serial.read) and
     transmits the data at the user-set interval (Serial.write)*/
-  BlaeckSerial.tick();
+  Blaeck.tick();
 }
 
 void UpdateSineNumbers()
@@ -147,13 +147,13 @@ void UpdateSineNumbers()
 
 void UpdateLoggingSignals()
 {
-  BlaeckSerial.deleteSignals();
+  Blaeck.deleteSignals();
 
   // Re-added first: deleteSignals() drops these too, and the typed number
   // commands above refer to them by name. F() keeps the two names in flash, so
   // re-registering costs no heap for them either.
-  BlaeckSerial.addSignal(F("Signal_First"), &signalFirst);
-  BlaeckSerial.addSignal(F("Signal_Last"), &signalLast);
+  Blaeck.addSignal(F("Signal_First"), &signalFirst);
+  Blaeck.addSignal(F("Signal_Last"), &signalLast);
 
   // The name is a literal plus a counter, which withNameSuffix() says without building
   // it: the prefix stays in flash and the digits are produced when the name is sent. That
@@ -164,7 +164,7 @@ void UpdateLoggingSignals()
   {
     if (sine[i].isActivated)
     {
-      BlaeckSerial.addSignal(F("Sine_"), &sine[i].value).withNameSuffix(i);
+      Blaeck.addSignal(F("Sine_"), &sine[i].value).withNameSuffix(i);
     }
   }
 }

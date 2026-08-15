@@ -55,7 +55,8 @@
 #include "Arduino.h"
 #include "BlaeckSerial.h"
 
-BlaeckSerial BlaeckSerial;
+// Instantiate a new BlaeckSerial object
+BlaeckSerial Blaeck;
 
 //---PUBLISHED AS SIGNALS, AND SO LOGGED
 // addSignal() keeps a pointer to these, so they have to be globals. What the waveform is
@@ -88,64 +89,64 @@ void setup()
   // Sizing every table the sketch fills, so nothing is left to a default: three signals, seven
   // commands, seven state channels (two declared here, five by the commands' withOwnState),
   // three event channels. Every one of these calls is optional.
-  BlaeckSerial.begin(&Serial)
+  Blaeck.begin(&Serial)
       .withSignals(3)
       .withCommands(7)
       .withStateChannels(7)
       .withEventChannels(3);
 
-  BlaeckSerial.DeviceName = "Waveform Generator Demo";
-  BlaeckSerial.DeviceHWVersion = "Arduino Mega 2560 Rev3";
-  BlaeckSerial.DeviceFWVersion = "1.0";
+  Blaeck.DeviceName = "Waveform Generator Demo";
+  Blaeck.DeviceHWVersion = "Arduino Mega 2560 Rev3";
+  Blaeck.DeviceFWVersion = "1.0";
 
   // addSignal() returns a handle describing how a host shows the signal. Every call is optional.
-  BlaeckSerial.addSignal(F("Output"), &Output)
+  Blaeck.addSignal(F("Output"), &Output)
       .withStateClass(BLAECK_STATE_CLASS_MEASUREMENT)
       .withDisplayPrecision(3)
       .withIcon(F("mdi:sine-wave"));
-  BlaeckSerial.addSignal(F("Frequency"), &Frequency);
+  Blaeck.addSignal(F("Frequency"), &Frequency);
 
   // Describes the board rather than the waveform, so it is filed as diagnostic. The device
   // class is what lets a host offer minutes or hours - without one the unit is only a label.
-  BlaeckSerial.addSignal(F("Uptime"), &Uptime)
+  Blaeck.addSignal(F("Uptime"), &Uptime)
       .withUnit(F("s"))
       .withDeviceClass(F("duration"))
       .withStateClass(BLAECK_STATE_CLASS_MEASUREMENT)
       .diagnostic();
 
-  BlaeckSerial.onNumberCommand("SET_FREQ", onSetFreq)
+  Blaeck.onNumberCommand("SET_FREQ", onSetFreq)
       .withRange(0.0f, 2.0f, 0.01f)
       .withUnit(F("Hz"))
       .withStateSignal(F("Frequency"));
-  BlaeckSerial.onNumberCommand("SET_AMP", onSetAmp)
+  Blaeck.onNumberCommand("SET_AMP", onSetAmp)
       .withRange(0.0f, 100.0f, 0.1f)
       .withOwnState(F("Amplitude"), &Amplitude);
-  BlaeckSerial.onNumberCommand("SET_OFFSET", onSetOffset)
+  Blaeck.onNumberCommand("SET_OFFSET", onSetOffset)
       .withRange(-100.0f, 100.0f, 0.1f)
       .withOwnState(F("Offset"), &Offset);
-  BlaeckSerial.onSelectCommand("SET_WAVE", onSetWave)
+  Blaeck.onSelectCommand("SET_WAVE", onSetWave)
       .withOptions(F("Sine,Square,Triangle,Sawtooth"))
       .withOwnState(F("Wave"), &waveIndex);
-  BlaeckSerial.onSwitchCommand("SET_ENABLE", onSetEnable)
+  Blaeck.onSwitchCommand("SET_ENABLE", onSetEnable)
       .withOwnState(F("Enabled"), &Enabled);
   // Host percent-encodes the value; the device decodes it and enforces the 32-byte max.
-  BlaeckSerial.onTextCommand("SET_LABEL", onSetLabel)
+  Blaeck.onTextCommand("SET_LABEL", onSetLabel)
       .withMaxLength(sizeof(DeviceLabel) - 1)
       .withOwnState(F("DeviceLabel"), DeviceLabel)
       .config();
-  BlaeckSerial.onButtonCommand("STATUS", onStatus);
+  Blaeck.onButtonCommand("STATUS", onStatus);
 
-  BlaeckSerial.addStateChannel(F("Status")).withIcon(F("mdi:pulse")).diagnostic();
-  BlaeckSerial.addStateChannel(F("StatusOnDemand")).withIcon(F("mdi:message-text")).diagnostic();
+  Blaeck.addStateChannel(F("Status")).withIcon(F("mdi:pulse")).diagnostic();
+  Blaeck.addStateChannel(F("StatusOnDemand")).withIcon(F("mdi:message-text")).diagnostic();
 
   // Each event channel declares up-front the closed set of events it can report.
   // addEventType() does the same one name at a time, for a list built conditionally.
-  BlaeckSerial.addEventChannel(F("Activity"), F("idle_warning,resumed"))
+  Blaeck.addEventChannel(F("Activity"), F("idle_warning,resumed"))
       .withIcon(F("mdi:sine-wave"));
 
   // Everything is declared: one summary of anything a table had no room for, naming the
   // begin() call that would have kept it. Prints nothing when all of it fitted.
-  BlaeckSerial.printRejections(&Serial);
+  Blaeck.printRejections(&Serial);
 
   lastMicros = micros();
 }
@@ -154,7 +155,7 @@ void loop()
 {
   Uptime = millis() / 1000;
   UpdateWaveform();
-  BlaeckSerial.tick();
+  Blaeck.tick();
   StatusEvery10s();
   CheckActivity();
 }
@@ -213,14 +214,14 @@ void StatusEvery10s()
 void WriteStatus(const __FlashStringHelper *channel)
 {
   char freqText[10] = ""; // fits "2.00"
-  BlaeckSerial.toText(Frequency, 2, freqText, sizeof(freqText));
+  Blaeck.toText(Frequency, 2, freqText, sizeof(freqText));
   char waveName[12] = ""; // fits the longest option, "Triangle"
-  BlaeckSerial.getSelectOptionNameAt("SET_WAVE", waveIndex, waveName, sizeof(waveName));
+  Blaeck.getSelectOptionNameAt("SET_WAVE", waveIndex, waveName, sizeof(waveName));
   const char *runState = Enabled ? "running" : "stopped";
 
   char text[80]; // fits "stopped Triangle @ 2.00 Hz"
   snprintf(text, sizeof(text), "%s %s @ %s Hz", runState, waveName, freqText);
-  BlaeckSerial.writeState(channel, text);
+  Blaeck.writeState(channel, text);
 }
 
 // Warns once per idle stretch (>=5s -> "idle_warning"), and only reports "resumed" if a warning
@@ -237,14 +238,14 @@ void CheckActivity()
 
     if (!warned && (millis() - idleSinceMs) >= 5000UL)
     {
-      BlaeckSerial.writeEvent(F("Activity"), F("idle_warning"));
+      Blaeck.writeEvent(F("Activity"), F("idle_warning"));
       warned = true;
     }
     return;
   }
 
   if (warned)
-    BlaeckSerial.writeEvent(F("Activity"), F("resumed"));
+    Blaeck.writeEvent(F("Activity"), F("resumed"));
 
   idleSinceMs = 0;
   warned = false;
@@ -255,7 +256,7 @@ void onSetFreq(const char *command, const char *const *params, byte paramCount)
   Frequency = (float)atof(params[0]);
   // The one control backed by a signal, so it reports by writing that signal - and the value
   // is logged. The others carry their own state instead, which is not; see onSetAmp().
-  BlaeckSerial.write("Frequency", Frequency);
+  Blaeck.write("Frequency", Frequency);
 }
 
 void onSetAmp(const char *command, const char *const *params, byte paramCount)
@@ -263,34 +264,34 @@ void onSetAmp(const char *command, const char *const *params, byte paramCount)
   Amplitude = (float)atof(params[0]);
   // Publishes the command's own state. Pushing is what makes the new value visible at once -
   // the channel is otherwise only read when a host polls the catalog.
-  BlaeckSerial.writeCommandState(command);
+  Blaeck.writeCommandState(command);
 }
 
 void onSetOffset(const char *command, const char *const *params, byte paramCount)
 {
   Offset = (float)atof(params[0]);
-  BlaeckSerial.writeCommandState(command);
+  Blaeck.writeCommandState(command);
 }
 
 void onSetWave(const char *command, const char *const *params, byte paramCount)
 {
   // params[0] is always the option index, whatever the host sent.
   waveIndex = (byte)atoi(params[0]);
-  BlaeckSerial.writeCommandState(command);
+  Blaeck.writeCommandState(command);
 }
 
 void onSetEnable(const char *command, const char *const *params, byte paramCount)
 {
   // The library has already rejected anything that is not 0 or 1.
   Enabled = atoi(params[0]) == 1;
-  BlaeckSerial.writeCommandState(command);
+  Blaeck.writeCommandState(command);
 }
 
 void onSetLabel(const char *command, const char *const *params, byte paramCount)
 {
   // Never longer than withMaxLength(sizeof(DeviceLabel) - 1) above; empty clears the label.
   strcpy(DeviceLabel, params[0]);
-  BlaeckSerial.writeCommandState(command);
+  Blaeck.writeCommandState(command);
 }
 
 void onStatus(const char *command, const char *const *params, byte paramCount)

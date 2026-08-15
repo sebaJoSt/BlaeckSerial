@@ -104,7 +104,7 @@
 #define ExampleVersion "1.0"
 
 // Instantiate a new BlaeckSerial object
-BlaeckSerial BlaeckSerial;
+BlaeckSerial Blaeck;
 
 // Sets the pin number:
 const int ledPin = LED_BUILTIN;
@@ -128,40 +128,40 @@ void setup()
   Serial.begin(115200);
 
   // Setup BlaeckSerial, room for one signal
-  BlaeckSerial.begin(&Serial, 1);
+  Blaeck.begin(&Serial, 1);
 
   // Reported by <BLAECK.GET_DEVICES>, and used by a host to name the device
-  BlaeckSerial.DeviceName = "Command Demo";
-  BlaeckSerial.DeviceHWVersion = "Arduino Mega 2560 Rev3";
-  BlaeckSerial.DeviceFWVersion = ExampleVersion;
+  Blaeck.DeviceName = "Command Demo";
+  Blaeck.DeviceHWVersion = "Arduino Mega 2560 Rev3";
+  Blaeck.DeviceFWVersion = ExampleVersion;
 
   // The state signal the typed switch below refers to
-  BlaeckSerial.addSignal(F("LED_State"), &ledState);
+  Blaeck.addSignal(F("LED_State"), &ledState);
 
   // Plain: you parse the parameters yourself. Listed by name only, so a host
   // knows the command exists but cannot build a control for it.
-  BlaeckSerial.onCommand("SwitchLED", onSwitchLED);
-  BlaeckSerial.onCommand("Print", onPrint);
+  Blaeck.onCommand("SwitchLED", onSwitchLED);
+  Blaeck.onCommand("Print", onPrint);
 
   // Typed: validated by the library, and listed with the metadata a host needs
   // to create an entity. A switch is 0/1 and mirrors a state signal; a button
   // carries no value.
-  BlaeckSerial.onSwitchCommand("LED", onLED).withStateSignal(F("LED_State"));
-  BlaeckSerial.onButtonCommand("Ping", onPing);
+  Blaeck.onSwitchCommand("LED", onLED).withStateSignal(F("LED_State"));
+  Blaeck.onButtonCommand("Ping", onPing);
 
   // State channels are declared up-front so the host can announce a text
   // sensor for "Status" before the first line is written.
-  BlaeckSerial.addStateChannel(F("Status")).withIcon(F("mdi:message-text"));
+  Blaeck.addStateChannel(F("Status")).withIcon(F("mdi:message-text"));
 }
 
 void loop()
 {
   /* Keeps watching for serial input and dispatches registered handlers
      when input with the correct syntax is detected. tick() also writes
-     the signals in a user-set interval; use BlaeckSerial.read() instead
+     the signals in a user-set interval; use Blaeck.read() instead
      if you only want commands and no data (see the Basic example).
   */
-  BlaeckSerial.tick();
+  Blaeck.tick();
 }
 
 /* Plain command. You get the raw parameters and decide what they mean,
@@ -185,13 +185,13 @@ void onSwitchLED(const char *command, const char *const *params, byte paramCount
   // A plain command parses its own value, so it can accept whatever spelling suits it.
   // equalsFlash() compares the parameter against a name kept in flash: written as a plain
   // literal, "ON" and "OFF" would each sit in SRAM for the life of the sketch.
-  if (BlaeckSerial.equalsFlash(params[0], F("ON")))
+  if (Blaeck.equalsFlash(params[0], F("ON")))
   {
     setLed(true);
     Serial.println("LED is ON.");
     return;
   }
-  if (BlaeckSerial.equalsFlash(params[0], F("OFF")))
+  if (Blaeck.equalsFlash(params[0], F("OFF")))
   {
     setLed(false);
     Serial.println("LED is OFF.");
@@ -248,7 +248,7 @@ void onPing(const char *command, const char *const *params, byte paramCount)
   char text[40];
   unsigned long seconds = millis() / 1000UL;
   snprintf(text, sizeof(text), "alive, running for %lu s", seconds);
-  BlaeckSerial.writeState(F("Status"), text);
+  Blaeck.writeState(F("Status"), text);
 }
 
 /* Exemplary command using string parameters:

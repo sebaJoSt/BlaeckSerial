@@ -5,17 +5,17 @@
 
   1. Direct Write (Sine_1):
      - Data is immediately transmitted after updating
-     - Updates every 100ms using BlaeckSerial.write()
+     - Updates every 100ms using Blaeck.write()
 
   2. Interval Mode (Sine_2 & Sine_3):
      - Data is marked as updated but transmitted only when tickUpdated() is called
      - Sine_2:
         - updates every 2 seconds
         - Data is calculated and stored in the signal variable
-        - Signal is marked as updated using BlaeckSerial.markSignalUpdated()
+        - Signal is marked as updated using Blaeck.markSignalUpdated()
      - Sine_3
         - updates every 10 seconds
-        - Sames as Sine_2, but BlaeckSerial.update() combines updating and marking in a single function call
+        - Sames as Sine_2, but Blaeck.update() combines updating and marking in a single function call
 */
 
 #include "Arduino.h"
@@ -24,7 +24,7 @@
 #define ExampleVersion "1.0"
 
 // Instantiate a new BlaeckSerial object
-BlaeckSerial BlaeckSerial;
+BlaeckSerial Blaeck;
 
 // Signals
 float sine_1;
@@ -49,19 +49,19 @@ void setup()
   Serial.begin(115200);
 
   // Setup BlaeckSerial
-  BlaeckSerial.begin(
+  Blaeck.begin(
       &Serial, // Serial reference
       3        // Maximal signal count used;
   );
 
-  BlaeckSerial.DeviceName = "Write Modes Demo";
-  BlaeckSerial.DeviceHWVersion = "Arduino Mega 2560 Rev3";
-  BlaeckSerial.DeviceFWVersion = ExampleVersion;
+  Blaeck.DeviceName = "Write Modes Demo";
+  Blaeck.DeviceHWVersion = "Arduino Mega 2560 Rev3";
+  Blaeck.DeviceFWVersion = ExampleVersion;
 
   // Add signals to BlaeckSerial
-  BlaeckSerial.addSignal(F("Sine_1"), &sine_1);
-  BlaeckSerial.addSignal(F("Sine_2"), &sine_2);
-  BlaeckSerial.addSignal(F("Sine_3"), &sine_3);
+  Blaeck.addSignal(F("Sine_1"), &sine_1);
+  Blaeck.addSignal(F("Sine_2"), &sine_2);
+  Blaeck.addSignal(F("Sine_3"), &sine_3);
 }
 
 void loop()
@@ -71,7 +71,7 @@ void loop()
   UpdateSecondSine();
   UpdateThirdSine();
 
-  BlaeckSerial.tickUpdated();
+  Blaeck.tickUpdated();
 }
 
 void TransmitFirstSine()
@@ -82,7 +82,7 @@ void TransmitFirstSine()
     updateFirstTime_s1 = false;
 
     float calcSine = sin(millis() * 0.00005);
-    BlaeckSerial.write("Sine_1", calcSine);
+    Blaeck.write("Sine_1", calcSine);
   }
 }
 
@@ -94,7 +94,7 @@ void UpdateSecondSine()
     updateFirstTime_s2 = false;
 
     sine_2 = sin(millis() * 0.00005);
-    BlaeckSerial.markSignalUpdated("Sine_2");
+    Blaeck.markSignalUpdated("Sine_2");
   }
 }
 
@@ -106,6 +106,6 @@ void UpdateThirdSine()
     updateFirstTime_s3 = false;
 
     float calcSine = sin(millis() * 0.00005);
-    BlaeckSerial.update("Sine_3", calcSine);
+    Blaeck.update("Sine_3", calcSine);
   }
 }

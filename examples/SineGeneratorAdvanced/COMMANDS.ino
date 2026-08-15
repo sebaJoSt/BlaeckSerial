@@ -14,7 +14,7 @@ void onSetSignalFirst(const char *command, const char *const *params, byte param
   {
     signalFirst = (byte)atoi(params[0]);
     EEPROM.updateByte(eepromaddress.signalFirst, signalFirst);
-    BlaeckSerial.write("Signal_First", signalFirst);
+    Blaeck.write("Signal_First", signalFirst);
   }
 }
 
@@ -25,7 +25,7 @@ void onSetSignalLast(const char *command, const char *const *params, byte paramC
   {
     signalLast = (byte)atoi(params[0]);
     EEPROM.updateByte(eepromaddress.signalLast, signalLast);
-    BlaeckSerial.write("Signal_Last", signalLast);
+    Blaeck.write("Signal_Last", signalLast);
   }
 }
 
@@ -140,7 +140,7 @@ void onStatus(const char *command, const char *const *params, byte paramCount)
   }
   char text[48];
   snprintf(text, sizeof(text), "%u of %u signals active", (unsigned)active, (unsigned)MAXIMUM_SIGNALS);
-  BlaeckSerial.writeState(F("Status"), text);
+  Blaeck.writeState(F("Status"), text);
 }
 
 // Catch-all handler for help commands (?) and LS

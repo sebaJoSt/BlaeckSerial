@@ -29,7 +29,7 @@
 #define ExampleVersion "1.0"
 
 // Instantiate a new BlaeckSerial object
-BlaeckSerial BlaeckSerial;
+BlaeckSerial Blaeck;
 
 // Signals
 float randomSmallNumber;
@@ -41,33 +41,33 @@ void setup()
   Serial.begin(115200);
 
   // Setup BlaeckSerial
-  BlaeckSerial.begin(
+  Blaeck.begin(
       &Serial, // Serial reference
       2        // Maximal signal count used;
   );
 
-  BlaeckSerial.DeviceName = "Random Number Generator";
-  BlaeckSerial.DeviceHWVersion = "Arduino Mega 2560 Rev3";
-  BlaeckSerial.DeviceFWVersion = ExampleVersion;
+  Blaeck.DeviceName = "Random Number Generator";
+  Blaeck.DeviceHWVersion = "Arduino Mega 2560 Rev3";
+  Blaeck.DeviceFWVersion = ExampleVersion;
 
   // Add signals to BlaeckSerial. F() keeps the names in flash: a plain literal is copied
   // into RAM at startup and copied again into the name the signal keeps, while F() leaves
   // it where it is and the signal stores a 2-byte pointer. That is most of what a signal
   // costs in SRAM on an Uno or Nano.
-  BlaeckSerial.addSignal(F("Small Number"), &randomSmallNumber);
-  BlaeckSerial.addSignal(F("Big Number"), &randomBigNumber);
+  Blaeck.addSignal(F("Small Number"), &randomSmallNumber);
+  Blaeck.addSignal(F("Big Number"), &randomBigNumber);
 
   /* A name built at runtime cannot use F() - pass the buffer instead, which is
      copied:
        char name[16];
        snprintf(name, sizeof(name), "Sensor_%d", i);
-       BlaeckSerial.addSignal(name, &value);
+       Blaeck.addSignal(name, &value);
      Other architectures (ESP32, SAMD, ...) handle RAM differently and gain
      little from F(), but it costs them nothing either. */
 
   /*Uncomment for fixed interval lock (ms)
     - ignores ACTIVATE/DEACTIVATE while locked */
-  // BlaeckSerial.setIntervalMs(60000);
+  // Blaeck.setIntervalMs(60000);
 }
 
 void loop()
@@ -76,7 +76,7 @@ void loop()
 
   /*Keeps watching for serial input (Serial.read) and
     transmits the data at the user-set interval (Serial.write)*/
-  BlaeckSerial.tick();
+  Blaeck.tick();
 }
 
 void UpdateRandomNumbers()

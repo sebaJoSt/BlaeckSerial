@@ -28,11 +28,11 @@ void PrintInfo(bool IsStartUp)
     //--FIRMWARE INFO
     Serial.print(F("Welcome to the "));
 
-    Serial.println(BlaeckSerial.DeviceName);
+    Serial.println(Blaeck.DeviceName);
     sinfo(), Serial.print(F("Hardware Version: "));
-    Serial.println(BlaeckSerial.DeviceHWVersion);
+    Serial.println(Blaeck.DeviceHWVersion);
     sinfo(), Serial.print(F("Firmware Version: "));
-    Serial.println(BlaeckSerial.DeviceFWVersion);
+    Serial.println(Blaeck.DeviceFWVersion);
     sinfo(), Serial.print(F("BlaeckSerial Version: "));
     Serial.println(BLAECKSERIAL_VERSION);
   }

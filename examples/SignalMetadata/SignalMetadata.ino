@@ -24,7 +24,7 @@
 #include "Arduino.h"
 #include "BlaeckSerial.h"
 
-BlaeckSerial BlaeckSerial;
+BlaeckSerial Blaeck;
 
 // addSignal() keeps a pointer to these, so they have to be globals.
 float Temperature = 21.0;
@@ -42,15 +42,15 @@ void setup()
 {
   Serial.begin(115200);
 
-  BlaeckSerial.begin(&Serial, 10); // exactly the ten added below
+  Blaeck.begin(&Serial, 10); // exactly the ten added below
 
-  BlaeckSerial.DeviceName = "Signal Metadata Demo";
-  BlaeckSerial.DeviceHWVersion = "Arduino Mega 2560 Rev3";
-  BlaeckSerial.DeviceFWVersion = "1.0";
+  Blaeck.DeviceName = "Signal Metadata Demo";
+  Blaeck.DeviceHWVersion = "Arduino Mega 2560 Rev3";
+  Blaeck.DeviceFWVersion = "1.0";
 
   // A measurement: goes up and down, meaningful at any instant. The device class is what lets
   // a host convert it - without one the unit is only a label.
-  BlaeckSerial.addSignal(F("Temperature"), &Temperature)
+  Blaeck.addSignal(F("Temperature"), &Temperature)
       .withUnit(F("\xC2\xB0" "C"))
       .withDeviceClass(F("temperature"))
       .withStateClass(BLAECK_STATE_CLASS_MEASUREMENT)
@@ -58,20 +58,20 @@ void setup()
 
   // A running total that only ever grows. Reported as total_increasing so a host can build
   // consumption from it rather than averaging it.
-  BlaeckSerial.addSignal(F("EnergyTotal"), &EnergyTotal)
+  Blaeck.addSignal(F("EnergyTotal"), &EnergyTotal)
       .withUnit(F("kWh"))
       .withDeviceClass(F("energy"))
       .withStateClass(BLAECK_STATE_CLASS_TOTAL_INCREASING)
       .withDisplayPrecision(3);
 
-  BlaeckSerial.addSignal(F("Uptime"), &Uptime)
+  Blaeck.addSignal(F("Uptime"), &Uptime)
       .withUnit(F("s"))
       .withDeviceClass(F("duration"))
       .withStateClass(BLAECK_STATE_CLASS_MEASUREMENT);
 
   // Describes the device rather than what it measures, and stays switched off until someone
   // asks for it.
-  BlaeckSerial.addSignal(F("SignalStrength"), &SignalStrength)
+  Blaeck.addSignal(F("SignalStrength"), &SignalStrength)
       .withUnit(F("dBm"))
       .withDeviceClass(F("signal_strength"))
       .withStateClass(BLAECK_STATE_CLASS_MEASUREMENT)
@@ -84,35 +84,35 @@ void setup()
   //
   // The more-info dialog is where to see this. A history timeline merges neighbouring identical
   // states into one band, so both versions look the same there.
-  BlaeckSerial.addSignal(F("Heartbeat"), &Heartbeat)
+  Blaeck.addSignal(F("Heartbeat"), &Heartbeat)
       .forceUpdate();
 
   // Declares nothing: no unit, no statistics, no icon. There for comparison.
-  BlaeckSerial.addSignal(F("Plain"), &Plain);
+  Blaeck.addSignal(F("Plain"), &Plain);
 
   // A bool becomes a binary sensor. The device class says what the on-state means - without
   // one it reads as a plain On/Off.
-  BlaeckSerial.addSignal(F("Running"), &Running)
+  Blaeck.addSignal(F("Running"), &Running)
       .withDeviceClass(F("running"));
-  BlaeckSerial.addSignal(F("Fault"), &Fault);
+  Blaeck.addSignal(F("Fault"), &Fault);
 
   // A string whose values come from a fixed set. Every value reported must be in the list, so
   // this only suits a signal that cannot report anything else.
-  BlaeckSerial.addSignal(F("PumpState"), PumpState)
+  Blaeck.addSignal(F("PumpState"), PumpState)
       .withOptions(F("idle,priming,running,fault"))
       .withDeviceClass(F("enum"));
 
-  BlaeckSerial.addSignal(F("Note"), Note)
+  Blaeck.addSignal(F("Note"), Note)
       .withIcon(F("mdi:note-text"));
 
   // One look covers every addSignal() above.
-  BlaeckSerial.printRejections(&Serial);
+  Blaeck.printRejections(&Serial);
 }
 
 void loop()
 {
   UpdateSignals();
-  BlaeckSerial.tick();
+  Blaeck.tick();
 }
 
 void UpdateSignals()

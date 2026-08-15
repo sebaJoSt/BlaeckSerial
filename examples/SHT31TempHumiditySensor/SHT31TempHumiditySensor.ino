@@ -36,7 +36,7 @@ float humidity;
 Adafruit_SHT31 sht31 = Adafruit_SHT31();
 
 // Instantiate a new BlaeckSerial object
-BlaeckSerial BlaeckSerial;
+BlaeckSerial Blaeck;
 
 void setup()
 {
@@ -46,17 +46,17 @@ void setup()
   // sht31.heater(true);
 
   // Setup BlaeckSerial
-  BlaeckSerial.begin(
+  Blaeck.begin(
       &Serial, // Serial reference
       2        // Maximal signal count used;
   );
 
-  BlaeckSerial.DeviceName = "Temp Humidity Sensor";
-  BlaeckSerial.DeviceHWVersion = "Arduino Mega 2560 Rev3";
-  BlaeckSerial.DeviceFWVersion = ExampleVersion;
+  Blaeck.DeviceName = "Temp Humidity Sensor";
+  Blaeck.DeviceHWVersion = "Arduino Mega 2560 Rev3";
+  Blaeck.DeviceFWVersion = ExampleVersion;
 
-  BlaeckSerial.addSignal(F("Temperature [°C]"), &temperature);
-  BlaeckSerial.addSignal(F("Humidity [%]"), &humidity);
+  Blaeck.addSignal(F("Temperature [°C]"), &temperature);
+  Blaeck.addSignal(F("Humidity [%]"), &humidity);
 }
 
 void loop()
@@ -64,5 +64,5 @@ void loop()
   temperature = sht31.readTemperature();
   humidity = sht31.readHumidity();
 
-  BlaeckSerial.tick();
+  Blaeck.tick();
 }

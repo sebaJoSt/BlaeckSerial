@@ -14,7 +14,7 @@
 #define ExampleVersion "1.0"
 
 // Instantiate a new BlaeckSerial object
-BlaeckSerial BlaeckSerial;
+BlaeckSerial Blaeck;
 
 // Signals
 float sine;
@@ -34,26 +34,26 @@ void setup()
   RTC.setTime(startTime);
 
   // Setup BlaeckSerial
-  BlaeckSerial.begin(
+  Blaeck.begin(
       &Serial, // Serial reference
       1        // Maximal signal count used;
   );
 
-  BlaeckSerial.DeviceName = "Sine Generator";
-  BlaeckSerial.DeviceHWVersion = "Arduino UNO R4";
-  BlaeckSerial.DeviceFWVersion = ExampleVersion;
+  Blaeck.DeviceName = "Sine Generator";
+  Blaeck.DeviceHWVersion = "Arduino UNO R4";
+  Blaeck.DeviceFWVersion = ExampleVersion;
 
-  BlaeckSerial.addSignal(F("Sine_1"), &sine);
+  Blaeck.addSignal(F("Sine_1"), &sine);
 
   // Unix timestamp from RTC transmitted with the data
-  BlaeckSerial.setTimestampMode(BLAECK_UNIX);
-  BlaeckSerial.setTimestampCallback(GetRTCUnixTimeMicros);
+  Blaeck.setTimestampMode(BLAECK_UNIX);
+  Blaeck.setTimestampCallback(GetRTCUnixTimeMicros);
 
   // micros() are transmitted with the data
-  // BlaeckSerial.setTimestampMode(BLAECK_MICROS);
+  // Blaeck.setTimestampMode(BLAECK_MICROS);
 
   // default mode, no time information transmitted with the data
-  // BlaeckSerial.setTimestampMode(BLAECK_NO_TIMESTAMP);
+  // Blaeck.setTimestampMode(BLAECK_NO_TIMESTAMP);
 }
 
 void loop()
@@ -62,7 +62,7 @@ void loop()
 
   /*Keeps watching for serial input (Serial.read) and
     transmits the data at the user-set interval (Serial.write)*/
-  BlaeckSerial.tick();
+  Blaeck.tick();
 }
 
 void UpdateSineNumbers()
