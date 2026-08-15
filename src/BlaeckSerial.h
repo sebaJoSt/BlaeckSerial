@@ -492,8 +492,10 @@ public:
 
     The name a host lists the device by, and groups its signals and controls under.
 
-    @warning Not copied. What it points at has to outlive the device, which a string
-             literal does and a local buffer does not.
+    @warning The library keeps the pointer, not a copy of the text, so the text has to
+             stay valid for as long as the sketch runs. A quoted literal does. A buffer
+             declared inside a function does not, and the name turns to garbage the
+             moment that function returns.
     @code
       BlaeckSerial.DeviceName = "Waveform Generator Demo";
     @endcode
@@ -505,7 +507,9 @@ public:
 
     Shown alongside the device; nothing is inferred from it.
 
-    @warning Not copied, as DeviceName is not.
+    @warning The library keeps the pointer, not a copy of the text, so the text has to
+             stay valid for as long as the sketch runs. A quoted literal does. A buffer
+             declared inside a function does not.
     @code
       BlaeckSerial.DeviceHWVersion = "Arduino Mega 2560 Rev3";
     @endcode
@@ -517,7 +521,9 @@ public:
 
     Tells one firmware from another across a fleet that is half updated.
 
-    @warning Not copied, as DeviceName is not.
+    @warning The library keeps the pointer, not a copy of the text, so the text has to
+             stay valid for as long as the sketch runs. A quoted literal does. A buffer
+             declared inside a function does not.
     @code
       BlaeckSerial.DeviceFWVersion = "1.0";
     @endcode
