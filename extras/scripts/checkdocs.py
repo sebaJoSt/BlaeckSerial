@@ -161,14 +161,18 @@ def show(tu, path, needle):
 
 
 def example_lines(raw):
-    """The code an example is made of, from either comment style.
+    """The code a @code block is made of, and its offset within the comment.
+
+    The offset is what lets the generated sketch carry #line directives back to
+    the header, so a compiler error names src/BlaeckSerial.h and not a generated
+    file the contributor does not have.
 
     Doxygen delimits it, so that is read exactly. The plain-comment style is
     inferred from the indent, and stops at the first prose line after the block -
     a comment may explain something below its example, and that prose is not code.
     """
-    lines, inside, seen_any = [], False, False
-    for line in raw.splitlines():
+    lines, inside, seen_any, first = [], False, False, None
+    for i, line in enumerate(raw.splitlines()):
         bare = line.strip().lstrip("/*").strip()
         if bare.startswith("@code"):
             inside, seen_any = True, True
@@ -177,17 +181,21 @@ def example_lines(raw):
             inside = False
             continue
         if inside:
+            if first is None:
+                first = i
             lines.append(line.strip().lstrip("/*").rstrip())
         elif not seen_any:
             if EXAMPLE.match(line):
+                if first is None:
+                    first = i
                 lines.append(line.strip().lstrip("/*").rstrip())
             elif lines:
                 break
     if not seen_any and not any(l.rstrip().endswith((";", "{", "}")) for l in lines):
         # An indented block with no statement in it is a table, not code - the
         # interval_ms table on setIntervalMs reads exactly like an example otherwise.
-        return []
-    return lines
+        return [], None
+    return lines, first
 
 
 # A line that opens a definition rather than performing a step: it has to go at file
@@ -196,7 +204,17 @@ def example_lines(raw):
 DEFINITION = re.compile(r"^(void|bool|byte|int|long|float|double|unsigned|char)\b.*\)\s*$")
 
 
-def extract(tu, path):
+def line_directive(n, filename):
+    """Point the compiler at the real source of the lines that follow.
+
+    Without this a build error names the generated sketch, which is gitignored -
+    so the one file a contributor would need in order to find the failing block is
+    the one file they do not have.
+    """
+    return '#line %d "%s"' % (n, filename.replace(chr(92), "/"))
+
+
+def extract(tu, path, dest):
     """Every @code block in the header, as one sketch a compiler can check.
 
     A block that does not compile is worse than none: it is read as authoritative
@@ -227,12 +245,17 @@ def extract(tu, path):
         if key in seen:
             continue
         seen.add(key)
-        lines = example_lines(raw)
+        lines, offset = example_lines(raw)
         if not lines:
             continue
         n += 1
         where = "%s::%s" % key if key[0] else key[1]
-        out.append("// %s  (line %d)" % (where, c.location.line))
+        # The comment sits immediately above the declaration - rule 1 requires it, and
+        # a blank line between them would detach it - so its first line is the
+        # declaration's line less the comment's height. The block's own lines are
+        # contiguous within it, which makes one #line per block exact for all of them.
+        first = c.location.line - len(raw.splitlines()) + offset
+        out.append("// %s  (%s:%d)" % (where, path.replace(chr(92), "/"), first))
         if DEFINITION.match(lines[0].strip()):
             # "void loop()" is the clearest way for an example to say where a call
             # belongs, and several examples rightly show it. They collide here, so
@@ -242,12 +265,17 @@ def extract(tu, path):
                 if head.strip() == "void %s()" % name:
                     head = "void _doc%s%d()" % (name.capitalize(), n)
             out.append(head)
+            out.append(line_directive(first + 1, path))
             out.extend(l.rstrip() for l in lines[1:])
         else:
             out.append("void _docExample%d()" % n)
             out.append("{")
-            out.extend("  " + l.strip() for l in lines)
+            out.append(line_directive(first, path))
+            out.extend(l.rstrip() for l in lines)
             out.append("}")
+        # Hand the numbering back to the generated file, or every line after this
+        # block is reported against the header too.
+        out.append(line_directive(len(out) + 2, dest))
         out.append("")
     out += ['void setup() {}', 'void loop() {}', '']
     return NL.join(out), n
@@ -262,7 +290,7 @@ def main(argv):
 
     if "--extract" in argv:
         dest = argv[argv.index("--extract") + 1]
-        text, n = extract(tu, path)
+        text, n = extract(tu, path, dest)
         io.open(dest, "w", encoding="utf-8", newline=NL).write(text)
         print("%d example(s) -> %s" % (n, dest))
         return 0

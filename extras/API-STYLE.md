@@ -124,6 +124,16 @@ renamed fails the build instead of being shown on hover as instructions that do 
 work. This is the only reason rule 7 is affordable; Rust requires one on every public
 item for the same reason, and checks them the same way.
 
+The generated sketch carries `#line` directives, so a failure names the header and
+the line of the offending block:
+
+```
+src/BlaeckSerial.h:1969:8: error: 'class BlaeckSerial' has no member named ...
+```
+
+which matters because the generated sketch is gitignored — without them, the error
+would point at the one file a contributor does not have.
+
 That imposes three things:
 
 - **Complete statements, not fragments of a chain.** Each block becomes a
