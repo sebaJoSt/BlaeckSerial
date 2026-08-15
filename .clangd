@@ -4,10 +4,10 @@
 # unknown and overloads are hard to tell apart.
 #
 # The database is generated, machine-specific (absolute paths, one board), and
-# gitignored. Rebuild it after changing boards or adding a library:
+# gitignored. Rebuild it after changing boards or adding a library - one line, so
+# it pastes into PowerShell and bash alike:
 #
-#   arduino-cli compile --fqbn arduino:avr:mega --only-compilation-database \
-#       --build-path "$PWD/.development/ccdb" examples/WaveformGenerator
+#   arduino-cli compile --fqbn arduino:avr:mega --only-compilation-database --build-path "$PWD/.development/ccdb" examples/WaveformGenerator
 #
 # Then restart the language server: Ctrl+Shift+P, "clangd: Restart language server".
 CompileFlags:
