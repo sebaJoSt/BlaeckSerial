@@ -437,7 +437,7 @@ class BlaeckSerial;
 // Handle to the just-initialised library, sizing the tables it will allocate.
 // Returned by begin(), meant to be chained, not stored.
 //
-//   BlaeckSerial.begin(&Serial).withSignals(50).withStateChannels(12);
+//   Blaeck.begin(&Serial).withSignals(50).withStateChannels(12);
 //
 // A number given here is a capacity, not a reservation: nothing is allocated
 // until the first entry is added to that table, so a table a sketch never uses
@@ -1001,7 +1001,7 @@ public:
 // Handle to the signal addSignal() just added, describing how it is presented.
 // Returned by value and meant to be chained, not stored:
 //
-//   BlaeckSerial.addSignal("FreeMemory", &FreeMemory)
+//   Blaeck.addSignal("FreeMemory", &FreeMemory)
 //       .withUnit(F("B"))
 //       .withStateClass(BLAECK_STATE_CLASS_MEASUREMENT)
 //       .withDisplayPrecision(0)
@@ -1434,7 +1434,7 @@ public:
 
     @code
       Serial.begin(115200);
-      BlaeckSerial.begin(&Serial)
+      Blaeck.begin(&Serial)
           .withSignals(50)
           .withStateChannels(12)
           .withDebugStream(&Serial1);
@@ -1453,7 +1453,7 @@ public:
     @return  Handle for sizing the remaining tables, as begin(Stream *) returns.
 
     @code
-      BlaeckSerial.begin(&Serial, 8);
+      Blaeck.begin(&Serial, 8);
     @endcode
   */
   BlaeckBeginRef begin(Stream *Ref, unsigned int Size);
@@ -1467,7 +1467,7 @@ public:
             built at runtime has to live in a global buffer, not one inside a function.
 
     @code
-      BlaeckSerial.DeviceName = "Waveform Generator Demo";
+      Blaeck.DeviceName = "Waveform Generator Demo";
     @endcode
   */
   const char *DeviceName = "Unknown";
@@ -1481,7 +1481,7 @@ public:
             built at runtime has to live in a global buffer, not one inside a function.
 
     @code
-      BlaeckSerial.DeviceHWVersion = "Arduino Mega 2560 Rev3";
+      Blaeck.DeviceHWVersion = "Arduino Mega 2560 Rev3";
     @endcode
   */
   const char *DeviceHWVersion = "n/a";
@@ -1495,7 +1495,7 @@ public:
             built at runtime has to live in a global buffer, not one inside a function.
 
     @code
-      BlaeckSerial.DeviceFWVersion = "1.0";
+      Blaeck.DeviceFWVersion = "1.0";
     @endcode
   */
   const char *DeviceFWVersion = "n/a";
@@ -1521,7 +1521,7 @@ public:
              problem, and hasRejectedSignals() reports it.
 
     @code
-      BlaeckSerial.addSignal("Temperature", &Temperature)
+      Blaeck.addSignal("Temperature", &Temperature)
           .withUnit(F("\xC2\xB0" "C"))
           .withDeviceClass(F("temperature"))
           .withStateClass(BLAECK_STATE_CLASS_MEASUREMENT)
@@ -1555,7 +1555,7 @@ public:
              copy it.
 
     @code
-      BlaeckSerial.addSignal(F("Temperature"), &Temperature);
+      Blaeck.addSignal(F("Temperature"), &Temperature);
     @endcode
   */
   BlaeckBoolSignalRef addSignal(const __FlashStringHelper *signalName, bool *value);
@@ -1582,9 +1582,9 @@ public:
              wrong names.
 
     @code
-      BlaeckSerial.deleteSignals();
-      BlaeckSerial.addSignal(F("Temperature"), &Temperature);
-      BlaeckSerial.writeSymbols();
+      Blaeck.deleteSignals();
+      Blaeck.addSignal(F("Temperature"), &Temperature);
+      Blaeck.writeSymbols();
     @endcode
   */
   void deleteSignals();
@@ -1598,7 +1598,7 @@ public:
     @return  True if at least one signal was dropped.
 
     @code
-      if (BlaeckSerial.hasRejectedSignals())
+      if (Blaeck.hasRejectedSignals())
         Serial.println(F("Raise withSignals() on the begin() chain."));
     @endcode
   */
@@ -1613,7 +1613,7 @@ public:
     @return  How many were dropped.
 
     @code
-      Serial.println(BlaeckSerial.getRejectedSignalCount());
+      Serial.println(Blaeck.getRejectedSignalCount());
     @endcode
   */
   uint16_t getRejectedSignalCount() const { return _rejectedSignalCount; }
@@ -1629,8 +1629,8 @@ public:
              the count disagreeing with the table.
 
     @code
-      for (int i = 0; i < BlaeckSerial.SignalCount; i++)
-        BlaeckSerial.markSignalUpdated(i);
+      for (int i = 0; i < Blaeck.SignalCount; i++)
+        Blaeck.markSignalUpdated(i);
     @endcode
   */
   int SignalCount;
@@ -1771,7 +1771,7 @@ public:
   //   void onSetOffset(const char *command, const char *const *params, byte paramCount)
   //   {
   //     Offset = (float)atof(params[0]);
-  //     BlaeckSerial.writeCommandState(command);
+  //     Blaeck.writeCommandState(command);
   //   }
   //
   // Does nothing for a command with no state of its own, or one whose state is a signal -
@@ -1840,12 +1840,12 @@ public:
   //   {
   //     Pulse = true;
   //     pulseSince = millis();
-  //     BlaeckSerial.write("Pulse", Pulse);
+  //     Blaeck.write("Pulse", Pulse);
   //   }
   //   if (Pulse && millis() - pulseSince >= 2000)
   //   {
   //     Pulse = false;
-  //     BlaeckSerial.write("Pulse", Pulse);
+  //     Blaeck.write("Pulse", Pulse);
   //   }
   //
   // Both edges then reach every consumer alike - a dashboard, the logged table, a second host -
@@ -1966,7 +1966,7 @@ public:
 
     @code
       Temperature = readSensor();
-      BlaeckSerial.markSignalUpdated("Temperature");
+      Blaeck.markSignalUpdated("Temperature");
     @endcode
   */
   void markSignalUpdated(int signalIndex);
@@ -1979,8 +1979,8 @@ public:
     question it can have an answer to.
 
     @code
-      BlaeckSerial.markAllSignalsUpdated();
-      BlaeckSerial.writeUpdatedData();
+      Blaeck.markAllSignalsUpdated();
+      Blaeck.writeUpdatedData();
     @endcode
   */
   void markAllSignalsUpdated();
@@ -1991,7 +1991,7 @@ public:
     The next writeUpdatedData() then carries nothing until something is marked again.
 
     @code
-      BlaeckSerial.clearAllUpdateFlags();
+      Blaeck.clearAllUpdateFlags();
     @endcode
   */
   void clearAllUpdateFlags();
@@ -2002,8 +2002,8 @@ public:
     @return  True if the next writeUpdatedData() would carry something.
 
     @code
-      if (BlaeckSerial.hasUpdatedSignals())
-        BlaeckSerial.writeUpdatedData();
+      if (Blaeck.hasUpdatedSignals())
+        Blaeck.writeUpdatedData();
     @endcode
   */
   bool hasUpdatedSignals();
@@ -2018,7 +2018,7 @@ public:
 
     @code
       if (Temperature > 40.0f)
-        BlaeckSerial.writeAllData();
+        Blaeck.writeAllData();
     @endcode
   */
   void writeAllData();
@@ -2029,7 +2029,7 @@ public:
     @param   messageID  Number the host sent with its request, echoed back.
 
     @code
-      BlaeckSerial.writeAllData(42);
+      Blaeck.writeAllData(42);
     @endcode
   */
   void writeAllData(unsigned long messageID);
@@ -2044,7 +2044,7 @@ public:
     @param   timestamp  Microseconds, in whatever epoch setTimestampMode() implies.
 
     @code
-      BlaeckSerial.writeAllData(42, 1723600000000000ULL);
+      Blaeck.writeAllData(42, 1723600000000000ULL);
     @endcode
   */
   void writeAllData(unsigned long messageID, unsigned long long timestamp);
@@ -2062,7 +2062,7 @@ public:
       void loop()
       {
         Temperature = readSensor();
-        BlaeckSerial.timedWriteAllData();
+        Blaeck.timedWriteAllData();
       }
     @endcode
   */
@@ -2073,7 +2073,7 @@ public:
     @param   msg_id  Number the host sent with its request, echoed back.
 
     @code
-      BlaeckSerial.timedWriteAllData(42);
+      Blaeck.timedWriteAllData(42);
     @endcode
   */
   void timedWriteAllData(unsigned long msg_id);
@@ -2084,7 +2084,7 @@ public:
     @param   timestamp  Microseconds, in whatever epoch setTimestampMode() implies.
 
     @code
-      BlaeckSerial.timedWriteAllData(42, 1723600000000000ULL);
+      Blaeck.timedWriteAllData(42, 1723600000000000ULL);
     @endcode
   */
   void timedWriteAllData(unsigned long messageID, unsigned long long timestamp);
@@ -2099,8 +2099,8 @@ public:
     nothing, where writeAllData() sends all of them every time.
 
     @code
-      BlaeckSerial.update("Temperature", readSensor());
-      BlaeckSerial.writeUpdatedData();
+      Blaeck.update("Temperature", readSensor());
+      Blaeck.writeUpdatedData();
     @endcode
   */
   void writeUpdatedData();
@@ -2110,7 +2110,7 @@ public:
     @param   messageID  Number the host sent with its request, echoed back.
 
     @code
-      BlaeckSerial.writeUpdatedData(42);
+      Blaeck.writeUpdatedData(42);
     @endcode
   */
   void writeUpdatedData(unsigned long messageID);
@@ -2121,7 +2121,7 @@ public:
     @param   timestamp  Microseconds, in whatever epoch setTimestampMode() implies.
 
     @code
-      BlaeckSerial.writeUpdatedData(42, 1723600000000000ULL);
+      Blaeck.writeUpdatedData(42, 1723600000000000ULL);
     @endcode
   */
   void writeUpdatedData(unsigned long messageID, unsigned long long timestamp);
@@ -2134,7 +2134,7 @@ public:
     @code
       void loop()
       {
-        BlaeckSerial.timedWriteUpdatedData();
+        Blaeck.timedWriteUpdatedData();
       }
     @endcode
   */
@@ -2145,7 +2145,7 @@ public:
     @param   msg_id  Number the host sent with its request, echoed back.
 
     @code
-      BlaeckSerial.timedWriteUpdatedData(42);
+      Blaeck.timedWriteUpdatedData(42);
     @endcode
   */
   void timedWriteUpdatedData(unsigned long msg_id);
@@ -2156,7 +2156,7 @@ public:
     @param   timestamp  Microseconds, in whatever epoch setTimestampMode() implies.
 
     @code
-      BlaeckSerial.timedWriteUpdatedData(42, 1723600000000000ULL);
+      Blaeck.timedWriteUpdatedData(42, 1723600000000000ULL);
     @endcode
   */
   void timedWriteUpdatedData(unsigned long messageID, unsigned long long timestamp);
@@ -2174,7 +2174,7 @@ public:
       void loop()
       {
         Temperature = readSensor();
-        BlaeckSerial.tick();
+        Blaeck.tick();
       }
     @endcode
   */
@@ -2189,7 +2189,7 @@ public:
     @param   messageID  Number the host sent with its request, echoed back.
 
     @code
-      BlaeckSerial.tick(42);
+      Blaeck.tick(42);
     @endcode
   */
   void tick(unsigned long messageID);
@@ -2203,8 +2203,8 @@ public:
     @code
       void loop()
       {
-        BlaeckSerial.update("Temperature", readSensor());
-        BlaeckSerial.tickUpdated();
+        Blaeck.update("Temperature", readSensor());
+        Blaeck.tickUpdated();
       }
     @endcode
   */
@@ -2215,7 +2215,7 @@ public:
     @param   messageID  Number the host sent with its request, echoed back.
 
     @code
-      BlaeckSerial.tickUpdated(42);
+      Blaeck.tickUpdated(42);
     @endcode
   */
   void tickUpdated(unsigned long messageID);
@@ -2271,9 +2271,9 @@ public:
   // literal in SRAM for the life of the sketch. F() leaves it in flash, and this reads it a
   // byte at a time:
   //
-  //   BlaeckSerial.onAnyCommand([](const char *command, const char *const *params, byte count)
+  //   Blaeck.onAnyCommand([](const char *command, const char *const *params, byte count)
   //   {
-  //     if (BlaeckSerial.equalsFlash(command, F("RESET")))
+  //     if (Blaeck.equalsFlash(command, F("RESET")))
   //       Uptime = 0;
   //   });
   //
@@ -2347,7 +2347,7 @@ public:
   // table, and prints nothing at all when there is nothing to report - so a sketch can end
   // setup() with it unconditionally. Returns whether anything was printed.
   //
-  //   BlaeckSerial.printRejections(&Serial);
+  //   Blaeck.printRejections(&Serial);
   //
   // Meant for the stream the sketch already talks on, including the one Blaeck itself uses:
   // called from setup() it cannot land inside a frame, since nothing has been written yet.
@@ -2359,7 +2359,7 @@ public:
   // Same runtime behavior as onCommand(), but the returned handle describes the control so the
   // device can declare it in a 0xA0 "Command List" frame (BLAECK.WRITE_COMMANDS):
   //
-  //   BlaeckSerial.onNumberCommand("SET_FREQ", onSetFreq)
+  //   Blaeck.onNumberCommand("SET_FREQ", onSetFreq)
   //       .withRange(0.0f, 2.0f, 0.01f)
   //       .withUnit(F("Hz"))
   //       .withStateSignal(F("Frequency"));
@@ -2409,7 +2409,7 @@ public:
 
     @code
       char name[12];
-      BlaeckSerial.getSelectOptionNameAt("SET_WAVE", waveIndex, name, sizeof(name));
+      Blaeck.getSelectOptionNameAt("SET_WAVE", waveIndex, name, sizeof(name));
     @endcode
   */
   bool getSelectOptionNameAt(const char *command, byte index, char *out, byte outSize) const;
@@ -2426,7 +2426,7 @@ public:
   //
   //   char saved[12];
   //   EEPROM.get(addr, saved);
-  //   long i = BlaeckSerial.getSelectOptionIndexOf("SET_WAVE", saved);
+  //   long i = Blaeck.getSelectOptionIndexOf("SET_WAVE", saved);
   //   waveIndex = (i >= 0) ? (byte)i : 0;
   long getSelectOptionIndexOf(const char *command, const char *optionName) const;
 

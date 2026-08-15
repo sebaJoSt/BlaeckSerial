@@ -17,7 +17,7 @@
 #include "BlaeckSerial.h"
 
 // The instance, named as every example sketch in this library names it.
-BlaeckSerial BlaeckSerial;
+BlaeckSerial Blaeck;
 
 // --- Values a sketch might publish as signals ---
 float Temperature = 0.0f;
