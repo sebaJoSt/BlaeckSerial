@@ -8,10 +8,11 @@ Overloads are judged as a group: one comment above the first of a set that
 differs only by argument type is the normal C++ shape, and an editor shows it
 whichever member it resolves to. A group with no comment anywhere is the defect.
 
-Usage: python extras/checkdocs.py src/BlaeckSerial.h [-- <extra clang args>]
+Usage: python extras/scripts/checkdocs.py src/BlaeckSerial.h [-- <extra clang args>]
 """
 import sys
 import io
+import os
 import collections
 import re
 import clang.cindex as ci
@@ -36,6 +37,11 @@ KINDS = {
 FIELD_OWNER = "Blaeck"
 
 NL = chr(10)
+
+# extras/scripts/checkdocs.py -> extras/DocExamples/DocExamples.ino, resolved from
+# this file rather than the working directory so it holds wherever it is run from.
+DEFAULT_EXTRACT = os.path.normpath(os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "..", "DocExamples", "DocExamples.ino"))
 
 SECTION = re.compile(r"^[\s/*-]*$")
 
@@ -289,7 +295,12 @@ def main(argv):
                                  options=ci.TranslationUnit.PARSE_SKIP_FUNCTION_BODIES)
 
     if "--extract" in argv:
-        dest = argv[argv.index("--extract") + 1]
+        # The destination is barely a choice: the generated sketch does
+        # #include "preamble.h", which resolves against the sketch, and preamble.h
+        # exists in one place. Extract anywhere else and the result cannot build.
+        # So the path is optional, and defaults to the only one that works.
+        i = argv.index("--extract") + 1
+        dest = argv[i] if i < len(argv) and not argv[i].startswith("-") else DEFAULT_EXTRACT
         text, n = extract(tu, path, dest)
         io.open(dest, "w", encoding="utf-8", newline=NL).write(text)
         print("%d example(s) -> %s" % (n, dest))

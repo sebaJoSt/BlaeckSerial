@@ -61,7 +61,7 @@ jobs:
         run: pip install libclang
 
       - name: Extract the examples from the header
-        run: python extras/scripts/checkdocs.py src/BlaeckSerial.h --extract extras/DocExamples/DocExamples.ino
+        run: python extras/scripts/checkdocs.py src/BlaeckSerial.h --extract
 
       - uses: arduino/compile-sketches@v1
         with:
