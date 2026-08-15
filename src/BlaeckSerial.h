@@ -1267,48 +1267,115 @@ template <class TYPE>
 class BlaeckSignalRefShared : public BlaeckSignalRefBase
 {
 public:
-  // Ends the name in a number, e.g. addSignal(F("Sine_"), &v).withNameSuffix(i + 1) names a
-  // signal Sine_1. 0-255, and 0 is a number like any other. Worth doing for a run of signals
-  // sharing a prefix: the prefix stays in flash and the digits are produced when the name is
-  // sent, so nothing is copied to the heap - which is what a name built with snprintf costs.
+  /*!
+    @brief   Ends the signal's name in a number.
+
+    For a run of signals sharing a prefix. The prefix stays in flash and the digits
+    are produced when the name is sent, so nothing reaches the heap - which is what
+    a name built with snprintf costs, once per signal.
+
+    @param   suffix  0-255. Zero is a number like any other, not "no suffix".
+    @return  The same handle, for chaining.
+
+    @code
+      for (int i = 0; i < 8; i++)
+        Blaeck.addSignal(F("Sine_"), &sine[i]).withNameSuffix(i + 1);
+    @endcode
+  */
   TYPE &withNameSuffix(uint8_t suffix)
   {
     _setNameSuffix(suffix);
     return _self();
   }
 
-  // What the value measures, e.g. F("temperature"). Home Assistant's vocabulary, carried as
-  // written: this library does not hold the list, because the list grows faster than firmware
-  // is reflashed.
+  /*!
+    @brief   Declares what the value measures.
+
+    Carried as written. This library holds no list of its own, because the
+    vocabulary grows faster than firmware is reflashed - so a class a host adds
+    after this release still works.
+
+    @param   deviceClass  The host's name for the quantity, as an F() literal.
+    @return  The same handle, for chaining.
+
+    @code
+      Blaeck.addSignal(F("Uptime"), &Uptime).withDeviceClass(F("duration"));
+    @endcode
+  */
   TYPE &withDeviceClass(const __FlashStringHelper *deviceClass)
   {
     _setFlash(deviceClass, BLAECK_SIG_HAS_DEVICE_CLASS);
     return _self();
   }
 
-  // Material Design Icons name, e.g. F("mdi:sine-wave").
+  /*!
+    @brief   Declares the icon a host shows beside the value.
+
+    @param   icon  Material Design Icons name, as an F() literal.
+    @return  The same handle, for chaining.
+
+    @code
+      Blaeck.addSignal(F("Output"), &Output).withIcon(F("mdi:sine-wave"));
+    @endcode
+  */
   TYPE &withIcon(const __FlashStringHelper *icon)
   {
     _setFlash(icon, BLAECK_SIG_HAS_ICON);
     return _self();
   }
 
-  // Moves the entity off Home Assistant's auto-generated dashboards, for a value that describes
-  // the device rather than what it measures.
+  /*!
+    @brief   Files the signal as describing the device rather than measuring anything.
+
+    Keeps it off a generated dashboard, so free memory and uptime do not crowd out
+    the readings someone opened the dashboard for.
+
+    @param   on  Pass false to undo it, or a variable to decide at runtime.
+    @return  The same handle, for chaining.
+
+    @code
+      Blaeck.addSignal(F("Uptime"), &Uptime).withUnit(F("s")).diagnostic();
+    @endcode
+  */
   TYPE &diagnostic(bool on = true)
   {
     _setBit(BLAECK_SIG_DIAGNOSTIC, on);
     return _self();
   }
 
-  // Registers the entity but leaves it switched off until someone enables it.
+  /*!
+    @brief   Registers the signal but leaves it switched off until someone enables it.
+
+    For something worth having available without adding to what a host shows by
+    default.
+
+    @param   on  Pass false to undo it, or a variable to decide at runtime.
+    @return  The same handle, for chaining.
+
+    @code
+      Blaeck.addSignal(F("RawADC"), &rawAdc).disabledByDefault();
+    @endcode
+  */
   TYPE &disabledByDefault(bool on = true)
   {
     _setBit(BLAECK_SIG_DISABLED_BY_DEFAULT, on);
     return _self();
   }
 
-  // Report every reading, even one identical to the last.
+  /*!
+    @brief   Reports every reading, even one identical to the last.
+
+    A host may otherwise keep only changes, which loses the evidence that a device
+    is still measuring. Use it where a flat line and a dead sensor should look
+    different.
+
+    @param   on  Pass false to undo it, or a variable to decide at runtime.
+    @return  The same handle, for chaining.
+
+    @code
+      Blaeck.addSignal(F("Temperature"), &Temperature).forceUpdate();
+    @endcode
+  */
   TYPE &forceUpdate(bool on = true)
   {
     _setBit(BLAECK_SIG_FORCE_UPDATE, on);

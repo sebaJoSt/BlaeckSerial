@@ -19,6 +19,12 @@ float Frequency = 1.0f;
 float Output = 0.0f;
 unsigned long Uptime = 0;
 
+// A run of signals sharing a prefix, for the withNameSuffix() block.
+float sine[8];
+
+// Something worth exposing but not showing by default.
+int rawAdc = 0;
+
 // --- Values a control might carry as its own state ---
 float Amplitude = 1.0f;
 float Offset = 0.0f;
