@@ -492,10 +492,8 @@ public:
 
     The name a host lists the device by, and groups its signals and controls under.
 
-    @warning The library keeps the pointer, not a copy of the text, so the text has to
-             stay valid for as long as the sketch runs. A quoted literal does. A buffer
-             declared inside a function does not, and the name turns to garbage the
-             moment that function returns.
+    @note   Kept as a pointer, not copied. A quoted literal is always safe; a name
+            built at runtime has to live in a global buffer, not one inside a function.
     @code
       BlaeckSerial.DeviceName = "Waveform Generator Demo";
     @endcode
@@ -507,9 +505,8 @@ public:
 
     Shown alongside the device; nothing is inferred from it.
 
-    @warning The library keeps the pointer, not a copy of the text, so the text has to
-             stay valid for as long as the sketch runs. A quoted literal does. A buffer
-             declared inside a function does not.
+    @note   Kept as a pointer, not copied. A quoted literal is always safe; a name
+            built at runtime has to live in a global buffer, not one inside a function.
     @code
       BlaeckSerial.DeviceHWVersion = "Arduino Mega 2560 Rev3";
     @endcode
@@ -521,9 +518,8 @@ public:
 
     Tells one firmware from another across a fleet that is half updated.
 
-    @warning The library keeps the pointer, not a copy of the text, so the text has to
-             stay valid for as long as the sketch runs. A quoted literal does. A buffer
-             declared inside a function does not.
+    @note   Kept as a pointer, not copied. A quoted literal is always safe; a name
+            built at runtime has to live in a global buffer, not one inside a function.
     @code
       BlaeckSerial.DeviceFWVersion = "1.0";
     @endcode
@@ -650,7 +646,7 @@ public:
     added, so a signal the table had no room for is not in it - getRejectedSignalCount()
     has those.
 
-    @warning Maintained by the library. Assigning to it resizes nothing and leaves
+    @note    Maintained by the library. Assigning to it resizes nothing and leaves
              the count disagreeing with the table.
     @code
       for (int i = 0; i < BlaeckSerial.SignalCount; i++)
