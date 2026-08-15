@@ -1,12 +1,14 @@
 name: PlatformIO
 
-# A second toolchain, for what the first one hides. arduino-cli compiles with
-# -fpermissive, so gcc downgrades some errors to warnings and prints them where
-# nobody looks. PlatformIO does not, and found a repeated default argument that
-# six boards of the arduino-cli matrix had compiled without a word.
+# A second toolchain, and a check on distribution.
 #
-# It also checks the half of distribution that library.properties does not cover:
-# whether library.json actually resolves and builds for a PlatformIO user.
+# The same code can be a warning on one core and an error on another: a repeated
+# default argument passed on AVR and failed the SAMD and ESP32 jobs of the
+# arduino-cli matrix. Building here as well is worth it because PlatformIO reports
+# on AVR what arduino-cli only reports on the boards a local build usually skips.
+#
+# It also covers the half of distribution library.properties does not: whether
+# library.json resolves, builds, and packages for a PlatformIO user.
 
 on:
   push:
@@ -138,5 +140,11 @@ jobs:
           print('export.include: all %d entries present' % len(m['export']['include']))
           PY
 
+      # The output directory has to exist first. Given a path that does not,
+      # pkg pack takes it for a filename and asserts it ends in .tar.gz, which
+      # surfaces as "An unexpected error occurred" with a traceback.
       - name: Pack the library
-        run: pio pkg pack --output /tmp/pkg
+        run: |
+          mkdir -p /tmp/pkg
+          pio pkg pack --output /tmp/pkg
+          ls -l /tmp/pkg
