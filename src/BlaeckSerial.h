@@ -1396,26 +1396,56 @@ class BlaeckNumericSignalRef : public BlaeckSignalRefShared<BlaeckNumericSignalR
 public:
   BlaeckNumericSignalRef(BlaeckSerial *owner, int16_t index) : BlaeckSignalRefShared<BlaeckNumericSignalRef>(owner, index) {}
 
-  // Symbol shown after the value, e.g. F("Hz"). Non-ASCII must be UTF-8:
-  // F("\xC2\xB0" "C") is the degree sign followed by C.
+  /*!
+    @brief   Declares the symbol shown after the value.
+
+    @param   unit  Symbol as an F() literal. Non-ASCII must be UTF-8.
+    @return  The same handle, for chaining.
+
+    @code
+      Blaeck.addSignal(F("Frequency"), &Frequency).withUnit(F("Hz"));
+    @endcode
+  */
   BlaeckNumericSignalRef &withUnit(const __FlashStringHelper *unit)
   {
     _setFlash(unit, BLAECK_SIG_HAS_UNIT);
     return *this;
   }
 
-  // How the value accumulates over time, which is what lets a host keep statistics
-  // on it - see BlaeckStateClass for the four kinds. A signal that never calls this
-  // carries NONE, and a host keeps no statistics on it.
+  /*!
+    @brief   Declares how the value accumulates over time.
+
+    This is what lets a host keep statistics - averages, totals, a graph over months
+    rather than a current reading. A signal that never calls it carries NONE and a
+    host keeps nothing.
+
+    @param   stateClass  One of the four kinds; see BlaeckStateClass.
+    @return  The same handle, for chaining.
+
+    @code
+      Blaeck.addSignal(F("Output"), &Output)
+          .withStateClass(BLAECK_STATE_CLASS_MEASUREMENT);
+    @endcode
+  */
   BlaeckNumericSignalRef &withStateClass(BlaeckStateClass stateClass)
   {
     _setStateClass(stateClass);
     return *this;
   }
 
-  // Decimal places to display. 0 is a real instruction - show it as an integer - and not the
-  // same as saying nothing, which is why it needs its own flag bit where the state class
-  // encodes its own absence.
+  /*!
+    @brief   Declares how many decimal places a host shows.
+
+    Presentation only - the value sent is unchanged.
+
+    @param   decimals  Places to show. Zero is a real instruction, meaning show it
+                       as an integer, and is not the same as saying nothing.
+    @return  The same handle, for chaining.
+
+    @code
+      Blaeck.addSignal(F("Output"), &Output).withDisplayPrecision(3);
+    @endcode
+  */
   BlaeckNumericSignalRef &withDisplayPrecision(uint8_t decimals)
   {
     _setDisplayPrecision(decimals);
@@ -1433,12 +1463,27 @@ class BlaeckTextSignalRef : public BlaeckSignalRefShared<BlaeckTextSignalRef>
 public:
   BlaeckTextSignalRef(BlaeckSerial *owner, int16_t index) : BlaeckSignalRefShared<BlaeckTextSignalRef>(owner, index) {}
 
-  // The closed set of values this signal reports, comma-separated. Text only: the list is a set
-  // of names, which is what Home Assistant's enum device class describes - a number has no such
-  // set, and a bool becomes a binary sensor, which has no options at all. Home Assistant needs
-  // withDeviceClass(F("enum")) alongside it and rejects the list without one. Every value
-  // reported must be in the list: one that is not raises rather than being shown. A unit is
-  // ignored alongside options rather than refused.
+  /*!
+    @brief   Declares the closed set of values this signal reports.
+
+    Text only. The list is a set of names, which is what an enum describes: a number
+    has no such set, and a bool becomes a binary sensor, which has no options at all.
+
+    @param   optionsCsv  Comma-separated names as an F() literal.
+    @return  The same handle, for chaining.
+
+    @warning Home Assistant needs withDeviceClass(F("enum")) alongside this and
+             rejects the list without it. Every value reported must be in the list;
+             one that is not raises rather than being shown.
+
+    @note    A unit is ignored alongside options rather than refused.
+
+    @code
+      Blaeck.addSignal(F("Mode"), modeText)
+          .withDeviceClass(F("enum"))
+          .withOptions(F("idle,running,fault"));
+    @endcode
+  */
   BlaeckTextSignalRef &withOptions(const __FlashStringHelper *optionsCsv)
   {
     _setOptions(optionsCsv);
@@ -1629,8 +1674,16 @@ class BlaeckNumericStateRef : public BlaeckStateRefShared<BlaeckNumericStateRef>
 public:
   BlaeckNumericStateRef(BlaeckSerial *owner, int16_t index) : BlaeckStateRefShared<BlaeckNumericStateRef>(owner, index) {}
 
-  // Symbol shown after the value, e.g. F("Hz"). Non-ASCII must be UTF-8:
-  // F("\xC2\xB0" "C") is the degree sign followed by C.
+  /*!
+    @brief   Declares the symbol shown after the value.
+
+    @param   unit  Symbol as an F() literal. Non-ASCII must be UTF-8.
+    @return  The same handle, for chaining.
+
+    @code
+      Blaeck.addStateChannel(F("Amplitude"), &Amplitude).withUnit(F("V"));
+    @endcode
+  */
   BlaeckNumericStateRef &withUnit(const __FlashStringHelper *unit)
   {
     if (auto *e = _entry())
@@ -1641,18 +1694,39 @@ public:
     return *this;
   }
 
-  // Declares that the value accumulates, which is what makes Home Assistant keep long-term
-  // statistics on it - a channel is never written to the host's own store, so this is the only
-  // way its history outlives the recorder's window.
+  /*!
+    @brief   Declares that the value accumulates, so a host keeps statistics on it.
+
+    Worth more here than on a signal: a channel is never written to the host's own
+    store, so this is the only way its history outlives the recorder's window.
+
+    @param   stateClass  One of the four kinds; see BlaeckStateClass.
+    @return  The same handle, for chaining.
+
+    @code
+      Blaeck.addStateChannel(F("Amplitude"), &Amplitude)
+          .withStateClass(BLAECK_STATE_CLASS_MEASUREMENT);
+    @endcode
+  */
   BlaeckNumericStateRef &withStateClass(BlaeckStateClass stateClass)
   {
     _setStateClass(stateClass);
     return *this;
   }
 
-  // Decimal places to display. 0 is a real instruction - show it as an integer - and not the
-  // same as saying nothing, which is why it needs its own flag bit where the state class
-  // encodes its own absence.
+  /*!
+    @brief   Declares how many decimal places a host shows.
+
+    Presentation only - the value sent is unchanged.
+
+    @param   decimals  Places to show. Zero means show it as an integer, which is
+                       not the same as saying nothing.
+    @return  The same handle, for chaining.
+
+    @code
+      Blaeck.addStateChannel(F("Amplitude"), &Amplitude).withDisplayPrecision(2);
+    @endcode
+  */
   BlaeckNumericStateRef &withDisplayPrecision(uint8_t decimals)
   {
     _setDisplayPrecision(decimals);
@@ -1668,15 +1742,26 @@ class BlaeckTextStateRef : public BlaeckStateRefShared<BlaeckTextStateRef>
 public:
   BlaeckTextStateRef(BlaeckSerial *owner, int16_t index) : BlaeckStateRefShared<BlaeckTextStateRef>(owner, index) {}
 
-  // Makes the channel report a current value: the library calls the getter while building the
-  // 0x90 catalog, so a host that polls learns the value as it is at that moment and the sketch
-  // never pushes just to keep it in step. Because it is fetched rather than stored it cannot go
-  // stale. Build the text in a function-local static and return it. Left out, the channel is a
-  // plain log channel and carries no value in the catalog.
-  //
-  // Only text takes a getter. A numeric channel points at the variable instead, which needs no
-  // function at all - and anything a getter would have computed can be assigned to a variable
-  // first.
+  /*!
+    @brief   Makes the channel report a current value, fetched when asked.
+
+    The getter is called while the catalog is built, so a host that polls learns the
+    value as it is at that moment and the sketch never pushes just to keep it in
+    step. Being fetched rather than stored, it cannot go stale. Left out, the channel
+    is a plain log channel and carries no value until something writes one.
+
+    @param   getStateText  Called to produce the value as text. Build it in a
+                           function-local static and return that.
+    @return  The same handle, for chaining.
+
+    @note    Only text takes a getter. A numeric channel points at the variable
+             instead, which needs no function at all - and anything a getter would
+             have computed can be assigned to a variable first.
+
+    @code
+      Blaeck.addStateChannel(F("Offset")).withStateText(offsetText);
+    @endcode
+  */
   BlaeckTextStateRef &withStateText(BlaeckStateTextGetter getStateText)
   {
     if (auto *e = _entry())
@@ -1684,11 +1769,27 @@ public:
     return *this;
   }
 
-  // The closed set of values this channel reports, comma-separated. Text only: the list is a set
-  // of names, which is what Home Assistant's enum device class describes - a number has no such
-  // set. Home Assistant needs withDeviceClass(F("enum")) alongside it and rejects the list
-  // without one. Every value reported must be in the list: one that is not raises rather than
-  // being shown. A unit is ignored alongside options rather than refused.
+  /*!
+    @brief   Declares the closed set of values this channel reports.
+
+    Text only. The list is a set of names, which is what an enum describes; a number
+    has no such set.
+
+    @param   optionsCsv  Comma-separated names as an F() literal.
+    @return  The same handle, for chaining.
+
+    @warning Home Assistant needs withDeviceClass(F("enum")) alongside this and
+             rejects the list without it. Every value reported must be in the list;
+             one that is not raises rather than being shown.
+
+    @note    A unit is ignored alongside options rather than refused.
+
+    @code
+      Blaeck.addStateChannel(F("Mode"))
+          .withDeviceClass(F("enum"))
+          .withOptions(F("idle,running,fault"));
+    @endcode
+  */
   BlaeckTextStateRef &withOptions(const __FlashStringHelper *optionsCsv)
   {
     if (auto *e = _entry())

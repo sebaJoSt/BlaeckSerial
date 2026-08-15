@@ -25,6 +25,9 @@ float sine[8];
 // Something worth exposing but not showing by default.
 int rawAdc = 0;
 
+// A text signal reporting one of a closed set, for the withOptions() blocks.
+char modeText[12] = "idle";
+
 // --- Values a control might carry as its own state ---
 float Amplitude = 1.0f;
 float Offset = 0.0f;
