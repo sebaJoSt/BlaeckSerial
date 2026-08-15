@@ -15,55 +15,74 @@ on:
       - "examples/**"
       - "src/**"
       - "library.json"
+      - "library.properties"
   pull_request:
     paths:
       - ".github/workflows/platformio.yml"
       - "examples/**"
       - "src/**"
       - "library.json"
+      - "library.properties"
   workflow_dispatch:
 
 jobs:
-  # Changing the version in library.properties publishes to the PlatformIO registry
-  # on its own - no tag, no pio install, nothing manual. 7.0.0, 6.0.2 and 5.0.2 each
-  # appeared there on the day their bump was committed, none of them tagged, and the
-  # 7.0.0 that real users can install is a mid-development branch state.
+  # A version bump publishes to the PlatformIO registry on its own - no tag, no pio
+  # install, nothing manual. 7.0.0, 6.0.2 and 5.0.2 each appeared there on the day
+  # their bump was committed, none tagged, and the 7.0.0 a user installs today is a
+  # mid-development branch state.
   #
-  # So a bump is a release. This fails when one arrives without a tag to match, which
-  # is an alarm rather than a lock - the crawler may already have taken it - but it
-  # says so within a minute instead of at the next release.
+  # Which file carries the version matters now: library.json wins where both exist.
+  # Verified - set it to 7.0.99 against a library.properties of 7.0.0 and pkg pack
+  # named the tarball 7.0.99. The two are checked for agreement because Arduino reads
+  # the other one, and the registries would otherwise publish different numbers.
+  #
+  # A bump is a release. This fails when one arrives without a tag - an alarm rather
+  # than a lock, since the crawler may already have taken it, but it says so within a
+  # minute instead of at the next release.
   version-bump-is-tagged:
     name: A version bump has a tag
     runs-on: ubuntu-latest
-    if: github.event_name == 'push'
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Check
+      - name: The two manifests agree
+        run: |
+          j=$(python -c "import json;print(json.load(open('library.json'))['version'])")
+          p=$(grep '^version=' library.properties | cut -d= -f2)
+          echo "library.json=$j  library.properties=$p"
+          if [ "$j" != "$p" ]; then
+            echo "::error::The manifests disagree. PlatformIO reads library.json and"
+            echo "Arduino reads library.properties, so the two registries would publish"
+            echo "different code under different numbers. Verified: pkg pack names the"
+            echo "tarball from library.json when they differ."
+            exit 1
+          fi
+
+      - name: A changed version has a tag
+        if: github.event_name == 'push'
         run: |
           before='${{ github.event.before }}'
           if [ -z "$before" ] || [ "$before" = "0000000000000000000000000000000000000000" ]; then
             echo "No previous ref to compare against - skipping."; exit 0
           fi
-          if ! git diff --quiet "$before" "${{ github.sha }}" -- library.properties; then
-            v=$(grep '^version=' library.properties | cut -d= -f2)
-            old=$(git show "$before:library.properties" 2>/dev/null | grep '^version=' | cut -d= -f2)
-            if [ "$v" != "$old" ]; then
-              echo "library.properties version: $old -> $v"
-              if git rev-parse -q --verify "refs/tags/$v" >/dev/null; then
-                echo "Tag $v exists. This is a release."
-              else
-                echo "::error::Version bumped to $v with no matching tag."
-                echo "PlatformIO publishes on this change alone, so $v is now a release"
-                echo "for real users, taken from whatever is on this branch. Tag it, or"
-                echo "revert the bump and raise it again when the release is ready."
-                exit 1
-              fi
-            fi
+          v=$(grep '^version=' library.properties | cut -d= -f2)
+          old=$(git show "$before:library.properties" 2>/dev/null | grep '^version=' | cut -d= -f2)
+          if [ "$v" = "$old" ]; then
+            echo "No version change in this push."; exit 0
           fi
-          echo "No version change in this push."
+          echo "version: $old -> $v"
+          if git rev-parse -q --verify "refs/tags/$v" >/dev/null; then
+            echo "Tag $v exists. This is a release."
+          else
+            echo "::error::Version bumped to $v with no matching tag."
+            echo "A bump alone publishes to the PlatformIO registry, so $v is now a"
+            echo "release for real users taken from whatever is on this branch, and the"
+            echo "number can never be reused - not even after pio pkg unpublish. Tag it,"
+            echo "or revert the bump and raise it when the release is ready."
+            exit 1
+          fi
 
   build:
     name: Examples build under PlatformIO
