@@ -24,6 +24,6 @@
     }
   ],
   "export": {
-    "include": ["src", "examples", "README.md", "LICENSE.md", "Changelog.md"]
+    "include": ["src", "examples", "README.md", "LICENSE.md", "CHANGELOG.md"]
   }
 }
