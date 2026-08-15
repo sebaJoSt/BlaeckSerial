@@ -2225,22 +2225,38 @@ public:
   void writeCommands();
   void writeCommands(unsigned long messageID);
 
-  // ----- State channels (0x90 / 0x95) -----
+  // ----- State channels -----
   // With BLAECK_ENABLE_STATE_CHANNELS=0 these still compile but do nothing, so a
   // sketch can be built for a tiny target without being rewritten.
-  //
-  // Declare a state channel. Channels must be declared up-front (typically in
-  // setup()) so the host can announce every text sensor before the first line
-  // arrives; writeState() on an undeclared channel is dropped.
-  // `channelName` is copied; `icon` must outlive the call (use a string literal
-  // or F("mdi:...")). Returns false if the name is empty/too long or the table
-  // is full.
-  // Declares a channel. Which overload is called settles the channel's type, and the type
-  // settles the handle: a numeric channel takes withUnit()/withStateClass()/
-  // withDisplayPrecision(), a text one takes withStateText()/withOptions(), and asking for
-  // the wrong one does not compile. Pass a pointer and the library reads that variable when
-  // the value is wanted, exactly as addSignal() does; pass none and the channel carries only
-  // what writeState() hands it.
+
+  /*!
+    @brief   Declares a channel reporting what something is set to.
+
+    A state channel reports a current value that is shown but never logged, whether
+    that is a status line or what a control is set to. A signal is the opposite - it
+    is sampled on every interval and kept as history.
+
+    Which overload you call settles the channel's type, and the type settles the
+    handle: a numeric channel takes withUnit(), withStateClass() and
+    withDisplayPrecision(), a text one takes withStateText() and withOptions(), and
+    asking for the wrong one does not compile.
+
+    Pass a pointer and the library reads that variable when the value is wanted,
+    exactly as addSignal() does. Pass none and the channel carries only what
+    writeState() hands it.
+
+    @param   channelName  Name a host lists the channel under. Copied, so a buffer
+                          may be reused straight away.
+    @return  Handle describing how a host should present the channel.
+
+    @warning Declare every channel before writing to it, typically in setup(). A
+             value on a channel that was never declared is dropped, silently.
+
+    @code
+      Blaeck.addStateChannel(F("Status")).withIcon(F("mdi:pulse")).diagnostic();
+      Blaeck.addStateChannel(F("Amplitude"), &Amplitude).withUnit(F("V"));
+    @endcode
+  */
   BlaeckTextStateRef addStateChannel(const char *channelName);
   BlaeckTextStateRef addStateChannel(const char *channelName, const char *value);
   BlaeckBoolStateRef addStateChannel(const char *channelName, bool *value);
@@ -2270,31 +2286,65 @@ public:
   BlaeckNumericStateRef addStateChannel(const __FlashStringHelper *channelName, unsigned long *value);
   BlaeckNumericStateRef addStateChannel(const __FlashStringHelper *channelName, float *value);
   BlaeckNumericStateRef addStateChannel(const __FlashStringHelper *channelName, double *value);
-  // Forgets every declared state channel, leaving the table empty and its capacity untouched.
-  // A host addresses a channel by its position in the 0x90 catalog, so re-declaring changes
-  // what those positions mean: follow with writeStateChannels(), or the host files values
-  // against the wrong channels.
-  //
-  // This clears the channels a command claimed with withOwnState() too, and those cannot be
-  // declared again - withOwnState() builds on the handle onNumberCommand() and its siblings
-  // return, so it only runs where the command is registered. writeCommandState() then finds
-  // no channel and quietly publishes nothing. For a device that re-declares its controls,
-  // clear the commands as well and register both together.
+  /*!
+    @brief   Forgets every declared state channel.
+
+    Leaves the table empty and its capacity untouched, for a device that re-declares
+    what it offers while running.
+
+    @warning A host addresses a channel by its position in the catalog, so
+             re-declaring changes what those positions mean. Follow with
+             writeStateChannels(), or values are filed against the wrong channels.
+
+    @warning This clears the channels a command claimed with withOwnState(), and
+             those cannot be declared again - withOwnState() builds on the handle
+             onNumberCommand() and its siblings return, so it only runs where the
+             command is registered. writeCommandState() then finds no channel and
+             publishes nothing. To re-declare controls, clear the commands too and
+             register both together.
+
+    @code
+      Blaeck.clearAllStateChannels();
+      Blaeck.addStateChannel(F("Status"));
+      Blaeck.writeStateChannels();
+    @endcode
+  */
   void clearAllStateChannels();
 
-  // Send the 0x90 "State Channel List" frame (the declared-channel catalog).
-  // Sent automatically in response to BLAECK.WRITE_STATE_CHANNELS.
+  /*!
+    @brief   Sends the list of declared state channels.
+
+    Answers <BLAECK.WRITE_STATE_CHANNELS>, and is what a host needs before any value
+    means anything - a value names its channel by position in this list.
+
+    @code
+      Blaeck.writeStateChannels();
+    @endcode
+  */
   void writeStateChannels();
   void writeStateChannels(unsigned long messageID);
 
-  // Report a value on a declared channel. Fire-and-forget: a host may surface it
-  // (e.g. a Home Assistant sensor per declared channel) but it is never stored as
-  // signal data. The frame carries the channel's index in the 0x90 catalog rather
-  // than its name, so the catalog must reach the host first. No CRC (like the
-  // 0xA0/0xA5 frames). Text longer than 255 bytes is truncated - the same cap a
-  // string signal has, and the same one Home Assistant puts on a state - and the
-  // truncation is reported once per channel on the debug stream. Values on
-  // channels that were never passed to addStateChannel() are dropped.
+  /*!
+    @brief   Reports a value on a declared channel.
+
+    Fire and forget: a host may show it, but it is never stored as logged data. Use
+    it for a status line, or for what a control is set to.
+
+    @param   channelName  A channel already passed to addStateChannel(). A value on
+                          one that was not is dropped.
+    @param   text         The value. Longer than 255 bytes is truncated, and the
+                          truncation is reported once per channel on the debug
+                          stream.
+
+    @warning The catalog has to reach the host first, since a value names its
+             channel by position in it rather than by name.
+
+    @code
+      char text[40];
+      snprintf(text, sizeof(text), "up %lu s", millis() / 1000UL);
+      Blaeck.writeState(F("Status"), text);
+    @endcode
+  */
   void writeState(const char *channelName, const char *text);
   void writeState(const char *channelName, const char *text, unsigned long messageID);
 
@@ -2327,37 +2377,76 @@ public:
   void writeCommandState(const char *command);
   void writeCommandState(const char *command, unsigned long messageID);
 
-  // ----- Events (Home Assistant event entities, 0x85) -----
+  // ----- Events -----
   // With BLAECK_ENABLE_EVENTS=0 these still compile but do nothing.
-  //
-  // Declare an event channel, then give it its event types with addEventType().
-  // Both must happen up-front (typically in setup()) so the host can announce
-  // the entity, including its list of types, before the first event arrives.
-  // `channelName` is copied; `icon` must outlive the call (use a string literal
-  // or F("mdi:...")). Returns false if the name is empty/too long or the table
-  // is full.
-  // eventTypes is the closed set this channel may report, comma-separated and read left to
-  // right, so position defines each type's index. It is not optional: writeEvent() resolves
-  // against this list, and a host needs it to announce the entity at all, so a channel without
-  // one could neither emit nor be shown. Use addEventType() to append more conditionally.
+
+  /*!
+    @brief   Declares a channel reporting discrete occurrences from a fixed list.
+
+    An event is something that happened, where a signal is a value that is true
+    continuously and a state channel is what something is set to.
+
+    @param   channelName  Name a host lists the channel under. Copied, so a buffer
+                          may be reused straight away.
+    @param   eventTypes   The closed set this channel may report, comma-separated
+                          and read left to right, so position fixes each type's
+                          index.
+    @return  Handle describing how a host should present the channel.
+
+    @warning eventTypes is not optional. writeEvent() resolves against this list,
+             and a host needs it to announce the channel at all, so one declared
+             without types could neither report nor be shown.
+
+    @code
+      Blaeck.addEventChannel(F("Activity"), F("idle_warning,resumed"))
+          .withIcon(F("mdi:pulse"));
+    @endcode
+  */
   BlaeckEventChannelRef addEventChannel(const char *channelName, const __FlashStringHelper *eventTypes);
 
   // The same, named with F(). The channel name is copied as it is from a RAM name;
   // eventTypes was already flash-only.
   BlaeckEventChannelRef addEventChannel(const __FlashStringHelper *channelName, const __FlashStringHelper *eventTypes);
 
-  // Append an event type to a declared channel. Call order defines the index used on the wire:
-  // the first type added to a channel is index 0, the next 1. addEventChannel() declares the set
-  // known at compile time; use this to append to it conditionally. `eventType`
-  // must outlive the call (use F("...")). Types are held in one pool shared by all channels.
-  // A type that does not fit, names an undeclared channel, or duplicates one the channel
-  // already has is dropped, reported on DebugRef, and counted by hasRejectedEventChannels().
+  /*!
+    @brief   Appends one event type to a channel already declared.
+
+    addEventChannel() takes the set known at compile time; this adds to it
+    conditionally, for types a board only has when some hardware is fitted.
+
+    @param   channelName  A channel already declared.
+    @param   eventType    The type to add. Must outlive the call, so use F().
+    @return  True if it was added. False if it does not fit, names a channel that
+             was never declared, or duplicates one the channel already has - each
+             reported on the debug stream and counted by hasRejectedEventChannels().
+
+    @note    Call order fixes each type's index within its channel, so appending is
+             safe but reordering is not. Types are held in one pool shared by every
+             channel; see withEventTypes().
+
+    @code
+      Blaeck.addEventChannel(F("Activity"), F("idle_warning,resumed"));
+      if (hasBatteryMonitor)
+        Blaeck.addEventType(F("Activity"), F("low_battery"));
+    @endcode
+  */
   bool addEventType(const char *channelName, const __FlashStringHelper *eventType);
   bool addEventType(const __FlashStringHelper *channelName, const __FlashStringHelper *eventType);
-  // Forgets every declared event channel and, with them, every event type - the types share one
-  // pool, so emptying the channels empties it. Both tables keep their capacity. A host addresses
-  // a channel and a type by their positions in the 0x80 catalog, so follow with
-  // writeEventChannels() or reported events land under the wrong names.
+  /*!
+    @brief   Forgets every declared event channel, and every event type with them.
+
+    The types share one pool, so emptying the channels empties it. Both tables keep
+    their capacity.
+
+    @warning A host addresses a channel and a type by their positions, so follow
+             with writeEventChannels() or reported events land under the wrong names.
+
+    @code
+      Blaeck.clearAllEventChannels();
+      Blaeck.addEventChannel(F("Activity"), F("idle_warning,resumed"));
+      Blaeck.writeEventChannels();
+    @endcode
+  */
   void clearAllEventChannels();
 
   // Send the 0x80 "Event Channel List" frame (the declared-channel catalog).

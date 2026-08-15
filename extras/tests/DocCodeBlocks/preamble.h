@@ -38,6 +38,10 @@ char DeviceLabel[33] = "wave-gen";
 // --- For the write() example, which shows a signal that pulses ---
 bool Pulse = false;
 bool triggered = false;
+
+// Stands in for hardware a board may or may not have fitted, so a block can show
+// something being declared conditionally.
+const bool hasBatteryMonitor = false;
 unsigned long pulseSince = 0;
 
 // --- Where a restored setting is kept, for the getSelectOptionIndexOf() example ---
