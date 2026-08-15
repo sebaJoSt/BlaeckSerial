@@ -44,10 +44,10 @@ FIELD_OWNER = "Blaeck"
 
 NL = chr(10)
 
-# extras/scripts/checkdocs.py -> extras/DocExamples/DocExamples.ino, resolved from
+# extras/scripts/checkdocs.py -> extras/tests/DocExamples/DocExamples.ino, resolved
 # this file rather than the working directory so it holds wherever it is run from.
 DEFAULT_EXTRACT = os.path.normpath(os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "..", "DocExamples", "DocExamples.ino"))
+    os.path.dirname(os.path.abspath(__file__)), "..", "tests", "DocExamples", "DocExamples.ino"))
 
 SECTION = re.compile(r"^[\s/*-]*$")
 

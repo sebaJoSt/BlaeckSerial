@@ -72,4 +72,4 @@ jobs:
             - source-path: ./
             - name: CRC
           sketch-paths: |
-            - extras/DocExamples
+            - extras/tests/DocExamples

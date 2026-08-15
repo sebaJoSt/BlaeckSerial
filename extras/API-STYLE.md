@@ -151,7 +151,7 @@ That imposes three things:
   function body. A dangling `.withRange(...)` cannot compile, and would not teach
   much anyway.
 - **Draw on the shared vocabulary.** `Temperature`, `Frequency`, `waveIndex`,
-  `readSensor()` and the rest live in `extras/DocExamples/preamble.h`. Reach for an
+  `readSensor()` and the rest live in `extras/tests/DocExamples/preamble.h`. Reach for an
   existing name before adding one: blocks that all speak of `Temperature` teach the
   library faster than blocks that each invent a cast of characters.
 - **Call the instance `Blaeck`.** Never `BlaeckSerial` — a global variable with the
@@ -165,17 +165,19 @@ shape for a command callback, and the extractor emits it at file scope. `void lo
 is welcome too; it is renamed on the way into the generated sketch so several blocks
 can use it.
 
-`extras/DocExamples/` cannot be renamed. `arduino-cli` requires a sketch folder to
-match its `.ino`, and `preamble.h` is reached by an `#include` resolved against that
-sketch — so renaming the folder fails the build with an error pointing at the
-include rather than at the rename.
+The folder may be moved, but not renamed: `arduino-cli` requires a sketch folder to
+match its `.ino`, so `DocExamples/` has to stay `DocExamples/` wherever it sits.
+`preamble.h` is reached by an `#include` resolved against that sketch, so a rename
+fails the build with an error pointing at the include rather than at the rename.
+Moving it means updating `DEFAULT_EXTRACT` in `checkdocs.py`, `.gitignore`, and the
+workflow that compiles it.
 
 ## Checking
 
 ```
 python extras/scripts/checkdocs.py src/BlaeckSerial.h              # what is undocumented
 python extras/scripts/checkdocs.py src/BlaeckSerial.h --show tick  # what a hover will show
-python extras/scripts/checkdocs.py src/BlaeckSerial.h --extract    # every block -> extras/DocExamples/DocExamples.ino
+python extras/scripts/checkdocs.py src/BlaeckSerial.h --extract    # every block -> extras/tests/DocExamples/DocExamples.ino
 ```
 
 `--show` reads `Cursor.raw_comment`, the same attachment clangd hovers, so a doc can
@@ -186,7 +188,7 @@ repeats once per block — which reads as one cause, not many, because each name
 own line in the header. To see only the first:
 
 ```
-arduino-cli compile --fqbn arduino:avr:mega --build-property compiler.cpp.extra_flags=-fmax-errors=1 extras/DocExamples
+arduino-cli compile --fqbn arduino:avr:mega --build-property compiler.cpp.extra_flags=-fmax-errors=1 extras/tests/DocExamples
 ```
 
 CI runs the first and builds the third.
