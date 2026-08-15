@@ -15,9 +15,11 @@ Please:
 3. Call the object `Blaeck` in examples and doc comments, never `BlaeckSerial` —
    a variable sharing its type's name switches off autocomplete in VS Code. The
    README explains it under *Instantiate BlaeckSerial*.
-4. Keep changes in step with
-   [BlaeckTCP](https://github.com/sebaJoSt/BlaeckTCP) where they touch the shared
-   API or the wire format. The two libraries send byte-identical frames.
+
+If a change touches the public API or the frames on the wire, mention it in the
+pull request. [BlaeckTCP](https://github.com/sebaJoSt/BlaeckTCP) is the same
+library over a network and sends byte-identical frames, so it usually needs the
+same change — but porting it is not something you have to do.
 
 ## Checking your work
 
