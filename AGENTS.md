@@ -44,6 +44,26 @@ CI compiles every example for AVR, ESP32 and SAMD, so a local build is only need
 to answer a specific question. `examples/TimeStampModes` needs `RTC.h` and does not
 build without it.
 
+## Releasing
+
+The two registries are triggered by different things, so a version number is not
+just a label:
+
+- **PlatformIO** watches the repository and publishes as soon as the `version` in
+  `library.properties` changes on the branch. No tag, no `pio` install, nothing
+  manual. Whatever is on the branch that day becomes a release for real users.
+- **Arduino Library Manager** publishes from a git tag, and ignores the version
+  field until then.
+
+So bump the version as the last step before tagging, never while developing. Bumping
+it early is how 7.0.0 reached PlatformIO users on 2026-08-08 mid-development, while
+Arduino stayed on 6.0.1 — and why 7.0.0 cannot be reused for the real 7.0.0.
+
+Published versions are listed at
+[registry.platformio.org/libraries/sebajost/BlaeckSerial](https://registry.platformio.org/libraries/sebajost/BlaeckSerial).
+Check it before choosing a number; several bumps were never tagged, so it holds
+versions the repository does not.
+
 ## Related
 
 [BlaeckTCP](https://github.com/sebaJoSt/BlaeckTCP) is the same library over a
