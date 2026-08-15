@@ -352,11 +352,17 @@ def main(argv):
 
     print()
     print("%d documented name(s) with no @code block" % len(no_block))
-    if no_block and "-v" in argv:
-        for (cls, name), members in no_block:
-            where = "%s::%s" % (cls, name) if cls else name
-            print("  %5d  %s" % (members[0].location.line, where))
-    return 1 if bare else 0
+    # Listed without -v now that this fails a build: a contributor who has just
+    # turned CI red should not have to rerun anything to find out where.
+    for (cls, name), members in no_block:
+        where = "%s::%s" % (cls, name) if cls else name
+        print("  %5d  %s" % (members[0].location.line, where))
+
+    # Both are gates. A public name with no comment hovers blank; one with no @code
+    # block leaves a reader with a signature and no worked call. The second was only
+    # counted while 84 names lacked one, because a red build nobody can fix is a red
+    # build everybody learns to ignore.
+    return 1 if (bare or no_block) else 0
 
 if __name__ == "__main__":
     sys.exit(main(sys.argv[1:]))

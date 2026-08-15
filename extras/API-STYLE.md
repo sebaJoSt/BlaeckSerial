@@ -223,11 +223,14 @@ arduino-cli compile --fqbn arduino:avr:mega --build-property compiler.cpp.extra_
 
 CI runs the first and builds the third.
 
-Two things fail a build: a public name with no comment, and a block that does not
-compile. The rest are reported and counted - a section divider standing in for a
-comment, a comment too short to say anything, a missing blank line before `@code`,
-and a missing `@code` block. Rule 7 is not a gate yet because the header does not
-meet it: that count is the backlog, and it becomes a gate when it reaches zero.
+Three things fail a build: a public name with no comment, one with no `@code` block,
+and a block that does not compile. The rest are reported and counted - a section
+divider standing in for a comment, a comment too short to say anything, and a missing
+blank line before `@code`.
+
+Rule 7 became a gate once the header met it. It was only counted while 84 names
+lacked a block, because a red build nobody can fix is a red build everybody learns to
+ignore.
 
 What they cannot catch: whether any of it is **true**. Every rule above is about
 form. Accuracy comes from reading the implementation before writing the comment,
