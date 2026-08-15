@@ -7,6 +7,13 @@ someone reading the header top to bottom. Most of these rules follow from that:
 a hover is read in isolation, out of order, at the moment somebody is deciding
 what to type next.
 
+**What these rules govern:** the doc comment attached to a public name — what an
+editor shows on hover. Not every comment in the file. The `BLAECK_ENABLE_*`
+documentation at the top of the header is read by someone configuring a build, not
+writing a sketch, so it names the frames a switch removes and is right to; the same
+goes for comments inside private members and function bodies. Rule 3 in particular
+would strip information those readers need.
+
 Drawn from four style guides that agree more than they differ — [Go Doc
 Comments](https://go.dev/doc/comment), the [Rust API
 Guidelines](https://rust-lang.github.io/api-guidelines/documentation.html),
