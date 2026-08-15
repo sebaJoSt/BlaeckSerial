@@ -1,16 +1,15 @@
-// Globals the @code blocks in BlaeckSerial.h are written against - the snippets an
-// editor shows on hover, not the sketches under examples/.
+// Globals the @code blocks in BlaeckSerial.h are written against.
 //
 // Only one file includes this, and it does not exist until it is generated:
 // extras/scripts/checkdocs.py --extract writes DocExamples.ino beside it, and CI
-// compiles the result. Nothing in src/ or examples/ includes this, and no sketch of
-// yours should. DocExamples.ino is generated and gitignored - do not edit or commit it.
+// compiles the result. Nothing in src/ or examples/ includes it, and no sketch of
+// yours should.
 //
-// This folder cannot be renamed: arduino-cli ties a sketch folder to its .ino, and
+// The folder cannot be renamed: arduino-cli ties a sketch folder to its .ino, and
 // the #include resolves against that sketch.
 //
-// Before adding a name, read extras/API-STYLE.md. It explains why these are shared
-// and when a new one is warranted; repeating it here would be a second copy to drift.
+// Before adding a name, read extras/API-STYLE.md - it explains why these are shared
+// and when a new one is warranted.
 
 #pragma once
 
