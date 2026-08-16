@@ -4212,6 +4212,20 @@ void BlaeckSerial::writeRestarted(unsigned long msg_id)
       StreamRef->write("\r\n");
       StreamRef->flush();
     }
+
+#if BLAECK_ENABLE_STATE_CHANNELS
+    // The catalog rides along with the notice, unasked, for the host that was already
+    // connected when this board came up. It holds every channel's current value, and those
+    // values are back at their startup defaults - so a host that keeps what it had shows a
+    // reading the device stopped reporting when it restarted, indefinitely if the value is
+    // retained somewhere. A host connecting fresh polls for this anyway and simply reads it
+    // twice, which costs one frame.
+    //
+    // Sent from read() rather than from begin(), so it goes out once the sketch has finished
+    // declaring: a catalog written mid-setup() would announce the channels declared so far and
+    // nothing after them.
+    this->writeStateChannels(msg_id);
+#endif
   }
 }
 
