@@ -4213,30 +4213,34 @@ void BlaeckSerial::writeRestarted(unsigned long msg_id)
       StreamRef->flush();
     }
 
-#if BLAECK_ENABLE_STATE_CHANNELS
-    // The catalog rides along with the notice, unasked, for the host that was already
-    // connected when this board came up. It holds every channel's current value, and those
-    // values are back at their startup defaults - so a host that keeps what it had shows a
-    // reading the device stopped reporting when it restarted, indefinitely if the value is
-    // retained somewhere. A host connecting fresh polls for this anyway and simply reads it
-    // twice, which costs one frame.
+    // Everything this board declares goes out behind the notice, unasked. A host that was
+    // already connected is holding what the previous run declared, and has no reason to ask
+    // again - it does not know anything changed. One rule rather than three: a device says
+    // what it has, every time it starts.
     //
-    // Sent from read() rather than from begin(), so it goes out once the sketch has finished
-    // declaring: a catalog written mid-setup() would announce the channels declared so far and
-    // nothing after them.
+    // The state catalog is the one that is wrong after an ordinary restart, because it carries
+    // each channel's current value and those are back at their startup defaults - a host that
+    // keeps what it had shows a reading the device stopped reporting, indefinitely where the
+    // value is retained. The other two are insurance against a sketch that declares
+    // conditionally, on a sensor that answered at boot or a setting read from EEPROM, and so
+    // comes back offering something else.
+    //
+    // Sent from read() rather than from begin(), so they go out once the sketch has finished
+    // declaring: a catalog written mid-setup() would announce what was declared up to that line
+    // and nothing after it.
+#if BLAECK_ENABLE_STATE_CHANNELS
     this->writeStateChannels(msg_id);
 #endif
 
 #if BLAECK_ENABLE_EVENTS
-    // The event catalog for a different reason: it carries no value, so nothing here is out
-    // of date after an ordinary restart. What it guards against is a sketch that declares
-    // conditionally - on a sensor that answered at boot, on a setting read from EEPROM - and
-    // comes back with another set. An event names its channel and its type by position in
-    // this list, so a host holding the previous one files occurrences under whatever now sits
-    // at those indices, with nothing to notice it by. A command cannot go wrong that way: it
-    // is matched by name, and one that is gone answers UNKNOWN_COMMAND.
     this->writeEventChannels(msg_id);
 #endif
+
+    // Costs 30 bytes of flash and one frame. Nothing here is addressed by position - a command
+    // is matched by the hash of its name, so a stale one answers UNKNOWN_COMMAND rather than
+    // being taken for another - which makes this the least urgent of the three and not worth
+    // the exception it would take to leave out.
+    this->writeCommands(msg_id);
   }
 }
 
