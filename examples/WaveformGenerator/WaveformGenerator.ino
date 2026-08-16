@@ -143,7 +143,7 @@ void setup()
   // Each event channel declares up-front the closed set of events it can report.
   // addEventType() does the same one name at a time, for a list built conditionally.
   Blaeck.addEventChannel(F("Activity"), F("idle_warning,resumed"))
-      .withIcon(F("mdi:motion-sensor"));
+      .withIcon(F("mdi:timer-sand"));
 
   // Everything is declared: one summary of anything a table had no room for, naming the
   // begin() call that would have kept it. Prints nothing when all of it fitted.
