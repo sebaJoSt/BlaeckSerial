@@ -454,11 +454,10 @@ class BlaeckSerial;
 // builds and the number is simply not stored, so a feature switch never breaks
 // a chain.
 //
-// RAM is what a sketch sizes against, and it decides long before any cap does. On AVR
-// an entry costs 26 bytes for a state channel, 48 for a command and 10 for an event
-// channel, so a Mega's 8 KB is gone at a few hundred of anything; an ESP32 has 320 KB
-// and room for thousands. A table that cannot be allocated says so and drops every
-// entry, which is a truer answer than a number.
+// RAM is what a sketch sizes against, and it decides long before any cap does. Each
+// sizer says what one of its entries costs; a Mega's 8 KB is gone at a few hundred of
+// anything, where an ESP32 has 320 KB and room for thousands. A table that cannot be
+// allocated says so and drops every entry, which is a truer answer than a number.
 //
 // Declared here rather than after BlaeckSerial, where the bodies live, so that the
 // type is complete where begin() names it as a return type. A forward declaration
@@ -473,8 +472,7 @@ public:
   /*!
     @brief   Makes room for a number of signals.
 
-    RAM is what a large count runs into. A value is sent in catalog order rather than
-    named by an index, so nothing on the wire constrains how many there can be.
+    A signal costs 9 bytes on AVR, so this is a RAM decision more than anything else.
 
     @param   count  Signals to make room for. At most 32767; a
                     larger literal fails the build.
@@ -492,6 +490,8 @@ public:
     Counts the channels declared with addStateChannel() and the one a command builds
     with withOwnState() - that channel comes out of this table, not withCommands().
 
+    A channel costs 26 bytes on AVR.
+
     @param   count  State channels to make room for. At most 32767; a
                     larger literal fails the build.
     @return  The same handle, for chaining.
@@ -504,6 +504,8 @@ public:
 
   /*!
     @brief   Makes room for a number of event channels.
+
+    An event channel costs 10 bytes on AVR.
 
     @param   count  Event channels to make room for. At most 32767; a
                     larger literal fails the build.
@@ -521,9 +523,8 @@ public:
     Types share one table, so this is the sum across channels rather than the most
     any one channel has: four channels of five types each need 20. Sharing is what
     makes that cheap - a channel with two types costs two slots, where a table per
-    channel would give every channel room for the largest. A type's index is counted
-    within its channel, so nothing addresses the pool itself and RAM is what a large
-    count runs into.
+    channel would give every channel room for the largest. A type costs 5 bytes on AVR,
+    the cheapest entry the library keeps.
 
     @param   count  Event types to make room for, added up across every channel.
                     Zero leaves the capacity as it is. At most 32767; a
@@ -541,6 +542,10 @@ public:
 
     Plain onCommand() registrations and the typed onNumberCommand(),
     onSelectCommand() and friends share this table.
+
+    A command costs 48 bytes on AVR, the largest entry there is - and one that reports
+    its own state takes a 26-byte state channel with it, so size withStateChannels()
+    to match.
 
     @param   count  Commands to make room for. At most 32767; a
                     larger literal fails the build.
