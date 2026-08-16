@@ -491,9 +491,7 @@ public:
     A value is sent in catalog order rather than named by an index, so nothing else
     constrains how many there can be.
 
-    @param   count  Signals to make room for. Sized once, when the first signal is
-                    added: a later call cannot resize the table and says so on a debug
-                    stream.
+    @param   count  Signals to make room for.
     @return  The same handle, for chaining.
 
     @code
@@ -2024,6 +2022,11 @@ public:
     @param   value       Address of the variable to read. One overload per type.
     @return  Handle describing how a host should present the signal. Chainable, and
              safe to ignore - a signal that describes nothing costs nothing.
+    @warning Call it after begin(). Before that there is no capacity to build the
+             table from, so the signal is dropped and counted as rejected - and not
+             even a debug stream says so, because the message names a table that does
+             not exist yet. hasRejectedSignals() is what shows it.
+
     @note    When the signal table is full the handle is dead: the chain still
              compiles and runs, and stores nothing. The missing signal is the real
              problem, and hasRejectedSignals() reports it.
