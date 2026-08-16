@@ -1246,7 +1246,7 @@ void BlaeckSerial::writeCommandState(const char *command, unsigned long messageI
     // The channel was declared from this same name at registration, so it exists unless the
     // table was full - in which case there is nothing to publish to and the warning was
     // already given there.
-    for (byte c = 0; c < _stateChannelSlots(); c++)
+    for (uint16_t c = 0; c < _stateChannelSlots(); c++)
     {
       if (!_stateChannels[c].inUse || !_stateChannels[c].ownedByCommand)
         continue;
