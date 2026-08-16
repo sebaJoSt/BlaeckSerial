@@ -153,6 +153,12 @@ registration would be the same sentence five times, in five places a reader who
 already called `begin()` will hover. It is stated on `begin()`, which is also where
 the reader is when the ordering is still theirs to get wrong.
 
+This needs an establishing call to apply. Repetition between siblings a reader
+reaches independently is a different thing and stays: `DeviceName`,
+`DeviceHWVersion` and `DeviceFWVersion` each state the pointer-lifetime rule,
+because nobody hovers one on the way to another — that is rule 5, and collapsing it
+is how `DeviceName` once came to be documented as "set these variables".
+
 ## Format
 
 Doxygen `/*!` blocks, in the Adafruit house style, because it renders structured
