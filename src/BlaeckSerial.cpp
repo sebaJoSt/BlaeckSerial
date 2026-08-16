@@ -1253,8 +1253,16 @@ void BlaeckSerial::writeCommandState(const char *command, unsigned long messageI
       if (!_channelNameEqualsFlash(_stateChannels[c].name, _stateChannels[c].nameInFlash, e.stateSignal))
         continue;
 
-      BlaeckStateTextGetter getter = _stateChannels[c].getStateText;
-      _writeStateFrame(c, getter != nullptr ? getter() : nullptr, messageID);
+      // The same resolution writeState(channelName) does, and for the same reason: a channel
+      // carries its text three ways and only one of them is a getter. A select's own state is
+      // an index into the option list the command handed it, and _channelText() is what turns
+      // that back into the name; a plain string channel is read where it sits.
+      //
+      // Asking only the getter meant those two answered nullptr, which _writeStateFrame sends
+      // as an empty string - and an empty retained payload deletes the topic it lands on, so a
+      // select reported its wave by removing the topic that said which one it was.
+      char optionBuf[BLAECK_STATE_MAX_OPTION_CHARS];
+      _writeStateFrame(c, _channelText(_stateChannels[c], optionBuf, sizeof(optionBuf)), messageID);
       return;
     }
     return;
