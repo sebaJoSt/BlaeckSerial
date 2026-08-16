@@ -4226,6 +4226,17 @@ void BlaeckSerial::writeRestarted(unsigned long msg_id)
     // nothing after them.
     this->writeStateChannels(msg_id);
 #endif
+
+#if BLAECK_ENABLE_EVENTS
+    // The event catalog for a different reason: it carries no value, so nothing here is out
+    // of date after an ordinary restart. What it guards against is a sketch that declares
+    // conditionally - on a sensor that answered at boot, on a setting read from EEPROM - and
+    // comes back with another set. An event names its channel and its type by position in
+    // this list, so a host holding the previous one files occurrences under whatever now sits
+    // at those indices, with nothing to notice it by. A command cannot go wrong that way: it
+    // is matched by name, and one that is gone answers UNKNOWN_COMMAND.
+    this->writeEventChannels(msg_id);
+#endif
   }
 }
 
