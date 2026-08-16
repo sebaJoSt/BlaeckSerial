@@ -22,7 +22,8 @@
     SET_OFFSET  number  -100..100, step 0.1             state: its own state channel
     SET_WAVE    select  Sine/Square/Triangle/Sawtooth   state: its own state channel
     SET_ENABLE  switch  off -> Output = Offset          state: its own state channel
-    SET_LABEL   text    max 32 bytes, config category   state: its own state channel
+    SET_LABEL   text    max 32 bytes, config category   state: its own state channel,
+                and the name the status line reports under
     STATUS      button  writes the StatusOnDemand channel
 
   Signals that describe themselves (Frequency declares nothing, and costs nothing):
@@ -142,7 +143,7 @@ void setup()
   // Each event channel declares up-front the closed set of events it can report.
   // addEventType() does the same one name at a time, for a list built conditionally.
   Blaeck.addEventChannel(F("Activity"), F("idle_warning,resumed"))
-      .withIcon(F("mdi:sine-wave"));
+      .withIcon(F("mdi:motion-sensor"));
 
   // Everything is declared: one summary of anything a table had no room for, naming the
   // begin() call that would have kept it. Prints nothing when all of it fitted.
@@ -219,8 +220,10 @@ void WriteStatus(const __FlashStringHelper *channel)
   Blaeck.getSelectOptionNameAt("SET_WAVE", waveIndex, waveName, sizeof(waveName));
   const char *runState = Enabled ? "running" : "stopped";
 
-  char text[80]; // fits "stopped Triangle @ 2.00 Hz"
-  snprintf(text, sizeof(text), "%s %s @ %s Hz", runState, waveName, freqText);
+  // DeviceLabel is what SET_LABEL wrote. Reading it here is the whole point of storing it:
+  // a control that only fills a variable no one looks at teaches the call and nothing else.
+  char text[80]; // fits "wave-gen: stopped Triangle @ 2.00 Hz"
+  snprintf(text, sizeof(text), "%s: %s %s @ %s Hz", DeviceLabel, runState, waveName, freqText);
   Blaeck.writeState(channel, text);
 }
 
