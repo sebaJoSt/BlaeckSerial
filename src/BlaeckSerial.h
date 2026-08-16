@@ -3264,8 +3264,9 @@ public:
     @param   handler  Called once a value has been accepted.
     @return  Handle describing the control. Chainable.
 
-    @note    Without withRange() nothing is checked: the handler takes whatever
-             arrives, and the catalog carries no limits for a host to build from.
+    @note    The value still has to be a number - text that is not one is refused
+             whether or not a range was declared. Without withRange() its size is
+             unchecked, and the catalog carries no limits for a host to build from.
 
     @code
       Blaeck.onNumberCommand("SET_FREQ", onSetFreq)

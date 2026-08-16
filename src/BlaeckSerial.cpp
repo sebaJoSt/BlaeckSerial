@@ -3257,12 +3257,32 @@ byte BlaeckSerial::_validateTypedCommand(byte handlerIndex)
   if (v[0] == '\0' && e.kind != BLAECK_CMD_TEXT)
     return BLAECK_ACK_MISSING_VALUE;
 
-  // No range declared, no limit: the handler decides what the value means. Checking
-  // against the 0 defaults would refuse every value but zero.
-  if (e.kind == BLAECK_CMD_NUMBER && _rangeDeclared(e))
+  if (e.kind == BLAECK_CMD_NUMBER)
   {
-    float f = (float)atof(v);
-    if (f < e.meta_min || f > e.meta_max)
+    // A number command takes a number, declared bounds or not. atof() read "abc" as 0,
+    // which passes any range spanning zero and reaches the handler as text its own
+    // atof() also reads as 0 - a wrong setting applied without a word. Parsed the way a
+    // select index already is at the branch below: all of the string, or none of it.
+    // NaN is refused here rather than by the comparison, which it defeats: every
+    // comparison against NaN is false, so it would pass any range. Infinity needs no
+    // guard of its own - it compares, so a finite max refuses it below.
+    char *endp = nullptr;
+    float f = (float)strtod(v, &endp);
+    if (endp == v || *endp != '\0' || isnan(f))
+    {
+      if (_debugStream != nullptr)
+      {
+        _debugStream->print(F("Command rejected (not a number): "));
+        _debugStream->print(e.command);
+        _debugStream->print('=');
+        _debugStream->println(v);
+      }
+      return BLAECK_ACK_OUT_OF_RANGE;
+    }
+
+    // Bounds only where the sketch stated them: no range declared, no limit. Checking
+    // against the 0 defaults would refuse every value but zero.
+    if (_rangeDeclared(e) && (f < e.meta_min || f > e.meta_max))
     {
       if (_debugStream != nullptr)
       {
