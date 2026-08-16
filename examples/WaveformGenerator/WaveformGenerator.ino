@@ -12,7 +12,7 @@
   per cycle. Sample slower than that and Output aliases into a waveform the device never made.
 
   Signals, state channels and events are three different jobs:
-    signal   a value that is sampled and logged       -> Output, Frequency, Uptime
+    signal   a value that is sampled and logged       -> Output, Frequency, RunNote
     state    what a control is set to, not logged     -> Amplitude, Wave, "running Sine @ 1.00 Hz"
     event    a discrete event from a fixed list       -> idle_warning, resumed
 
@@ -29,8 +29,11 @@
 
   Signals that describe themselves (Frequency declares nothing, and costs nothing):
     Output      measurement, 3 decimals, mdi:sine-wave
-    Uptime      seconds since boot, which a host may show in minutes or hours instead
     RunNote     free text, logged with every row - what SET_NOTE wrote
+
+  Shown but never logged (state channels):
+    Uptime      seconds since boot, which a host may show in minutes or hours instead
+    Status      the same line every 10 s; StatusOnDemand, the same on the STATUS button
 
   --- HOW A CONTROL GETS ITS VALUE BACK ---
 
@@ -98,9 +101,9 @@ void setup()
   // commands, seven state channels (two declared here, five by the commands' withOwnState),
   // three event channels. Every one of these calls is optional.
   Blaeck.begin(&Serial)
-      .withSignals(4)
+      .withSignals(3)
       .withCommands(8)
-      .withStateChannels(7)
+      .withStateChannels(8)
       .withEventChannels(3);
 
   Blaeck.DeviceName = "Waveform Generator Demo";
@@ -119,13 +122,6 @@ void setup()
   Blaeck.addSignal(F("RunNote"), RunNote)
       .withIcon(F("mdi:note-text"));
 
-  // Describes the board rather than the waveform, so it is filed as diagnostic. The device
-  // class is what lets a host offer minutes or hours - without one the unit is only a label.
-  Blaeck.addSignal(F("Uptime"), &Uptime)
-      .withUnit(F("s"))
-      .withDeviceClass(F("duration"))
-      .withStateClass(BLAECK_STATE_CLASS_MEASUREMENT)
-      .diagnostic();
 
   Blaeck.onNumberCommand("SET_FREQ", onSetFreq)
       .withRange(0.0f, 2.0f, 0.01f)
@@ -154,6 +150,16 @@ void setup()
       .withMaxLength(sizeof(RunNote) - 1)
       .withStateSignal(F("RunNote"));
   Blaeck.onButtonCommand("STATUS", onStatus);
+
+  // Describes the board rather than the waveform, so it is filed as diagnostic. A channel
+  // rather than a signal: it is worth seeing and not worth a column, since a row already
+  // carries the time it was written. The device class is what lets a host offer minutes or
+  // hours - without one the unit is only a label.
+  Blaeck.addStateChannel(F("Uptime"), &Uptime)
+      .withUnit(F("s"))
+      .withDeviceClass(F("duration"))
+      .withStateClass(BLAECK_STATE_CLASS_MEASUREMENT)
+      .diagnostic();
 
   Blaeck.addStateChannel(F("Status")).withIcon(F("mdi:pulse")).diagnostic();
   Blaeck.addStateChannel(F("StatusOnDemand")).withIcon(F("mdi:message-text")).diagnostic();
@@ -226,6 +232,10 @@ void StatusEvery10s()
   first = false;
   lastStatusMs = millis();
   WriteStatus(F("Status"));
+
+  // A channel is pushed, where a signal is sampled: nothing sends Uptime unless the sketch
+  // says so. The no-text overload reads the variable the channel was declared with.
+  Blaeck.writeState(F("Uptime"));
 }
 
 // The same status line on two channels, each driving its own Home Assistant sensor:
