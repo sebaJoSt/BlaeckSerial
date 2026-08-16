@@ -159,6 +159,27 @@ reaches independently is a different thing and stays: `DeviceName`,
 because nobody hovers one on the way to another — that is rule 5, and collapsing it
 is how `DeviceName` once came to be documented as "set these variables".
 
+**17. Say what a call costs, where the cost is spent.** Someone hovering `withCommands`
+is deciding a capacity, so "48 bytes an entry on AVR" belongs in that hover — not in the
+section comment above the chain, and not as "a command entry is fairly large". The cost
+*is* the question at that line. This is rule 8's licensed exception aimed at a
+particular spot: mechanism stays out, price does not.
+
+Measure it rather than counting struct fields. Every number in the five sizers came out
+of the compiler — a template declared without a body names the size in its error, which
+is the only way to read a `sizeof` for a target you cannot run:
+
+```cpp
+template <int N> struct Show;
+Show<sizeof(blaeck_detail::StateChannelEntry)> a;   // error: 'Show<26> a' has incomplete type
+```
+
+A number nobody measured is rule 4's problem, not a cost.
+
+Where the cost lands on another table, say so as well: a command that reports its own
+state takes a state channel with it, so `withCommands` points at `withStateChannels`.
+That is the one part of sizing a reader cannot work out from the call in front of them.
+
 ## Format
 
 Doxygen `/*!` blocks, in the Adafruit house style, because it renders structured
