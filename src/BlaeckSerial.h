@@ -454,25 +454,17 @@ class BlaeckSerial;
 // builds and the number is simply not stored, so a feature switch never breaks
 // a chain.
 //
-// Three of these cap at 255 entries, and asking for more is clamped there with a
-// line on the debug stream. Which three, and why, is worth knowing before sizing a
-// large device:
+// All five clamp at MAX_TABLE_ENTRIES, and asking for more is clamped there with a
+// line on the debug stream. That number is this library's own bookkeeping - a signed
+// 16-bit index and a -1 for "not found" - and nothing to do with the protocol: a
+// channel is named on the wire by a two-byte index, and signals are named by no index
+// at all, since a data frame carries values in catalog order.
 //
-//   withStateChannels   the wire. A value names its channel with a one-byte index,
-//   withEventChannels   so a 256th channel could be declared and never addressed.
-//
-//   withCommands        this library's own counter. A command is matched by the
-//                       hash of its name and carries no index on the wire, so this
-//                       255 could be lifted without the protocol noticing.
-//
-//   withSignals         nothing. A data frame carries values in catalog order and
-//                       names none of them, so there is no index at all.
-//
-//   withEventTypes      nothing. A type's index is counted within its channel, so
-//                       the pool is addressed by nothing and holds what RAM allows.
-//
-// Long before any of that, RAM decides. A state entry is around 25 bytes, so 255 of
-// them is most of a Mega's SRAM; on an Uno the arithmetic never gets that far.
+// Long before any of that, RAM decides, and it is the limit worth sizing against. On
+// AVR an entry costs 26 bytes for a state channel, 48 for a command and 10 for an
+// event channel, so a Mega's 8 KB is gone at a few hundred of anything; an ESP32 has
+// 320 KB and room for thousands. A table that cannot be allocated says so and drops
+// every entry, which is a truer answer than a cap.
 //
 // Declared here rather than after BlaeckSerial, where the bodies live, so that the
 // type is complete where begin() names it as a return type. A forward declaration
@@ -506,7 +498,8 @@ public:
     Counts the channels declared with addStateChannel() and the one a command builds
     with withOwnState() - that channel comes out of this table, not withCommands().
 
-    @param   count  State channels to make room for. Clamped to 255.
+    @param   count  State channels to make room for. Clamped to 32767, which no
+                    board has the RAM to reach.
     @return  The same handle, for chaining.
 
     @code
@@ -518,7 +511,8 @@ public:
   /*!
     @brief   Makes room for a number of event channels.
 
-    @param   count  Event channels to make room for. Clamped to 255.
+    @param   count  Event channels to make room for. Clamped to 32767, which no
+                    board has the RAM to reach.
     @return  The same handle, for chaining.
 
     @code
@@ -553,7 +547,8 @@ public:
     Plain onCommand() registrations and the typed onNumberCommand(),
     onSelectCommand() and friends share this table.
 
-    @param   count  Commands to make room for. Clamped to 255.
+    @param   count  Commands to make room for. Clamped to 32767, which no board
+                    has the RAM to reach.
     @return  The same handle, for chaining.
 
     @code
@@ -683,7 +678,7 @@ struct EventChannelEntry
 
 struct EventTypeEntry
 {
-  byte channelIndex = 0;
+  uint16_t channelIndex = 0;
   // Either a whole flash string, or one comma-separated field of one: addEventType()
   // stores its literal with field = WHOLE_STRING, while the CSV form of
   // addEventChannel() appends one entry per field, all sharing the same pointer. The
@@ -3605,7 +3600,7 @@ private:
   int _registerCommand(const char *command, BlaeckCommandHandler handler, uint8_t kind);
   // Clears an entry's metadata to the defaults for its kind. Registering a name twice replaces
   // the command outright, so what the previous declaration said must not survive.
-  void _resetCommandMeta(byte handlerIndex, uint8_t kind);
+  void _resetCommandMeta(uint16_t handlerIndex, uint8_t kind);
   // The one place a channel is declared, mirroring _registerCommand(): the table index, or -1
   // having counted the rejection and said why on DebugRef. Re-declaring a name returns its
   // existing slot with the metadata cleared, so what a previous declaration said cannot linger.
@@ -3622,10 +3617,10 @@ private:
   int _registerEventChannel(const char *channelName, const __FlashStringHelper *flashName, const __FlashStringHelper *eventTypes);
   // Appends one pool entry per field of a comma-separated list, in order, so a field's position
   // is its wire index - the same rule call order gives addEventType().
-  void _addEventTypesCsv(byte channelIndex, const __FlashStringHelper *eventTypes);
+  void _addEventTypesCsv(uint16_t channelIndex, const __FlashStringHelper *eventTypes);
 #if BLAECK_ENABLE_COMMAND_META
   void writeCommandsFrame(unsigned long MessageID);
-  byte _validateTypedCommand(byte handlerIndex);
+  byte _validateTypedCommand(uint16_t handlerIndex);
   // Declares the channel a typed command owns. Separate from addStateChannel() so that one
   // can refuse an owned name outright rather than needing a "unless it is mine" exception.
   bool _addOwnedStateChannel(const __FlashStringHelper *channelName, BlaeckStateTextGetter getStateText,
@@ -3634,10 +3629,10 @@ private:
   // at registration is what corrects a host that was already connected when the board reset.
   // False when the channel could not be declared, so withOwnState() can leave the command
   // without state rather than advertising a channel absent from the 0x90 catalog.
-  bool _declareOwnState(byte handlerIndex, const __FlashStringHelper *channelName,
+  bool _declareOwnState(uint16_t handlerIndex, const __FlashStringHelper *channelName,
                         BlaeckStateTextGetter getStateText, dataType valueType, const void *value,
                         bool selectIndex = false);
-  bool _declareOwnState(byte handlerIndex, const __FlashStringHelper *channelName,
+  bool _declareOwnState(uint16_t handlerIndex, const __FlashStringHelper *channelName,
                         BlaeckStateTextGetter getStateText);
 
   static void _percentDecodeInPlace(char *s);
@@ -3660,7 +3655,7 @@ private:
   int _findEventChannel(const __FlashStringHelper *channelName) const;
   // Position of an event type within its own channel's list, or -1 when that
   // channel never declared it.
-  int _findEventType(byte channelIndex, const __FlashStringHelper *eventType) const;
+  int _findEventType(uint16_t channelIndex, const __FlashStringHelper *eventType) const;
   // Byte-wise equality of two PROGMEM strings. Needed because strcmp_P() reads
   // its first argument from RAM, which silently mismatches when both operands
   // are flash pointers.
@@ -3735,6 +3730,17 @@ private:
   void _printRejectionLine(Stream *out, const __FlashStringHelper *what,
                            const __FlashStringHelper *chainCall, uint16_t dropped,
                            unsigned int capacity);
+
+  // The most any table will hold, whatever a sketch asks for. The same on every board:
+  // it exists to stop an entry aliasing onto slot 0, not to ration RAM, and RAM says no
+  // long before this does - 32767 state channels would be 852 KB of entries, where an
+  // ESP32 has 320 KB and a Mega 8. A board that cannot afford a table hears so when the
+  // allocation fails, which is a truer limit than any number here. What does vary per
+  // board is where a table starts, below.
+  //
+  // 32767 and not 65535 because _findStateChannel() and its neighbours answer with a
+  // signed int and -1 for "not found", and int is 16 bits on AVR.
+  static const uint16_t MAX_TABLE_ENTRIES = 32767;
 
   // Defaults a table starts from, raised per sketch on the begin() chain:
   // BLAECK.begin(&Serial).withSignals(50). Generous where SRAM is plentiful
@@ -3914,12 +3920,12 @@ private:
 
   typedef blaeck_detail::CommandHandlerEntry CommandHandlerEntry;
   CommandHandlerEntry *_commandHandlers = nullptr;
-  byte _commandCapacity = DEFAULT_COMMANDS;
+  uint16_t _commandCapacity = DEFAULT_COMMANDS;
   // Slots that exist right now: the capacity once the table has been built, and
   // zero before that. Every loop over a table is bounded by this, so a table
   // that was never needed - or that the board had no RAM for - simply has
   // nothing to walk.
-  byte _commandSlots() const { return _commandHandlers != nullptr ? _commandCapacity : 0; }
+  uint16_t _commandSlots() const { return _commandHandlers != nullptr ? _commandCapacity : 0; }
   // Allocates the table on first use. False when the board had no RAM for it,
   // which is reported the same way a full table is.
   bool _ensureCommandTable();
@@ -3931,8 +3937,8 @@ private:
   typedef blaeck_detail::StateChannelEntry StateChannelEntry;
 #if BLAECK_ENABLE_STATE_CHANNELS
   StateChannelEntry *_stateChannels = nullptr;
-  byte _stateChannelCapacity = DEFAULT_STATE_CHANNELS;
-  byte _stateChannelSlots() const { return _stateChannels != nullptr ? _stateChannelCapacity : 0; }
+  uint16_t _stateChannelCapacity = DEFAULT_STATE_CHANNELS;
+  uint16_t _stateChannelSlots() const { return _stateChannels != nullptr ? _stateChannelCapacity : 0; }
   bool _ensureStateChannelTable();
   // The text a channel reports, or nullptr when it has none: its getter, the text its
   // stateValue points at, or the option an index names. Resolved into `buf` only in the
@@ -3965,8 +3971,8 @@ private:
 #if BLAECK_ENABLE_EVENTS
   typedef blaeck_detail::EventChannelEntry EventChannelEntry;
   EventChannelEntry *_eventChannels = nullptr;
-  byte _eventChannelCapacity = DEFAULT_EVENT_CHANNELS;
-  byte _eventChannelSlots() const { return _eventChannels != nullptr ? _eventChannelCapacity : 0; }
+  uint16_t _eventChannelCapacity = DEFAULT_EVENT_CHANNELS;
+  uint16_t _eventChannelSlots() const { return _eventChannels != nullptr ? _eventChannelCapacity : 0; }
   bool _ensureEventChannelTable();
 
   // One pool shared by every channel: each entry records which channel owns it,

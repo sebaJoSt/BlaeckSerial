@@ -198,56 +198,48 @@ void BlaeckSerial::_setTableCapacity(TableId table, unsigned int count)
     return;
   }
 
-  // Two different ceilings, and they are worth telling apart.
+  // One ceiling now, and it is this library's own. Channel indices went to two bytes on
+  // the wire, so a table is bounded by what an index can name and by RAM, whichever
+  // arrives first - and RAM arrives first on every board there is. 32767 rather than
+  // 65535 because _findStateChannel() and its neighbours answer with a signed int and
+  // -1 for "not found", and int is 16 bits on AVR.
   //
-  // A state or event CHANNEL is named on the wire by a one-byte index, so a 256th
-  // could be declared and never addressed - that cap is the protocol, and lifting it
-  // means changing 0x95 and 0x85.
-  //
-  // Event types and commands are capped only by this library's own counters. A type's
-  // wire index is counted within its channel, not across the pool, and a command is
-  // matched by the hash of its name rather than any index. Those two could be widened
-  // here alone, with nothing on the wire changing.
-  //
-  // Either way it is clamped and said aloud, rather than an entry silently aliasing
-  // onto the first one: a sketch that asked for 300 has a design to revisit, not a typo.
-  if (count > 255 && table != TABLE_SIGNALS && table != TABLE_EVENT_TYPES &&
-      _debugStream != nullptr)
+  // Clamped and said aloud rather than letting an entry alias onto the first one: a
+  // sketch asking for more than this has a design to revisit, not a typo.
+  if (count > MAX_TABLE_ENTRIES && _debugStream != nullptr)
   {
-    bool wireLimited = (table == TABLE_STATE_CHANNELS || table == TABLE_EVENT_CHANNELS);
     _debugStream->print(F("BLAECK."));
     _debugStream->print(chainCall);
     _debugStream->print(F("("));
     _debugStream->print(count);
-    if (wireLimited)
-      _debugStream->println(F("): clamped to 255. A channel is named on the wire by a "
-                              "single byte, so entries past that could never be addressed."));
-    else
-      _debugStream->println(F("): clamped to 255, which is the most this table can hold."));
+    _debugStream->print(F("): clamped to "));
+    _debugStream->print(MAX_TABLE_ENTRIES);
+    _debugStream->println(F(", which is the most this table can hold."));
   }
 
   switch (table)
   {
   case TABLE_SIGNALS:
-    _signalCapacity = count;
+    // Clamped like the rest, for a reason of its own: _signalIndex is a signed int,
+    // 16 bits on AVR, and a table it cannot index is worse than one that is smaller
+    // than asked for.
+    _signalCapacity = (count > MAX_TABLE_ENTRIES) ? MAX_TABLE_ENTRIES : (uint16_t)count;
     break;
 #if BLAECK_ENABLE_STATE_CHANNELS
   case TABLE_STATE_CHANNELS:
-    _stateChannelCapacity = (count > 255) ? 255 : (byte)count;
+    _stateChannelCapacity = (count > MAX_TABLE_ENTRIES) ? MAX_TABLE_ENTRIES : (uint16_t)count;
     break;
 #endif
 #if BLAECK_ENABLE_EVENTS
   case TABLE_EVENT_CHANNELS:
-    _eventChannelCapacity = (count > 255) ? 255 : (byte)count;
+    _eventChannelCapacity = (count > MAX_TABLE_ENTRIES) ? MAX_TABLE_ENTRIES : (uint16_t)count;
     break;
   case TABLE_EVENT_TYPES:
-    // Not clamped: a type's wire index is counted within its channel, so nothing
-    // addresses the pool itself and it may hold as many as RAM allows.
-    _eventTypeCapacity = count;
+    _eventTypeCapacity = (count > MAX_TABLE_ENTRIES) ? MAX_TABLE_ENTRIES : (uint16_t)count;
     break;
 #endif
   case TABLE_COMMANDS:
-    _commandCapacity = (count > 255) ? 255 : (byte)count;
+    _commandCapacity = (count > MAX_TABLE_ENTRIES) ? MAX_TABLE_ENTRIES : (uint16_t)count;
     break;
   default:
     break;
@@ -1155,7 +1147,7 @@ int BlaeckSerial::_registerCommand(const char *command, BlaeckCommandHandler han
     return -1;
   }
 
-  for (byte i = 0; i < _commandSlots(); i++)
+  for (uint16_t i = 0; i < _commandSlots(); i++)
   {
     if (_commandHandlers[i].inUse && strcmp(_commandHandlers[i].command, command) == 0)
     {
@@ -1165,7 +1157,7 @@ int BlaeckSerial::_registerCommand(const char *command, BlaeckCommandHandler han
     }
   }
 
-  for (byte i = 0; i < _commandSlots(); i++)
+  for (uint16_t i = 0; i < _commandSlots(); i++)
   {
     if (!_commandHandlers[i].inUse)
     {
@@ -1185,7 +1177,7 @@ int BlaeckSerial::_registerCommand(const char *command, BlaeckCommandHandler han
 
 // Registering the same name twice replaces the command outright, so the metadata starts empty
 // rather than inheriting whatever the previous declaration said.
-void BlaeckSerial::_resetCommandMeta(byte handlerIndex, uint8_t kind)
+void BlaeckSerial::_resetCommandMeta(uint16_t handlerIndex, uint8_t kind)
 {
 #if BLAECK_ENABLE_COMMAND_META
   CommandHandlerEntry &e = _commandHandlers[handlerIndex];
@@ -1218,7 +1210,7 @@ void BlaeckSerial::onAnyCommand(BlaeckAnyCommandHandler handler)
 
 void BlaeckSerial::clearAllCommandHandlers()
 {
-  for (byte i = 0; i < _commandSlots(); i++)
+  for (uint16_t i = 0; i < _commandSlots(); i++)
   {
     _commandHandlers[i].inUse = false;
     _commandHandlers[i].handler = nullptr;
@@ -1248,7 +1240,7 @@ void BlaeckSerial::writeCommandState(const char *command, unsigned long messageI
   if (command == nullptr)
     return;
 
-  for (byte i = 0; i < _commandSlots(); i++)
+  for (uint16_t i = 0; i < _commandSlots(); i++)
   {
     const CommandHandlerEntry &e = _commandHandlers[i];
     if (!e.inUse || e.stateSource != BLAECK_STATE_CHANNEL || e.stateSignal == nullptr)
@@ -1326,7 +1318,7 @@ bool BlaeckSerial::_addOwnedStateChannel(const __FlashStringHelper *channelName,
     return false;
   }
 
-  for (byte i = 0; i < _stateChannelSlots(); i++)
+  for (uint16_t i = 0; i < _stateChannelSlots(); i++)
   {
     if (_stateChannels[i].inUse)
       continue;
@@ -1350,13 +1342,13 @@ bool BlaeckSerial::_addOwnedStateChannel(const __FlashStringHelper *channelName,
 #endif
 }
 
-bool BlaeckSerial::_declareOwnState(byte handlerIndex, const __FlashStringHelper *channelName,
+bool BlaeckSerial::_declareOwnState(uint16_t handlerIndex, const __FlashStringHelper *channelName,
                                    BlaeckStateTextGetter getStateText)
 {
   return _declareOwnState(handlerIndex, channelName, getStateText, Blaeck_string, nullptr);
 }
 
-bool BlaeckSerial::_declareOwnState(byte handlerIndex, const __FlashStringHelper *channelName,
+bool BlaeckSerial::_declareOwnState(uint16_t handlerIndex, const __FlashStringHelper *channelName,
                                    BlaeckStateTextGetter getStateText, dataType valueType,
                                    const void *value, bool selectIndex)
 {
@@ -1442,7 +1434,7 @@ long BlaeckSerial::getSelectOptionIndexOf(const char *command, const char *optio
   // No metadata is stored, so there is no option list to match against.
   return -1;
 #else
-  for (byte i = 0; i < _commandSlots(); i++)
+  for (uint16_t i = 0; i < _commandSlots(); i++)
   {
     const CommandHandlerEntry &e = _commandHandlers[i];
     if (!e.inUse || e.kind != BLAECK_CMD_SELECT || e.options == nullptr)
@@ -1472,7 +1464,7 @@ bool BlaeckSerial::getSelectOptionNameAt(const char *command, byte index, char *
   (void)index;
   return false;
 #else
-  for (byte i = 0; i < _commandSlots(); i++)
+  for (uint16_t i = 0; i < _commandSlots(); i++)
   {
     const CommandHandlerEntry &e = _commandHandlers[i];
     if (!e.inUse || e.kind != BLAECK_CMD_SELECT || e.options == nullptr)
@@ -1877,7 +1869,7 @@ void BlaeckSerial::_dispatchRegisteredHandlers(bool sendAck)
   byte ackReason = BLAECK_ACK_UNKNOWN; // reason reported when rejected
   bool matched = false;
 
-  for (byte i = 0; i < _commandSlots(); i++)
+  for (uint16_t i = 0; i < _commandSlots(); i++)
   {
     if (_commandHandlers[i].inUse &&
         _commandHandlers[i].handler != nullptr &&
@@ -2059,7 +2051,7 @@ int BlaeckSerial::_registerStateChannel(const char *channelName, const __FlashSt
     return -1;
   }
 
-  for (byte i = 0; i < _stateChannelSlots(); i++)
+  for (uint16_t i = 0; i < _stateChannelSlots(); i++)
   {
     if (!_stateChannels[i].inUse)
     {
@@ -2167,7 +2159,7 @@ bool BlaeckSerial::_flashStringEqualsName(const __FlashStringHelper *flashName, 
 
 void BlaeckSerial::clearAllStateChannels()
 {
-  for (byte i = 0; i < _stateChannelSlots(); i++)
+  for (uint16_t i = 0; i < _stateChannelSlots(); i++)
   {
     _stateChannels[i].inUse = false;
     _stateChannels[i].icon = nullptr;
@@ -2178,7 +2170,7 @@ void BlaeckSerial::clearAllStateChannels()
 
 int BlaeckSerial::_findStateChannel(const __FlashStringHelper *channelName) const
 {
-  for (byte i = 0; i < _stateChannelSlots(); i++)
+  for (uint16_t i = 0; i < _stateChannelSlots(); i++)
   {
     if (_stateChannels[i].inUse &&
         _channelNameEqualsFlash(_stateChannels[i].name, _stateChannels[i].nameInFlash, channelName))
@@ -2192,7 +2184,7 @@ int BlaeckSerial::_findStateChannel(const char *channelName) const
   if (channelName == nullptr || channelName[0] == '\0')
     return -1;
 
-  for (byte i = 0; i < _stateChannelSlots(); i++)
+  for (uint16_t i = 0; i < _stateChannelSlots(); i++)
   {
     if (_stateChannels[i].inUse && _channelNameEquals(_stateChannels[i].name, _stateChannels[i].nameInFlash, channelName))
       return (int)i;
@@ -2203,9 +2195,11 @@ int BlaeckSerial::_findStateChannel(const char *channelName) const
 void BlaeckSerial::writeState(const char *channelName, const char *text, unsigned long messageID)
 {
   // 0x95 "State" frame: the current value of a declared channel, device -> host.
-  //   channelIndex(1)  valueType(1)  value
+  //   channelIndex(2, LE uint16)  valueType(1)  value
   // channelIndex is the channel's position in the 0x90 catalog, so that frame
-  // must be received first. Channels are never removed, only cleared as a whole,
+  // must be received first. Two bytes: a device may declare more channels than a
+  // single byte can name, and the catalog itself has never carried an index or a
+  // count - entries are read in order. Channels are never removed, only cleared as a whole,
   // so the slot index and the catalog position cannot drift apart.
   // No CRC (like the 0xA0/0xA5 frames). The host may surface it (e.g. a Home
   // Assistant text sensor announced from the 0x90 channel catalog); it is never
@@ -2336,7 +2330,8 @@ void BlaeckSerial::_writeStateFrame(int channelIndex, const char *text, unsigned
     _bufHeader(0x95, messageID);
     // Channel index, the datatype, then the value: fixed width for a number, a 1-byte length
     // followed by that many UTF-8 bytes for a string - the same rule a data frame follows.
-    _bufByte((byte)channelIndex);
+    _bufByte((byte)(channelIndex & 0xFF));
+    _bufByte((byte)((channelIndex >> 8) & 0xFF));
     _bufByte(_dtypeCode(e.valueType));
     if (valueLen > 0)
     {
@@ -2361,7 +2356,8 @@ void BlaeckSerial::_writeStateFrame(int channelIndex, const char *text, unsigned
     StreamRef->write(ulngCvt.bval, 4);
     StreamRef->write(":");
 
-    StreamRef->write((byte)channelIndex);
+    StreamRef->write((byte)(channelIndex & 0xFF));
+    StreamRef->write((byte)((channelIndex >> 8) & 0xFF));
     StreamRef->write(_dtypeCode(e.valueType));
     if (valueLen > 0)
     {
@@ -2537,7 +2533,7 @@ void BlaeckSerial::writeStateChannelsFrame(unsigned long msg_id)
     _bufReset();
     _bufHeader(0x90, msg_id);
 
-    for (byte i = 0; i < _stateChannelSlots(); i++)
+    for (uint16_t i = 0; i < _stateChannelSlots(); i++)
     {
       StateChannelEntry &e = _stateChannels[i];
       if (!e.inUse)
@@ -2596,7 +2592,7 @@ void BlaeckSerial::writeStateChannelsFrame(unsigned long msg_id)
     StreamRef->write(ulngCvt.bval, 4);
     StreamRef->write(":");
 
-    for (byte i = 0; i < _stateChannelSlots(); i++)
+    for (uint16_t i = 0; i < _stateChannelSlots(); i++)
     {
       StateChannelEntry &e = _stateChannels[i];
       if (!e.inUse)
@@ -2747,7 +2743,7 @@ int BlaeckSerial::_registerEventChannel(const char *channelName, const __FlashSt
     return -1;
   }
 
-  for (byte i = 0; i < _eventChannelSlots(); i++)
+  for (uint16_t i = 0; i < _eventChannelSlots(); i++)
   {
     if (!_eventChannels[i].inUse)
     {
@@ -2772,7 +2768,7 @@ BlaeckEventChannelRef BlaeckSerial::addEventChannel(const char *channelName, con
   return BlaeckEventChannelRef(this, (int16_t)_registerEventChannel(channelName, nullptr, eventTypes));
 }
 
-void BlaeckSerial::_addEventTypesCsv(byte channelIndex, const __FlashStringHelper *eventTypes)
+void BlaeckSerial::_addEventTypesCsv(uint16_t channelIndex, const __FlashStringHelper *eventTypes)
 {
   // One pool entry per field, all pointing at the same flash string. Appended in
   // order, so a field's position is its wire index - the same rule call order gives
@@ -2907,7 +2903,7 @@ bool BlaeckSerial::addEventType(const char *channelName, const __FlashStringHelp
 
 void BlaeckSerial::clearAllEventChannels()
 {
-  for (byte i = 0; i < _eventChannelSlots(); i++)
+  for (uint16_t i = 0; i < _eventChannelSlots(); i++)
   {
     _eventChannels[i].inUse = false;
     _eventChannels[i].icon = nullptr;
@@ -2920,7 +2916,7 @@ void BlaeckSerial::clearAllEventChannels()
 
 int BlaeckSerial::_findEventChannel(const __FlashStringHelper *channelName) const
 {
-  for (byte i = 0; i < _eventChannelSlots(); i++)
+  for (uint16_t i = 0; i < _eventChannelSlots(); i++)
   {
     if (_eventChannels[i].inUse &&
         _channelNameEqualsFlash(_eventChannels[i].name, _eventChannels[i].nameInFlash, channelName))
@@ -2934,7 +2930,7 @@ int BlaeckSerial::_findEventChannel(const char *channelName) const
   if (channelName == nullptr || channelName[0] == '\0')
     return -1;
 
-  for (byte i = 0; i < _eventChannelSlots(); i++)
+  for (uint16_t i = 0; i < _eventChannelSlots(); i++)
   {
     if (_eventChannels[i].inUse && _channelNameEquals(_eventChannels[i].name, _eventChannels[i].nameInFlash, channelName))
       return (int)i;
@@ -2942,7 +2938,7 @@ int BlaeckSerial::_findEventChannel(const char *channelName) const
   return -1;
 }
 
-int BlaeckSerial::_findEventType(byte channelIndex, const __FlashStringHelper *eventType) const
+int BlaeckSerial::_findEventType(uint16_t channelIndex, const __FlashStringHelper *eventType) const
 {
   if (eventType == nullptr)
     return -1;
@@ -3025,7 +3021,7 @@ void BlaeckSerial::writeEventChannelsFrame(unsigned long msg_id)
     _bufReset();
     _bufHeader(0x80, msg_id);
 
-    for (byte i = 0; i < _eventChannelSlots(); i++)
+    for (uint16_t i = 0; i < _eventChannelSlots(); i++)
     {
       EventChannelEntry &e = _eventChannels[i];
       if (!e.inUse)
@@ -3083,7 +3079,7 @@ void BlaeckSerial::writeEventChannelsFrame(unsigned long msg_id)
     StreamRef->write(ulngCvt.bval, 4);
     StreamRef->write(":");
 
-    for (byte i = 0; i < _eventChannelSlots(); i++)
+    for (uint16_t i = 0; i < _eventChannelSlots(); i++)
     {
       EventChannelEntry &e = _eventChannels[i];
       if (!e.inUse)
@@ -3156,7 +3152,7 @@ void BlaeckSerial::writeEvent(const char *channelName, const __FlashStringHelper
 void BlaeckSerial::writeEvent(const char *channelName, const __FlashStringHelper *eventType, unsigned long messageID)
 {
   // 0x85 "Event" frame: one occurrence on a declared channel, device -> host.
-  //   channelIndex(1)  eventIndex(1)
+  //   channelIndex(2, LE uint16)  eventIndex(2, LE uint16)
   // Both indices refer to the 0x80 catalog, so that frame must be received
   // first. Channels are never removed, only cleared as a whole, so the slot
   // index and the catalog position cannot drift apart.
@@ -3191,8 +3187,10 @@ void BlaeckSerial::writeEvent(const char *channelName, const __FlashStringHelper
   {
     _bufReset();
     _bufHeader(0x85, messageID);
-    _bufByte((byte)channelIndex);
-    _bufByte((byte)eventIndex);
+    _bufByte((byte)(channelIndex & 0xFF));
+    _bufByte((byte)((channelIndex >> 8) & 0xFF));
+    _bufByte((byte)(eventIndex & 0xFF));
+    _bufByte((byte)((eventIndex >> 8) & 0xFF));
     _bufFooter();
     _bufSend();
   }
@@ -3206,8 +3204,10 @@ void BlaeckSerial::writeEvent(const char *channelName, const __FlashStringHelper
     StreamRef->write(ulngCvt.bval, 4);
     StreamRef->write(":");
 
-    StreamRef->write((byte)channelIndex);
-    StreamRef->write((byte)eventIndex);
+    StreamRef->write((byte)(channelIndex & 0xFF));
+    StreamRef->write((byte)((channelIndex >> 8) & 0xFF));
+    StreamRef->write((byte)(eventIndex & 0xFF));
+    StreamRef->write((byte)((eventIndex >> 8) & 0xFF));
 
     StreamRef->write("/BLAECK>");
     StreamRef->write("\r\n");
@@ -3236,7 +3236,7 @@ static inline bool _rangeDeclared(const blaeck_detail::CommandHandlerEntry &e)
   return e.meta_max > e.meta_min;
 }
 
-byte BlaeckSerial::_validateTypedCommand(byte handlerIndex)
+byte BlaeckSerial::_validateTypedCommand(uint16_t handlerIndex)
 {
   const CommandHandlerEntry &e = _commandHandlers[handlerIndex];
 
@@ -4725,7 +4725,7 @@ void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
     _bufReset();
     _bufHeader(0xA0, msg_id);
 
-    for (byte i = 0; i < _commandSlots(); i++)
+    for (uint16_t i = 0; i < _commandSlots(); i++)
     {
       CommandHandlerEntry &e = _commandHandlers[i];
       if (!e.inUse)
@@ -4803,7 +4803,7 @@ void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
     StreamRef->write(ulngCvt.bval, 4);
     StreamRef->write(":");
 
-    for (byte i = 0; i < _commandSlots(); i++)
+    for (uint16_t i = 0; i < _commandSlots(); i++)
     {
       CommandHandlerEntry &e = _commandHandlers[i];
       if (!e.inUse)
