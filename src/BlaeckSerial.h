@@ -732,6 +732,11 @@ protected:
 
   void _setOwnState(const __FlashStringHelper *channelName, BlaeckStateTextGetter getStateText);
 
+  // Reported rather than stored silently: a range whose max is not above its min reads
+  // everywhere downstream as no range at all - nothing is checked and nothing is
+  // announced - so reversed arguments turn the checking off instead of tightening it.
+  void _warnRangeIgnored(float mn, float mx) const;
+
   void _setRange(float mn, float mx, float st)
   {
 #if BLAECK_ENABLE_COMMAND_META
@@ -740,6 +745,8 @@ protected:
       e->meta_min = mn;
       e->meta_max = mx;
       e->meta_step = st;
+      if (!(mx > mn))
+        _warnRangeIgnored(mn, mx);
     }
 #else
     (void)mn; (void)mx; (void)st;
@@ -912,7 +919,9 @@ public:
     what it is given. A number command that never calls this accepts anything.
 
     @param   min   Lowest value accepted.
-    @param   max   Highest value accepted.
+    @param   max   Highest value accepted. Has to be above min: a max that is not
+                   leaves the command with no range at all, accepting anything and
+                   declaring nothing, which a debug stream reports.
     @param   step  Display resolution only - never rounded to, and not validated.
                    Pass 0 to leave it unsaid and let the host choose. A host may
                    refuse a step below 0.001 and raise it rather than reject the
@@ -4149,6 +4158,28 @@ inline blaeck_detail::CommandHandlerEntry * BlaeckCommandRefBase::_entry() const
   if (_owner == nullptr || _index < 0)
     return nullptr;
   return &_owner->_commandHandlers[_index];
+}
+
+inline void BlaeckCommandRefBase::_warnRangeIgnored(float mn, float mx) const
+{
+#if BLAECK_ENABLE_COMMAND_META
+  if (_owner == nullptr || _owner->_debugStream == nullptr)
+    return;
+  _owner->_debugStream->print(F("withRange ignored, max must be above min: "));
+  if (auto *e = _entry())
+  {
+    _owner->_debugStream->print(e->command);
+    _owner->_debugStream->print(' ');
+  }
+  _owner->_debugStream->print('[');
+  _owner->_debugStream->print(mn);
+  _owner->_debugStream->print(F(", "));
+  _owner->_debugStream->print(mx);
+  _owner->_debugStream->println(F("]. Any value is accepted and no range is declared."));
+#else
+  (void)mn;
+  (void)mx;
+#endif
 }
 
 inline void BlaeckCommandRefBase::_setOwnState(const __FlashStringHelper *channelName,
