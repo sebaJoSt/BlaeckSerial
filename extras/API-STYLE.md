@@ -273,7 +273,13 @@ CI runs the first and builds the third.
 Four things fail a build: a public name with no comment, one with no `@code` block, a
 block that does not compile, and prose naming a method the header does not declare.
 The rest are reported and counted - a section divider standing in for a comment, a
-comment too short to say anything, and a missing blank line before `@code`.
+comment too short to say anything, a missing blank line before `@code`, and a
+sentence carried by more than one name.
+
+That last one is a prompt, not a verdict, which is why it stays a count. Three
+sentences repeat today and all three are right to: the checker cannot tell a
+precondition that should move to its establishing call from sibling fields that each
+have to state the same rule. It can only put them in front of someone who can.
 
 The fourth reads names out of the parse, not out of the file's text. Deriving them
 from the source with a regex matches the mentions inside the comments too, so every

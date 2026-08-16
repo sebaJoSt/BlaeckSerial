@@ -119,6 +119,42 @@ KNOWN_ELSEWHERE = {
 # and "in ms (ACTIVATE ignored)" are prose and would otherwise be read as calls.
 CALL = re.compile(r"\b([a-zA-Z_]\w*)\([^)\n]*\)")
 
+SENTENCE = re.compile(r"(?<=[.!?])\s+")
+
+def doc_sentences(raw):
+    """The prose of a doc comment, as sentences. Slots and code are not prose."""
+    out, incode = [], False
+    for line in (raw or "").splitlines():
+        b = line.strip().lstrip("/*").strip()
+        if b.startswith("@code"):
+            incode = True; continue
+        if b.startswith("@endcode"):
+            incode = False; continue
+        if incode or not b or b.startswith("@param") or b.startswith("@return"):
+            continue
+        out.append(re.sub(r"^@\w+\s*", "", b))
+    # Rejoined first: a sentence is wrapped across lines more often than not.
+    return [s.strip() for s in SENTENCE.split(" ".join(out)) if len(s.strip()) > 35]
+
+
+def repeated_prose(groups):
+    """Sentences carried by more than one public name.
+
+    Reported, never a gate. Repetition is sometimes exactly right - DeviceName,
+    DeviceHWVersion and DeviceFWVersion each state the pointer-lifetime rule because
+    nobody hovers one on the way to another - and sometimes a precondition that
+    belongs on the call establishing it, which is where "call begin() first" was
+    before it moved onto begin(). The checker cannot tell those apart; it can only
+    put them in front of someone who can.
+    """
+    seen = collections.defaultdict(set)
+    for (_, name), members in groups.items():
+        for m in members:
+            for s in doc_sentences(m.raw_comment):
+                seen[re.sub(r"\W+", " ", s.lower()).strip()].add(name)
+    return {k: v for k, v in seen.items() if len(v) > 1}
+
+
 def stale_references(raw, declared):
     """Method names in prose that this header no longer declares.
 
@@ -387,6 +423,14 @@ def main(argv):
         print()
         print("  (%d name(s) documented on some overloads only - normal for a type-overload set)"
               % len(partial))
+
+    repeats = repeated_prose(groups)
+    if repeats:
+        print()
+        print("%d sentence(s) carried by more than one name:" % len(repeats))
+        for text, names in sorted(repeats.items(), key=lambda kv: (-len(kv[1]), kv[0])):
+            print("  x%d  %s" % (len(names), text[:78]))
+            print("      %s" % ", ".join(sorted(names)))
 
     if jammed:
         print()
