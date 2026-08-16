@@ -4236,11 +4236,20 @@ void BlaeckSerial::writeRestarted(unsigned long msg_id)
     this->writeEventChannels(msg_id);
 #endif
 
-    // Costs 30 bytes of flash and one frame. Nothing here is addressed by position - a command
-    // is matched by the hash of its name, so a stale one answers UNKNOWN_COMMAND rather than
-    // being taken for another - which makes this the least urgent of the three and not worth
-    // the exception it would take to leave out.
+    // Nothing here is addressed by position - a command is matched by the hash of its name, so a
+    // stale one answers UNKNOWN_COMMAND rather than being taken for another. The least urgent
+    // of these, and still not worth the exception it would take to leave out.
     this->writeCommands(msg_id);
+
+    // What the signals say about themselves, which the symbol list does not carry. Only the
+    // ones that declare something appear, so a device where none do sends an empty frame, and
+    // one built with BLAECK_ENABLE_SIGNAL_META=0 always does.
+    //
+    // Read against whichever symbol list the host holds, since this names its signals by
+    // position in it. That is the right reading only while the list is unchanged - which is the
+    // case this is for, a unit or an icon that moved while the signals did not. A list that did
+    // change is the schema hash's business, and its answer is to stop rather than resynchronise.
+    this->writeSignalConfig(msg_id);
   }
 }
 
