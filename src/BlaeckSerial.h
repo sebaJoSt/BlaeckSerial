@@ -487,10 +487,9 @@ public:
   /*!
     @brief   Makes room for a number of signals.
 
-    The count given here is the whole limit. Signals are not capped at 255 the way
-    state channels, event channels and commands are, because a value is sent in
-    catalog order rather than named by a one-byte index - so RAM is what a large
-    number runs into. withEventTypes() is counted the same way.
+    The count given here is the whole limit, and RAM is what a large one runs into.
+    A value is sent in catalog order rather than named by an index, so nothing else
+    constrains how many there can be.
 
     @param   count  Signals to make room for. Sized once, when the first signal is
                     added: a later call cannot resize the table and says so on a debug
@@ -536,9 +535,9 @@ public:
     Types share one table, so this is the sum across channels rather than the most
     any one channel has: four channels of five types each need 20. Sharing is what
     makes that cheap - a channel with two types costs two slots, where a table per
-    channel would give every channel room for the largest. Not capped at 255, as
-    signals are not: a type's index is counted within its channel, so nothing
-    addresses the pool itself and RAM is what a large number runs into.
+    channel would give every channel room for the largest. A type's index is counted
+    within its channel, so nothing addresses the pool itself and RAM is what a large
+    count runs into.
 
     @param   count  Event types to make room for, added up across every channel.
                     Zero leaves the capacity as it is.
