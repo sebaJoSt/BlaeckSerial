@@ -1938,6 +1938,12 @@ public:
              a table the sketch never uses costs nothing - which is also why the chain
              may run after begin() has returned.
 
+    @warning Nothing can be declared before this call. A signal, channel or command
+             registered first has no table and no capacity to build one from, so it
+             is dropped and counted as rejected, in silence - the debug stream that
+             would report it is named on this chain too. printRejections() finds them
+             afterwards.
+
     @code
       Serial.begin(115200);
       Blaeck.begin(&Serial)
@@ -2022,11 +2028,6 @@ public:
     @param   value       Address of the variable to read. One overload per type.
     @return  Handle describing how a host should present the signal. Chainable, and
              safe to ignore - a signal that describes nothing costs nothing.
-    @warning Call it after begin(). Before that there is no capacity to build the
-             table from, so the signal is dropped and counted as rejected - and not
-             even a debug stream says so, because the message names a table that does
-             not exist yet. hasRejectedSignals() is what shows it.
-
     @note    When the signal table is full the handle is dead: the chain still
              compiles and runs, and stores nothing. The missing signal is the real
              problem, and hasRejectedSignals() reports it.

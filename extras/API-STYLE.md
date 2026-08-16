@@ -146,6 +146,13 @@ What a block cannot show is a path it does not take: a three-line example of
 `writeState()` has no room for "and this vanishes if you skipped setup()". So the
 ordering facts stay — once each, on the call that drops the value.
 
+**A precondition the whole API shares belongs to the call that establishes it.**
+Everything here needs `begin()` first, and every example opens with it, so saying so
+again on `addSignal`, `addStateChannel`, `addEventChannel` and each command
+registration would be the same sentence five times, in five places a reader who
+already called `begin()` will hover. It is stated on `begin()`, which is also where
+the reader is when the ordering is still theirs to get wrong.
+
 ## Format
 
 Doxygen `/*!` blocks, in the Adafruit house style, because it renders structured
