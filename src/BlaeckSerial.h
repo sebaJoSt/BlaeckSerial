@@ -454,17 +454,11 @@ class BlaeckSerial;
 // builds and the number is simply not stored, so a feature switch never breaks
 // a chain.
 //
-// All five clamp at MAX_TABLE_ENTRIES, and asking for more is clamped there with a
-// line on the debug stream. That number is this library's own bookkeeping - a signed
-// 16-bit index and a -1 for "not found" - and nothing to do with the protocol: a
-// channel is named on the wire by a two-byte index, and signals are named by no index
-// at all, since a data frame carries values in catalog order.
-//
-// Long before any of that, RAM decides, and it is the limit worth sizing against. On
-// AVR an entry costs 26 bytes for a state channel, 48 for a command and 10 for an
-// event channel, so a Mega's 8 KB is gone at a few hundred of anything; an ESP32 has
-// 320 KB and room for thousands. A table that cannot be allocated says so and drops
-// every entry, which is a truer answer than a cap.
+// RAM is what a sketch sizes against, and it decides long before any cap does. On AVR
+// an entry costs 26 bytes for a state channel, 48 for a command and 10 for an event
+// channel, so a Mega's 8 KB is gone at a few hundred of anything; an ESP32 has 320 KB
+// and room for thousands. A table that cannot be allocated says so and drops every
+// entry, which is a truer answer than a number.
 //
 // Declared here rather than after BlaeckSerial, where the bodies live, so that the
 // type is complete where begin() names it as a return type. A forward declaration
@@ -479,11 +473,11 @@ public:
   /*!
     @brief   Makes room for a number of signals.
 
-    The count given here is the whole limit, and RAM is what a large one runs into.
-    A value is sent in catalog order rather than named by an index, so nothing else
-    constrains how many there can be.
+    RAM is what a large count runs into. A value is sent in catalog order rather than
+    named by an index, so nothing on the wire constrains how many there can be.
 
-    @param   count  Signals to make room for.
+    @param   count  Signals to make room for. At most 32767; a
+                    larger literal fails the build.
     @return  The same handle, for chaining.
 
     @code
@@ -498,8 +492,8 @@ public:
     Counts the channels declared with addStateChannel() and the one a command builds
     with withOwnState() - that channel comes out of this table, not withCommands().
 
-    @param   count  State channels to make room for. Clamped to 32767, which no
-                    board has the RAM to reach.
+    @param   count  State channels to make room for. At most 32767; a
+                    larger literal fails the build.
     @return  The same handle, for chaining.
 
     @code
@@ -511,8 +505,8 @@ public:
   /*!
     @brief   Makes room for a number of event channels.
 
-    @param   count  Event channels to make room for. Clamped to 32767, which no
-                    board has the RAM to reach.
+    @param   count  Event channels to make room for. At most 32767; a
+                    larger literal fails the build.
     @return  The same handle, for chaining.
 
     @code
@@ -532,7 +526,8 @@ public:
     count runs into.
 
     @param   count  Event types to make room for, added up across every channel.
-                    Zero leaves the capacity as it is.
+                    Zero leaves the capacity as it is. At most 32767; a
+                    larger literal fails the build.
     @return  The same handle, for chaining.
 
     @code
@@ -547,8 +542,8 @@ public:
     Plain onCommand() registrations and the typed onNumberCommand(),
     onSelectCommand() and friends share this table.
 
-    @param   count  Commands to make room for. Clamped to 32767, which no board
-                    has the RAM to reach.
+    @param   count  Commands to make room for. At most 32767; a
+                    larger literal fails the build.
     @return  The same handle, for chaining.
 
     @code
