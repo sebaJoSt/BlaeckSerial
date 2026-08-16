@@ -153,6 +153,13 @@ registration would be the same sentence five times, in five places a reader who
 already called `begin()` will hover. It is stated on `begin()`, which is also where
 the reader is when the ordering is still theirs to get wrong.
 
+State the precondition; do not go on to enumerate what breaks when it is ignored.
+`begin()` says it is the first call a sketch makes, and that is the whole instruction.
+A paragraph describing what becomes of a signal declared before it documents a sketch
+nobody should write — and that paragraph was wrong twice before it was right, first
+about which tables are affected and then about whether anything is reported, which is
+a fair measure of what it was worth.
+
 This needs an establishing call to apply. Repetition between siblings a reader
 reaches independently is a different thing and stays: `DeviceName`,
 `DeviceHWVersion` and `DeviceFWVersion` each state the pointer-lifetime rule,
