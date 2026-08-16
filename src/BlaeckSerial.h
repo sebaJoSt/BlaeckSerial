@@ -2365,20 +2365,26 @@ public:
   void writeState(const __FlashStringHelper *channelName);
   void writeState(const __FlashStringHelper *channelName, unsigned long messageID);
 
-  // Publish a command's own state now: asks the getter it was registered with and sends the
-  // value on the channel the command owns. The push is what makes a change visible at once -
-  // the catalog only reports on demand, when a host asks for it.
-  //
-  // Pass the handler's own `command` parameter and there is no literal to keep in step:
-  //
-  //   void onSetOffset(const char *command, const char *const *params, byte paramCount)
-  //   {
-  //     Offset = (float)atof(params[0]);
-  //     Blaeck.writeCommandState(command);
-  //   }
-  //
-  // Does nothing for a command with no state of its own, or one whose state is a signal -
-  // there the signal's own write is what reports it.
+  /*!
+    @brief   Publishes a command's own state now.
+
+    Asks the getter the command was registered with and sends the value on the channel
+    the command owns. The push is what makes a change visible at once: the catalog
+    reports only on demand, when a host asks for it.
+
+    @param   command  Pass the handler's own command parameter and there is no literal
+                      to keep in step with the registration.
+    @note    Does nothing for a command with no state of its own, or one whose state is
+             a signal - there the signal's own write is what reports it.
+
+    @code
+      void onSetOffset(const char *command, const char *const *params, byte paramCount)
+      {
+        Offset = (float)atof(params[0]);
+        Blaeck.writeCommandState(command);
+      }
+    @endcode
+  */
   void writeCommandState(const char *command);
   void writeCommandState(const char *command, unsigned long messageID);
 
@@ -2491,27 +2497,35 @@ public:
   void writeEvent(const __FlashStringHelper *channelName, const __FlashStringHelper *eventType, unsigned long messageID);
 
   // ----- Data Write -----
-  // Update value and write directly - by name. Independent of the timed interval, so a sketch
-  // can push a value the moment something happens and stream nothing otherwise
-  // (setIntervalMs(BLAECK_INTERVAL_OFF)).
-  //
-  // A momentary signal clears itself here rather than asking a host to time it out:
-  //
-  //   if (triggered && !Pulse)
-  //   {
-  //     Pulse = true;
-  //     pulseSince = millis();
-  //     Blaeck.write("Pulse", Pulse);
-  //   }
-  //   if (Pulse && millis() - pulseSince >= 2000)
-  //   {
-  //     Pulse = false;
-  //     Blaeck.write("Pulse", Pulse);
-  //   }
-  //
-  // Both edges then reach every consumer alike - a dashboard, the logged table, a second host -
-  // and the stored data says how long the value was true. A host-side timer would leave the
-  // table holding one reading and the duration existing nowhere but that host.
+
+  /*!
+    @brief   Stores a signal's value and sends it at once, by name.
+
+    Independent of the timed interval, so a sketch can push a value the moment
+    something happens and stream nothing the rest of the time - pair it with
+    setIntervalMs(BLAECK_INTERVAL_OFF).
+
+    @param   signalName  Name the signal was added under.
+    @param   value       What to store and send.
+    @note    Writing both edges of a momentary signal here, rather than asking a host
+             to time it out, is what makes the stored data say how long the value was
+             true. A host-side timer leaves the table holding one reading, with the
+             duration existing nowhere but that host.
+
+    @code
+      if (triggered && !Pulse)
+      {
+        Pulse = true;
+        pulseSince = millis();
+        Blaeck.write("Pulse", Pulse);
+      }
+      if (Pulse && millis() - pulseSince >= 2000)
+      {
+        Pulse = false;
+        Blaeck.write("Pulse", Pulse);
+      }
+    @endcode
+  */
   void write(const char *signalName, bool value);
   void write(const char *signalName, byte value);
   void write(const char *signalName, short value);
@@ -2908,11 +2922,20 @@ public:
   void tickUpdated(unsigned long messageID);
 
   // ----- Timed Data configuruation -----
-  // interval_ms semantics:
-  //   >= 0                    fixed interval lock in ms (ACTIVATE/DEACTIVATE ignored)
-  //   BLAECK_INTERVAL_OFF     timed data locked off (ACTIVATE ignored)
-  //   BLAECK_INTERVAL_CLIENT  client-controlled mode (default)
-  // Invalid values are rejected and the previous mode remains active.
+
+  /*!
+    @brief   Fixes how often timed data is sent, or who decides.
+
+    @param   interval_ms  A value of 0 or more locks that interval in milliseconds and
+                          BLAECK.ACTIVATE / BLAECK.DEACTIVATE stop having an effect.
+                          BLAECK_INTERVAL_OFF locks timed data off, ignoring ACTIVATE.
+                          BLAECK_INTERVAL_CLIENT leaves it to the host, the default.
+    @note    A value that is none of these is refused and the previous mode stays.
+
+    @code
+      Blaeck.setIntervalMs(BLAECK_INTERVAL_OFF);
+    @endcode
+  */
   void setIntervalMs(long interval_ms);
   /*!
     @brief   Reports the interval as set, in milliseconds.
@@ -3029,25 +3052,28 @@ public:
   */
   uint16_t getRejectedCommandCount() const { return _rejectedCommandCount; }
 
-  // Compares a string in RAM against one kept in flash, copying neither.
-  //
-  // A command handler is handed plain const char*, and comparing one with a literal puts that
-  // literal in SRAM for the life of the sketch. F() leaves it in flash, and this reads it a
-  // byte at a time:
-  //
-  //   Blaeck.onAnyCommand([](const char *command, const char *const *params, byte count)
-  //   {
-  //     if (Blaeck.equalsFlash(command, F("RESET")))
-  //       Uptime = 0;
-  //   });
-  //
-  // Called through the object, not the class: a sketch usually names its object BlaeckSerial
-  // too, and that hides the type name.
-  //
-  // Byte-wise through pgm_read_byte rather than strcmp_P, which not every core provides. Where
-  // flash is directly addressable that read is a plain one, so this costs nothing there. The
-  // library uses it for its own BLAECK.* names, which is ~196 bytes of SRAM on AVR - a tenth of
-  // an Uno - kept out of RAM for text that never changes.
+  /*!
+    @brief   Compares a string in RAM against one kept in flash, copying neither.
+
+    A command handler is handed a plain const char*, and comparing one with a literal
+    puts that literal in SRAM for the life of the sketch. F() leaves it in flash, and
+    this reads it a byte at a time.
+
+    @param   ram    The string to compare, typically a handler's command parameter.
+    @param   flash  An F() or PROGMEM literal.
+    @return  True if the two match.
+    @note    Call it through the object rather than the class. The library uses it for
+             its own BLAECK.* names, which keeps about 196 bytes off SRAM on AVR - a
+             tenth of an Uno - for text that never changes.
+
+    @code
+      Blaeck.onAnyCommand([](const char *command, const char *const *params, byte count)
+      {
+        if (Blaeck.equalsFlash(command, F("RESET")))
+          Uptime = 0;
+      });
+    @endcode
+  */
   static bool equalsFlash(const char *ram, const __FlashStringHelper *flash);
 
   /*!
@@ -3180,16 +3206,23 @@ public:
     @endcode
   */
   bool hasRejections() const;
-  // Says what was dropped and the exact begin() call that would have kept it, one line per
-  // table, and prints nothing at all when there is nothing to report - so a sketch can end
-  // setup() with it unconditionally. Returns whether anything was printed.
-  //
-  //   Blaeck.printRejections(&Serial);
-  //
-  // Meant for the stream the sketch already talks on, including the one Blaeck itself uses:
-  // called from setup() it cannot land inside a frame, since nothing has been written yet.
-  // A debug stream reports the same thing as it happens, naming each dropped entry; this is
-  // the summary for a board with only one Serial.
+  /*!
+    @brief   Prints what was dropped and the begin() call that would have kept it.
+
+    One line per table, and nothing at all when there is nothing to report - so a
+    sketch can end setup() with it unconditionally.
+
+    @param   out  Where to print. Meant for the stream the sketch already talks on,
+                  including the one the library itself uses: called from setup() it
+                  cannot land inside a frame, since nothing has been written yet.
+    @return  True if anything was printed.
+    @note    A debug stream reports the same thing as it happens, naming each dropped
+             entry. This is the summary for a board with only one Serial.
+
+    @code
+      Blaeck.printRejections(&Serial);
+    @endcode
+  */
   bool printRejections(Stream *out);
 
   // ----- Typed command registration (Home Assistant discovery metadata) -----
@@ -3208,11 +3241,10 @@ public:
   // All metadata strings must be F()/PROGMEM literals with program lifetime: they are stored as
   // pointers, never copied.
   //
-  // A number command must state its range. The firmware validates against it - values outside
-  // [min,max], bad select indices and non-0/1 switch values are rejected before dispatch and
-  // reported on DebugRef - and a host needs it too: Home Assistant defaults an undeclared range
-  // to 0..100 step 1, so a command accepting 0..500 gets a control that stops at 100, and one
-  // accepting 0..1 gets a control with only two positions.
+  // What the firmware validates before dispatch, reporting each on DebugRef: values outside a
+  // declared [min,max], bad select indices, and non-0/1 switch values. A number command that
+  // declares no range is not checked and the catalog carries no limits for it, so a host builds
+  // the control from its own defaults - state a range wherever the sketch has one to state.
 
   /*!
     @brief   Registers a command taking a number.

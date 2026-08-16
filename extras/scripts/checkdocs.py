@@ -82,23 +82,15 @@ def _words(raw):
 #
 # Rust requires one on every public item, on the grounds that a signature says
 # what a call looks like and only a worked call says why you would make it.
-INDENTED_CODE = re.compile(r"^\s*(?://+|\*)\s{2,}\S")
-
 def has_code_block(raw):
-    if not raw:
-        return False
-    # Doxygen says so outright; the indent heuristic below is for the plain-comment
-    # style the header used before the conversion.
-    if "@code" in raw:
-        return True
-    for line in raw.splitlines():
-        if not INDENTED_CODE.match(line):
-            continue
-        body = line.strip().lstrip("/*").strip()
-        # Prose that happens to be indented is not code; code has syntax.
-        if any(t in body for t in ("(", ";", "=", ".", "->")):
-            return True
-    return False
+    """True only for a real @code block.
+
+    An indented example in a plain // comment used to count as well, which was how the
+    conversion tolerated the names it had not reached yet. It also meant the gate passed
+    on examples nothing compiles - the whole point of requiring one - and it hid five of
+    them for a while after the last name was thought converted. Nothing is exempt now.
+    """
+    return bool(raw) and "@code" in raw
 
 
 def code_needs_air(raw):
@@ -242,15 +234,13 @@ def code_block_lines(raw):
     the header, so a compiler error names src/BlaeckSerial.h and not a generated
     file the contributor does not have.
 
-    Doxygen delimits it, so that is read exactly. The plain-comment style is
-    inferred from the indent, and stops at the first prose line after the block -
-    a comment may explain something below its block, and that prose is not code.
+    Doxygen delimits it, so it is read exactly - no guessing where an example starts.
     """
-    lines, inside, seen_any, first = [], False, False, None
+    lines, inside, first = [], False, None
     for i, line in enumerate(raw.splitlines()):
         bare = line.strip().lstrip("/*").strip()
         if bare.startswith("@code"):
-            inside, seen_any = True, True
+            inside = True
             continue
         if bare.startswith("@endcode"):
             inside = False
@@ -259,17 +249,6 @@ def code_block_lines(raw):
             if first is None:
                 first = i
             lines.append(line.strip().lstrip("/*").rstrip())
-        elif not seen_any:
-            if INDENTED_CODE.match(line):
-                if first is None:
-                    first = i
-                lines.append(line.strip().lstrip("/*").rstrip())
-            elif lines:
-                break
-    if not seen_any and not any(l.rstrip().endswith((";", "{", "}")) for l in lines):
-        # An indented block with no statement in it is a table, not code - the
-        # interval_ms table on setIntervalMs reads exactly like one otherwise.
-        return [], None
     return lines, first
 
 

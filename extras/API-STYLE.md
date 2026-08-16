@@ -193,7 +193,10 @@ not take.
 
 Every one is extracted and compiled, so a block calling a method that has since been
 renamed fails the build instead of being shown on hover as instructions that do not
-work. This is the only reason rule 7 is affordable; Rust requires one on every public
+work. Only a real `@code` block counts. An indented example in a plain `//` comment
+used to satisfy the gate as well, which let five names keep the old style long after
+the conversion was thought finished — and one of them, `setIntervalMs`, had no
+compiled example at all, because what looked like a block was a table of values. This is the only reason rule 7 is affordable; Rust requires one on every public
 item for the same reason, and checks them the same way.
 
 The generated sketch carries `#line` directives, so a failure names the header and
