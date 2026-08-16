@@ -1933,11 +1933,13 @@ public:
              a table the sketch never uses costs nothing - which is also why the chain
              may run after begin() has returned.
 
-    @warning Nothing can be declared before this call. A signal, channel or command
-             registered first has no table and no capacity to build one from, so it
-             is dropped and counted as rejected, in silence - the debug stream that
-             would report it is named on this chain too. printRejections() finds them
-             afterwards.
+    @warning Declare nothing before this call, and it fails two different ways. A
+             signal added first is dropped and counted as rejected: its table has no
+             capacity until begin() sets one. A state channel, event channel, event
+             type or command added first is quieter - its table is built at the board
+             default, and the sizer for it later in this chain is then refused as too
+             late to change. Neither is reported, since the debug stream is named on
+             this chain too; printRejections() finds the dropped signals afterwards.
 
     @code
       Serial.begin(115200);
