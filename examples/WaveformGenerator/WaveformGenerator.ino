@@ -84,6 +84,18 @@ char DeviceLabel[33] = "wave-gen"; // free-text label set via SET_LABEL
 // above is the other kind - what the device is, unchanged between runs, and not worth a column.
 char RunNote[25] = ""; // "swapped probe", "run 3 after warm-up"
 
+// The step each number control declares, named once so the range and the handler cannot
+// drift apart - a control that snapped to a step it no longer advertises would be worse
+// than one that did not snap at all.
+//
+// Held as how many steps fit in a unit, because that is the number the snap divides by, and
+// dividing is what gets this right: 0.1f is not exactly a tenth, so multiplying by it lands
+// on the wrong side of 0.9 even when the value was already correct. A division is correctly
+// rounded, so 9 / 10.0f is the nearest float to 0.9 and prints as "0.9".
+const float FreqStepsPerUnit = 100.0f;   // step 0.01 Hz
+const float AmpStepsPerUnit = 10.0f;     // step 0.1
+const float OffsetStepsPerUnit = 10.0f;  // step 0.1
+
 //---PUBLISHED AS A SIGNAL, BUT ABOUT THE BOARD RATHER THAN THE WAVE
 unsigned long Uptime = 0; // [s]
 
@@ -124,14 +136,14 @@ void setup()
 
 
   Blaeck.onNumberCommand("SET_FREQ", onSetFreq)
-      .withRange(0.0f, 2.0f, 0.01f)
+      .withRange(0.0f, 2.0f, 1.0f / FreqStepsPerUnit)
       .withUnit(F("Hz"))
       .withStateSignal(F("Frequency"));
   Blaeck.onNumberCommand("SET_AMP", onSetAmp)
-      .withRange(0.0f, 100.0f, 0.1f)
+      .withRange(0.0f, 100.0f, 1.0f / AmpStepsPerUnit)
       .withOwnState(F("Amplitude"), &Amplitude);
   Blaeck.onNumberCommand("SET_OFFSET", onSetOffset)
-      .withRange(-100.0f, 100.0f, 0.1f)
+      .withRange(-100.0f, 100.0f, 1.0f / OffsetStepsPerUnit)
       .withOwnState(F("Offset"), &Offset);
   Blaeck.onSelectCommand("SET_WAVE", onSetWave)
       .withOptions(F("Sine,Square,Triangle,Sawtooth"))
@@ -282,9 +294,23 @@ void CheckActivity()
   warned = false;
 }
 
+// A number arrives as text and is read with atof(), which on AVR is not correctly rounded:
+// "0.9" can land one float above 0.9, and Home Assistant then shows 0.90000004 - the number
+// the board really holds, reported faithfully. Snapping to the step the control declares puts
+// it back where it was asked for; a value between two steps was never meant to exist.
+//
+// Multiply and divide are not interchangeable here. roundf(v / 0.1f) * 0.1f leaves the wrong
+// float alone and turns a right one into it, because 0.1f is a shade over a tenth and the
+// error survives the multiplication. Dividing by 10 is correctly rounded, so the result is
+// the closest float to the decimal the user typed.
+static float SnapToStep(const char *text, float stepsPerUnit)
+{
+  return roundf((float)atof(text) * stepsPerUnit) / stepsPerUnit;
+}
+
 void onSetFreq(const char *command, const char *const *params, byte paramCount)
 {
-  Frequency = (float)atof(params[0]);
+  Frequency = SnapToStep(params[0], FreqStepsPerUnit);
   // The one control backed by a signal, so it reports by writing that signal - and the value
   // is logged. The others carry their own state instead, which is not; see onSetAmp().
   Blaeck.write("Frequency", Frequency);
@@ -292,7 +318,7 @@ void onSetFreq(const char *command, const char *const *params, byte paramCount)
 
 void onSetAmp(const char *command, const char *const *params, byte paramCount)
 {
-  Amplitude = (float)atof(params[0]);
+  Amplitude = SnapToStep(params[0], AmpStepsPerUnit);
   // Publishes the command's own state. Pushing is what makes the new value visible at once -
   // the channel is otherwise only read when a host polls the catalog.
   Blaeck.writeCommandState(command);
@@ -300,7 +326,7 @@ void onSetAmp(const char *command, const char *const *params, byte paramCount)
 
 void onSetOffset(const char *command, const char *const *params, byte paramCount)
 {
-  Offset = (float)atof(params[0]);
+  Offset = SnapToStep(params[0], OffsetStepsPerUnit);
   Blaeck.writeCommandState(command);
 }
 
