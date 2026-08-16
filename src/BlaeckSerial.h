@@ -4107,8 +4107,31 @@ private:
 // The blank line below matters: without it this note attaches to withSignals() as
 // its documentation, and the hover shows this instead of what the declaration says.
 
+// A capacity is nearly always a literal, and a literal above the cap is a mistake the
+// build can catch instead of the board. GCC drops the call when the condition is false,
+// and fails the link with this text when it holds - so a sketch hears about it before it
+// is flashed, rather than from a debug stream that may not be attached yet.
+//
+// Only what is certain: RAM is the limit that actually bites, but no single table knows
+// what the other four, the sketch and the stack have already claimed. 32767 is knowable
+// here, so 32767 is what is checked.
+#if defined(__GNUC__) && !defined(__clang__)
+extern void blaeck_capacity_above_32767() __attribute__((error(
+    "BLAECK: a table capacity above 32767 cannot be indexed - a handle names its slot "
+    "with an int16_t. Ask for 32767 or fewer.")));
+  #define BLAECK_CHECK_CAPACITY(count)                                     \
+    do {                                                                   \
+      if (__builtin_constant_p(count) &&                                   \
+          (unsigned long)(count) > (unsigned long)BlaeckSerial::MAX_TABLE_ENTRIES) \
+        blaeck_capacity_above_32767();                                     \
+    } while (0)
+#else
+  #define BLAECK_CHECK_CAPACITY(count) do { } while (0)
+#endif
+
 inline BlaeckBeginRef &BlaeckBeginRef::withSignals(unsigned int count)
 {
+  BLAECK_CHECK_CAPACITY(count);
   if (_owner != nullptr)
     _owner->_setTableCapacity(BlaeckSerial::TABLE_SIGNALS, count);
   return *this;
@@ -4116,6 +4139,7 @@ inline BlaeckBeginRef &BlaeckBeginRef::withSignals(unsigned int count)
 
 inline BlaeckBeginRef &BlaeckBeginRef::withStateChannels(unsigned int count)
 {
+  BLAECK_CHECK_CAPACITY(count);
 #if BLAECK_ENABLE_STATE_CHANNELS
   if (_owner != nullptr)
     _owner->_setTableCapacity(BlaeckSerial::TABLE_STATE_CHANNELS, count);
@@ -4127,6 +4151,7 @@ inline BlaeckBeginRef &BlaeckBeginRef::withStateChannels(unsigned int count)
 
 inline BlaeckBeginRef &BlaeckBeginRef::withEventChannels(unsigned int count)
 {
+  BLAECK_CHECK_CAPACITY(count);
 #if BLAECK_ENABLE_EVENTS
   if (_owner != nullptr)
     _owner->_setTableCapacity(BlaeckSerial::TABLE_EVENT_CHANNELS, count);
@@ -4138,6 +4163,7 @@ inline BlaeckBeginRef &BlaeckBeginRef::withEventChannels(unsigned int count)
 
 inline BlaeckBeginRef &BlaeckBeginRef::withEventTypes(unsigned int count)
 {
+  BLAECK_CHECK_CAPACITY(count);
 #if BLAECK_ENABLE_EVENTS
   if (_owner != nullptr)
     _owner->_setTableCapacity(BlaeckSerial::TABLE_EVENT_TYPES, count);
@@ -4149,6 +4175,7 @@ inline BlaeckBeginRef &BlaeckBeginRef::withEventTypes(unsigned int count)
 
 inline BlaeckBeginRef &BlaeckBeginRef::withCommands(unsigned int count)
 {
+  BLAECK_CHECK_CAPACITY(count);
   if (_owner != nullptr)
     _owner->_setTableCapacity(BlaeckSerial::TABLE_COMMANDS, count);
   return *this;
