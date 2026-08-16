@@ -3731,16 +3731,17 @@ private:
                            const __FlashStringHelper *chainCall, uint16_t dropped,
                            unsigned int capacity);
 
-  // The most any table will hold, whatever a sketch asks for. The same on every board:
-  // it exists to stop an entry aliasing onto slot 0, not to ration RAM, and RAM says no
-  // long before this does - 32767 state channels would be 852 KB of entries, where an
-  // ESP32 has 320 KB and a Mega 8. A board that cannot afford a table hears so when the
-  // allocation fails, which is a truer limit than any number here. What does vary per
-  // board is where a table starts, below.
+  // The most any table will hold, whatever a sketch asks for. Not a number anyone
+  // chose: every handle carries its slot as an int16_t and spends the negatives on
+  // "registration failed", so INT16_MAX is the last slot one can name. The find
+  // functions answer the same way, with a signed int and -1, and int is 16 bits on AVR.
   //
-  // 32767 and not 65535 because _findStateChannel() and its neighbours answer with a
-  // signed int and -1 for "not found", and int is 16 bits on AVR.
-  static const uint16_t MAX_TABLE_ENTRIES = 32767;
+  // The same on every board, because it is bookkeeping rather than rationing, and RAM
+  // says no long first: this many state channels is 852 KB of entries, where an ESP32
+  // has 320 KB and a Mega 8. A board that cannot afford a table hears about it when the
+  // allocation fails, which is a truer limit than any constant. What does vary per
+  // board is where a table starts, below.
+  static const uint16_t MAX_TABLE_ENTRIES = INT16_MAX;
 
   // Defaults a table starts from, raised per sketch on the begin() chain:
   // BLAECK.begin(&Serial).withSignals(50). Generous where SRAM is plentiful
