@@ -148,9 +148,6 @@ bool BlaeckSerial::printRejections(Stream *out)
 
 void BlaeckSerial::_setTableCapacity(TableId table, unsigned int count)
 {
-  if (count == 0)
-    return;
-
   // The table this capacity would size, and whether it is already built.
   const void *existing = nullptr;
   const __FlashStringHelper *chainCall = nullptr;
@@ -387,13 +384,10 @@ int BlaeckSerial::_registerSignalCommon(const char *ram, const __FlashStringHelp
 {
   if (!_ensureSignalTable() || static_cast<unsigned int>(_signalIndex) >= _signalCapacity)
   {
-    if (Signals != nullptr)
-    {
-      if (flash != nullptr)
-        _warnTableFull(F("withSignals"), _signalCapacity, flash);
-      else
-        _warnTableFull(F("withSignals"), _signalCapacity, ram);
-    }
+    if (flash != nullptr)
+      _warnTableFull(F("withSignals"), _signalCapacity, flash);
+    else
+      _warnTableFull(F("withSignals"), _signalCapacity, ram);
     _signalRegistrationFailed = true;
     _rejectedSignalCount++;
     // -1 gives a dead handle: the chain that follows compiles and runs and stores nothing.
@@ -1143,6 +1137,7 @@ int BlaeckSerial::_registerCommand(const char *command, BlaeckCommandHandler han
 
   if (!_ensureCommandTable())
   {
+    _warnTableFull(F("withCommands"), _commandCapacity, command);
     _rejectedCommandCount++;
     return -1;
   }
@@ -1314,6 +1309,7 @@ bool BlaeckSerial::_addOwnedStateChannel(const __FlashStringHelper *channelName,
 
   if (!_ensureStateChannelTable())
   {
+    _warnTableFull(F("withStateChannels"), _stateChannelCapacity, channelName);
     _rejectedStateChannelCount++;
     return false;
   }
@@ -2047,6 +2043,10 @@ int BlaeckSerial::_registerStateChannel(const char *channelName, const __FlashSt
 
   if (!_ensureStateChannelTable())
   {
+    if (flashName != nullptr)
+      _warnTableFull(F("withStateChannels"), _stateChannelCapacity, flashName);
+    else
+      _warnTableFull(F("withStateChannels"), _stateChannelCapacity, channelName);
     _rejectedStateChannelCount++;
     return -1;
   }
@@ -2739,6 +2739,10 @@ int BlaeckSerial::_registerEventChannel(const char *channelName, const __FlashSt
 
   if (!_ensureEventChannelTable())
   {
+    if (flashName != nullptr)
+      _warnTableFull(F("withEventChannels"), _eventChannelCapacity, flashName);
+    else
+      _warnTableFull(F("withEventChannels"), _eventChannelCapacity, channelName);
     _rejectedEventChannelCount++;
     return -1;
   }

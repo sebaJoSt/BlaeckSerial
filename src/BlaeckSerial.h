@@ -527,7 +527,7 @@ public:
     the cheapest entry the library keeps.
 
     @param   count  Event types to make room for, added up across every channel.
-                    Zero leaves the capacity as it is. At most 32767; a
+                    At most 32767; a
                     larger literal fails the build.
     @return  The same handle, for chaining.
 
