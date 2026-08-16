@@ -24,11 +24,13 @@
     SET_ENABLE  switch  off -> Output = Offset          state: its own state channel
     SET_LABEL   text    max 32 bytes, config category   state: its own state channel,
                 and the name the status line reports under
+    SET_NOTE    text    max 24 bytes                    state: the RunNote signal
     STATUS      button  writes the StatusOnDemand channel
 
   Signals that describe themselves (Frequency declares nothing, and costs nothing):
     Output      measurement, 3 decimals, mdi:sine-wave
     Uptime      seconds since boot, which a host may show in minutes or hours instead
+    RunNote     free text, logged with every row - what SET_NOTE wrote
 
   --- HOW A CONTROL GETS ITS VALUE BACK ---
 
@@ -74,6 +76,11 @@ float Offset = 0.0;
 bool Enabled = true;
 char DeviceLabel[33] = "wave-gen"; // free-text label set via SET_LABEL
 
+// The note SET_NOTE writes. A signal, not a state channel, because it is worth keeping: what
+// was happening at the time is the thing a row of readings cannot say for itself. The label
+// above is the other kind - what the device is, unchanged between runs, and not worth a column.
+char RunNote[25] = ""; // "swapped probe", "run 3 after warm-up"
+
 //---PUBLISHED AS A SIGNAL, BUT ABOUT THE BOARD RATHER THAN THE WAVE
 unsigned long Uptime = 0; // [s]
 
@@ -91,8 +98,8 @@ void setup()
   // commands, seven state channels (two declared here, five by the commands' withOwnState),
   // three event channels. Every one of these calls is optional.
   Blaeck.begin(&Serial)
-      .withSignals(3)
-      .withCommands(7)
+      .withSignals(4)
+      .withCommands(8)
       .withStateChannels(7)
       .withEventChannels(3);
 
@@ -106,6 +113,11 @@ void setup()
       .withDisplayPrecision(3)
       .withIcon(F("mdi:sine-wave"));
   Blaeck.addSignal(F("Frequency"), &Frequency);
+
+  // A string signal: logged like any other, one text column in the table. Every data frame
+  // carries it, so keep the buffer as small as the note needs to be.
+  Blaeck.addSignal(F("RunNote"), RunNote)
+      .withIcon(F("mdi:note-text"));
 
   // Describes the board rather than the waveform, so it is filed as diagnostic. The device
   // class is what lets a host offer minutes or hours - without one the unit is only a label.
@@ -135,6 +147,12 @@ void setup()
       .withMaxLength(sizeof(DeviceLabel) - 1)
       .withOwnState(F("DeviceLabel"), DeviceLabel)
       .config();
+  // The other half of the pair: SET_LABEL keeps its value on a state channel, this one on a
+  // signal, so the note is written to the table beside the readings it explains. Everything
+  // else about the two is the same call.
+  Blaeck.onTextCommand("SET_NOTE", onSetNote)
+      .withMaxLength(sizeof(RunNote) - 1)
+      .withStateSignal(F("RunNote"));
   Blaeck.onButtonCommand("STATUS", onStatus);
 
   Blaeck.addStateChannel(F("Status")).withIcon(F("mdi:pulse")).diagnostic();
@@ -295,6 +313,14 @@ void onSetLabel(const char *command, const char *const *params, byte paramCount)
   // Never longer than withMaxLength(sizeof(DeviceLabel) - 1) above; empty clears the label.
   strcpy(DeviceLabel, params[0]);
   Blaeck.writeCommandState(command);
+}
+
+void onSetNote(const char *command, const char *const *params, byte paramCount)
+{
+  // Arrives decoded: a host percent-encodes the value, so a note may hold the characters the
+  // frame itself is built from - a comma, an angle bracket, a percent sign - and they reach
+  // here as typed. Never longer than withMaxLength() above.
+  strcpy(RunNote, params[0]);
 }
 
 void onStatus(const char *command, const char *const *params, byte paramCount)
