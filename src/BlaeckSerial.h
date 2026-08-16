@@ -722,8 +722,8 @@ protected:
   }
 
   // Typed own state: the command reports a variable rather than text a getter builds. Same
-  // path as the getter form, so the channel is declared, claimed and announced identically -
-  // only where the value comes from differs.
+  // path as the getter form, so the channel is declared and claimed identically - only where
+  // the value comes from differs.
   void _setOwnState(const __FlashStringHelper *channelName, dataType valueType, const void *value,
                     bool selectIndex = false);
 
@@ -2147,6 +2147,11 @@ public:
     Lets a host tell a rebooted device from one that has simply gone quiet - the
     values look identical otherwise. Sent once per boot, by read() on its first
     call, so a sketch needs this only to get it out before it starts reading.
+
+    Everything the device declares follows it unasked: the state channels with their
+    current values, the event channels, the commands and what the signals say about
+    themselves. A host that stayed connected is holding what the last run declared and
+    has no reason to ask again, so the device tells it.
 
     @code
       Blaeck.writeRestarted();
@@ -4226,7 +4231,7 @@ inline void BlaeckCommandRefBase::_setOwnState(const __FlashStringHelper *channe
 #if BLAECK_ENABLE_COMMAND_META
   if (auto *e = _entry())
   {
-    if (_owner->_declareOwnState((byte)_index, channelName, nullptr, valueType, value, selectIndex))
+    if (_owner->_declareOwnState((uint16_t)_index, channelName, nullptr, valueType, value, selectIndex))
     {
       e->stateSignal = channelName;
       e->stateSource = BLAECK_STATE_CHANNEL;
@@ -4248,7 +4253,7 @@ inline void BlaeckCommandRefBase::_setOwnState(const __FlashStringHelper *channe
     // Only claim the state if the channel was actually declared. Advertising one the 0x90
     // catalog does not carry would wire a control to a topic nothing ever publishes, and it
     // would sit at unknown forever - a full table costs the state, not the command.
-    if (_owner->_declareOwnState((byte)_index, channelName, getStateText))
+    if (_owner->_declareOwnState((uint16_t)_index, channelName, getStateText))
     {
       e->stateSignal = channelName;
       e->stateSource = BLAECK_STATE_CHANNEL;

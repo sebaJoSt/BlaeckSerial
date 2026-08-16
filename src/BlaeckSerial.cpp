@@ -1369,12 +1369,12 @@ bool BlaeckSerial::_declareOwnState(uint16_t handlerIndex, const __FlashStringHe
       _stateChannels[ch].options = cmd.options;
   }
 
-  // Announce once, here. A host connecting later reads the value from the channel catalog,
-  // but one already connected when the board reset has no reason to re-read a catalog it
-  // already holds - and the sketch's variables are back at their startup values. Dropped
-  // harmlessly when no host holds the catalog yet, which is the cold-start case the poll
-  // covers.
-  writeCommandState(_commandHandlers[handlerIndex].command);
+  // No announce here. There was one, to correct a host that stayed connected across a reset,
+  // and it never ran: writeCommandState() looks for a command whose stateSignal and
+  // stateSource are set, and the handle sets those only after this returns - it cannot set
+  // them earlier, because a channel that failed to declare must not be claimed. The restart
+  // notice carries the whole catalog now, values included, which corrects that host in one
+  // frame instead of one per command and does it for channels no command owns as well.
   return true;
 }
 #endif
