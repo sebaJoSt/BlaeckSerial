@@ -3003,7 +3003,7 @@ void BlaeckSerial::writeEventChannelsFrame(unsigned long msg_id)
   //   msConfig(1) slaveID(1) name\0 flags(2, LE uint16)
   //   [icon\0]                 if flags.hasIcon
   //   [deviceClass\0]          if flags.hasDeviceClass
-  //   count(1) type\0 x count
+  //   count(2, LE uint16) type\0 x count
   // flags bits: 0=hasIcon 1=isDiagnostic 2=hasDeviceClass 3=disabledByDefault.
   //             Bits 4-15 reserved - two bytes, matching 0x90, so the catalog has room to
   //             grow without taking a new message key.
@@ -3051,13 +3051,14 @@ void BlaeckSerial::writeEventChannelsFrame(unsigned long msg_id)
       if (flags & 0x0004)
         _bufFlashStr0(e.deviceClass);
 
-      byte typeCount = 0;
+      uint16_t typeCount = 0;
       for (uint16_t t = 0; t < _eventTypeCount; t++)
       {
         if (_eventTypes[t].channelIndex == i)
           typeCount++;
       }
-      _bufByte(typeCount);
+      _bufByte((byte)(typeCount & 0xFF));
+      _bufByte((byte)((typeCount >> 8) & 0xFF));
 
       for (uint16_t t = 0; t < _eventTypeCount; t++)
       {
@@ -3116,13 +3117,14 @@ void BlaeckSerial::writeEventChannelsFrame(unsigned long msg_id)
         StreamRef->write((byte)0);
       }
 
-      byte typeCount = 0;
+      uint16_t typeCount = 0;
       for (uint16_t t = 0; t < _eventTypeCount; t++)
       {
         if (_eventTypes[t].channelIndex == i)
           typeCount++;
       }
-      StreamRef->write(typeCount);
+      StreamRef->write((byte)(typeCount & 0xFF));
+      StreamRef->write((byte)((typeCount >> 8) & 0xFF));
 
       for (uint16_t t = 0; t < _eventTypeCount; t++)
       {
