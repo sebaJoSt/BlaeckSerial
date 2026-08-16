@@ -1408,12 +1408,12 @@ BlaeckTextCommandRef BlaeckSerial::onTextCommand(const char *command, BlaeckComm
   return BlaeckTextCommandRef(this, (int16_t)_registerCommand(command, handler, BLAECK_CMD_TEXT));
 }
 
-byte BlaeckSerial::_flashCsvOptionCount(const __FlashStringHelper *csv)
+uint16_t BlaeckSerial::_flashCsvOptionCount(const __FlashStringHelper *csv)
 {
   if (csv == nullptr)
     return 0;
   PGM_P p = reinterpret_cast<PGM_P>(csv);
-  byte count = 1;
+  uint16_t count = 1;
   bool any = false;
   byte c;
   while ((c = pgm_read_byte(p++)) != 0)
@@ -2773,8 +2773,8 @@ void BlaeckSerial::_addEventTypesCsv(uint16_t channelIndex, const __FlashStringH
   // One pool entry per field, all pointing at the same flash string. Appended in
   // order, so a field's position is its wire index - the same rule call order gives
   // addEventType().
-  byte fieldCount = _flashCsvOptionCount(eventTypes);
-  for (byte f = 0; f < fieldCount; f++)
+  uint16_t fieldCount = _flashCsvOptionCount(eventTypes);
+  for (uint16_t f = 0; f < fieldCount; f++)
   {
     if (!_ensureEventTypeTable() || _eventTypeCount >= _eventTypeSlots())
     {
@@ -2949,7 +2949,7 @@ int BlaeckSerial::_findEventType(uint16_t channelIndex, const __FlashStringHelpe
   // F() literals at different addresses. Both operands live in flash, so
   // neither strcmp() nor strcmp_P() applies (the latter reads its first
   // argument from RAM) — read both sides with pgm_read_byte().
-  byte index = 0;
+  uint16_t index = 0;
   for (uint16_t i = 0; i < _eventTypeCount; i++)
   {
     if (_eventTypes[i].channelIndex != channelIndex)
@@ -3317,7 +3317,7 @@ byte BlaeckSerial::_validateTypedCommand(uint16_t handlerIndex)
   }
   else if (e.kind == BLAECK_CMD_SELECT)
   {
-    byte count = _flashCsvOptionCount(e.options);
+    uint16_t count = _flashCsvOptionCount(e.options);
 
     // Accept either an option name (case-insensitive) or a numeric index.
     long idx = _flashCsvIndexOf(e.options, v);

@@ -3641,7 +3641,7 @@ private:
   // Number of comma-separated fields in a flash CSV. Deliberately outside the
   // command-metadata guard: it counts a select command's options and an event
   // channel's type list, and those features are enabled independently.
-  static byte _flashCsvOptionCount(const __FlashStringHelper *csv);
+  static uint16_t _flashCsvOptionCount(const __FlashStringHelper *csv);
 #if BLAECK_ENABLE_STATE_CHANNELS
   void writeStateChannelsFrame(unsigned long MessageID);
   // Index of a declared channel, or -1 when the name was never declared.
