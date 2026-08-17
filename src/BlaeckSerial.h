@@ -2120,6 +2120,12 @@ public:
     @param   value       Address of the variable to read. One overload per type.
     @return  Handle describing how a host should present the signal. Chainable, and
              safe to ignore - a signal that describes nothing costs nothing.
+    @note    The handle may also be kept and used later, which is how a signal changes
+             how it looks while the sketch runs - an icon that follows what the device
+             is doing. It names an owner and a slot, so it cannot be declared empty;
+             give it an index of -1, the slot a refused registration returns, and it
+             stays inert until setup() assigns the real one. The handles the state
+             channel and command calls return work the same way.
     @note    When the signal table is full the handle is dead: the chain still
              compiles and runs, and stores nothing. The missing signal is the real
              problem, and hasRejectedSignals() reports it.
@@ -2323,6 +2329,9 @@ public:
     polling host from waiting out its timeout. With BLAECK_ENABLE_SIGNAL_META=0
     that is always the case.
 
+    Changing an icon or a unit while the sketch runs sends this on its own, so a
+    sketch calls it to answer a poll rather than to keep a host current.
+
     @code
       Blaeck.writeSignalConfig();
     @endcode
@@ -2339,6 +2348,8 @@ public:
     typed one carries what it controls - its kind, its range, its options - which is
     what lets a host build a control for it rather than just list it.
     Answers <BLAECK.WRITE_COMMANDS>.
+
+    Registering or clearing a command sends this by itself, as does starting up.
 
     @code
       Blaeck.writeCommands();
@@ -2433,6 +2444,9 @@ public:
 
     Answers <BLAECK.WRITE_STATE_CHANNELS>, and is what a host needs before any value
     means anything - a value names its channel by position in this list.
+
+    A sketch rarely has to call it: the list goes out when the device starts, and
+    again whenever the channels or what they declare have moved.
 
     @code
       Blaeck.writeStateChannels();
@@ -2581,6 +2595,9 @@ public:
 
     Answers <BLAECK.WRITE_EVENT_CHANNELS>, and is what a host needs before any event
     means anything - an event names its channel and type by position in this list.
+
+    Like the other catalogs it is sent at startup and after any change, and ahead of
+    an event that would otherwise be read against a list already out of date.
 
     @code
       Blaeck.writeEventChannels();
