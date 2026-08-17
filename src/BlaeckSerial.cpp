@@ -1274,20 +1274,24 @@ void BlaeckSerial::clearAllCommandHandlers()
     if (!_stateChannels[i].ownedByCommand)
       continue;
 
+    // Both catalogs move, each only if it held something: the channels here, the
+    // commands below.
+    if (_stateChannels[i].inUse)
+      _stateCatalogDirty = true;
+
     _stateChannels[i].inUse = false;
     _stateChannels[i].ownedByCommand = false;
     _stateChannels[i].icon = nullptr;
     _stateChannels[i].diagnostic = false;
     _setChannelName(_stateChannels[i].name, _stateChannels[i].nameInFlash, nullptr, nullptr);
-    // Both catalogs moved: the channels went here, the commands go below.
-    _stateCatalogDirty = true;
   }
 #endif
 
-  _commandCatalogDirty = true;
-
   for (uint16_t i = 0; i < _commandSlots(); i++)
   {
+    if (_commandHandlers[i].inUse)
+      _commandCatalogDirty = true;
+
     _commandHandlers[i].inUse = false;
     _commandHandlers[i].handler = nullptr;
     _commandHandlers[i].command[0] = '\0';
@@ -1649,6 +1653,9 @@ long BlaeckSerial::_flashCsvIndexOf(const __FlashStringHelper *csv, const char *
 
 bool BlaeckSerial::recvWithStartEndMarkers()
 {
+  if (StreamRef == nullptr)
+    return false;
+
   bool newData = false;
   static boolean recvInProgress = false;
   static byte ndx = 0;
@@ -2269,11 +2276,16 @@ void BlaeckSerial::clearAllStateChannels()
     if (_stateChannels[i].ownedByCommand)
       continue;
 
+    // Only a slot that held something changes the catalog. Clearing a table that was
+    // already empty announces nothing, the same way a modifier that writes the value
+    // already there announces nothing.
+    if (_stateChannels[i].inUse)
+      _stateCatalogDirty = true;
+
     _stateChannels[i].inUse = false;
     _stateChannels[i].icon = nullptr;
     _stateChannels[i].diagnostic = false;
     _setChannelName(_stateChannels[i].name, _stateChannels[i].nameInFlash, nullptr, nullptr);
-    _stateCatalogDirty = true;
   }
 }
 
@@ -3024,6 +3036,9 @@ void BlaeckSerial::clearAllEventChannels()
 {
   for (uint16_t i = 0; i < _eventChannelSlots(); i++)
   {
+    if (_eventChannels[i].inUse)
+      _eventCatalogDirty = true;
+
     _eventChannels[i].inUse = false;
     _eventChannels[i].icon = nullptr;
     _eventChannels[i].diagnostic = false;
@@ -3031,7 +3046,6 @@ void BlaeckSerial::clearAllEventChannels()
   }
   // The count gates every read of the pool, so the entries need no cleanup.
   _eventTypeCount = 0;
-  _eventCatalogDirty = true;
 }
 
 int BlaeckSerial::_findEventChannel(const __FlashStringHelper *channelName) const
@@ -4312,6 +4326,12 @@ void BlaeckSerial::writeRestarted()
 
 void BlaeckSerial::writeRestarted(unsigned long msg_id)
 {
+  // Guarded like every other writer. Deliberately before the flag is set, so a sketch
+  // that reaches read() before begin() still announces its restart once it has a stream
+  // rather than having spent the one notice on nothing.
+  if (StreamRef == nullptr)
+    return;
+
   if (!_writeRestartedAlreadyDone)
   {
     _writeRestartedAlreadyDone = true;

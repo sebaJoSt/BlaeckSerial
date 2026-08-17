@@ -883,6 +883,9 @@ public:
     @param   getStateText  Called to produce the current value as text.
     @return  The same handle, for chaining.
 
+    @warning The getter runs while a frame is being assembled and must not send one,
+             for the reason given on withStateText().
+
     @code
       Blaeck.onNumberCommand("SET_OFFSET", onSetOffset)
           .withOwnState(F("Offset"), offsetText);
@@ -1855,6 +1858,11 @@ public:
     @note    Only text takes a getter. A numeric channel points at the variable
              instead, which needs no function at all - and anything a getter would
              have computed can be assigned to a variable first.
+
+    @warning The getter runs while a frame is being assembled, so it must not send
+             one: writeState(), writeEvent() and the catalog writers all start a new
+             frame, and the half-built one they interrupt goes out malformed. Read a
+             variable and format it - nothing else.
 
     @code
       Blaeck.addStateChannel(F("Offset")).withStateText(offsetText);
