@@ -2203,7 +2203,11 @@ int BlaeckSerial::_findStateChannel(const char *channelName) const
 void BlaeckSerial::writeState(const char *channelName, const char *text, unsigned long messageID)
 {
   // 0x95 "State" frame: the current value of a declared channel, device -> host.
-  //   channelIndex(2, LE uint16)  valueType(1)  value
+  //   msConfig(1) slaveID(1) channelIndex(2, LE uint16)  valueType(1)  value
+  // The two leading bytes are the channel's device identity, written zero here and
+  // rewritten by an aggregator relaying several boards - the same slot every catalog
+  // frame carries. They make channelIndex mean "position in that device's 0x90 list",
+  // so a relay rewrites identity and never has to renumber an index it forwards.
   // channelIndex is the channel's position in the 0x90 catalog, so that frame
   // must be received first. Two bytes: a device may declare more channels than a
   // single byte can name, and the catalog itself has never carried an index or a
@@ -2336,8 +2340,11 @@ void BlaeckSerial::_writeStateFrame(int channelIndex, const char *text, unsigned
   {
     _bufReset();
     _bufHeader(0x95, messageID);
-    // Channel index, the datatype, then the value: fixed width for a number, a 1-byte length
-    // followed by that many UTF-8 bytes for a string - the same rule a data frame follows.
+    // Device identity, the channel index, the datatype, then the value: fixed width for a
+    // number, a 1-byte length followed by that many UTF-8 bytes for a string - the same rule
+    // a data frame follows.
+    _bufByte((byte)0);
+    _bufByte((byte)0);
     _bufByte((byte)(channelIndex & 0xFF));
     _bufByte((byte)((channelIndex >> 8) & 0xFF));
     _bufByte(_dtypeCode(e.valueType));
@@ -2364,6 +2371,8 @@ void BlaeckSerial::_writeStateFrame(int channelIndex, const char *text, unsigned
     StreamRef->write(ulngCvt.bval, 4);
     StreamRef->write(":");
 
+    StreamRef->write((byte)0);
+    StreamRef->write((byte)0);
     StreamRef->write((byte)(channelIndex & 0xFF));
     StreamRef->write((byte)((channelIndex >> 8) & 0xFF));
     StreamRef->write(_dtypeCode(e.valueType));
@@ -3166,8 +3175,11 @@ void BlaeckSerial::writeEvent(const char *channelName, const __FlashStringHelper
 void BlaeckSerial::writeEvent(const char *channelName, const __FlashStringHelper *eventType, unsigned long messageID)
 {
   // 0x85 "Event" frame: one occurrence on a declared channel, device -> host.
-  //   channelIndex(2, LE uint16)  eventIndex(2, LE uint16)
-  // Both indices refer to the 0x80 catalog, so that frame must be received
+  //   msConfig(1) slaveID(1) channelIndex(2, LE uint16)  eventIndex(2, LE uint16)
+  // The two leading bytes are the channel's device identity, written zero here and
+  // rewritten by an aggregator relaying several boards - the same slot every catalog
+  // frame carries, and the same one 0x95 carries.
+  // Both indices refer to that device's 0x80 catalog, so that frame must be received
   // first. Channels are never removed, only cleared as a whole, so the slot
   // index and the catalog position cannot drift apart.
   // No CRC (like the 0x95/0xA0/0xA5 frames). The event carries no text and no
@@ -3201,6 +3213,8 @@ void BlaeckSerial::writeEvent(const char *channelName, const __FlashStringHelper
   {
     _bufReset();
     _bufHeader(0x85, messageID);
+    _bufByte((byte)0);
+    _bufByte((byte)0);
     _bufByte((byte)(channelIndex & 0xFF));
     _bufByte((byte)((channelIndex >> 8) & 0xFF));
     _bufByte((byte)(eventIndex & 0xFF));
@@ -3218,6 +3232,8 @@ void BlaeckSerial::writeEvent(const char *channelName, const __FlashStringHelper
     StreamRef->write(ulngCvt.bval, 4);
     StreamRef->write(":");
 
+    StreamRef->write((byte)0);
+    StreamRef->write((byte)0);
     StreamRef->write((byte)(channelIndex & 0xFF));
     StreamRef->write((byte)((channelIndex >> 8) & 0xFF));
     StreamRef->write((byte)(eventIndex & 0xFF));
