@@ -115,9 +115,10 @@ void setup()
 {
   Serial.begin(115200);
 
-  // Sizing every table the sketch fills, so nothing is left to a default: three signals, seven
-  // commands, seven state channels (two declared here, five by the commands' withOwnState),
-  // three event channels. Every one of these calls is optional.
+  // Sizing every table the sketch fills, so nothing is left to a default: three signals, eight
+  // commands, eight state channels - three declared here and five by the commands'
+  // withOwnState - and three event channels, of which this sketch declares one. Every one of
+  // these calls is optional.
   Blaeck.begin(&Serial)
       .withSignals(3)
       .withCommands(8)
