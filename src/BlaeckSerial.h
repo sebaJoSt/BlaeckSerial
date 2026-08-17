@@ -2142,11 +2142,15 @@ public:
   // ----- Device Restarted -----
 
   /*!
-    @brief   Announces that the device has restarted.
+    @brief   Announces that the device has started running.
 
-    Lets a host tell a rebooted device from one that has simply gone quiet - the
-    values look identical otherwise. Sent once per boot, by read() on its first
-    call, so a sketch needs this only to get it out before it starts reading.
+    Sent once per boot - the first start as well as a restart, which a host can
+    neither distinguish nor needs to: both mean the values it holds are from before
+    and should be discarded. Sent by read() on its first call, so a sketch needs this
+    only to get it out before it starts reading.
+
+    Lets a host tell a device that came back from one that has simply gone quiet - the
+    values look identical otherwise.
 
     Everything the device declares follows it unasked: the state channels with their
     current values, the event channels, the commands and what the signals say about
