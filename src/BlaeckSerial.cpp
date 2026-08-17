@@ -55,6 +55,33 @@ byte BlaeckSerial::_dtypeCode(dataType t)
   }
 }
 
+void BlaeckSerial::_flushCatalogs()
+{
+  if (StreamRef == nullptr)
+    return;
+
+  // Each writer clears its own flag, so a host that asks for a catalog settles the same
+  // debt an announce would - and the startup announce, which runs before this ever can,
+  // clears what setup() marked without anything being sent twice.
+#if BLAECK_ENABLE_STATE_CHANNELS
+  if (_stateCatalogDirty)
+    this->writeStateChannels(1);
+#endif
+
+#if BLAECK_ENABLE_EVENTS
+  if (_eventCatalogDirty)
+    this->writeEventChannels(1);
+#endif
+
+  if (_commandCatalogDirty)
+    this->writeCommands(1);
+
+#if BLAECK_ENABLE_SIGNAL_META
+  if (_signalConfigDirty)
+    this->writeSignalConfig(1);
+#endif
+}
+
 BlaeckBeginRef BlaeckSerial::begin(Stream *Ref)
 {
   StreamRef = (Stream *)Ref;
@@ -1132,6 +1159,11 @@ void BlaeckSerial::read()
 
     _dispatchRegisteredHandlers();
   }
+
+  // A handler dispatched above may have declared, re-styled or cleared something. This is
+  // the ordinary way that reaches a host; the guard on the push writers is only for a
+  // handler that reports on what it has just declared.
+  _flushCatalogs();
 }
 
 void BlaeckSerial::setBeforeWriteCallback(void (*callback)())
@@ -1170,6 +1202,9 @@ int BlaeckSerial::_registerCommand(const char *command, BlaeckCommandHandler han
     {
       _commandHandlers[i].handler = handler;
       _resetCommandMeta(i, kind);
+      // The kind and every piece of metadata were just reset, so the entry the host holds
+      // for this name no longer describes it.
+      _commandCatalogDirty = true;
       return (int)i;
     }
   }
@@ -1183,6 +1218,7 @@ int BlaeckSerial::_registerCommand(const char *command, BlaeckCommandHandler han
       _commandHandlers[i].handler = handler;
       _commandHandlers[i].inUse = true;
       _resetCommandMeta(i, kind);
+      _commandCatalogDirty = true;
       return (int)i;
     }
   }
@@ -1243,8 +1279,12 @@ void BlaeckSerial::clearAllCommandHandlers()
     _stateChannels[i].icon = nullptr;
     _stateChannels[i].diagnostic = false;
     _setChannelName(_stateChannels[i].name, _stateChannels[i].nameInFlash, nullptr, nullptr);
+    // Both catalogs moved: the channels went here, the commands go below.
+    _stateCatalogDirty = true;
   }
 #endif
+
+  _commandCatalogDirty = true;
 
   for (uint16_t i = 0; i < _commandSlots(); i++)
   {
@@ -1378,6 +1418,7 @@ bool BlaeckSerial::_addOwnedStateChannel(const __FlashStringHelper *channelName,
     _stateChannels[i].truncationWarned = false;
     _stateChannels[i].ownedByCommand = true;
     _stateChannels[i].inUse = true;
+    _stateCatalogDirty = true;
     return true;
   }
 
@@ -2094,6 +2135,7 @@ int BlaeckSerial::_registerStateChannel(const char *channelName, const __FlashSt
     _stateChannels[existing].displayPrecision = 0;
     _stateChannels[existing].valueType = valueType;
     _stateChannels[existing].stateValue = value;
+    _stateCatalogDirty = true;
     return existing;
   }
 
@@ -2126,6 +2168,7 @@ int BlaeckSerial::_registerStateChannel(const char *channelName, const __FlashSt
       _stateChannels[i].valueType = valueType;
       _stateChannels[i].stateValue = value;
       _stateChannels[i].inUse = true;
+      _stateCatalogDirty = true;
       return (int)i;
     }
   }
@@ -2230,6 +2273,7 @@ void BlaeckSerial::clearAllStateChannels()
     _stateChannels[i].icon = nullptr;
     _stateChannels[i].diagnostic = false;
     _setChannelName(_stateChannels[i].name, _stateChannels[i].nameInFlash, nullptr, nullptr);
+    _stateCatalogDirty = true;
   }
 }
 
@@ -2365,6 +2409,10 @@ void BlaeckSerial::_writeStateFrame(int channelIndex, const char *text, unsigned
 {
   if (StreamRef == nullptr)
     return;
+
+  // Before the push, not after: a catalog can be emptied and re-declared whole, and then
+  // this index names a different channel than the one the host holds at that position.
+  _flushCatalogs();
 
   // A typed channel reports its variable; text is what a string channel was handed, or what
   // its getter returned. One or the other, never both - which is what valueType records.
@@ -2553,6 +2601,10 @@ uint16_t BlaeckSerial::_stateChannelFlags(const StateChannelEntry &e, bool hasSt
 
 void BlaeckSerial::writeStateChannelsFrame(unsigned long msg_id)
 {
+  // Whatever prompted this - a host asking, the startup announce, or _flushCatalogs() -
+  // the host is about to hold the current list, which is the whole of what the flag means.
+  _stateCatalogDirty = false;
+
   // 0x90 "State Channel List" frame. Per declared channel entry:
   //   msConfig(1) slaveID(1) name\0 flags(2, LE uint16) valueType(1)
   //   [icon\0]                 if flags.hasIcon
@@ -2793,6 +2845,7 @@ int BlaeckSerial::_registerEventChannel(const char *channelName, const __FlashSt
     _eventChannels[existing].deviceClass = nullptr;
     _eventChannels[existing].diagnostic = false;
     _eventChannels[existing].disabledByDefault = false;
+    _eventCatalogDirty = true;
     return existing;
   }
 
@@ -2817,6 +2870,7 @@ int BlaeckSerial::_registerEventChannel(const char *channelName, const __FlashSt
       _eventChannels[i].disabledByDefault = false;
       _eventChannels[i].inUse = true;
       _addEventTypesCsv(i, eventTypes);
+      _eventCatalogDirty = true;
       return (int)i;
     }
   }
@@ -2961,6 +3015,8 @@ bool BlaeckSerial::addEventType(const char *channelName, const __FlashStringHelp
   _eventTypes[_eventTypeCount].text = eventType;
   _eventTypes[_eventTypeCount].field = WHOLE_STRING;
   _eventTypeCount++;
+  // The catalog carries each channel's list of types, so a new one changes it.
+  _eventCatalogDirty = true;
   return true;
 }
 
@@ -2975,6 +3031,7 @@ void BlaeckSerial::clearAllEventChannels()
   }
   // The count gates every read of the pool, so the entries need no cleanup.
   _eventTypeCount = 0;
+  _eventCatalogDirty = true;
 }
 
 int BlaeckSerial::_findEventChannel(const __FlashStringHelper *channelName) const
@@ -3062,6 +3119,8 @@ void BlaeckSerial::writeEventChannels(unsigned long msg_id)
 
 void BlaeckSerial::writeEventChannelsFrame(unsigned long msg_id)
 {
+  _eventCatalogDirty = false;
+
   // 0x80 "Event Channel List" frame. Per declared channel entry:
   //   msConfig(1) slaveID(1) name\0 flags(2, LE uint16)
   //   [icon\0]                 if flags.hasIcon
@@ -3228,6 +3287,11 @@ void BlaeckSerial::writeEvent(const char *channelName, const __FlashStringHelper
   // timestamp: the host supplies its own receipt time.
   if (StreamRef == nullptr)
     return;
+
+  // An occurrence is in no catalog, so one filed against a stale list is not recoverable
+  // the way a state value is - the announce that followed would carry the value, but
+  // never the event.
+  _flushCatalogs();
 
   int channelIndex = _findEventChannel(channelName);
   if (channelIndex < 0)
@@ -3535,6 +3599,7 @@ void BlaeckSerial::writeSignalConfig()
 }
 void BlaeckSerial::writeSignalConfig(unsigned long msg_id)
 {
+  _signalConfigDirty = false;
   this->writeSignalConfigFrame(msg_id);
 }
 #else
@@ -3552,6 +3617,7 @@ void BlaeckSerial::writeCommands()
 }
 void BlaeckSerial::writeCommands(unsigned long msg_id)
 {
+  _commandCatalogDirty = false;
   this->writeCommandsFrame(msg_id);
 }
 #else
@@ -3559,7 +3625,10 @@ void BlaeckSerial::writeCommands(unsigned long msg_id)
 // discovery metadata. The catalog answers with an empty list so a polling
 // host learns that immediately (see _writeEmptyFrame).
 void BlaeckSerial::writeCommands() { this->writeCommands(1); }
-void BlaeckSerial::writeCommands(unsigned long msg_id) { this->_writeEmptyFrame(0xA0, msg_id); }
+// Clears the flag like the full writer does. Registration sets it whether or not metadata
+// is compiled in, and an empty catalog is still the answer to it - without this the flush
+// would send that frame again on every read().
+void BlaeckSerial::writeCommands(unsigned long msg_id) { _commandCatalogDirty = false; this->_writeEmptyFrame(0xA0, msg_id); }
 #endif
 
 // Header + footer with no payload. Every catalog frame shares this envelope,

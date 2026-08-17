@@ -3944,6 +3944,23 @@ private:
   // costs nothing; only the table below is compiled away.
   typedef blaeck_detail::StateChannelEntry StateChannelEntry;
 
+  // A command is declared whether or not command metadata is compiled in, so this flag is
+  // not guarded the way the other three are.
+  bool _commandCatalogDirty = false;
+#if BLAECK_ENABLE_SIGNAL_META
+  bool _signalConfigDirty = false;
+#endif
+
+  // Sends every catalog whose declarations have moved since the host last saw them, and
+  // nothing otherwise. Called where a change can have happened, and ahead of a push, which
+  // is where one would do harm unannounced.
+  //
+  // Deliberately never for signals. A changed signal list mid-session is not a legal change -
+  // a host has fixed its storage layout around the list it was given - and announcing one
+  // could let it adopt the new schema and go on writing into a table whose columns no longer
+  // describe it. deleteSignals() says to send the symbols by hand, and means it.
+  void _flushCatalogs();
+
   // Wire code for a datatype, the same 0x00-0x0A a 0xB0 symbol carries. Declared out here
   // with the type above, and for the same reason: the symbol list and the schema hash call
   // it whether or not this board was built with state channels.
@@ -4024,10 +4041,14 @@ private:
 #if BLAECK_ENABLE_STATE_CHANNELS
   // Monotonic message id stamped into the 0x95 State frame header.
   unsigned long _stateMsgId = 0;
+  // Set when this catalog no longer describes what the host was last told, cleared by any
+  // send of it. See _flushCatalogs().
+  bool _stateCatalogDirty = false;
 #endif
 #if BLAECK_ENABLE_EVENTS
   // Monotonic message id stamped into the 0x85 Event frame header.
   unsigned long _eventMsgId = 0;
+  bool _eventCatalogDirty = false;
 #endif
 #if BLAECK_ENABLE_COMMAND_META
   // Scratch buffer holding a select command's normalized index string, so a
