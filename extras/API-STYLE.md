@@ -187,6 +187,24 @@ Where the cost lands on another table, say so as well: a command that reports it
 state takes a state channel with it, so `withCommands` points at `withStateChannels`.
 That is the one part of sizing a reader cannot work out from the call in front of them.
 
+**18. Duplicate a property, never an instruction.** A sentence saying what a name *is*
+belongs on every name it is true of. `DeviceName`, `DeviceHWVersion` and `DeviceFWVersion`
+each carry the same constraint on where the string may live, because nobody hovering the
+third has read the first; `writeState()` and `writeEvent()` each say the value is never
+stored. Repetition there is the design - a hover has to stand alone.
+
+A sentence telling a sketch to *do* something is the opposite. It makes a claim about
+behaviour that lives somewhere else, and when that behaviour changes the sentence goes false
+in every place it was copied to. `clearAllStateChannels()`, `clearAllEventChannels()` and
+`clearAllCommandHandlers()` each told a sketch to follow with the matching write. The
+library began announcing its own changes, and all three were wrong at once - `@code` blocks
+included, which is the half a reader copies.
+
+So state a property wherever it applies, and state an instruction once, at the thing that
+makes it true. If an instruction has to appear twice, that is a sign the behaviour it
+describes should be the library's job instead - which is how those three came to be deleted
+rather than reworded.
+
 ## Format
 
 Doxygen `/*!` blocks, in the Adafruit house style, because it renders structured
@@ -287,6 +305,10 @@ python extras/scripts/checkdocs.py src/BlaeckSerial.h --extract    # every block
 
 `--show` reads `Cursor.raw_comment`, the same attachment clangd hovers, so a doc can
 be checked against what an editor will display without opening one.
+
+The duplicate-sentence list the first command prints is advisory, not a failure. A property
+repeated across siblings is rule 18 working as intended; what to look for is the same
+*instruction* in more than one place.
 
 When something in `preamble.h` breaks, every block fails at once and the same error
 repeats once per block — which reads as one cause, not many, because each names its
