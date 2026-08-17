@@ -33,6 +33,28 @@ BlaeckSerial::~BlaeckSerial()
   _bufFree();
 }
 
+// Ahead of every BLAECK_ENABLE_* region, because every one of them needs it: a 0xB0 symbol
+// and the schema hash read a datatype code just as a state channel does, so a board built
+// without one feature must not lose the code the others still write.
+byte BlaeckSerial::_dtypeCode(dataType t)
+{
+  switch (t)
+  {
+  case (Blaeck_bool):   return 0x0;
+  case (Blaeck_byte):   return 0x1;
+  case (Blaeck_short):  return 0x2;
+  case (Blaeck_ushort): return 0x3;
+  case (Blaeck_int):    return 0x4;
+  case (Blaeck_uint):   return 0x5;
+  case (Blaeck_long):   return 0x6;
+  case (Blaeck_ulong):  return 0x7;
+  case (Blaeck_float):  return 0x8;
+  case (Blaeck_double): return 0x9;
+  case (Blaeck_string): return 0xA;
+  default:              return 0x8;
+  }
+}
+
 BlaeckBeginRef BlaeckSerial::begin(Stream *Ref)
 {
   StreamRef = (Stream *)Ref;
@@ -1387,6 +1409,7 @@ bool BlaeckSerial::_declareOwnState(uint16_t handlerIndex, const __FlashStringHe
   // A select hands its option list to the channel: it is what a host needs to show the control
   // as a list rather than free text, and what lets the channel report an index as the option
   // it names. Both come from the command, so neither is asked of the sketch.
+#if BLAECK_ENABLE_STATE_CHANNELS
   const CommandHandlerEntry &cmd = _commandHandlers[handlerIndex];
   int ch = _findStateChannel(channelName);
   if (ch >= 0)
@@ -1395,6 +1418,12 @@ bool BlaeckSerial::_declareOwnState(uint16_t handlerIndex, const __FlashStringHe
     if (cmd.kind == BLAECK_CMD_SELECT && cmd.options != nullptr)
       _stateChannels[ch].options = cmd.options;
   }
+#else
+  // No channel was declared - _addOwnedStateChannel() refused above - so there is nothing
+  // here to hand the option list to.
+  (void)handlerIndex;
+  (void)selectIndex;
+#endif
 
   // No announce here. There was one, to correct a host that stayed connected across a reset,
   // and it never ran: writeCommandState() looks for a command whose stateSignal and
@@ -2431,25 +2460,6 @@ void BlaeckSerial::writeStateChannels(unsigned long msg_id)
   this->writeStateChannelsFrame(msg_id);
 }
 
-byte BlaeckSerial::_dtypeCode(dataType t)
-{
-  switch (t)
-  {
-  case (Blaeck_bool):   return 0x0;
-  case (Blaeck_byte):   return 0x1;
-  case (Blaeck_short):  return 0x2;
-  case (Blaeck_ushort): return 0x3;
-  case (Blaeck_int):    return 0x4;
-  case (Blaeck_uint):   return 0x5;
-  case (Blaeck_long):   return 0x6;
-  case (Blaeck_ulong):  return 0x7;
-  case (Blaeck_float):  return 0x8;
-  case (Blaeck_double): return 0x9;
-  case (Blaeck_string): return 0xA;
-  default:              return 0x8;
-  }
-}
-
 #if BLAECK_ENABLE_STATE_CHANNELS
 const char *BlaeckSerial::_channelText(const StateChannelEntry &e, char *buf, byte bufSize) const
 {
@@ -2725,6 +2735,10 @@ BlaeckNumericStateRef BlaeckSerial::addStateChannel(const char *, unsigned long 
 BlaeckNumericStateRef BlaeckSerial::addStateChannel(const char *, float *) { return BlaeckNumericStateRef(this, -1); }
 BlaeckNumericStateRef BlaeckSerial::addStateChannel(const char *, double *) { return BlaeckNumericStateRef(this, -1); }
 void BlaeckSerial::clearAllStateChannels() {}
+// Called by the addStateChannel() overloads that take a flash name, which are compiled
+// whether or not the feature is on. -1 is the index a refused registration returns, so the
+// handle it produces is the same inert one every stub above hands back.
+int BlaeckSerial::_registerStateChannel(const char *, const __FlashStringHelper *, dataType, const void *) { return -1; }
 void BlaeckSerial::writeStateChannels() { this->writeStateChannels(1); }
 void BlaeckSerial::writeStateChannels(unsigned long msg_id) { this->_writeEmptyFrame(0x90, msg_id); }
 void BlaeckSerial::writeState(const char *, const char *) {}
@@ -3278,6 +3292,10 @@ void BlaeckSerial::writeEvent(const char *channelName, const __FlashStringHelper
 BlaeckEventChannelRef BlaeckSerial::addEventChannel(const char *, const __FlashStringHelper *) { return BlaeckEventChannelRef(this, -1); }
 bool BlaeckSerial::addEventType(const char *, const __FlashStringHelper *) { return false; }
 void BlaeckSerial::clearAllEventChannels() {}
+// Called by the addEventChannel() overload that takes a flash name, which is compiled
+// whether or not the feature is on. -1 is the index a refused registration returns, so the
+// handle it produces is the same inert one the stub above hands back.
+int BlaeckSerial::_registerEventChannel(const char *, const __FlashStringHelper *, const __FlashStringHelper *) { return -1; }
 void BlaeckSerial::writeEventChannels() { this->writeEventChannels(1); }
 void BlaeckSerial::writeEventChannels(unsigned long msg_id) { this->_writeEmptyFrame(0x80, msg_id); }
 void BlaeckSerial::writeEvent(const char *, const __FlashStringHelper *) {}
@@ -5260,7 +5278,13 @@ bool BlaeckSerial::addEventType(const __FlashStringHelper *channelName, const __
 
 void BlaeckSerial::writeEvent(const __FlashStringHelper *channelName, const __FlashStringHelper *eventType)
 {
+#if BLAECK_ENABLE_EVENTS
   writeEvent(channelName, eventType, _eventMsgId++);
+#else
+  // The counter is compiled out with the events it numbers. The call still happens, so the
+  // overload behaves exactly like the one a sketch would have called instead: nothing.
+  writeEvent(channelName, eventType, 1);
+#endif
 }
 
 void BlaeckSerial::writeEvent(const __FlashStringHelper *channelName, const __FlashStringHelper *eventType, unsigned long messageID)

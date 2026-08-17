@@ -3943,6 +3943,11 @@ private:
   // compiling so a sketch needs no #ifdef around what it writes. A type on its own
   // costs nothing; only the table below is compiled away.
   typedef blaeck_detail::StateChannelEntry StateChannelEntry;
+
+  // Wire code for a datatype, the same 0x00-0x0A a 0xB0 symbol carries. Declared out here
+  // with the type above, and for the same reason: the symbol list and the schema hash call
+  // it whether or not this board was built with state channels.
+  static byte _dtypeCode(dataType t);
 #if BLAECK_ENABLE_STATE_CHANNELS
   StateChannelEntry *_stateChannels = nullptr;
   uint16_t _stateChannelCapacity = DEFAULT_STATE_CHANNELS;
@@ -3958,8 +3963,6 @@ private:
   // added to only one of them would make a board's catalog depend on how it was configured.
   uint16_t _stateChannelFlags(const StateChannelEntry &e, bool hasStateValue) const;
 
-  // Wire code for a datatype, the same 0x00-0x0A a 0xB0 symbol carries.
-  static byte _dtypeCode(dataType t);
 
   // Lays a numeric channel's value into out (never more than 8 bytes) and returns the width.
   // Goes through the same converter unions the data writer uses, so a value is identical on
