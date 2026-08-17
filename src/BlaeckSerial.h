@@ -2417,14 +2417,13 @@ public:
     declared again only by registering its command again. clearAllCommandHandlers()
     releases those, along with the commands that own them.
 
-    @warning A host addresses a channel by its position in the catalog, so
-             re-declaring changes what those positions mean. Follow with
-             writeStateChannels(), or values are filed against the wrong channels.
+    @note    Re-declaring changes what a position means, and the new list is sent
+             for that reason without being asked for - so a host is never left
+             reading values against the list this cleared.
 
     @code
       Blaeck.clearAllStateChannels();
       Blaeck.addStateChannel(F("Status"));
-      Blaeck.writeStateChannels();
     @endcode
   */
   void clearAllStateChannels();
@@ -2566,13 +2565,13 @@ public:
     The types share one pool, so emptying the channels empties it. Both tables keep
     their capacity.
 
-    @warning A host addresses a channel and a type by their positions, so follow
-             with writeEventChannels() or reported events land under the wrong names.
+    @note    The new list goes out unasked, and ahead of any event reported after
+             this - an occurrence names its channel and its type by position, and
+             is the one thing that cannot be put right afterwards.
 
     @code
       Blaeck.clearAllEventChannels();
       Blaeck.addEventChannel(F("Activity"), F("idle_warning,resumed"));
-      Blaeck.writeEventChannels();
     @endcode
   */
   void clearAllEventChannels();
@@ -3139,13 +3138,12 @@ public:
     which nothing could reach once their command is gone. Clearing this table and the
     state channels empties both, in either order.
 
-    @warning A host is still holding the old list, so follow with writeCommands() -
-             and with writeStateChannels() where any command owned a channel.
+    @note    Both lists are sent unasked afterwards: the commands, and the state
+             channels released with them.
 
     @code
       Blaeck.clearAllCommandHandlers();
       Blaeck.onSwitchCommand("LED", onLED);
-      Blaeck.writeCommands();
     @endcode
   */
   void clearAllCommandHandlers();
