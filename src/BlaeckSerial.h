@@ -708,13 +708,23 @@ protected:
   // The entry this handle names, or nullptr when registration was rejected.
   blaeck_detail::CommandHandlerEntry * _entry() const;
 
+  // Out of line for the same reason as _entry(); see BlaeckStateRefBase::_markDirty().
+  void _markDirty() const;
+
   void _setStateSignal(const __FlashStringHelper *signalName)
   {
 #if BLAECK_ENABLE_COMMAND_META
     if (auto *e = _entry())
     {
-      e->stateSignal = signalName;
-      e->stateSource = BLAECK_STATE_SIGNAL;
+      // Compared before it is written, here and in every modifier below: a modifier is
+      // idempotent, so a sketch may call one every pass through loop(), and marking on
+      // assignment would announce the whole catalog every pass.
+      if (e->stateSignal != signalName || e->stateSource != BLAECK_STATE_SIGNAL)
+      {
+        e->stateSignal = signalName;
+        e->stateSource = BLAECK_STATE_SIGNAL;
+        _markDirty();
+      }
     }
 #else
     (void)signalName;
@@ -739,9 +749,13 @@ protected:
 #if BLAECK_ENABLE_COMMAND_META
     if (auto *e = _entry())
     {
-      e->meta_min = mn;
-      e->meta_max = mx;
-      e->meta_step = st;
+      if (e->meta_min != mn || e->meta_max != mx || e->meta_step != st)
+      {
+        e->meta_min = mn;
+        e->meta_max = mx;
+        e->meta_step = st;
+        _markDirty();
+      }
       if (!(mx > mn))
         _warnRangeIgnored(mn, mx);
     }
@@ -754,7 +768,13 @@ protected:
   {
 #if BLAECK_ENABLE_COMMAND_META
     if (auto *e = _entry())
-      e->unit = unit;
+    {
+      if (e->unit != unit)
+      {
+        e->unit = unit;
+        _markDirty();
+      }
+    }
 #else
     (void)unit;
 #endif
@@ -764,7 +784,13 @@ protected:
   {
 #if BLAECK_ENABLE_COMMAND_META
     if (auto *e = _entry())
-      e->options = optionsCsv;
+    {
+      if (e->options != optionsCsv)
+      {
+        e->options = optionsCsv;
+        _markDirty();
+      }
+    }
 #else
     (void)optionsCsv;
 #endif
@@ -775,7 +801,13 @@ protected:
   {
 #if BLAECK_ENABLE_COMMAND_META
     if (auto *e = _entry())
-      e->meta_max = (float)maxLength;
+    {
+      if (e->meta_max != (float)maxLength)
+      {
+        e->meta_max = (float)maxLength;
+        _markDirty();
+      }
+    }
 #else
     (void)maxLength;
 #endif
@@ -785,7 +817,13 @@ protected:
   {
 #if BLAECK_ENABLE_COMMAND_META
     if (auto *e = _entry())
-      e->category = category;
+    {
+      if (e->category != category)
+      {
+        e->category = category;
+        _markDirty();
+      }
+    }
 #else
     (void)category;
 #endif
@@ -1530,14 +1568,27 @@ protected:
   // The entry this handle names, or nullptr when registration was rejected.
   blaeck_detail::StateChannelEntry * _entry() const;
 
+  // Says the catalog no longer describes what the host holds. Out of line for the same
+  // reason as _entry(): BlaeckSerial is still incomplete at this point in the header.
+  void _markDirty() const;
+
   void _setStateClass(BlaeckStateClass stateClass)
   {
 #if BLAECK_ENABLE_STATE_CHANNELS
     if (auto *e = _entry())
     {
-      e->metaFlags &= (uint16_t)~BLAECK_SCH_STATE_CLASS_MASK;
-      e->metaFlags |= (uint16_t)(((uint16_t)stateClass << BLAECK_SCH_STATE_CLASS_SHIFT) &
-                                 BLAECK_SCH_STATE_CLASS_MASK);
+      // Compared before it is written, here and in every modifier on this handle: a sketch
+      // may call one every pass through loop(), and marking on assignment rather than on
+      // change would announce the whole catalog every pass.
+      const uint16_t flags =
+          (uint16_t)((e->metaFlags & ~BLAECK_SCH_STATE_CLASS_MASK) |
+                     (((uint16_t)stateClass << BLAECK_SCH_STATE_CLASS_SHIFT) &
+                      BLAECK_SCH_STATE_CLASS_MASK));
+      if (e->metaFlags != flags)
+      {
+        e->metaFlags = flags;
+        _markDirty();
+      }
     }
 #else
     (void)stateClass;
@@ -1549,8 +1600,13 @@ protected:
 #if BLAECK_ENABLE_STATE_CHANNELS
     if (auto *e = _entry())
     {
-      e->displayPrecision = decimals;
-      e->metaFlags |= BLAECK_SCH_HAS_DISPLAY_PRECISION;
+      const uint16_t flags = (uint16_t)(e->metaFlags | BLAECK_SCH_HAS_DISPLAY_PRECISION);
+      if (e->displayPrecision != decimals || e->metaFlags != flags)
+      {
+        e->displayPrecision = decimals;
+        e->metaFlags = flags;
+        _markDirty();
+      }
     }
 #else
     (void)decimals;
@@ -1581,7 +1637,13 @@ public:
   TYPE &withIcon(const __FlashStringHelper *icon)
   {
     if (auto *e = _entry())
-      e->icon = icon;
+    {
+      if (e->icon != icon)
+      {
+        e->icon = icon;
+        _markDirty();
+      }
+    }
     return _self();
   }
 
@@ -1601,7 +1663,13 @@ public:
   TYPE &diagnostic(bool on = true)
   {
     if (auto *e = _entry())
-      e->diagnostic = on;
+    {
+      if (e->diagnostic != on)
+      {
+        e->diagnostic = on;
+        _markDirty();
+      }
+    }
     return _self();
   }
 
@@ -1623,7 +1691,13 @@ public:
   TYPE &withDeviceClass(const __FlashStringHelper *deviceClass)
   {
     if (auto *e = _entry())
-      e->deviceClass = deviceClass;
+    {
+      if (e->deviceClass != deviceClass)
+      {
+        e->deviceClass = deviceClass;
+        _markDirty();
+      }
+    }
     return _self();
   }
 
@@ -1640,7 +1714,13 @@ public:
   TYPE &disabledByDefault(bool on = true)
   {
     if (auto *e = _entry())
-      e->disabledByDefault = on;
+    {
+      if (e->disabledByDefault != on)
+      {
+        e->disabledByDefault = on;
+        _markDirty();
+      }
+    }
     return _self();
   }
 
@@ -1661,7 +1741,13 @@ public:
   TYPE &forceUpdate(bool on = true)
   {
     if (auto *e = _entry())
-      e->forceUpdate = on;
+    {
+      if (e->forceUpdate != on)
+      {
+        e->forceUpdate = on;
+        _markDirty();
+      }
+    }
     return _self();
   }
 
@@ -1695,8 +1781,13 @@ public:
   {
     if (auto *e = _entry())
     {
-      e->unit = unit;
-      e->metaFlags |= BLAECK_SCH_HAS_UNIT;
+      const uint16_t flags = (uint16_t)(e->metaFlags | BLAECK_SCH_HAS_UNIT);
+      if (e->unit != unit || e->metaFlags != flags)
+      {
+        e->unit = unit;
+        e->metaFlags = flags;
+        _markDirty();
+      }
     }
     return *this;
   }
@@ -1772,7 +1863,13 @@ public:
   BlaeckTextStateRef &withStateText(BlaeckStateTextGetter getStateText)
   {
     if (auto *e = _entry())
-      e->getStateText = getStateText;
+    {
+      if (e->getStateText != getStateText)
+      {
+        e->getStateText = getStateText;
+        _markDirty();
+      }
+    }
     return *this;
   }
 
@@ -1800,7 +1897,13 @@ public:
   BlaeckTextStateRef &withOptions(const __FlashStringHelper *optionsCsv)
   {
     if (auto *e = _entry())
-      e->options = optionsCsv;
+    {
+      if (e->options != optionsCsv)
+      {
+        e->options = optionsCsv;
+        _markDirty();
+      }
+    }
     return *this;
   }
 };
@@ -4234,6 +4337,12 @@ inline blaeck_detail::CommandHandlerEntry * BlaeckCommandRefBase::_entry() const
   return &_owner->_commandHandlers[_index];
 }
 
+inline void BlaeckCommandRefBase::_markDirty() const
+{
+  if (_owner != nullptr)
+    _owner->_commandCatalogDirty = true;
+}
+
 inline void BlaeckCommandRefBase::_warnRangeIgnored(float mn, float mx) const
 {
 #if BLAECK_ENABLE_COMMAND_META
@@ -4303,16 +4412,25 @@ inline void BlaeckSignalRefBase::_setFlash(const __FlashStringHelper *value, uin
   if (SignalMeta *m = _owner != nullptr ? _owner->_ensureSignalMeta(_index) : nullptr)
   {
     // Together, so the bit and the field can never disagree.
+    const __FlashStringHelper **slot;
     switch (bit)
     {
-    case BLAECK_SIG_HAS_UNIT:         m->Unit = value; break;
-    case BLAECK_SIG_HAS_DEVICE_CLASS: m->DeviceClass = value; break;
-    default:                          m->Icon = value; break;
+    case BLAECK_SIG_HAS_UNIT:         slot = &m->Unit; break;
+    case BLAECK_SIG_HAS_DEVICE_CLASS: slot = &m->DeviceClass; break;
+    default:                          slot = &m->Icon; break;
     }
-    if (value != nullptr)
-      m->MetaFlags |= bit;
-    else
-      m->MetaFlags &= (uint16_t)~bit;
+    const uint16_t flags = (value != nullptr) ? (uint16_t)(m->MetaFlags | bit)
+                                              : (uint16_t)(m->MetaFlags & ~bit);
+
+    // Compared before it is written, not after. A modifier is idempotent, so a sketch may
+    // reasonably call one every pass through loop() - withIcon(running ? A : B) - and a flag
+    // set on assignment rather than on change would announce the whole catalog every pass.
+    if (*slot != value || m->MetaFlags != flags)
+    {
+      *slot = value;
+      m->MetaFlags = flags;
+      _owner->_signalConfigDirty = true;
+    }
   }
 #else
   (void)value;
@@ -4325,10 +4443,13 @@ inline void BlaeckSignalRefBase::_setBit(uint16_t bit, bool on)
 #if BLAECK_ENABLE_SIGNAL_META
   if (SignalMeta *m = _owner != nullptr ? _owner->_ensureSignalMeta(_index) : nullptr)
   {
-    if (on)
-      m->MetaFlags |= bit;
-    else
-      m->MetaFlags &= (uint16_t)~bit;
+    const uint16_t flags = on ? (uint16_t)(m->MetaFlags | bit)
+                              : (uint16_t)(m->MetaFlags & ~bit);
+    if (m->MetaFlags != flags)
+    {
+      m->MetaFlags = flags;
+      _owner->_signalConfigDirty = true;
+    }
   }
 #else
   (void)bit;
@@ -4341,9 +4462,15 @@ inline void BlaeckSignalRefBase::_setStateClass(BlaeckStateClass stateClass)
 #if BLAECK_ENABLE_SIGNAL_META
   if (SignalMeta *m = _owner != nullptr ? _owner->_ensureSignalMeta(_index) : nullptr)
   {
-    m->MetaFlags &= (uint16_t)~BLAECK_SIG_STATE_CLASS_MASK;
-    m->MetaFlags |= (uint16_t)(((uint16_t)stateClass << BLAECK_SIG_STATE_CLASS_SHIFT) &
-                               BLAECK_SIG_STATE_CLASS_MASK);
+    const uint16_t flags =
+        (uint16_t)((m->MetaFlags & ~BLAECK_SIG_STATE_CLASS_MASK) |
+                   (((uint16_t)stateClass << BLAECK_SIG_STATE_CLASS_SHIFT) &
+                    BLAECK_SIG_STATE_CLASS_MASK));
+    if (m->MetaFlags != flags)
+    {
+      m->MetaFlags = flags;
+      _owner->_signalConfigDirty = true;
+    }
   }
 #else
   (void)stateClass;
@@ -4355,11 +4482,15 @@ inline void BlaeckSignalRefBase::_setOptions(const __FlashStringHelper *optionsC
 #if BLAECK_ENABLE_SIGNAL_META
   if (SignalMeta *m = _owner != nullptr ? _owner->_ensureSignalMeta(_index) : nullptr)
   {
-    m->Options = optionsCsv;
-    if (optionsCsv != nullptr)
-      m->MetaFlags |= BLAECK_SIG_HAS_OPTIONS;
-    else
-      m->MetaFlags &= (uint16_t)~BLAECK_SIG_HAS_OPTIONS;
+    const uint16_t flags = (optionsCsv != nullptr)
+                               ? (uint16_t)(m->MetaFlags | BLAECK_SIG_HAS_OPTIONS)
+                               : (uint16_t)(m->MetaFlags & ~BLAECK_SIG_HAS_OPTIONS);
+    if (m->Options != optionsCsv || m->MetaFlags != flags)
+    {
+      m->Options = optionsCsv;
+      m->MetaFlags = flags;
+      _owner->_signalConfigDirty = true;
+    }
   }
 #else
   (void)optionsCsv;
@@ -4371,8 +4502,13 @@ inline void BlaeckSignalRefBase::_setDisplayPrecision(uint8_t decimals)
 #if BLAECK_ENABLE_SIGNAL_META
   if (SignalMeta *m = _owner != nullptr ? _owner->_ensureSignalMeta(_index) : nullptr)
   {
-    m->DisplayPrecision = decimals;
-    m->MetaFlags |= BLAECK_SIG_HAS_DISPLAY_PRECISION;
+    const uint16_t flags = (uint16_t)(m->MetaFlags | BLAECK_SIG_HAS_DISPLAY_PRECISION);
+    if (m->DisplayPrecision != decimals || m->MetaFlags != flags)
+    {
+      m->DisplayPrecision = decimals;
+      m->MetaFlags = flags;
+      _owner->_signalConfigDirty = true;
+    }
   }
 #else
   (void)decimals;
@@ -4401,11 +4537,25 @@ inline blaeck_detail::StateChannelEntry * BlaeckStateRefBase::_entry() const
   return nullptr;
 }
 
+inline void BlaeckStateRefBase::_markDirty() const
+{
+#if BLAECK_ENABLE_STATE_CHANNELS
+  if (_owner != nullptr)
+    _owner->_stateCatalogDirty = true;
+#endif
+}
+
 inline BlaeckEventChannelRef BlaeckEventChannelRef::withIcon(const __FlashStringHelper *icon)
 {
 #if BLAECK_ENABLE_EVENTS
   if (_index >= 0 && _owner != nullptr)
-    _owner->_eventChannels[_index].icon = icon;
+    // Compared before it is written, as on the state and command handles: a modifier
+    // called every pass through loop() must not announce the catalog every pass.
+    if (_owner->_eventChannels[_index].icon != icon)
+    {
+      _owner->_eventChannels[_index].icon = icon;
+      _owner->_eventCatalogDirty = true;
+    }
 #else
   (void)icon;
 #endif
@@ -4416,7 +4566,11 @@ inline BlaeckEventChannelRef BlaeckEventChannelRef::diagnostic(bool on)
 {
 #if BLAECK_ENABLE_EVENTS
   if (_index >= 0 && _owner != nullptr)
-    _owner->_eventChannels[_index].diagnostic = on;
+    if (_owner->_eventChannels[_index].diagnostic != on)
+    {
+      _owner->_eventChannels[_index].diagnostic = on;
+      _owner->_eventCatalogDirty = true;
+    }
 #else
   (void)on;
 #endif
@@ -4427,7 +4581,11 @@ inline BlaeckEventChannelRef BlaeckEventChannelRef::withDeviceClass(const __Flas
 {
 #if BLAECK_ENABLE_EVENTS
   if (_index >= 0 && _owner != nullptr)
-    _owner->_eventChannels[_index].deviceClass = deviceClass;
+    if (_owner->_eventChannels[_index].deviceClass != deviceClass)
+    {
+      _owner->_eventChannels[_index].deviceClass = deviceClass;
+      _owner->_eventCatalogDirty = true;
+    }
 #else
   (void)deviceClass;
 #endif
@@ -4438,7 +4596,11 @@ inline BlaeckEventChannelRef BlaeckEventChannelRef::disabledByDefault(bool on)
 {
 #if BLAECK_ENABLE_EVENTS
   if (_index >= 0 && _owner != nullptr)
-    _owner->_eventChannels[_index].disabledByDefault = on;
+    if (_owner->_eventChannels[_index].disabledByDefault != on)
+    {
+      _owner->_eventChannels[_index].disabledByDefault = on;
+      _owner->_eventCatalogDirty = true;
+    }
 #else
   (void)on;
 #endif
