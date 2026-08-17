@@ -1205,6 +1205,25 @@ void BlaeckSerial::onAnyCommand(BlaeckAnyCommandHandler handler)
 
 void BlaeckSerial::clearAllCommandHandlers()
 {
+#if BLAECK_ENABLE_STATE_CHANNELS
+  // The channels these commands owned go with them. Nothing could reach one afterwards -
+  // writeCommandState() finds a channel through the command that named it, and that command
+  // is about to be gone - and clearAllStateChannels() leaves them alone by design, so this is
+  // the only place they are released. Clearing both tables therefore empties both, whichever
+  // order they are cleared in.
+  for (uint16_t i = 0; i < _stateChannelSlots(); i++)
+  {
+    if (!_stateChannels[i].ownedByCommand)
+      continue;
+
+    _stateChannels[i].inUse = false;
+    _stateChannels[i].ownedByCommand = false;
+    _stateChannels[i].icon = nullptr;
+    _stateChannels[i].diagnostic = false;
+    _setChannelName(_stateChannels[i].name, _stateChannels[i].nameInFlash, nullptr, nullptr);
+  }
+#endif
+
   for (uint16_t i = 0; i < _commandSlots(); i++)
   {
     _commandHandlers[i].inUse = false;
@@ -2169,6 +2188,15 @@ void BlaeckSerial::clearAllStateChannels()
 {
   for (uint16_t i = 0; i < _stateChannelSlots(); i++)
   {
+    // A channel a command claimed with withOwnState() belongs to that command, and a sketch
+    // clearing the channels it declared has not cleared the command. It is left because it
+    // could not be got back: withOwnState() runs on the handle onNumberCommand() and its
+    // siblings return, so a channel taken here could only be re-declared by registering the
+    // command again - which a sketch re-declaring its own channels has no reason to do.
+    // clearAllCommandHandlers() releases them, together with the commands that own them.
+    if (_stateChannels[i].ownedByCommand)
+      continue;
+
     _stateChannels[i].inUse = false;
     _stateChannels[i].icon = nullptr;
     _stateChannels[i].diagnostic = false;

@@ -2308,16 +2308,15 @@ public:
     Leaves the table empty and its capacity untouched, for a device that re-declares
     what it offers while running.
 
+    Channels a command claimed with withOwnState() are left: they belong to the
+    command, which this has not cleared, and withOwnState() runs only on the handle
+    onNumberCommand() and its siblings return - so a channel taken here could be
+    declared again only by registering its command again. clearAllCommandHandlers()
+    releases those, along with the commands that own them.
+
     @warning A host addresses a channel by its position in the catalog, so
              re-declaring changes what those positions mean. Follow with
              writeStateChannels(), or values are filed against the wrong channels.
-
-    @warning This clears the channels a command claimed with withOwnState(), and
-             those cannot be declared again - withOwnState() builds on the handle
-             onNumberCommand() and its siblings return, so it only runs where the
-             command is registered. writeCommandState() then finds no channel and
-             publishes nothing. To re-declare controls, clear the commands too and
-             register both together.
 
     @code
       Blaeck.clearAllStateChannels();
@@ -3033,7 +3032,12 @@ public:
     Leaves the table empty and its capacity untouched, for a device that re-declares
     what it offers while running.
 
-    @warning A host is still holding the old list, so follow with writeCommands().
+    Also releases the state channels those commands claimed with withOwnState(),
+    which nothing could reach once their command is gone. Clearing this table and the
+    state channels empties both, in either order.
+
+    @warning A host is still holding the old list, so follow with writeCommands() -
+             and with writeStateChannels() where any command owned a channel.
 
     @code
       Blaeck.clearAllCommandHandlers();
