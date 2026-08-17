@@ -105,6 +105,12 @@ unsigned long lastMicros = 0;
 // The wave, as an index: what onSetWave() is handed and what UpdateWaveform() switches on.
 byte waveIndex = 0; // 0=Sine, 1=Square, 2=Triangle, 3=Sawtooth
 
+// The handle addSignal() returns, kept so the icon can be changed after setup() - see
+// ShowWaveInIcon(). A handle names an owner and a slot, so it cannot be declared empty; -1
+// is the slot a refused registration returns, which leaves this inert until setup() assigns
+// the real one.
+BlaeckNumericSignalRef OutputSignal(&Blaeck, -1);
+
 void setup()
 {
   Serial.begin(115200);
@@ -123,10 +129,10 @@ void setup()
   Blaeck.DeviceFWVersion = "1.0";
 
   // addSignal() returns a handle describing how a host shows the signal. Every call is optional.
-  Blaeck.addSignal(F("Output"), &Output)
-      .withStateClass(BLAECK_STATE_CLASS_MEASUREMENT)
-      .withDisplayPrecision(3)
-      .withIcon(F("mdi:sine-wave"));
+  OutputSignal = Blaeck.addSignal(F("Output"), &Output)
+                     .withStateClass(BLAECK_STATE_CLASS_MEASUREMENT)
+                     .withDisplayPrecision(3)
+                     .withIcon(F("mdi:sine-wave"));
   Blaeck.addSignal(F("Frequency"), &Frequency);
 
   // A string signal: logged like any other, one text column in the table. Every data frame
@@ -192,9 +198,31 @@ void loop()
 {
   Uptime = millis() / 1000;
   UpdateWaveform();
+  ShowWaveInIcon();
   Blaeck.tick();
   StatusEvery10s();
   CheckActivity();
+}
+
+// Gives the Output signal the icon of the wave it is currently producing, so the entity in a
+// host changes shape with the control rather than staying whatever setup() said.
+//
+// Called every pass, unconditionally, which is the point: a modifier only marks its catalog
+// when the value actually differs, so this announces the signal config once per waveform
+// change and never in between. Written the naive way on purpose - if it were expensive to
+// call repeatedly, this is where it would show.
+void ShowWaveInIcon()
+{
+  const __FlashStringHelper *icon;
+  switch (waveIndex)
+  {
+  case 1:  icon = F("mdi:square-wave"); break;
+  case 2:  icon = F("mdi:triangle-wave"); break;
+  case 3:  icon = F("mdi:sawtooth-wave"); break;
+  default: icon = F("mdi:sine-wave"); break;
+  }
+
+  OutputSignal.withIcon(icon);
 }
 
 void UpdateWaveform()
