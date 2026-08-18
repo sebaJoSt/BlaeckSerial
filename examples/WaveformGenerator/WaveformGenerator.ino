@@ -129,9 +129,10 @@ void setup()
   Blaeck.DeviceFWVersion = "1.0";
 
   // addSignal() returns a handle describing how a host shows the signal. Every call is optional.
-  OutputSignal = Blaeck.addSignal(F("Output"), &Output)
+  OutputSignal = Blaeck.addSignal(F("Output [V]"), &Output)
                      .withStateClass(BLAECK_STATE_CLASS_MEASUREMENT)
                      .withDisplayPrecision(3)
+                     .withUnit(F("V"))
                      .withIcon(F("mdi:sine-wave"));
   Blaeck.addSignal(F("Frequency"), &Frequency);
 

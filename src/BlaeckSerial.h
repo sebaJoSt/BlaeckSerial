@@ -1546,6 +1546,10 @@ public:
   /*!
     @brief   Declares the symbol shown after the value.
 
+    This reaches how a host shows the value, not what it stores - a host that logs keeps
+    only the signal name, so put the unit there too if it should survive. Both is normal,
+    and costs only a host saying it twice: "Output [V]: 1.230 V".
+
     @param   unit  Symbol as an F() literal. Non-ASCII must be UTF-8.
     @return  The same handle, for chaining.
 
