@@ -1370,6 +1370,10 @@ class BlaeckSignalRefBase
 protected:
   BlaeckSignalRefBase(BlaeckSerial *owner, int16_t index) : _owner(owner), _index(index) {}
 
+  // Names no signal. Index -1 is what a refused registration already returns, so an
+  // unassigned handle and a dead one are the same thing to every setter below.
+  BlaeckSignalRefBase() : _owner(nullptr), _index(-1) {}
+
   void _setFlash(const __FlashStringHelper *value, uint16_t bit);
 
   void _setBit(uint16_t bit, bool on);
@@ -1511,6 +1515,7 @@ public:
 
 protected:
   BlaeckSignalRefShared(BlaeckSerial *owner, int16_t index) : BlaeckSignalRefBase(owner, index) {}
+  BlaeckSignalRefShared() : BlaeckSignalRefBase() {}
 
 private:
   TYPE &_self() { return *static_cast<TYPE *>(this); }
@@ -1521,7 +1526,22 @@ private:
 class BlaeckNumericSignalRef : public BlaeckSignalRefShared<BlaeckNumericSignalRef>
 {
 public:
-  BlaeckNumericSignalRef(BlaeckSerial *owner, int16_t index) : BlaeckSignalRefShared<BlaeckNumericSignalRef>(owner, index) {}
+  /*!
+    @brief   Declares a handle that names no signal yet.
+
+    For the one case where a handle is stored rather than chained: kept as a global so
+    the sketch can change how a signal is shown after setup() has run. Assign what
+    addSignal() returns to it. Until then it does nothing when called - the same as the
+    handle for a signal that did not fit - so nothing has to be checked first.
+
+    @code
+      BlaeckNumericSignalRef OutputSignal;  // file scope
+
+      void setup() { OutputSignal = Blaeck.addSignal(F("Output"), &Output); }
+      void loop()  { OutputSignal.withIcon(F("mdi:sine-wave")); }
+    @endcode
+  */
+  BlaeckNumericSignalRef() : BlaeckSignalRefShared<BlaeckNumericSignalRef>() {}
 
   /*!
     @brief   Declares the symbol shown after the value.
@@ -1578,6 +1598,12 @@ public:
     _setDisplayPrecision(decimals);
     return *this;
   }
+
+private:
+  // Only addSignal() knows a real slot number, so only addSignal() may name one. A sketch
+  // reaches a handle by keeping what it returns, never by building one.
+  BlaeckNumericSignalRef(BlaeckSerial *owner, int16_t index) : BlaeckSignalRefShared<BlaeckNumericSignalRef>(owner, index) {}
+  friend class BlaeckSerial;
 };
 
 // A string signal. No unit, no decimals to round and nothing to keep statistics on: all three
@@ -1588,7 +1614,13 @@ public:
 class BlaeckTextSignalRef : public BlaeckSignalRefShared<BlaeckTextSignalRef>
 {
 public:
-  BlaeckTextSignalRef(BlaeckSerial *owner, int16_t index) : BlaeckSignalRefShared<BlaeckTextSignalRef>(owner, index) {}
+  /*!
+    @brief   Declares a handle that names no signal yet.
+
+    See BlaeckNumericSignalRef's default constructor: for a handle kept as a global and
+    assigned what addSignal() returns. Does nothing until then.
+  */
+  BlaeckTextSignalRef() : BlaeckSignalRefShared<BlaeckTextSignalRef>() {}
 
   /*!
     @brief   Declares the closed set of values this signal reports.
@@ -1616,6 +1648,10 @@ public:
     _setOptions(optionsCsv);
     return *this;
   }
+
+private:
+  BlaeckTextSignalRef(BlaeckSerial *owner, int16_t index) : BlaeckSignalRefShared<BlaeckTextSignalRef>(owner, index) {}
+  friend class BlaeckSerial;
 };
 
 // A bool signal, which a host announces as a binary sensor - a shape with no unit at all, on
@@ -1629,7 +1665,17 @@ public:
 class BlaeckBoolSignalRef : public BlaeckSignalRefShared<BlaeckBoolSignalRef>
 {
 public:
+  /*!
+    @brief   Declares a handle that names no signal yet.
+
+    See BlaeckNumericSignalRef's default constructor: for a handle kept as a global and
+    assigned what addSignal() returns. Does nothing until then.
+  */
+  BlaeckBoolSignalRef() : BlaeckSignalRefShared<BlaeckBoolSignalRef>() {}
+
+private:
   BlaeckBoolSignalRef(BlaeckSerial *owner, int16_t index) : BlaeckSignalRefShared<BlaeckBoolSignalRef>(owner, index) {}
+  friend class BlaeckSerial;
 };
 
 // Handle to the channel just declared. Returned by value and meant to be chained, not stored;

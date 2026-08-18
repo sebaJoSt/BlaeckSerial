@@ -106,10 +106,9 @@ unsigned long lastMicros = 0;
 byte waveIndex = 0; // 0=Sine, 1=Square, 2=Triangle, 3=Sawtooth
 
 // The handle addSignal() returns, kept so the icon can be changed after setup() - see
-// ShowWaveInIcon(). A handle names an owner and a slot, so it cannot be declared empty; -1
-// is the slot a refused registration returns, which leaves this inert until setup() assigns
-// the real one.
-BlaeckNumericSignalRef OutputSignal(&Blaeck, -1);
+// ShowWaveInIcon(). Declared empty here and assigned in setup(); until then it names no
+// signal and does nothing when called.
+BlaeckNumericSignalRef OutputSignal;
 
 void setup()
 {
