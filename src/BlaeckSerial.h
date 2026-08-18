@@ -375,7 +375,7 @@ enum BlaeckCommandKind
   BLAECK_CMD_PLAIN = 0,  // registered via onCommand(): no HA entity, but listed in 0xA0 for command palettes
   BLAECK_CMD_NUMBER = 1, // HA number   (value in [min,max])
   BLAECK_CMD_SWITCH = 2, // HA switch   (0/1)
-  BLAECK_CMD_SELECT = 3, // HA select   (index into optionsCsv)
+  BLAECK_CMD_SELECT = 3, // HA select   (index into selectOptions)
   BLAECK_CMD_BUTTON = 4, // HA button   (no value)
   BLAECK_CMD_TEXT = 5    // HA text     (free text, percent-encoded on the wire)
 };
@@ -417,14 +417,27 @@ enum BlaeckCommandAckReason
   BLAECK_ACK_TRUNCATED = 7      // rejected: frame did not fit - too many parameters, or longer than the receive buffer
 };
 
+// Warns when the value of a call is thrown away. Used on the two typed helpers whose handle
+// carries a requirement: dropping that handle is how a sketch skips the requirement, and it is
+// the one case the type system cannot catch on its own. A warning rather than an error because
+// GCC offers no way to make it one, and nothing here is unsafe - the command still runs, it just
+// describes itself with a control the host has to guess at.
+#if defined(__GNUC__)
+#define BLAECK_NODISCARD __attribute__((warn_unused_result))
+#else
+#define BLAECK_NODISCARD
+#endif
+
 class BlaeckSignalRefBase;
 class BlaeckNumericSignalRef;
 class BlaeckTextSignalRef;
 class BlaeckBoolSignalRef;
 class BlaeckCommandRefBase;
 class BlaeckNumberCommandRef;
+class BlaeckNumberCommandNeedsRange;
 class BlaeckSwitchCommandRef;
 class BlaeckSelectCommandRef;
+class BlaeckSelectCommandNeedsOptions;
 class BlaeckButtonCommandRef;
 class BlaeckTextCommandRef;
 class BlaeckStateRefBase;
@@ -744,6 +757,17 @@ protected:
   // announced - so reversed arguments turn the checking off instead of tightening it.
   void _warnRangeIgnored(float mn, float mx) const;
 
+  // Same reasoning for a step that is not a positive number. A step is declared by being
+  // above zero, so a negative one - or a NaN, which fails every comparison - reads as no
+  // step at all and is dropped rather than announced.
+  void _warnStepIgnored(float st) const;
+
+  // Whether a list has anything in it. A list with no entries is not a list: a host has
+  // nothing to offer and _validateTypedCommand() has nothing to accept, so the command is
+  // dead at both ends - the same reasoning addEventChannel() applies to a channel declared
+  // with no event types, and refused here in the same way rather than stored.
+  bool _optionsAccepted(const __FlashStringHelper *optionsCsv) const;
+
   void _setRange(float mn, float mx, float st)
   {
 #if BLAECK_ENABLE_COMMAND_META
@@ -758,6 +782,11 @@ protected:
       }
       if (!(mx > mn))
         _warnRangeIgnored(mn, mx);
+      // 0 is how a caller says "no resolution" on purpose - the parameter is mandatory, so it
+      // was passed deliberately - and only a value meant as a step that cannot serve as one is
+      // worth reporting.
+      if (st != 0.0f && !(st > 0.0f))
+        _warnStepIgnored(st);
     }
 #else
     (void)mn; (void)mx; (void)st;
@@ -785,6 +814,10 @@ protected:
 #if BLAECK_ENABLE_COMMAND_META
     if (auto *e = _entry())
     {
+      // Refused rather than stored, so an empty list leaves the entry as it was: never
+      // declared, or still holding the list an earlier call gave it.
+      if (!_optionsAccepted(optionsCsv))
+        return;
       if (e->options != optionsCsv)
       {
         e->options = optionsCsv;
@@ -888,6 +921,7 @@ public:
 
     @code
       Blaeck.onNumberCommand("SET_OFFSET", onSetOffset)
+          .withRange(-100.0f, 100.0f, 0.1f)
           .withOwnState(F("Offset"), offsetText);
     @endcode
   */
@@ -951,32 +985,6 @@ public:
   using BlaeckCommandRefShared<BlaeckNumberCommandRef>::withOwnState;
 
   /*!
-    @brief   Declares the range the firmware accepts.
-
-    A value outside it is rejected before the handler runs, so the handler can take
-    what it is given. A number command that never calls this accepts anything.
-
-    @param   min   Lowest value accepted.
-    @param   max   Highest value accepted. Has to be above min: a max that is not
-                   leaves the command with no range at all, accepting anything and
-                   declaring nothing, which a debug stream reports.
-    @param   step  Display resolution only - never rounded to, and not validated.
-                   Pass 0 to leave it unsaid and let the host choose. A host may
-                   refuse a step below 0.001 and raise it rather than reject the
-                   whole control, so a finer resolution cannot be shown.
-    @return  The same handle, for chaining.
-
-    @code
-      Blaeck.onNumberCommand("SET_FREQ", onSetFreq).withRange(0.0f, 2.0f, 0.01f);
-    @endcode
-  */
-  BlaeckNumberCommandRef &withRange(float min, float max, float step = 0.0f)
-  {
-    _setRange(min, max, step);
-    return *this;
-  }
-
-  /*!
     @brief   Declares the unit shown beside the input.
 
     A label only: nothing is converted, and the handler is passed whatever number
@@ -987,7 +995,7 @@ public:
     @return  The same handle, for chaining.
 
     @code
-      Blaeck.onNumberCommand("SET_FREQ", onSetFreq).withUnit(F("Hz"));
+      Blaeck.onNumberCommand("SET_FREQ", onSetFreq).withRange(0.0f, 2.0f, 0.01f).withUnit(F("Hz"));
     @endcode
   */
   BlaeckNumberCommandRef &withUnit(const __FlashStringHelper *unit)
@@ -1137,33 +1145,6 @@ public:
   using BlaeckCommandRefShared<BlaeckSelectCommandRef>::withOwnState;
 
   /*!
-    @brief   Declares the closed set of values this control accepts.
-
-    The list lives in flash once instead of being repeated in the sketch, and the
-    library validates against it: a value that is neither a listed name nor a valid
-    index is rejected before the handler runs. The handler is always handed the
-    index as text, whichever form the host sent, so atoi(params[0]) is enough.
-    getSelectOptionNameAt() reads a name back out when one is wanted.
-
-    @param   optionsCsv  Comma-separated names as an F() literal, in the order their
-                         indices follow.
-    @return  The same handle, for chaining.
-
-    @note    Do not name an option "none" in any casing. A host may read that state as
-             "no option selected" and blank the control instead of showing it.
-
-    @code
-      Blaeck.onSelectCommand("SET_WAVE", onSetWave)
-          .withOptions(F("Sine,Square,Triangle,Sawtooth"));
-    @endcode
-  */
-  BlaeckSelectCommandRef &withOptions(const __FlashStringHelper *optionsCsv)
-  {
-    _setOptions(optionsCsv);
-    return *this;
-  }
-
-  /*!
     @brief   Carries this select's state as the option index the sketch switches on.
 
     The library resolves the index against the declared list and reports the option
@@ -1260,6 +1241,104 @@ public:
   {
     _setMaxLength(maxLength);
     return *this;
+  }
+};
+
+// Number and select are the two kinds carrying metadata the control cannot be built without: a
+// number is bounded by definition, and a select is its list of options. Home Assistant makes both
+// of those explicit - a number entity always has a min, max and step, filling in 0..100 by 1 when
+// told nothing, and its MQTT select schema marks options Required - so a device that stays silent
+// does not get an unconstrained control, it gets someone else's guess. Silence is worse still on a
+// select: with no list, every value fails validation here and the entity a host builds has nothing
+// to choose from, so the command is dead at both ends.
+//
+// Neither can be enforced by the kind's own handle, because a chain that simply stops is valid
+// C++. So the typed helper hands back one of these instead: a handle with exactly one method,
+// which returns the full one. The requirement is then part of the type - .withUnit() before
+// .withRange() names a member that does not exist yet - while the call still reads as the same
+// chain, and nothing but the first link had to change. Registering without chaining at all is the
+// one case left; BLAECK_NODISCARD makes the compiler mention it.
+class BlaeckNumberCommandNeedsRange : public BlaeckCommandRefBase
+{
+public:
+  BlaeckNumberCommandNeedsRange(BlaeckSerial *owner, int16_t index) : BlaeckCommandRefBase(owner, index) {}
+
+  /*!
+    @brief   Declares the range the firmware accepts, and unlocks the rest of the chain.
+
+    A value outside it is rejected before the handler runs, so the handler can take
+    what it is given. Every other modifier lives on the handle this returns, so a
+    number command cannot quietly go without one.
+
+    @param   min   Lowest value accepted. A command that really does take anything
+                   says so with bounds wide enough to show it.
+    @param   max   Highest value accepted. Has to be above min: a max that is not
+                   leaves the command with no range at all, accepting anything and
+                   declaring nothing, which a debug stream reports.
+    @param   step  Display resolution only - never rounded to, and not validated, so
+                   a value between two steps is still accepted. Has no default,
+                   because the host's is 1: leaving it out would quietly turn a range
+                   in tenths into an integer one. Pass 0 to say nothing deliberately
+                   and let the host choose.
+    @return  The command's full handle, for chaining.
+
+    @note    A host may have a resolution floor of its own - Home Assistant refuses a
+             step below 0.001 - and drops that one control rather than the whole
+             device. Ask for a finer step than the host allows and the control does
+             not appear.
+
+    @code
+      Blaeck.onNumberCommand("SET_FREQ", onSetFreq).withRange(0.0f, 2.0f, 0.01f);
+    @endcode
+  */
+  BlaeckNumberCommandRef withRange(float min, float max, float step)
+  {
+    _setRange(min, max, step);
+    return BlaeckNumberCommandRef(_owner, _index);
+  }
+};
+
+class BlaeckSelectCommandNeedsOptions : public BlaeckCommandRefBase
+{
+public:
+  BlaeckSelectCommandNeedsOptions(BlaeckSerial *owner, int16_t index) : BlaeckCommandRefBase(owner, index) {}
+
+  /*!
+    @brief   Declares the closed set of values this control accepts, and unlocks the rest
+             of the chain.
+
+    The list lives in flash once instead of being repeated in the sketch, and the
+    library validates against it: a value that is neither a listed name nor a valid
+    index is rejected before the handler runs. The handler is always handed the
+    index as text, whichever form the host sent, so atoi(params[0]) is enough.
+    getSelectOptionNameAt() reads a name back out when one is wanted.
+
+    Every other modifier lives on the handle this returns, because a select with no
+    list accepts nothing: each value is checked against the options, and there are
+    none to match.
+
+    @param   optionsCsv  Comma-separated names as an F() literal, in the order their
+                         indices follow.
+    @return  The command's full handle, for chaining.
+
+    @note    Do not name an option "none" in any casing. A host may read that state as
+             "no option selected" and blank the control instead of showing it.
+
+    @warning An empty list is ignored rather than stored, and reported on the debug
+             stream: it would leave the command as if no list had been given at all,
+             which the catalog reports again as it goes out. A list holding a blank
+             option is refused on the same ground - it would offer a choice showing
+             nothing, and dropping it instead would renumber the options after it.
+
+    @code
+      Blaeck.onSelectCommand("SET_WAVE", onSetWave)
+          .withOptions(F("Sine,Square,Triangle,Sawtooth"));
+    @endcode
+  */
+  BlaeckSelectCommandRef withOptions(const __FlashStringHelper *optionsCsv)
+  {
+    _setOptions(optionsCsv);
+    return BlaeckSelectCommandRef(_owner, _index);
   }
 };
 
@@ -2544,7 +2623,9 @@ public:
 
     @warning eventTypes is not optional. writeEvent() resolves against this list,
              and a host needs it to announce the channel at all, so one declared
-             without types could neither report nor be shown.
+             without types could neither report nor be shown. A blank type is
+             refused with it: it would hold an index nothing could be reported
+             under, and dropping it instead would renumber every type after it.
 
     @code
       Blaeck.addEventChannel(F("Activity"), F("idle_warning,resumed"))
@@ -2565,8 +2646,8 @@ public:
 
     @param   channelName  A channel already declared.
     @param   eventType    The type to add. Must outlive the call, so use F().
-    @return  True if it was added. False if it does not fit, names a channel that
-             was never declared, or duplicates one the channel already has - each
+    @return  True if it was added. False if it is blank, does not fit, names a channel
+             that was never declared, or duplicates one the channel already has - each
              reported on the debug stream and counted by hasRejectedEventChannels().
 
     @note    Call order fixes each type's index within its channel, so appending is
@@ -3387,9 +3468,11 @@ public:
   // pointers, never copied.
   //
   // What the firmware validates before dispatch, reporting each on DebugRef: values outside a
-  // declared [min,max], bad select indices, and non-0/1 switch values. A number command that
-  // declares no range is not checked and the catalog carries no limits for it, so a host builds
-  // the control from its own defaults - state a range wherever the sketch has one to state.
+  // declared [min,max], bad select indices, and non-0/1 switch values. A number and a select
+  // carry metadata their control cannot be built without - the bounds and the option list - so
+  // those two helpers hand back a handle offering only that call, and the rest of the chain
+  // opens once it is made. Dropping the handle entirely is the one way past it, which
+  // BLAECK_NODISCARD asks the compiler to warn about and the catalog writer reports.
 
   /*!
     @brief   Registers a command taking a number.
@@ -3398,11 +3481,12 @@ public:
 
     @param   command  Name a host sends to invoke it.
     @param   handler  Called once a value has been accepted.
-    @return  Handle describing the control. Chainable.
+    @return  Handle offering withRange(), which returns the full one. Chainable.
 
-    @note    The value still has to be a number - text that is not one is refused
-             whether or not a range was declared. Without withRange() its size is
-             unchecked, and the catalog carries no limits for a host to build from.
+    @note    The range comes first because a number is bounded by definition: the rest
+             of the modifiers live on the handle withRange() returns, so the limits
+             cannot be left out by ending the chain early. The value still has to be a
+             number - text that is not one is refused whichever range was declared.
 
     @code
       Blaeck.onNumberCommand("SET_FREQ", onSetFreq)
@@ -3410,7 +3494,7 @@ public:
           .withUnit(F("Hz"));
     @endcode
   */
-  BlaeckNumberCommandRef onNumberCommand(const char *command, BlaeckCommandHandler handler);
+  BLAECK_NODISCARD BlaeckNumberCommandNeedsRange onNumberCommand(const char *command, BlaeckCommandHandler handler);
 
   /*!
     @brief   Registers a command that is on or off.
@@ -3437,10 +3521,12 @@ public:
 
     @param   command  Name a host sends to invoke it.
     @param   handler  Called once a value has been accepted.
-    @return  Handle describing the control. Chainable.
+    @return  Handle offering withOptions(), which returns the full one. Chainable.
 
-    @warning Declare the list with withOptions(), or there is nothing to validate
-             against and nothing for a host to offer.
+    @note    The list comes first because it is what a select is: every value is
+             validated against it, so without one nothing can be accepted and a host
+             has nothing to offer. The rest of the modifiers live on the handle
+             withOptions() returns, so the list cannot be left out.
 
     @code
       Blaeck.onSelectCommand("SET_WAVE", onSetWave)
@@ -3448,7 +3534,7 @@ public:
           .withOwnState(F("Wave"), &waveIndex);
     @endcode
   */
-  BlaeckSelectCommandRef onSelectCommand(const char *command, BlaeckCommandHandler handler);
+  BLAECK_NODISCARD BlaeckSelectCommandNeedsOptions onSelectCommand(const char *command, BlaeckCommandHandler handler);
 
   /*!
     @brief   Registers a command that is just a press.
@@ -3775,6 +3861,13 @@ private:
   // command-metadata guard: it counts a select command's options and an event
   // channel's type list, and those features are enabled independently.
   static uint16_t _flashCsvOptionCount(const __FlashStringHelper *csv);
+
+  // Whether any field of a flash CSV is empty or only blank space. A closed set fixes each
+  // member's wire index by position, so a blank field cannot be dropped - that would renumber
+  // every field after it, and those numbers are what events and select values are carried as -
+  // and it cannot be chosen or reported either. Refused at declaration instead, which is the
+  // one moment the sketch that wrote it is still what is being talked about.
+  static bool _flashCsvHasBlankField(const __FlashStringHelper *csv);
 #if BLAECK_ENABLE_STATE_CHANNELS
   void writeStateChannelsFrame(unsigned long MessageID);
   // Index of a declared channel, or -1 when the name was never declared.
@@ -4385,6 +4478,46 @@ inline void BlaeckCommandRefBase::_warnRangeIgnored(float mn, float mx) const
 #else
   (void)mn;
   (void)mx;
+#endif
+}
+
+inline void BlaeckCommandRefBase::_warnStepIgnored(float st) const
+{
+#if BLAECK_ENABLE_COMMAND_META
+  if (_owner == nullptr || _owner->_debugStream == nullptr)
+    return;
+  _owner->_debugStream->print(F("step ignored, must be above zero: "));
+  if (auto *e = _entry())
+  {
+    _owner->_debugStream->print(e->command);
+    _owner->_debugStream->print(' ');
+  }
+  _owner->_debugStream->print(st);
+  _owner->_debugStream->println(F(". No resolution is declared and the host chooses one."));
+#else
+  (void)st;
+#endif
+}
+
+inline bool BlaeckCommandRefBase::_optionsAccepted(const __FlashStringHelper *optionsCsv) const
+{
+#if BLAECK_ENABLE_COMMAND_META
+  bool empty = BlaeckSerial::_flashCsvOptionCount(optionsCsv) == 0;
+  if (!empty && !BlaeckSerial::_flashCsvHasBlankField(optionsCsv))
+    return true;
+  if (_owner != nullptr && _owner->_debugStream != nullptr)
+  {
+    _owner->_debugStream->print(empty
+                                    ? F("withOptions ignored, needs at least one option: ")
+                                    : F("withOptions ignored, an option is blank: "));
+    if (auto *e = _entry())
+      _owner->_debugStream->print(e->command);
+    _owner->_debugStream->println(F(". Every value is rejected and a host has nothing to offer."));
+  }
+  return false;
+#else
+  (void)optionsCsv;
+  return false;
 #endif
 }
 

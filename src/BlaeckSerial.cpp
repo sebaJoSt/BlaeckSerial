@@ -1480,9 +1480,9 @@ bool BlaeckSerial::_declareOwnState(uint16_t handlerIndex, const __FlashStringHe
 }
 #endif
 
-BlaeckNumberCommandRef BlaeckSerial::onNumberCommand(const char *command, BlaeckCommandHandler handler)
+BlaeckNumberCommandNeedsRange BlaeckSerial::onNumberCommand(const char *command, BlaeckCommandHandler handler)
 {
-  return BlaeckNumberCommandRef(this, (int16_t)_registerCommand(command, handler, BLAECK_CMD_NUMBER));
+  return BlaeckNumberCommandNeedsRange(this, (int16_t)_registerCommand(command, handler, BLAECK_CMD_NUMBER));
 }
 
 BlaeckSwitchCommandRef BlaeckSerial::onSwitchCommand(const char *command, BlaeckCommandHandler handler)
@@ -1490,9 +1490,9 @@ BlaeckSwitchCommandRef BlaeckSerial::onSwitchCommand(const char *command, Blaeck
   return BlaeckSwitchCommandRef(this, (int16_t)_registerCommand(command, handler, BLAECK_CMD_SWITCH));
 }
 
-BlaeckSelectCommandRef BlaeckSerial::onSelectCommand(const char *command, BlaeckCommandHandler handler)
+BlaeckSelectCommandNeedsOptions BlaeckSerial::onSelectCommand(const char *command, BlaeckCommandHandler handler)
 {
-  return BlaeckSelectCommandRef(this, (int16_t)_registerCommand(command, handler, BLAECK_CMD_SELECT));
+  return BlaeckSelectCommandNeedsOptions(this, (int16_t)_registerCommand(command, handler, BLAECK_CMD_SELECT));
 }
 
 BlaeckButtonCommandRef BlaeckSerial::onButtonCommand(const char *command, BlaeckCommandHandler handler)
@@ -1520,6 +1520,33 @@ uint16_t BlaeckSerial::_flashCsvOptionCount(const __FlashStringHelper *csv)
       count++;
   }
   return any ? count : 0;
+}
+
+// A field counts as blank when it holds nothing but spacing. Whitespace-only is caught as well as
+// empty because a member that shows as nothing is not one a host could offer or a person could
+// pick, and the space would be trimmed away downstream regardless.
+bool BlaeckSerial::_flashCsvHasBlankField(const __FlashStringHelper *csv)
+{
+  if (csv == nullptr)
+    return true;
+  PGM_P p = reinterpret_cast<PGM_P>(csv);
+  bool fieldHasContent = false;
+  byte c;
+  while ((c = pgm_read_byte(p++)) != 0)
+  {
+    if (c == ',')
+    {
+      if (!fieldHasContent)
+        return true;
+      fieldHasContent = false;
+    }
+    else if (c != ' ' && c != '\t' && c != '\r' && c != '\n')
+    {
+      fieldHasContent = true;
+    }
+  }
+  // Closes the last field, and answers for an empty string too - both are "no usable member here".
+  return !fieldHasContent;
 }
 
 long BlaeckSerial::getSelectOptionIndexOf(const char *command, const char *optionName) const
@@ -2825,11 +2852,23 @@ int BlaeckSerial::_registerEventChannel(const char *channelName, const __FlashSt
 
   // A channel with no types can neither emit - writeEvent() resolves against this list - nor be
   // announced, since a host has nothing to declare the entity with. Refused rather than stored.
+  // A blank type is refused on the same ground: it occupies an index that nothing can ever report.
   if (eventTypes == nullptr || _flashCsvOptionCount(eventTypes) == 0)
   {
     if (_debugStream != nullptr)
     {
       _debugStream->print(F("Event channel needs at least one event type: "));
+      _debugStream->println(channelName);
+    }
+    _rejectedEventChannelCount++;
+    return -1;
+  }
+
+  if (_flashCsvHasBlankField(eventTypes))
+  {
+    if (_debugStream != nullptr)
+    {
+      _debugStream->print(F("Event channel has a blank event type: "));
       _debugStream->println(channelName);
     }
     _rejectedEventChannelCount++;
@@ -2991,6 +3030,19 @@ bool BlaeckSerial::addEventType(const char *channelName, const __FlashStringHelp
 {
   if (eventType == nullptr)
     return false;
+
+  // Same rule addEventChannel() applies to the list it is given: a type that shows as nothing
+  // takes an index no event could ever be reported under.
+  if (_flashCsvHasBlankField(eventType))
+  {
+    if (_debugStream != nullptr)
+    {
+      _debugStream->print(F("Blank event type dropped on channel: "));
+      _debugStream->println(channelName != nullptr ? channelName : "");
+    }
+    _rejectedEventTypeCount++;
+    return false;
+  }
 
   int channelIndex = _findEventChannel(channelName);
   if (channelIndex < 0)
@@ -3388,6 +3440,53 @@ void BlaeckSerial::writeEvent(const char *, const __FlashStringHelper *, unsigne
 static inline bool _rangeDeclared(const blaeck_detail::CommandHandlerEntry &e)
 {
   return e.meta_max > e.meta_min;
+}
+
+// Whether a step was declared, which a step says by being above zero. Nothing else has to be
+// stored: 0 is what a caller passes to withRange() to say "no resolution", and a negative step -
+// or a NaN, which fails every comparison - is not a resolution any control could use.
+// Separate from _rangeDeclared() because the two are independently optional on the wire: the
+// bit is what tells a command that stated no resolution apart from one that stated 0.
+static inline bool _stepDeclared(const blaeck_detail::CommandHandlerEntry &e)
+{
+  return e.meta_step > 0.0f;
+}
+
+// Whether a usable option list was declared. withOptions() refuses a list with no entries, so a
+// pointer that survived to here is one a host can build a control from. Checked at the setter
+// rather than again here because that is where it can still be reported against the line that
+// wrote it, while this runs long afterwards on every catalog.
+static inline bool _optionsDeclared(const blaeck_detail::CommandHandlerEntry &e)
+{
+  return e.options != nullptr;
+}
+
+// Reported here rather than at registration because the requirement is met on the handle the
+// typed helper returns, so at registration there is nothing yet to complain about. The catalog
+// going out is the moment the omission becomes visible to anyone else, and it is the point the
+// value stops being the sketch's business: a host with no limits to build from falls back on its
+// own, and Home Assistant's are 1 to 100, which silently puts zero and every negative value out
+// of reach. Only reachable when the handle was dropped without chaining - BLAECK_NODISCARD asks
+// the compiler to mention that - so this is the last net rather than the first.
+static void _warnCommandWithoutRange(Stream *dbg, const blaeck_detail::CommandHandlerEntry &e)
+{
+  if (dbg == nullptr)
+    return;
+  dbg->print(F("No withRange() on number command: "));
+  dbg->print(e.command);
+  dbg->println(F(". Any value is accepted and the host builds the control from its own defaults."));
+}
+
+// The same omission on a select, which fares worse than a number: every value is checked against
+// the list, so with no list nothing can be accepted, and the entity a host builds has nothing to
+// choose from. The command is dead at both ends rather than merely loosely described.
+static void _warnCommandWithoutOptions(Stream *dbg, const blaeck_detail::CommandHandlerEntry &e)
+{
+  if (dbg == nullptr)
+    return;
+  dbg->print(F("No withOptions() on select command: "));
+  dbg->print(e.command);
+  dbg->println(F(". Every value is rejected and a host has nothing to offer."));
 }
 
 byte BlaeckSerial::_validateTypedCommand(uint16_t handlerIndex)
@@ -4905,17 +5004,26 @@ void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
 {
   // 0xA0 "Command List" frame. Per discovered command entry:
   //   msConfig(1) slaveID(1) payloadMax(2, LE uint16) name\0 kind(1) flags(2, LE uint16)
-  //   [min(4) max(4) step(4)]  if flags.hasRange   (LE float)
+  //   [min(4) max(4)]          if flags.hasRange   (LE float)
   //   [unit\0]                 if flags.hasUnit
-  //   [optionsCsv\0]           if flags.hasOptions
+  //   [selectOptions\0]        if flags.hasOptions
   //   [stateSignal\0 src(1)]   if flags.hasStateSignal
   //   [maxLen(2)]              if flags.isText     (LE uint16)
+  //   [step(4)]                if flags.hasStep    (LE float)
   // flags bits: 0=hasRange 1=hasUnit 2=hasOptions 3=hasStateSignal 4=isText
-  //             5-6=entity category. Bits 7-15 reserved - two bytes rather than one,
-  //             so the catalog has room to grow without taking a new message key.
+  //             5-6=entity category 7=hasStep. Bits 8-15 reserved - two bytes rather
+  //             than one, so the catalog has room to grow without taking a new message key.
+  // Optional fields follow in bit order, as they do in 0x90 and 0xF0, which is why the step
+  // trails the text length rather than sitting with the min and max it was once sent beside.
+  // hasStep is separate from hasRange because the two are independently optional: a range is
+  // what bounds the value and a step only says how finely a control moves through it, so most
+  // commands declare a range and no step. The bit is what tells that apart from a step of 0,
+  // which a host would otherwise have to know to read as "none". A step with no range is not
+  // reachable from this library - withRange() is where a step is given - but the format allows
+  // it, so a reader should not assume bit 0 whenever bit 7 is set.
   // src says what stateSignal names: 0 an addSignal() signal, 1 an
   // addStateChannel() channel (BlaeckStateSource). It rides with the name rather
-  // than taking a flags bit, so the last free bit (0x80) stays available.
+  // than taking a flags bit of its own, of which bits 8-15 are still free.
   // The two leading bytes are the entry's device identity, msConfig and slaveID: zero from
   // a single-device library, rewritten by an aggregator relaying several boards. Not
   // padding - without them a catalog could name only one device.
@@ -4938,18 +5046,32 @@ void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
       // Only when there is one to send. A number command with no withRange() leaves the
       // bytes out entirely rather than announcing 0 to 0, which a host would build a
       // control from - and that control would accept nothing but zero.
-      if (e.kind == BLAECK_CMD_NUMBER && _rangeDeclared(e))
-        flags |= 0x0001;
+      if (e.kind == BLAECK_CMD_NUMBER)
+      {
+        if (_rangeDeclared(e))
+          flags |= 0x0001;
+        else
+          _warnCommandWithoutRange(_debugStream, e);
+      }
       if (e.unit != nullptr)
         flags |= 0x0002;
-      if (e.kind == BLAECK_CMD_SELECT && e.options != nullptr)
-        flags |= 0x0004;
+      if (e.kind == BLAECK_CMD_SELECT)
+      {
+        if (_optionsDeclared(e))
+          flags |= 0x0004;
+        else
+          _warnCommandWithoutOptions(_debugStream, e);
+      }
       if (e.stateSignal != nullptr)
         flags |= 0x0008;
       if (e.kind == BLAECK_CMD_TEXT)
         flags |= 0x0010;
       // Entity category in bits 5-6, so it needs no trailing payload.
       flags |= (uint16_t)((e.category & 0x03) << 5);
+      // Resolution rides on its own bit rather than with the range: a range with no step is
+      // ordinary, and the bit is what tells that apart from a step of 0.
+      if (e.kind == BLAECK_CMD_NUMBER && _stepDeclared(e))
+        flags |= 0x0080;
 
       // How long a command this device can receive: characters between the delimiters, terminator
       // excluded. The same on every entry - one buffer serves them all - but carried here so each
@@ -4972,8 +5094,6 @@ void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
         _bufBytes(fltCvt.bval, 4);
         fltCvt.val = e.meta_max;
         _bufBytes(fltCvt.bval, 4);
-        fltCvt.val = e.meta_step;
-        _bufBytes(fltCvt.bval, 4);
       }
       if (flags & 0x0002)
         _bufFlashStr0(e.unit);
@@ -4989,6 +5109,11 @@ void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
         uint16_t maxLen = (uint16_t)e.meta_max;
         _bufByte((byte)(maxLen & 0xFF));
         _bufByte((byte)((maxLen >> 8) & 0xFF));
+      }
+      if (flags & 0x0080)
+      {
+        fltCvt.val = e.meta_step;
+        _bufBytes(fltCvt.bval, 4);
       }
     }
 
@@ -5016,18 +5141,32 @@ void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
       // Only when there is one to send. A number command with no withRange() leaves the
       // bytes out entirely rather than announcing 0 to 0, which a host would build a
       // control from - and that control would accept nothing but zero.
-      if (e.kind == BLAECK_CMD_NUMBER && _rangeDeclared(e))
-        flags |= 0x0001;
+      if (e.kind == BLAECK_CMD_NUMBER)
+      {
+        if (_rangeDeclared(e))
+          flags |= 0x0001;
+        else
+          _warnCommandWithoutRange(_debugStream, e);
+      }
       if (e.unit != nullptr)
         flags |= 0x0002;
-      if (e.kind == BLAECK_CMD_SELECT && e.options != nullptr)
-        flags |= 0x0004;
+      if (e.kind == BLAECK_CMD_SELECT)
+      {
+        if (_optionsDeclared(e))
+          flags |= 0x0004;
+        else
+          _warnCommandWithoutOptions(_debugStream, e);
+      }
       if (e.stateSignal != nullptr)
         flags |= 0x0008;
       if (e.kind == BLAECK_CMD_TEXT)
         flags |= 0x0010;
       // Entity category in bits 5-6, so it needs no trailing payload.
       flags |= (uint16_t)((e.category & 0x03) << 5);
+      // Resolution rides on its own bit rather than with the range: a range with no step is
+      // ordinary, and the bit is what tells that apart from a step of 0.
+      if (e.kind == BLAECK_CMD_NUMBER && _stepDeclared(e))
+        flags |= 0x0080;
 
       // How long a command this device can receive: characters between the delimiters, terminator
       // excluded. The same on every entry - one buffer serves them all - but carried here so each
@@ -5051,8 +5190,6 @@ void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
         StreamRef->write(fltCvt.bval, 4);
         fltCvt.val = e.meta_max;
         StreamRef->write(fltCvt.bval, 4);
-        fltCvt.val = e.meta_step;
-        StreamRef->write(fltCvt.bval, 4);
       }
       if (flags & 0x0002)
       {
@@ -5075,6 +5212,11 @@ void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
         uint16_t maxLen = (uint16_t)e.meta_max;
         StreamRef->write((byte)(maxLen & 0xFF));
         StreamRef->write((byte)((maxLen >> 8) & 0xFF));
+      }
+      if (flags & 0x0080)
+      {
+        fltCvt.val = e.meta_step;
+        StreamRef->write(fltCvt.bval, 4);
       }
     }
 

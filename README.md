@@ -213,15 +213,20 @@ with a length limit:
      .config();
 ```
 
-The kind is the helper's name because it decides the entity; every modifier is optional. Each
-helper returns the handle for its own kind, so `.withRange(...)` on a text command does not
-compile rather than quietly doing nothing.
+The kind is the helper's name because it decides the entity; most modifiers are optional. Two are
+not: a number is bounded by definition and a select *is* its option list, so `onNumberCommand()`
+and `onSelectCommand()` return a handle offering only `withRange()` (resp. `withOptions()`), and
+the rest of the chain opens once that is called. Ordering it differently does not compile. The
+`step` is part of `withRange()` for the same reason — a host's default is 1, so omitting it would
+quietly turn a range in tenths into an integer one; pass `0` to leave the resolution to the host on
+purpose. Each helper returns the handle for its own kind, so `.withRange(...)` on a text command
+does not compile rather than quietly doing nothing.
 
 | | Number | Switch | Select | Button | Text |
 |---|:-:|:-:|:-:|:-:|:-:|
-| `withRange(min, max, step)` | ● | | | | |
+| `withRange(min, max, step)` — required | ● | | | | |
+| `withOptions(F("A,B,C"))` — required | | | ● | | |
 | `withUnit(F("Hz"))` | ● | | | | |
-| `withOptions(F("A,B,C"))` | | | ● | | |
 | `withMaxLength(32)` | | | | | ● |
 | `withStateSignal(F("Name"))` | ● | ● | ● | ● | ● |
 | `withOwnState(F("Name"), getter)` | ● | ● | ● | ● | ● |
