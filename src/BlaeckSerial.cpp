@@ -1261,13 +1261,20 @@ void BlaeckSerial::_resetCommandMeta(uint16_t handlerIndex, uint8_t kind)
   e.meta_min = 0.0f;
   // A text command that never states a limit advertises 255; every other kind reads this as a
   // range maximum and states its own.
-  e.meta_max = (kind == BLAECK_CMD_TEXT) ? 255.0f : 0.0f;
+  e.meta_max = (kind == BLAECK_CMD_TEXT) ? (float)BLAECK_TEXT_MAX_LENGTH : 0.0f;
   e.meta_step = 0.0f;
   e.unit = nullptr;
   e.options = nullptr;
   e.stateSignal = nullptr;
   e.stateSource = BLAECK_STATE_SIGNAL;
   e.category = BLAECK_CAT_NONE;
+  // Cleared with the rest, so a name registered twice describes what the second call declared
+  // rather than the two calls put together. The slot is reused; the metadata is not.
+  e.displayName = nullptr;
+  e.deviceClass = nullptr;
+  e.icon = nullptr;
+  e.pressPayload = nullptr;
+  e.mode = 0;
 #else
   (void)handlerIndex;
   (void)kind;
@@ -5149,9 +5156,10 @@ void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
   //   [icon\0]                 if flags.hasIcon
   //   [pressPayload\0]         if flags.hasPressPayload  (button only)
   // flags bits: 0=hasRange 1=hasUnit 2=hasOptions 3=hasStateSignal 4=isText
-  //             5-6=entity category 7=hasStep 8=hasDisplayName 9-10=number render mode
-  //             (0 auto, 1 box, 2 slider, 3 reserved) 11=hasDeviceClass 12=hasIcon
-  //             13=hasPressPayload.
+  //             5-6=entity category 7=hasStep 8=hasDisplayName 9-10=input mode, read against
+  //             the kind: on a number 0 auto, 1 box, 2 slider; on a text command 0 plain,
+  //             1 password; 3 reserved on both, and every other kind sends 0.
+  //             11=hasDeviceClass 12=hasIcon 13=hasPressPayload.
   //             Bits 14-31 reserved - four bytes rather than two, because one pass over the
   //             typed kinds spent bits 7 through 12 and a flags word that fills up is a wire
   //             break rather than an addition. The two extra bytes ride in a catalog frame a
@@ -5217,11 +5225,13 @@ void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
         flags |= 0x0080;
       if (e.displayName != nullptr)
         flags |= 0x0100;
-      // Render hint in bits 9-10, needing no payload either. AUTO is zero, so a command that
-      // never asked for one leaves the bits clear and the host keeps its own default rather
-      // than being handed one that says nothing.
-      if (e.kind == BLAECK_CMD_NUMBER)
-        flags |= (uint32_t)((e.numberMode & 0x03) << 9);
+      // Input hint in bits 9-10, needing no payload either: a number's box or slider, a text
+      // command's masked field. Read against the kind, which is what lets one pair of bits serve
+      // both - no entry is ever both kinds. Zero is the default of each, so a command that never
+      // asked for one leaves the bits clear and the host keeps its own default rather than being
+      // handed one that says nothing.
+      if (e.kind == BLAECK_CMD_NUMBER || e.kind == BLAECK_CMD_TEXT)
+        flags |= (uint32_t)((e.mode & 0x03) << 9);
       if (e.deviceClass != nullptr)
         flags |= 0x0800;
       if (e.icon != nullptr)
@@ -5337,11 +5347,13 @@ void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
         flags |= 0x0080;
       if (e.displayName != nullptr)
         flags |= 0x0100;
-      // Render hint in bits 9-10, needing no payload either. AUTO is zero, so a command that
-      // never asked for one leaves the bits clear and the host keeps its own default rather
-      // than being handed one that says nothing.
-      if (e.kind == BLAECK_CMD_NUMBER)
-        flags |= (uint32_t)((e.numberMode & 0x03) << 9);
+      // Input hint in bits 9-10, needing no payload either: a number's box or slider, a text
+      // command's masked field. Read against the kind, which is what lets one pair of bits serve
+      // both - no entry is ever both kinds. Zero is the default of each, so a command that never
+      // asked for one leaves the bits clear and the host keeps its own default rather than being
+      // handed one that says nothing.
+      if (e.kind == BLAECK_CMD_NUMBER || e.kind == BLAECK_CMD_TEXT)
+        flags |= (uint32_t)((e.mode & 0x03) << 9);
       if (e.deviceClass != nullptr)
         flags |= 0x0800;
       if (e.icon != nullptr)

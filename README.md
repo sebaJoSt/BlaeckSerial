@@ -229,6 +229,7 @@ does not compile rather than quietly doing nothing.
 | `withOptions(F("A,B,C"))` — required | | | ● | | |
 | `withUnit(F("Hz"))` | ● | | | | |
 | `withMode(BLAECK_NUMBER_MODE_BOX)` | ● | | | | |
+| `withMode(BLAECK_TEXT_MODE_PASSWORD)` | | | | | ● |
 | `withDeviceClass(F("temperature"))` | ● | ● | | ● | |
 | `withIcon(F("mdi:tune"))` | ● | ● | ● | ● | ● |
 | `withMaxLength(32)` | | | | | ● |

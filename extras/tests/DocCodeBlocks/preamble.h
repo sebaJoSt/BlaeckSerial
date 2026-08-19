@@ -34,6 +34,9 @@ float Offset = 0.0f;
 bool Enabled = true;
 byte waveIndex = 0;
 char DeviceLabel[33] = "wave-gen";
+// A secret-ish setting, so a block can show a field worth masking. Nothing else in the
+// cast is one: masking a device label would teach the modifier and misplace it at once.
+char ApiKey[33] = "";
 
 // --- For the write() example, which shows a signal that pulses ---
 bool Pulse = false;
@@ -82,5 +85,10 @@ inline void onStatus(const char *command, const char *const *params, byte paramC
 inline void onLED(const char *command, const char *const *params, byte paramCount) {}
 inline void onReboot(const char *command, const char *const *params, byte paramCount) {}
 inline void onSetLabel(const char *command, const char *const *params, byte paramCount) {}
+inline void onSetApiKey(const char *command, const char *const *params, byte paramCount) {}
+inline void onSetTemp(const char *command, const char *const *params, byte paramCount) {}
+inline void onSetRelay(const char *command, const char *const *params, byte paramCount) {}
+inline void onCalibrate(const char *command, const char *const *params, byte paramCount) {}
+inline void onDutActivate(const char *command, const char *const *params, byte paramCount) {}
 inline void onSwitchLED(const char *command, const char *const *params, byte paramCount) {}
 inline void onAny(const char *command, const char *const *params, byte count) {}

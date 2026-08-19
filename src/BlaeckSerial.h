@@ -408,6 +408,30 @@ enum BlaeckNumberMode
   BLAECK_NUMBER_MODE_SLIDER = 2  // HA mode "slider"
 };
 
+// How a host should render a text command's input, carried in the same bits 9-10 as the number
+// mode above. The two share the bits because a command has one kind: bits read against a number
+// are a render hint, against a text command an input hint, and no entry is ever both. Sharing
+// costs nothing per entry in RAM and leaves the reserved bits for what needs its own.
+//
+// PLAIN is the default and zero, for the same reason AUTO is. PASSWORD asks a host to mask the
+// field while it is typed.
+//
+// Presentation only, and worth being plain about: the value still crosses the wire and the
+// broker as the characters it is. It hides a value from someone reading over a shoulder, not
+// from anything on the network. ESPHome's password mode means the same and no more.
+enum BlaeckTextMode
+{
+  BLAECK_TEXT_MODE_PLAIN = 0,   // shown as typed (default)
+  BLAECK_TEXT_MODE_PASSWORD = 1 // HA mode "password"
+};
+
+// The longest text value Home Assistant accepts. Not a limit of this library or of the frame -
+// the field on the wire is a uint16 - but of every host we know of: an entity's state is capped
+// at 255 characters there, and its MQTT text schema refuses a max above that outright, losing
+// the whole control rather than shortening it. withMaxLength() checks against this so the loss
+// is a line on the debug stream at startup instead of a control that never appears.
+#define BLAECK_TEXT_MAX_LENGTH 255
+
 // What a typed command's state name refers to, carried in the 0xA0 entry as one byte after
 // that name. The library sets it from how the command was declared; a sketch does not pass
 // it. Kept public because it is part of the frame's vocabulary.
@@ -722,7 +746,9 @@ struct CommandHandlerEntry
   const __FlashStringHelper *pressPayload = nullptr;
   uint8_t stateSource = BLAECK_STATE_SIGNAL;
   uint8_t category = BLAECK_CAT_NONE;
-  uint8_t numberMode = BLAECK_NUMBER_MODE_AUTO;
+  // Bits 9-10 of the 0xA0 flags, read against the kind: a render hint on a number, an input
+  // hint on a text command. One byte serves both because an entry has one kind.
+  uint8_t mode = 0;
 #endif
 };
 
@@ -877,6 +903,11 @@ protected:
   // A step this library keeps and sends, but that a host may not accept. Reported because
   // what is lost is the whole control rather than the step, and nothing else says so.
   void _warnStepTooFine(float st) const;
+
+  // A maximum length no host will build a control from. Refused rather than clamped: a limit
+  // quietly made smaller than the buffer it was taken from is how a sketch comes to believe it
+  // has room it does not, and the number the caller wrote is worth naming back to them.
+  void _warnMaxLengthTooLong(unsigned int maxLength) const;
 
   // Whether a list has anything in it. A list with no entries is not a list: a host has
   // nothing to offer and _validateTypedCommand() has nothing to accept, so the command is
@@ -1034,6 +1065,14 @@ protected:
 #if BLAECK_ENABLE_COMMAND_META
     if (auto *e = _entry())
     {
+      // Refused, so the entry keeps the 255 it was registered with: the one length every host
+      // accepts, and shorter than what was asked for rather than longer, so nothing the sketch
+      // then copies is sized on a promise this library did not keep.
+      if (maxLength > BLAECK_TEXT_MAX_LENGTH)
+      {
+        _warnMaxLengthTooLong(maxLength);
+        return;
+      }
       if (e->meta_max != (float)maxLength)
       {
         e->meta_max = (float)maxLength;
@@ -1061,17 +1100,18 @@ protected:
 #endif
   }
 
-  // Only a number command offers withMode(), so nothing has to check the kind here. AUTO is
-  // zero, which is what makes an undeclared mode cost nothing: the bits stay clear and the
-  // host applies its own default rather than being told one.
-  void _setNumberMode(uint8_t mode)
+  // Set by withMode(), which only a number and a text command offer - so nothing has to check
+  // the kind here, and the value is read back against it. Zero is the default of both, which is
+  // what makes an undeclared mode cost nothing: the bits stay clear and the host applies its own
+  // default rather than being told one.
+  void _setMode(uint8_t mode)
   {
 #if BLAECK_ENABLE_COMMAND_META
     if (auto *e = _entry())
     {
-      if (e->numberMode != mode)
+      if (e->mode != mode)
       {
-        e->numberMode = mode;
+        e->mode = mode;
         _markDirty();
       }
     }
@@ -1314,7 +1354,7 @@ public:
   */
   BlaeckNumberCommandRef &withMode(BlaeckNumberMode mode)
   {
-    _setNumberMode((uint8_t)mode);
+    _setMode((uint8_t)mode);
     return *this;
   }
 
@@ -1667,9 +1707,14 @@ public:
     Enforced before the handler runs - a longer value is rejected with
     BLAECK_ACK_TOO_LONG - so the handler can copy what it is given.
 
-    @param   maxLength  Limit in decoded bytes. Left unsaid it is 255.
+    @param   maxLength  Limit in decoded bytes, 255 at most. Left unsaid it is 255.
                         sizeof(buffer) - 1 is usually the right value.
     @return  The same handle, for chaining.
+
+    @note    A value above 255 is ignored and the 255 kept, with a line on the debug
+             stream naming both. Home Assistant caps an entity's state at 255 characters
+             and refuses a text control declaring more, so passing a larger number
+             through would cost the whole control and say nothing about why.
 
     @code
       Blaeck.onTextCommand("SET_LABEL", onSetLabel)
@@ -1679,6 +1724,30 @@ public:
   BlaeckTextCommandRef &withMaxLength(unsigned int maxLength)
   {
     _setMaxLength(maxLength);
+    return *this;
+  }
+
+  /*!
+    @brief   Asks a host to mask this field while it is typed.
+
+    @param   mode  BLAECK_TEXT_MODE_PASSWORD for a masked field.
+                   BLAECK_TEXT_MODE_PLAIN is the default and declares nothing.
+    @return  The same handle, for chaining.
+
+    @warning Presentation, not protection. The value still travels the wire and any
+             broker as the characters it is, and is as readable there as any other
+             command. It hides a key from someone looking at the screen; it hides
+             nothing from anything on the network.
+
+    @code
+      Blaeck.onTextCommand("SET_API_KEY", onSetApiKey)
+          .withMaxLength(sizeof(ApiKey) - 1)
+          .withMode(BLAECK_TEXT_MODE_PASSWORD);
+    @endcode
+  */
+  BlaeckTextCommandRef &withMode(BlaeckTextMode mode)
+  {
+    _setMode((uint8_t)mode);
     return *this;
   }
 };
@@ -5067,6 +5136,26 @@ inline void BlaeckCommandRefBase::_warnStepTooFine(float st) const
                                   "control rather than only the step."));
 #else
   (void)st;
+#endif
+}
+
+inline void BlaeckCommandRefBase::_warnMaxLengthTooLong(unsigned int maxLength) const
+{
+#if BLAECK_ENABLE_COMMAND_META
+  if (_owner == nullptr || _owner->_debugStream == nullptr)
+    return;
+  _owner->_debugStream->print(F("max length above 255: "));
+  if (auto *e = _entry())
+  {
+    _owner->_debugStream->print(e->command);
+    _owner->_debugStream->print(' ');
+  }
+  _owner->_debugStream->print(maxLength);
+  _owner->_debugStream->println(F(". Ignored, and 255 kept: Home Assistant caps an entity's "
+                                  "state at 255 characters and refuses the control outright "
+                                  "above it."));
+#else
+  (void)maxLength;
 #endif
 }
 
