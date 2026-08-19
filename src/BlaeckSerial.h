@@ -717,6 +717,9 @@ struct CommandHandlerEntry
   const __FlashStringHelper *displayName = nullptr;
   const __FlashStringHelper *options = nullptr;
   const __FlashStringHelper *stateSignal = nullptr;
+  // Buttons only: the fixed argument list a press carries, or nullptr for the bare press
+  // that is the default.
+  const __FlashStringHelper *pressPayload = nullptr;
   uint8_t stateSource = BLAECK_STATE_SIGNAL;
   uint8_t category = BLAECK_CAT_NONE;
   uint8_t numberMode = BLAECK_NUMBER_MODE_AUTO;
@@ -966,6 +969,24 @@ protected:
     }
 #else
     (void)icon;
+#endif
+  }
+
+  void _setPressPayload(const __FlashStringHelper *pressPayload)
+  {
+#if BLAECK_ENABLE_COMMAND_META
+    if (blaeck_detail::flashStrEmpty(pressPayload))
+      pressPayload = nullptr;
+    if (auto *e = _entry())
+    {
+      if (e->pressPayload != pressPayload)
+      {
+        e->pressPayload = pressPayload;
+        _markDirty();
+      }
+    }
+#else
+    (void)pressPayload;
 #endif
   }
 
@@ -1567,6 +1588,42 @@ public:
   BlaeckButtonCommandRef &withDeviceClass(const __FlashStringHelper *deviceClass)
   {
     _setDeviceClass(deviceClass);
+    return *this;
+  }
+
+  /*!
+    @brief   Gives the press a fixed argument list.
+
+    A press normally carries nothing and the handler runs with no parameters. This puts
+    a payload behind it, so one button can stand for a call with its arguments already
+    filled in - the label says "Activate all DUTs", the press sends "1,40", and the
+    handler reads params[0] and params[1] as it would from any other sender.
+
+    Arguments are comma separated, exactly as a command sent over the wire is written.
+
+    @param   pressPayload  What a press sends, as an F() literal.
+    @return  The same handle, for chaining.
+
+    @warning Nothing checks this. A button's parameters are the one kind the library
+             passes through unvalidated - there is no declared signature to check them
+             against - so a payload with a typo, the wrong separator or too few
+             arguments reaches the handler as written and is only found by what the
+             handler then does with it. The constants in a small wrapper function are
+             checked by the compiler; these are not.
+
+    @note    A button is still one entity per command name, so a second preset over the
+             same code is a second command sharing the same handler rather than a second
+             payload on this one.
+
+    @code
+      Blaeck.onButtonCommand("DUT_ACTIVATE_ALL", onDutActivate)
+          .withPressPayload(F("1,40"))
+          .withDisplayName(F("Activate all DUTs"));
+    @endcode
+  */
+  BlaeckButtonCommandRef &withPressPayload(const __FlashStringHelper *pressPayload)
+  {
+    _setPressPayload(pressPayload);
     return *this;
   }
 };

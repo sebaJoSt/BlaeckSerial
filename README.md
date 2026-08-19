@@ -232,6 +232,7 @@ does not compile rather than quietly doing nothing.
 | `withDeviceClass(F("temperature"))` | ● | ● | | ● | |
 | `withIcon(F("mdi:tune"))` | ● | ● | ● | ● | ● |
 | `withMaxLength(32)` | | | | | ● |
+| `withPressPayload(F("1,40"))` | | | | ● | |
 | `withStateFromSignal(F("Name"))` | ● | ● | ● | | ● |
 | `withOwnState(F("Name"), getter)` | ● | ● | ● | | ● |
 | `withDisplayName(F("Frequency"))` | ● | ● | ● | ● | ● |
@@ -263,6 +264,25 @@ The button is the one kind offering neither, because a press is not a value: Hom
 its button entity a timestamp of the last press that it writes itself, and subscribes to nothing.
 A state a button declared would have nowhere to arrive, so the modifiers are not on the handle and
 saying otherwise costs a compile error rather than a channel that goes nowhere.
+
+What a button can carry instead is a fixed argument list. A press normally sends nothing and the
+handler runs with no parameters; `withPressPayload` puts a payload behind it, so one button stands
+for a call with its arguments already filled in:
+
+```cpp
+Blaeck.onButtonCommand("DUT_ACTIVATE_ALL", onDutActivate)
+    .withPressPayload(F("1,40"))
+    .withDisplayName(F("Activate all DUTs"));
+```
+
+The handler reads `params[0]` and `params[1]` exactly as it would from any other sender, so several
+presets can share one handler and differ only in what they send. Nothing checks the string: a
+button's parameters are the one kind the library passes through unvalidated, because there is no
+declared signature to check them against, so a wrong separator or a missing argument arrives as
+written and is found only by what the handler does with it. The constants in a small wrapper
+function are checked by the compiler; these are not. Note also that a button is one entity per
+command name, so a second preset over the same code is a second command sharing the handler rather
+than a second payload on this one.
 
 Resolving an option name needs somewhere to build it, and that buffer is `24` characters by
 default. A longer option is reported as nothing rather than as a truncated name that would match

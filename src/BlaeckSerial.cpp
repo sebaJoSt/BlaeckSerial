@@ -5147,10 +5147,12 @@ void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
   //   [displayName\0]          if flags.hasDisplayName
   //   [deviceClass\0]          if flags.hasDeviceClass
   //   [icon\0]                 if flags.hasIcon
+  //   [pressPayload\0]         if flags.hasPressPayload  (button only)
   // flags bits: 0=hasRange 1=hasUnit 2=hasOptions 3=hasStateSignal 4=isText
   //             5-6=entity category 7=hasStep 8=hasDisplayName 9-10=number render mode
-  //             (0 auto, 1 box, 2 slider, 3 reserved) 11=hasDeviceClass 12=hasIcon.
-  //             Bits 13-31 reserved - four bytes rather than two, because one pass over the
+  //             (0 auto, 1 box, 2 slider, 3 reserved) 11=hasDeviceClass 12=hasIcon
+  //             13=hasPressPayload.
+  //             Bits 14-31 reserved - four bytes rather than two, because one pass over the
   //             typed kinds spent bits 7 through 12 and a flags word that fills up is a wire
   //             break rather than an addition. The two extra bytes ride in a catalog frame a
   //             host asks for, not in the data frames, and cost nothing per entry in RAM.
@@ -5222,6 +5224,12 @@ void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
         flags |= (uint32_t)((e.numberMode & 0x03) << 9);
       if (e.deviceClass != nullptr)
         flags |= 0x0800;
+      if (e.icon != nullptr)
+        flags |= 0x1000;
+      // Buttons only. Every other kind carries its value in the payload a host sends, so a
+      // fixed one there would overwrite what the control is for.
+      if (e.kind == BLAECK_CMD_BUTTON && e.pressPayload != nullptr)
+        flags |= 0x2000;
 
       // How long a command this device can receive: characters between the delimiters, terminator
       // excluded. The same on every entry - one buffer serves them all - but carried here so each
@@ -5273,6 +5281,8 @@ void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
         _bufFlashStr0(e.deviceClass);
       if (flags & 0x1000)
         _bufFlashStr0(e.icon);
+      if (flags & 0x2000)
+        _bufFlashStr0(e.pressPayload);
     }
 
       _bufFooter();
@@ -5336,6 +5346,10 @@ void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
         flags |= 0x0800;
       if (e.icon != nullptr)
         flags |= 0x1000;
+      // Buttons only. Every other kind carries its value in the payload a host sends, so a
+      // fixed one there would overwrite what the control is for.
+      if (e.kind == BLAECK_CMD_BUTTON && e.pressPayload != nullptr)
+        flags |= 0x2000;
 
       // How long a command this device can receive: characters between the delimiters, terminator
       // excluded. The same on every entry - one buffer serves them all - but carried here so each
@@ -5402,6 +5416,11 @@ void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
       if (flags & 0x1000)
       {
         StreamRef->print(e.icon);
+        StreamRef->write((byte)0);
+      }
+      if (flags & 0x2000)
+      {
+        StreamRef->print(e.pressPayload);
         StreamRef->write((byte)0);
       }
     }
