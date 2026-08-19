@@ -18,7 +18,7 @@
   The commands are registered with the typed helpers, so the device describes
   itself in <BLAECK.WRITE_COMMANDS> and a host (e.g. Loggbok / Home Assistant)
   can build controls for it: the two bounds are numbers with a range and a
-  mirrored state signal, and the four actions are buttons.
+  state channel of their own, and the four actions are buttons.
 
   Splitting the range into "set the bounds, then press apply" is what makes
   that possible. A single <SIGNAL_ACTIVATE,first,last> command with magic
@@ -92,21 +92,30 @@ void setup()
   EEPROMConfiguration();
 
   Serial.begin(115200);
-  // +2 for the Signal_First / Signal_Last state signals
-  Blaeck.begin(&Serial, MAXIMUM_SIGNALS + 2);
+  Blaeck.begin(&Serial, MAXIMUM_SIGNALS);
 
   Blaeck.DeviceName = "Advanced Sine Number Generator";
   Blaeck.DeviceHWVersion = "Arduino Mega 2560 Rev3";
   Blaeck.DeviceFWVersion = FW_VERSION;
 
-  // Typed: each becomes a dashboard control. The bounds are numbers with a
-  // range and a mirrored signal; applying them is a button, as is STATUS.
+  // Typed: each becomes a dashboard control. The bounds are numbers keeping their value on a
+  // state channel of their own; applying them is a button, as is STATUS.
+  //
+  // A bound is a setting, not a measurement, so it is not a signal: a signal is a column in
+  // every logged row, and these two would be a constant repeated on each one. The state
+  // channel is where a value that only changes when someone changes it belongs. Boxes rather
+  // than sliders, because the pair is picked by number - a slider invites dragging past the
+  // bound you meant.
   Blaeck.onNumberCommand("SIGNAL_FIRST", onSetSignalFirst)
       .withRange(1.0f, (float)MAXIMUM_SIGNALS, 1.0f)
-      .withStateFromSignal(F("Signal_First"));
+      .withMode(BLAECK_NUMBER_MODE_BOX)
+      .withDisplayName(F("First signal"))
+      .withOwnState(F("Signal_First"), &signalFirst);
   Blaeck.onNumberCommand("SIGNAL_LAST", onSetSignalLast)
       .withRange(1.0f, (float)MAXIMUM_SIGNALS, 1.0f)
-      .withStateFromSignal(F("Signal_Last"));
+      .withMode(BLAECK_NUMBER_MODE_BOX)
+      .withDisplayName(F("Last signal"))
+      .withOwnState(F("Signal_Last"), &signalLast);
   Blaeck.onButtonCommand("SIGNAL_ACTIVATE_RANGE", onSignalActivateRange)
       .withDisplayName(F("Activate range"));
   Blaeck.onButtonCommand("SIGNAL_DEACTIVATE_RANGE", onSignalDeactivateRange)
@@ -164,12 +173,6 @@ void UpdateSineNumbers()
 void UpdateLoggingSignals()
 {
   Blaeck.deleteSignals();
-
-  // Re-added first: deleteSignals() drops these too, and the typed number
-  // commands above refer to them by name. F() keeps the two names in flash, so
-  // re-registering costs no heap for them either.
-  Blaeck.addSignal(F("Signal_First"), &signalFirst);
-  Blaeck.addSignal(F("Signal_Last"), &signalLast);
 
   // The name is a literal plus a counter, which withNameSuffix() says without building
   // it: the prefix stays in flash and the digits are produced when the name is sent. That

@@ -9,23 +9,23 @@
 // before these run, so an out-of-range bound never reaches the sketch.
 void onSetSignalFirst(const char *command, const char *const *params, byte paramCount)
 {
-  (void)command;
   if (paramCount >= 1 && params[0][0] != '\0')
   {
     signalFirst = (byte)atoi(params[0]);
     EEPROM.updateByte(eepromaddress.signalFirst, signalFirst);
-    Blaeck.write("Signal_First", signalFirst);
+    // Pushes the bound's own state channel, so the control shows the new value at once -
+    // the channel is otherwise only read when a host polls the catalog.
+    Blaeck.writeCommandState(command);
   }
 }
 
 void onSetSignalLast(const char *command, const char *const *params, byte paramCount)
 {
-  (void)command;
   if (paramCount >= 1 && params[0][0] != '\0')
   {
     signalLast = (byte)atoi(params[0]);
     EEPROM.updateByte(eepromaddress.signalLast, signalLast);
-    Blaeck.write("Signal_Last", signalLast);
+    Blaeck.writeCommandState(command);
   }
 }
 
