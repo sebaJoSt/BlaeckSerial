@@ -160,7 +160,7 @@ void onHelpOrList(const char *command, const char *const *params, byte paramCoun
   }
   else if (strcmp(command, "LS") == 0)
   {
-    sinfo(), Serial.println(F("<LS> <STATUS> <SIGNAL_FIRST> <SIGNAL_LAST> <SIGNAL_ACTIVATE_RANGE> <SIGNAL_DEACTIVATE_RANGE>"));
+    sinfo(), Serial.println(F("<LS> <STATUS> <SIGNAL_FIRST> <SIGNAL_LAST> <SIGNAL_ACTIVATE_RANGE> <SIGNAL_DEACTIVATE_RANGE> <SIGNAL_ACTIVATE_ALL>"));
     sinfo(), Serial.println(F("<BLAECK.ACTIVATE> <BLAECK.DEACTIVATE> <BLAECK.WRITE_SYMBOLS> <BLAECK.WRITE_COMMANDS> <BLAECK.WRITE_DATA> <BLAECK.GET_DEVICES>"));
     sinfo(), Serial.println(F("Enter <command?> for instructions, e.g. <STATUS?>"));
   }
@@ -182,12 +182,21 @@ void onHelpOrList(const char *command, const char *const *params, byte paramCoun
   {
     shelp(), Serial.println(F("Activates every signal in the current range"));
     shelp(), Serial.println(F("e.g. <SIGNAL_FIRST,1> <SIGNAL_LAST,10> <SIGNAL_ACTIVATE_RANGE>"));
+    shelp(), Serial.println(F("Or give the bounds directly: <SIGNAL_ACTIVATE_RANGE,1,10>"));
     shelp(), Serial.println(F("Signals outside the range keep their state"));
   }
   else if (strcmp(command, "SIGNAL_DEACTIVATE_RANGE?") == 0)
   {
     shelp(), Serial.println(F("Deactivates every signal in the current range"));
     shelp(), Serial.println(F("e.g. <SIGNAL_FIRST,1> <SIGNAL_LAST,25> <SIGNAL_DEACTIVATE_RANGE> clears all"));
+    shelp(), Serial.println(F("Or give the bounds directly: <SIGNAL_DEACTIVATE_RANGE,1,25>"));
+  }
+  else if (strcmp(command, "SIGNAL_ACTIVATE_ALL?") == 0)
+  {
+    shelp(), Serial.print(F("Activates every signal, 1-"));
+    Serial.print(MAXIMUM_SIGNALS);
+    Serial.println(F(", whatever the current range is"));
+    shelp(), Serial.println(F("Same as <SIGNAL_ACTIVATE_RANGE> with the bounds given: the two are one handler"));
   }
   else if (strcmp(command, "STATUS?") == 0)
   {
