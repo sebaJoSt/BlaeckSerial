@@ -5137,7 +5137,7 @@ void BlaeckSerial::writeSignalConfigFrame(unsigned long msg_id)
 void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
 {
   // 0xA0 "Command List" frame. Per discovered command entry:
-  //   msConfig(1) slaveID(1) payloadMax(2, LE uint16) name\0 kind(1) flags(2, LE uint16)
+  //   msConfig(1) slaveID(1) payloadMax(2, LE uint16) name\0 kind(1) flags(4, LE uint32)
   //   [min(4) max(4)]          if flags.hasRange   (LE float)
   //   [unit\0]                 if flags.hasUnit
   //   [selectOptions\0]        if flags.hasOptions
@@ -5150,8 +5150,10 @@ void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
   // flags bits: 0=hasRange 1=hasUnit 2=hasOptions 3=hasStateSignal 4=isText
   //             5-6=entity category 7=hasStep 8=hasDisplayName 9-10=number render mode
   //             (0 auto, 1 box, 2 slider, 3 reserved) 11=hasDeviceClass 12=hasIcon.
-  //             Bits 13-15 reserved - two bytes rather than one, so the catalog has room
-  //             to grow without taking a new message key.
+  //             Bits 13-31 reserved - four bytes rather than two, because one pass over the
+  //             typed kinds spent bits 7 through 12 and a flags word that fills up is a wire
+  //             break rather than an addition. The two extra bytes ride in a catalog frame a
+  //             host asks for, not in the data frames, and cost nothing per entry in RAM.
   // Optional fields follow in bit order, as they do in 0x90 and 0xF0, which is why the step
   // trails the text length rather than sitting with the min and max it was once sent beside.
   // hasStep is separate from hasRange because the two are independently optional: a range is
@@ -5162,7 +5164,7 @@ void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
   // it, so a reader should not assume bit 0 whenever bit 7 is set.
   // src says what stateSignal names: 0 an addSignal() signal, 1 an
   // addStateChannel() channel (BlaeckStateSource). It rides with the name rather
-  // than taking a flags bit of its own, of which bits 12-15 are still free.
+  // than taking a flags bit of its own.
   // The two leading bytes are the entry's device identity, msConfig and slaveID: zero from
   // a single-device library, rewritten by an aggregator relaying several boards. Not
   // padding - without them a catalog could name only one device.
@@ -5181,7 +5183,7 @@ void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
       if (!e.inUse)
         continue;
 
-      uint16_t flags = 0;
+      uint32_t flags = 0;
       // Only when there is one to send. A number command with no withRange() leaves the
       // bytes out entirely rather than announcing 0 to 0, which a host would build a
       // control from - and that control would accept nothing but zero.
@@ -5206,7 +5208,7 @@ void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
       if (e.kind == BLAECK_CMD_TEXT)
         flags |= 0x0010;
       // Entity category in bits 5-6, so it needs no trailing payload.
-      flags |= (uint16_t)((e.category & 0x03) << 5);
+      flags |= (uint32_t)((e.category & 0x03) << 5);
       // Resolution rides on its own bit rather than with the range: a range with no step is
       // ordinary, and the bit is what tells that apart from a step of 0.
       if (e.kind == BLAECK_CMD_NUMBER && _stepDeclared(e))
@@ -5217,7 +5219,7 @@ void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
       // never asked for one leaves the bits clear and the host keeps its own default rather
       // than being handed one that says nothing.
       if (e.kind == BLAECK_CMD_NUMBER)
-        flags |= (uint16_t)((e.numberMode & 0x03) << 9);
+        flags |= (uint32_t)((e.numberMode & 0x03) << 9);
       if (e.deviceClass != nullptr)
         flags |= 0x0800;
 
@@ -5235,6 +5237,8 @@ void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
       _bufByte(e.kind);
       _bufByte((byte)(flags & 0xFF));
       _bufByte((byte)((flags >> 8) & 0xFF));
+      _bufByte((byte)((flags >> 16) & 0xFF));
+      _bufByte((byte)((flags >> 24) & 0xFF));
 
       if (flags & 0x0001)
       {
@@ -5291,7 +5295,7 @@ void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
       if (!e.inUse)
         continue;
 
-      uint16_t flags = 0;
+      uint32_t flags = 0;
       // Only when there is one to send. A number command with no withRange() leaves the
       // bytes out entirely rather than announcing 0 to 0, which a host would build a
       // control from - and that control would accept nothing but zero.
@@ -5316,7 +5320,7 @@ void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
       if (e.kind == BLAECK_CMD_TEXT)
         flags |= 0x0010;
       // Entity category in bits 5-6, so it needs no trailing payload.
-      flags |= (uint16_t)((e.category & 0x03) << 5);
+      flags |= (uint32_t)((e.category & 0x03) << 5);
       // Resolution rides on its own bit rather than with the range: a range with no step is
       // ordinary, and the bit is what tells that apart from a step of 0.
       if (e.kind == BLAECK_CMD_NUMBER && _stepDeclared(e))
@@ -5327,7 +5331,7 @@ void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
       // never asked for one leaves the bits clear and the host keeps its own default rather
       // than being handed one that says nothing.
       if (e.kind == BLAECK_CMD_NUMBER)
-        flags |= (uint16_t)((e.numberMode & 0x03) << 9);
+        flags |= (uint32_t)((e.numberMode & 0x03) << 9);
       if (e.deviceClass != nullptr)
         flags |= 0x0800;
       if (e.icon != nullptr)
@@ -5348,6 +5352,8 @@ void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
       StreamRef->write(e.kind);
       StreamRef->write((byte)(flags & 0xFF));
       StreamRef->write((byte)((flags >> 8) & 0xFF));
+      StreamRef->write((byte)((flags >> 16) & 0xFF));
+      StreamRef->write((byte)((flags >> 24) & 0xFF));
 
       if (flags & 0x0001)
       {
