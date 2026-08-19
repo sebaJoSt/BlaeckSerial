@@ -836,6 +836,29 @@ void BlaeckSerial::_printSignalName(const Signal &s)
   _emitSignalName(s, NAME_SINK_STREAM);
 }
 
+bool blaeck_detail::optionsAccepted(const __FlashStringHelper *optionsCsv, Stream *debug,
+                                    const char *name, bool nameInFlash)
+{
+  const bool empty = BlaeckSerial::_flashCsvOptionCount(optionsCsv) == 0;
+  if (!empty && !BlaeckSerial::_flashCsvHasBlankField(optionsCsv))
+    return true;
+
+  if (debug != nullptr)
+  {
+    debug->print(empty ? F("withOptions ignored, needs at least one option: ")
+                       : F("withOptions ignored, an option is blank: "));
+    if (name != nullptr)
+    {
+      if (nameInFlash)
+        debug->print(reinterpret_cast<const __FlashStringHelper *>(name));
+      else
+        debug->print(name);
+    }
+    debug->println(F(". Every value is rejected and a host has nothing to offer."));
+  }
+  return false;
+}
+
 void BlaeckSerial::update(int signalIndex, bool value)
 {
   if (signalIndex >= 0 && signalIndex < _signalIndex)
@@ -4902,9 +4925,11 @@ void BlaeckSerial::writeSignalConfigFrame(unsigned long msg_id)
   //   [icon\0]                 if flags bit 2
   //   [displayPrecision(1)]    if flags bit 9
   //   [options\0]              if flags bit 10
+  //   [displayName\0]          if flags bit 11
   // flags bits: 0=hasUnit 1=hasDeviceClass 2=hasIcon 3-5=stateClass
   //             6=isDiagnostic 7=disabledByDefault 8=forceUpdate
-  //             9=hasDisplayPrecision 10=hasOptions. Bits 11-15 reserved.
+  //             9=hasDisplayPrecision 10=hasOptions 11=hasDisplayName.
+  //             Bits 12-15 reserved.
   // stateClass takes three bits because Home Assistant defines five values counting
   // none: measurement, total, total_increasing and measurement_angle.
   // Optional fields follow in bit order, which is why precision precedes options.
@@ -4941,6 +4966,8 @@ void BlaeckSerial::writeSignalConfigFrame(unsigned long msg_id)
         _bufByte(m->DisplayPrecision);
       if (m->MetaFlags & BLAECK_SIG_HAS_OPTIONS)
         _bufFlashStr0(m->Options);
+      if (m->MetaFlags & BLAECK_SIG_HAS_DISPLAY_NAME)
+        _bufFlashStr0(m->DisplayName);
     }
 
     _bufFooter();
@@ -4990,6 +5017,11 @@ void BlaeckSerial::writeSignalConfigFrame(unsigned long msg_id)
         StreamRef->print(m->Options);
         StreamRef->print('\0');
       }
+      if (m->MetaFlags & BLAECK_SIG_HAS_DISPLAY_NAME)
+      {
+        StreamRef->print(m->DisplayName);
+        StreamRef->print('\0');
+      }
     }
 
     StreamRef->write("/BLAECK>");
@@ -5010,9 +5042,11 @@ void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
   //   [stateSignal\0 src(1)]   if flags.hasStateSignal
   //   [maxLen(2)]              if flags.isText     (LE uint16)
   //   [step(4)]                if flags.hasStep    (LE float)
+  //   [displayName\0]          if flags.hasDisplayName
   // flags bits: 0=hasRange 1=hasUnit 2=hasOptions 3=hasStateSignal 4=isText
-  //             5-6=entity category 7=hasStep. Bits 8-15 reserved - two bytes rather
-  //             than one, so the catalog has room to grow without taking a new message key.
+  //             5-6=entity category 7=hasStep 8=hasDisplayName. Bits 9-15 reserved - two
+  //             bytes rather than one, so the catalog has room to grow without taking a
+  //             new message key.
   // Optional fields follow in bit order, as they do in 0x90 and 0xF0, which is why the step
   // trails the text length rather than sitting with the min and max it was once sent beside.
   // hasStep is separate from hasRange because the two are independently optional: a range is
@@ -5023,7 +5057,7 @@ void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
   // it, so a reader should not assume bit 0 whenever bit 7 is set.
   // src says what stateSignal names: 0 an addSignal() signal, 1 an
   // addStateChannel() channel (BlaeckStateSource). It rides with the name rather
-  // than taking a flags bit of its own, of which bits 8-15 are still free.
+  // than taking a flags bit of its own, of which bits 9-15 are still free.
   // The two leading bytes are the entry's device identity, msConfig and slaveID: zero from
   // a single-device library, rewritten by an aggregator relaying several boards. Not
   // padding - without them a catalog could name only one device.
@@ -5072,6 +5106,8 @@ void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
       // ordinary, and the bit is what tells that apart from a step of 0.
       if (e.kind == BLAECK_CMD_NUMBER && _stepDeclared(e))
         flags |= 0x0080;
+      if (e.displayName != nullptr)
+        flags |= 0x0100;
 
       // How long a command this device can receive: characters between the delimiters, terminator
       // excluded. The same on every entry - one buffer serves them all - but carried here so each
@@ -5115,6 +5151,8 @@ void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
         fltCvt.val = e.meta_step;
         _bufBytes(fltCvt.bval, 4);
       }
+      if (flags & 0x0100)
+        _bufFlashStr0(e.displayName);
     }
 
       _bufFooter();
@@ -5167,6 +5205,8 @@ void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
       // ordinary, and the bit is what tells that apart from a step of 0.
       if (e.kind == BLAECK_CMD_NUMBER && _stepDeclared(e))
         flags |= 0x0080;
+      if (e.displayName != nullptr)
+        flags |= 0x0100;
 
       // How long a command this device can receive: characters between the delimiters, terminator
       // excluded. The same on every entry - one buffer serves them all - but carried here so each
@@ -5217,6 +5257,11 @@ void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
       {
         fltCvt.val = e.meta_step;
         StreamRef->write(fltCvt.bval, 4);
+      }
+      if (flags & 0x0100)
+      {
+        StreamRef->print(e.displayName);
+        StreamRef->write((byte)0);
       }
     }
 

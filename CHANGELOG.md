@@ -115,10 +115,26 @@ without being configured for that board in advance.
   buffer read live on each transmit: `write(name/index, char *value)` repoints the
   buffer and transmits that one signal, or update the buffer in place and let the
   periodic transmit pick it up. Up to 255 bytes.
+- **`withDisplayName(F("Output"))` on a signal.** A label a host shows in place of the name,
+  for when the name is doing a second job. A signal's name is what a host that logs calls its
+  stored column, so an author writes `F("Output [V]")` to keep the table self-describing — and
+  then reads the unit twice on screen. Presentation only: the name still identifies the signal
+  everywhere, so declaring a display name on one already deployed relabels it and moves nothing.
+  Optional in the `0xF0` frame (signal meta flags bit 11), so a host that does not read it is
+  unaffected. Typed commands take it too.
 - New `WaveformGenerator` example: one fully controllable waveform, exercising
   typed commands, state channels, event channels and string signals together.
 
 ### Changed
+- **`F("")` now means "not declared".** `withUnit`, `withIcon` and `withDeviceClass` stored an
+  empty literal and announced it as a blank; it is now read the same as leaving the call out,
+  so a value built conditionally can say "nothing" without the sketch branching around the
+  call. It also keeps a blank device class off a host that validates the field against a
+  fixed list and would reject the entity outright.
+- **A blank options list is refused on a signal too.** `withOptions(F(""))` — or a list with a
+  blank field in it — was stored and announced, leaving a host a closed set it cannot offer or
+  report. It is now refused where it is declared and said so on the debug stream, which is what
+  a select command already did; the check is written once and shared by both.
 - **A signal no longer keeps its name in a `String`.** The entry holds a pointer the
   library owns (or the flash address, for an `F()` name), which takes a signal entry from
   22 bytes to 19 on AVR and removes a heap allocation per signal per `0xB0` frame — the
@@ -129,7 +145,7 @@ without being configured for that board in advance.
   whether or not the sketch set them; they now live in a record allocated by the first
   `with*()` call that describes the signal. A signal entry goes from 19 bytes to 10 on
   AVR, so a sketch that describes nothing — the common case — saves 9 bytes per signal,
-  while a fully described signal costs about 4 bytes more than before. The 0xF0 Signal
+  while a fully described signal costs about 6 bytes more than before. The 0xF0 Signal
   Metadata frame and the public API are unchanged. If the heap cannot hold a record the
   description is dropped and the signal itself keeps working; `printRejections()` says
   how many.

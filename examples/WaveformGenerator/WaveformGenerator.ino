@@ -133,6 +133,7 @@ void setup()
                      .withStateClass(BLAECK_STATE_CLASS_MEASUREMENT)
                      .withDisplayPrecision(3)
                      .withUnit(F("V"))
+                     .withDisplayName(F("Output"))
                      .withIcon(F("mdi:sine-wave"));
   Blaeck.addSignal(F("Frequency"), &Frequency);
 
@@ -145,6 +146,7 @@ void setup()
   Blaeck.onNumberCommand("SET_FREQ", onSetFreq)
       .withRange(0.0f, 2.0f, 1.0f / FreqStepsPerUnit)
       .withUnit(F("Hz"))
+      .withDisplayName(F("Frequency"))
       .withStateSignal(F("Frequency"));
   Blaeck.onNumberCommand("SET_AMP", onSetAmp)
       .withRange(0.0f, 100.0f, 1.0f / AmpStepsPerUnit)

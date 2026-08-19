@@ -267,13 +267,14 @@ enum BlaeckSignalMetaFlag
   BLAECK_SIG_HAS_DEVICE_CLASS = 0x0002,
   BLAECK_SIG_HAS_ICON = 0x0004,
   // Three bits, not two: Home Assistant defines five state classes counting none, and a
-  // two-bit field could hold only four. Bits 11-15 stay reserved.
+  // two-bit field could hold only four. Bits 12-15 stay reserved.
   BLAECK_SIG_STATE_CLASS_MASK = 0x0038, // bits 3-5
   BLAECK_SIG_DIAGNOSTIC = 0x0040,
   BLAECK_SIG_DISABLED_BY_DEFAULT = 0x0080,
   BLAECK_SIG_FORCE_UPDATE = 0x0100,
   BLAECK_SIG_HAS_DISPLAY_PRECISION = 0x0200,
-  BLAECK_SIG_HAS_OPTIONS = 0x0400
+  BLAECK_SIG_HAS_OPTIONS = 0x0400,
+  BLAECK_SIG_HAS_DISPLAY_NAME = 0x0800
 };
 static const byte BLAECK_SIG_STATE_CLASS_SHIFT = 3;
 
@@ -309,6 +310,7 @@ struct SignalMeta
   const __FlashStringHelper *DeviceClass = nullptr;
   const __FlashStringHelper *Icon = nullptr;
   const __FlashStringHelper *Options = nullptr;
+  const __FlashStringHelper *DisplayName = nullptr;
   uint16_t MetaFlags = 0;
   uint8_t DisplayPrecision = 0;
 };
@@ -609,6 +611,24 @@ static const byte MAX_COMMAND_NAME_COUNT = 40;
 // An EventTypeEntry field length meaning "to the end of the string" rather than a count.
 static const byte WHOLE_STRING = 0xFF;
 
+// F("") is nothing to say, and every modifier that takes a flash string reads it that way:
+// an empty string is stored as no declaration at all rather than announced as a blank. It
+// has to be read with pgm_read_byte, because on AVR the pointer is a flash address and
+// dereferencing it would test whatever RAM happens to be at that number.
+inline bool flashStrEmpty(const __FlashStringHelper *value)
+{
+  return value != nullptr && pgm_read_byte(reinterpret_cast<PGM_P>(value)) == 0;
+}
+
+// Whether a CSV list can serve as one, and the refusal on `debug` when it cannot: a list with
+// no entries, or with a blank entry, leaves a host nothing to offer and nothing it may report.
+// Written once and called from every withOptions() - a signal's, a channel's and a command's -
+// because the reasoning and the sentence are the same wherever the list came from. `name` is
+// what the message names, read as flash when nameInFlash says so.
+// Defined below BlaeckSerial, which owns the two CSV helpers it asks.
+bool optionsAccepted(const __FlashStringHelper *optionsCsv, Stream *debug,
+                     const char *name, bool nameInFlash);
+
 struct CommandHandlerEntry
 {
   char command[MAX_COMMAND_NAME_COUNT];
@@ -620,6 +640,7 @@ struct CommandHandlerEntry
   float meta_max = 0.0f;
   float meta_step = 0.0f;
   const __FlashStringHelper *unit = nullptr;
+  const __FlashStringHelper *displayName = nullptr;
   const __FlashStringHelper *options = nullptr;
   const __FlashStringHelper *stateSignal = nullptr;
   uint8_t stateSource = BLAECK_STATE_SIGNAL;
@@ -796,6 +817,8 @@ protected:
   void _setUnit(const __FlashStringHelper *unit)
   {
 #if BLAECK_ENABLE_COMMAND_META
+    if (blaeck_detail::flashStrEmpty(unit))
+      unit = nullptr;
     if (auto *e = _entry())
     {
       if (e->unit != unit)
@@ -806,6 +829,24 @@ protected:
     }
 #else
     (void)unit;
+#endif
+  }
+
+  void _setDisplayName(const __FlashStringHelper *displayName)
+  {
+#if BLAECK_ENABLE_COMMAND_META
+    if (blaeck_detail::flashStrEmpty(displayName))
+      displayName = nullptr;
+    if (auto *e = _entry())
+    {
+      if (e->displayName != displayName)
+      {
+        e->displayName = displayName;
+        _markDirty();
+      }
+    }
+#else
+    (void)displayName;
 #endif
   }
 
@@ -928,6 +969,32 @@ public:
   TYPE &withOwnState(const __FlashStringHelper *channelName, BlaeckStateTextGetter getStateText)
   {
     _setOwnState(channelName, getStateText);
+    return _self();
+  }
+
+  /*!
+    @brief   Declares the label a host shows in place of the name.
+
+    A command name is an identifier: the host sends it back to invoke the command, so
+    it is written to be matched rather than read - and a control ends up labelled
+    SET_FREQ. A display name splits the two: the wire keeps saying SET_FREQ, the
+    screen says "Frequency".
+
+    Presentation only. The name still identifies the command everywhere, so adding
+    this to a command already deployed relabels it and breaks nothing that sends it.
+
+    @param   displayName  What to show, as an F() literal.
+    @return  The same handle, for chaining.
+
+    @code
+      Blaeck.onNumberCommand("SET_FREQ", onSetFreq)
+          .withRange(0.0f, 2.0f, 0.01f)
+          .withDisplayName(F("Frequency"));
+    @endcode
+  */
+  TYPE &withDisplayName(const __FlashStringHelper *displayName)
+  {
+    _setDisplayName(displayName);
     return _self();
   }
 
@@ -1456,6 +1523,31 @@ public:
   }
 
   /*!
+    @brief   Declares the label a host shows in place of the name.
+
+    For when the name is doing a second job. A host that logs calls its stored column
+    by the name, so an author who wants that column to say what it measured writes
+    F("Output [V]") - and then reads the unit twice on screen. A display name splits
+    the two: the column keeps saying [V], the screen says "Output".
+
+    Presentation only. The name still identifies the signal everywhere - the symbol
+    list, the stored column, and whatever a host builds from those - so adding this
+    to a signal already deployed relabels it without moving anything.
+
+    @param   displayName  What to show, as an F() literal.
+    @return  The same handle, for chaining.
+
+    @code
+      Blaeck.addSignal(F("Output [V]"), &Output).withUnit(F("V")).withDisplayName(F("Output"));
+    @endcode
+  */
+  TYPE &withDisplayName(const __FlashStringHelper *displayName)
+  {
+    _setFlash(displayName, BLAECK_SIG_HAS_DISPLAY_NAME);
+    return _self();
+  }
+
+  /*!
     @brief   Files the signal as describing the device rather than measuring anything.
 
     Keeps it off a generated dashboard, so free memory and uptime do not crowd out
@@ -1641,6 +1733,10 @@ public:
 
     @note    A unit is ignored alongside options rather than refused.
 
+    @warning An empty list, or one holding a blank option, is ignored rather than stored,
+             and reported on the debug stream: it would hand a host a closed set it can
+             neither offer nor report a value against.
+
     @code
       Blaeck.addSignal(F("Mode"), modeText)
           .withDeviceClass(F("enum"))
@@ -1703,6 +1799,10 @@ protected:
   // Says the catalog no longer describes what the host holds. Out of line for the same
   // reason as _entry(): BlaeckSerial is still incomplete at this point in the header.
   void _markDirty() const;
+
+  // Where a refusal is explained, or nullptr when no debug stream was named. Out of line for
+  // the same reason.
+  Stream *_debugStream() const;
 
   void _setStateClass(BlaeckStateClass stateClass)
   {
@@ -1768,6 +1868,8 @@ public:
   */
   TYPE &withIcon(const __FlashStringHelper *icon)
   {
+    if (blaeck_detail::flashStrEmpty(icon))
+      icon = nullptr;
     if (auto *e = _entry())
     {
       if (e->icon != icon)
@@ -1822,6 +1924,8 @@ public:
   */
   TYPE &withDeviceClass(const __FlashStringHelper *deviceClass)
   {
+    if (blaeck_detail::flashStrEmpty(deviceClass))
+      deviceClass = nullptr;
     if (auto *e = _entry())
     {
       if (e->deviceClass != deviceClass)
@@ -1911,9 +2015,14 @@ public:
   */
   BlaeckNumericStateRef &withUnit(const __FlashStringHelper *unit)
   {
+    if (blaeck_detail::flashStrEmpty(unit))
+      unit = nullptr;
     if (auto *e = _entry())
     {
-      const uint16_t flags = (uint16_t)(e->metaFlags | BLAECK_SCH_HAS_UNIT);
+      // The bit the 0x90 writer actually sends is rebuilt from the pointer, so it is cleared
+      // here too rather than left set over a unit that is no longer there.
+      const uint16_t flags = (unit != nullptr) ? (uint16_t)(e->metaFlags | BLAECK_SCH_HAS_UNIT)
+                                               : (uint16_t)(e->metaFlags & ~BLAECK_SCH_HAS_UNIT);
       if (e->unit != unit || e->metaFlags != flags)
       {
         e->unit = unit;
@@ -2025,6 +2134,9 @@ public:
 
     @note    A unit is ignored alongside options rather than refused.
 
+    @warning An empty list, or one holding a blank option, is ignored rather than stored,
+             and reported on the debug stream, for the reason given on the signal form.
+
     @code
       Blaeck.addStateChannel(F("Mode"))
           .withDeviceClass(F("enum"))
@@ -2035,6 +2147,9 @@ public:
   {
     if (auto *e = _entry())
     {
+      // Refused rather than stored, for the reason given on the command form.
+      if (!blaeck_detail::optionsAccepted(optionsCsv, _debugStream(), e->name, e->nameInFlash))
+        return *this;
       if (e->options != optionsCsv)
       {
         e->options = optionsCsv;
@@ -4393,6 +4508,8 @@ private:
   } dblCvt;
 
   friend class BlaeckSignalRefBase;
+  friend bool blaeck_detail::optionsAccepted(const __FlashStringHelper *, Stream *,
+                                             const char *, bool);
   friend class BlaeckCommandRefBase;
   friend class BlaeckStateRefBase;
   friend class BlaeckEventChannelRef;
@@ -4552,19 +4669,10 @@ inline void BlaeckCommandRefBase::_warnStepIgnored(float st) const
 inline bool BlaeckCommandRefBase::_optionsAccepted(const __FlashStringHelper *optionsCsv) const
 {
 #if BLAECK_ENABLE_COMMAND_META
-  bool empty = BlaeckSerial::_flashCsvOptionCount(optionsCsv) == 0;
-  if (!empty && !BlaeckSerial::_flashCsvHasBlankField(optionsCsv))
-    return true;
-  if (_owner != nullptr && _owner->_debugStream != nullptr)
-  {
-    _owner->_debugStream->print(empty
-                                    ? F("withOptions ignored, needs at least one option: ")
-                                    : F("withOptions ignored, an option is blank: "));
-    if (auto *e = _entry())
-      _owner->_debugStream->print(e->command);
-    _owner->_debugStream->println(F(". Every value is rejected and a host has nothing to offer."));
-  }
-  return false;
+  auto *e = _entry();
+  return blaeck_detail::optionsAccepted(optionsCsv,
+                                        _owner != nullptr ? _owner->_debugStream : nullptr,
+                                        e != nullptr ? e->command : nullptr, false);
 #else
   (void)optionsCsv;
   return false;
@@ -4615,6 +4723,9 @@ inline void BlaeckCommandRefBase::_setOwnState(const __FlashStringHelper *channe
 inline void BlaeckSignalRefBase::_setFlash(const __FlashStringHelper *value, uint16_t bit)
 {
 #if BLAECK_ENABLE_SIGNAL_META
+  // Before anything else, so an empty literal takes the same path as leaving the call out.
+  if (blaeck_detail::flashStrEmpty(value))
+    value = nullptr;
   if (SignalMeta *m = _owner != nullptr ? _owner->_ensureSignalMeta(_index) : nullptr)
   {
     // Together, so the bit and the field can never disagree.
@@ -4623,6 +4734,7 @@ inline void BlaeckSignalRefBase::_setFlash(const __FlashStringHelper *value, uin
     {
     case BLAECK_SIG_HAS_UNIT:         slot = &m->Unit; break;
     case BLAECK_SIG_HAS_DEVICE_CLASS: slot = &m->DeviceClass; break;
+    case BLAECK_SIG_HAS_DISPLAY_NAME: slot = &m->DisplayName; break;
     default:                          slot = &m->Icon; break;
     }
     const uint16_t flags = (value != nullptr) ? (uint16_t)(m->MetaFlags | bit)
@@ -4686,7 +4798,13 @@ inline void BlaeckSignalRefBase::_setStateClass(BlaeckStateClass stateClass)
 inline void BlaeckSignalRefBase::_setOptions(const __FlashStringHelper *optionsCsv)
 {
 #if BLAECK_ENABLE_SIGNAL_META
-  if (SignalMeta *m = _owner != nullptr ? _owner->_ensureSignalMeta(_index) : nullptr)
+  // Refused rather than stored, so a list that is not one leaves the signal as it was.
+  if (_owner == nullptr || _index < 0 || _index >= _owner->_signalIndex ||
+      !blaeck_detail::optionsAccepted(optionsCsv, _owner->_debugStream,
+                                      _owner->Signals[_index].SignalName,
+                                      _owner->Signals[_index].NameInFlash))
+    return;
+  if (SignalMeta *m = _owner->_ensureSignalMeta(_index))
   {
     const uint16_t flags = (optionsCsv != nullptr)
                                ? (uint16_t)(m->MetaFlags | BLAECK_SIG_HAS_OPTIONS)
@@ -4749,6 +4867,11 @@ inline void BlaeckStateRefBase::_markDirty() const
   if (_owner != nullptr)
     _owner->_stateCatalogDirty = true;
 #endif
+}
+
+inline Stream *BlaeckStateRefBase::_debugStream() const
+{
+  return _owner != nullptr ? _owner->_debugStream : nullptr;
 }
 
 inline BlaeckEventChannelRef BlaeckEventChannelRef::withIcon(const __FlashStringHelper *icon)

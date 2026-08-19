@@ -113,6 +113,7 @@ gets no entry in the frame and costs nothing on the wire.
 | `disabledByDefault()` | Registered, but switched off until someone enables it | ● | ● | ● |
 | `forceUpdate()` | Report every reading, even one identical to the last | ● | ● | ● |
 | `withOptions(F("a,b,c"))` | The closed set of values reported. Home Assistant needs `withDeviceClass(F("enum"))` alongside it, and every value reported must be in the list | | ● | |
+| `withDisplayName(F("Output"))` | Label shown in place of the name. The name still identifies the signal — the symbol list, a logged column, and anything a host builds from those | ● | ● | ● |
 
 The three booleans take an argument, so `diagnostic(isDebugBuild)` works as well.
 
@@ -120,7 +121,7 @@ Each datatype returns its own handle, so a modifier that cannot mean anything fo
 does not compile: a string has no decimals and no statistics, and a bool becomes a
 `binary_sensor`, which has no unit either.
 
-Metadata is only paid for by the signals that have it: a described signal costs about 13
+Metadata is only paid for by the signals that have it: a described signal costs about 15
 bytes of SRAM, one you say nothing about costs 2. Set `BLAECK_ENABLE_SIGNAL_META` to `0`
 to drop even those: the methods still compile and store nothing, so no `#ifdef` is needed.
 
@@ -230,11 +231,17 @@ does not compile rather than quietly doing nothing.
 | `withMaxLength(32)` | | | | | ● |
 | `withStateSignal(F("Name"))` | ● | ● | ● | ● | ● |
 | `withOwnState(F("Name"), getter)` | ● | ● | ● | ● | ● |
+| `withDisplayName(F("Frequency"))` | ● | ● | ● | ● | ● |
 | `config()` / `diagnostic()` | ● | ● | ● | ● | ● |
 
 `withStateSignal` names the signal that mirrors the command's value, so a dashboard shows what the
 device holds rather than what was last sent. `withOwnState` has the command carry its own value
 instead, on a state channel it owns — for a control with no signal behind it.
+
+`withDisplayName` labels the control something other than its name. A command name is an
+identifier — the host sends `SET_FREQ` back to invoke it — so it is written to be matched rather
+than read, and a display name is how the screen says "Frequency" while the wire keeps saying
+`SET_FREQ`.
 
 All metadata strings must be `F()` literals: they are stored as pointers, never copied.
 
