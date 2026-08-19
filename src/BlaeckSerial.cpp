@@ -5043,10 +5043,12 @@ void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
   //   [maxLen(2)]              if flags.isText     (LE uint16)
   //   [step(4)]                if flags.hasStep    (LE float)
   //   [displayName\0]          if flags.hasDisplayName
+  //   [deviceClass\0]          if flags.hasDeviceClass
   // flags bits: 0=hasRange 1=hasUnit 2=hasOptions 3=hasStateSignal 4=isText
-  //             5-6=entity category 7=hasStep 8=hasDisplayName. Bits 9-15 reserved - two
-  //             bytes rather than one, so the catalog has room to grow without taking a
-  //             new message key.
+  //             5-6=entity category 7=hasStep 8=hasDisplayName 9-10=number render mode
+  //             (0 auto, 1 box, 2 slider, 3 reserved) 11=hasDeviceClass. Bits 12-15
+  //             reserved - two bytes rather than one, so the catalog has room to grow
+  //             without taking a new message key.
   // Optional fields follow in bit order, as they do in 0x90 and 0xF0, which is why the step
   // trails the text length rather than sitting with the min and max it was once sent beside.
   // hasStep is separate from hasRange because the two are independently optional: a range is
@@ -5057,7 +5059,7 @@ void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
   // it, so a reader should not assume bit 0 whenever bit 7 is set.
   // src says what stateSignal names: 0 an addSignal() signal, 1 an
   // addStateChannel() channel (BlaeckStateSource). It rides with the name rather
-  // than taking a flags bit of its own, of which bits 9-15 are still free.
+  // than taking a flags bit of its own, of which bits 12-15 are still free.
   // The two leading bytes are the entry's device identity, msConfig and slaveID: zero from
   // a single-device library, rewritten by an aggregator relaying several boards. Not
   // padding - without them a catalog could name only one device.
@@ -5108,6 +5110,13 @@ void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
         flags |= 0x0080;
       if (e.displayName != nullptr)
         flags |= 0x0100;
+      // Render hint in bits 9-10, needing no payload either. AUTO is zero, so a command that
+      // never asked for one leaves the bits clear and the host keeps its own default rather
+      // than being handed one that says nothing.
+      if (e.kind == BLAECK_CMD_NUMBER)
+        flags |= (uint16_t)((e.numberMode & 0x03) << 9);
+      if (e.deviceClass != nullptr)
+        flags |= 0x0800;
 
       // How long a command this device can receive: characters between the delimiters, terminator
       // excluded. The same on every entry - one buffer serves them all - but carried here so each
@@ -5153,6 +5162,8 @@ void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
       }
       if (flags & 0x0100)
         _bufFlashStr0(e.displayName);
+      if (flags & 0x0800)
+        _bufFlashStr0(e.deviceClass);
     }
 
       _bufFooter();
@@ -5207,6 +5218,13 @@ void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
         flags |= 0x0080;
       if (e.displayName != nullptr)
         flags |= 0x0100;
+      // Render hint in bits 9-10, needing no payload either. AUTO is zero, so a command that
+      // never asked for one leaves the bits clear and the host keeps its own default rather
+      // than being handed one that says nothing.
+      if (e.kind == BLAECK_CMD_NUMBER)
+        flags |= (uint16_t)((e.numberMode & 0x03) << 9);
+      if (e.deviceClass != nullptr)
+        flags |= 0x0800;
 
       // How long a command this device can receive: characters between the delimiters, terminator
       // excluded. The same on every entry - one buffer serves them all - but carried here so each
@@ -5261,6 +5279,11 @@ void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
       if (flags & 0x0100)
       {
         StreamRef->print(e.displayName);
+        StreamRef->write((byte)0);
+      }
+      if (flags & 0x0800)
+      {
+        StreamRef->print(e.deviceClass);
         StreamRef->write((byte)0);
       }
     }

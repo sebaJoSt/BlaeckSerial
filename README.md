@@ -228,6 +228,8 @@ does not compile rather than quietly doing nothing.
 | `withRange(min, max, step)` — required | ● | | | | |
 | `withOptions(F("A,B,C"))` — required | | | ● | | |
 | `withUnit(F("Hz"))` | ● | | | | |
+| `withMode(BLAECK_NUMBER_MODE_BOX)` | ● | | | | |
+| `withDeviceClass(F("temperature"))` | ● | ● | | ● | |
 | `withMaxLength(32)` | | | | | ● |
 | `withStateFromSignal(F("Name"))` | ● | ● | ● | ● | ● |
 | `withOwnState(F("Name"), getter)` | ● | ● | ● | ● | ● |
@@ -243,6 +245,23 @@ which is not logged. Naming versus creating is why only one of the two takes a s
 identifier — the host sends `SET_FREQ` back to invoke it — so it is written to be matched rather
 than read, and a display name is how the screen says "Frequency" while the wire keeps saying
 `SET_FREQ`.
+
+`withMode` asks for a typed box or a dragged slider. It is a hint about entry and not about
+validity — the range is what bounds the value — so leaving it out is the right answer for most
+controls and lets the host choose. Say it where one form is clearly wrong: a setpoint read to two
+decimals is not reachable by dragging, and a slider card computes `min + n*step` in floating point,
+so it hands back 21.200000000000003 for a step of 0.1.
+
+`withDeviceClass` names what the control acts on, and the vocabulary is the host's, not ours — a
+different one per kind. A number takes a measurable quantity (`temperature`, `pressure`, `power`,
+and some fifty more), a switch takes only `outlet` or `switch`, a button only `restart`, `identify`
+or `update`. A select and a text field take none, which is why the modifier is not offered there.
+
+On a number it does more than pick an icon: for the classes a host knows how to convert, the value
+is shown in the reader's own units. That conversion runs both ways and never reaches the device —
+a control declared in Celsius is typed in Fahrenheit and arrives back in Celsius — so the range
+stays expressed in the unit the sketch declared and `withRange` keeps meaning what it says. Declare
+the matching `withUnit` alongside it, or the host converts from an assumption.
 
 All metadata strings must be `F()` literals: they are stored as pointers, never copied.
 

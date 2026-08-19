@@ -133,7 +133,8 @@ void setup()
       .withRange(0.0f, 2.0f, FreqStep)
       .withUnit(F("Hz"))
       .withDisplayName(F("Frequency"))
-      .withStateFromSignal(F("Frequency"));
+      .withStateFromSignal(F("Frequency"))
+      .withMode(BLAECK_NUMBER_MODE_BOX);
   Blaeck.onNumberCommand("SET_AMP", onSetAmp)
       .withRange(0.0f, 100.0f, AmpStep)
       .withDisplayName(F("Amplitude"))

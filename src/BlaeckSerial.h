@@ -394,6 +394,20 @@ enum BlaeckEntityCategory
   BLAECK_CAT_DIAGNOSTIC = 2 // HA entity_category "diagnostic"
 };
 
+// How a host should render a number command's input (0xA0 CommandFlags bits 9-10). AUTO is
+// what a command that never called withMode() carries, and leaves the choice to the host -
+// which is why it is zero: the bits stay clear and nothing is claimed. BOX asks for a typed
+// field, SLIDER for a dragged one.
+//
+// A hint, not a constraint. The range is what bounds the value; this only says how it is
+// most usefully entered, and a host is free to ignore it.
+enum BlaeckNumberMode
+{
+  BLAECK_NUMBER_MODE_AUTO = 0,   // host decides (default)
+  BLAECK_NUMBER_MODE_BOX = 1,    // HA mode "box"
+  BLAECK_NUMBER_MODE_SLIDER = 2  // HA mode "slider"
+};
+
 // What a typed command's state name refers to, carried in the 0xA0 entry as one byte after
 // that name. The library sets it from how the command was declared; a sketch does not pass
 // it. Kept public because it is part of the frame's vocabulary.
@@ -640,11 +654,13 @@ struct CommandHandlerEntry
   float meta_max = 0.0f;
   float meta_step = 0.0f;
   const __FlashStringHelper *unit = nullptr;
+  const __FlashStringHelper *deviceClass = nullptr;
   const __FlashStringHelper *displayName = nullptr;
   const __FlashStringHelper *options = nullptr;
   const __FlashStringHelper *stateSignal = nullptr;
   uint8_t stateSource = BLAECK_STATE_SIGNAL;
   uint8_t category = BLAECK_CAT_NONE;
+  uint8_t numberMode = BLAECK_NUMBER_MODE_AUTO;
 #endif
 };
 
@@ -832,6 +848,27 @@ protected:
 #endif
   }
 
+  // Empty reads as "not declared", as it does for every flash-backed modifier. It matters more
+  // here than most: a host validates the device class against a fixed list, and a blank one
+  // fails that check and takes the whole entity with it.
+  void _setDeviceClass(const __FlashStringHelper *deviceClass)
+  {
+#if BLAECK_ENABLE_COMMAND_META
+    if (blaeck_detail::flashStrEmpty(deviceClass))
+      deviceClass = nullptr;
+    if (auto *e = _entry())
+    {
+      if (e->deviceClass != deviceClass)
+      {
+        e->deviceClass = deviceClass;
+        _markDirty();
+      }
+    }
+#else
+    (void)deviceClass;
+#endif
+  }
+
   void _setDisplayName(const __FlashStringHelper *displayName)
   {
 #if BLAECK_ENABLE_COMMAND_META
@@ -900,6 +937,25 @@ protected:
     }
 #else
     (void)category;
+#endif
+  }
+
+  // Only a number command offers withMode(), so nothing has to check the kind here. AUTO is
+  // zero, which is what makes an undeclared mode cost nothing: the bits stay clear and the
+  // host applies its own default rather than being told one.
+  void _setNumberMode(uint8_t mode)
+  {
+#if BLAECK_ENABLE_COMMAND_META
+    if (auto *e = _entry())
+    {
+      if (e->numberMode != mode)
+      {
+        e->numberMode = mode;
+        _markDirty();
+      }
+    }
+#else
+    (void)mode;
 #endif
   }
 
@@ -1077,6 +1133,73 @@ public:
   }
 
   /*!
+    @brief   Asks a host to render the input as a typed box or a dragged slider.
+
+    A hint about entry, not about validity: the range is what bounds the value, and
+    a host is free to ignore this. Leave it out and the host decides, which is the
+    right answer for most controls - say it only where one form is clearly wrong,
+    such as a setpoint read to two decimals that no one can hit by dragging.
+
+    @param   mode  BLAECK_NUMBER_MODE_BOX for a typed field,
+                   BLAECK_NUMBER_MODE_SLIDER for a dragged one.
+                   BLAECK_NUMBER_MODE_AUTO is the default and declares nothing.
+    @return  The same handle, for chaining.
+
+    @note    A slider offers min + n*step, computed in floating point, so a host can
+             hand back 21.200000000000003 for a step of 0.1. Nothing is rounded on
+             the way in - a step is display resolution and never validated - so a
+             sketch that needs the round number snaps to it itself.
+
+    @code
+      Blaeck.onNumberCommand("SET_FREQ", onSetFreq)
+          .withRange(0.0f, 2.0f, 0.01f)
+          .withMode(BLAECK_NUMBER_MODE_BOX);
+    @endcode
+  */
+  BlaeckNumberCommandRef &withMode(BlaeckNumberMode mode)
+  {
+    _setNumberMode((uint8_t)mode);
+    return *this;
+  }
+
+  /*!
+    @brief   Names what kind of quantity this control sets.
+
+    A host uses it to pick an icon and, for the classes it knows how to convert, to
+    show the value in the reader's own units. The conversion runs both ways and the
+    device is never part of it: a control declaring "temperature" in Celsius, read by
+    someone whose system is set to Fahrenheit, is typed in Fahrenheit and arrives here
+    already converted back to Celsius. So the range stays expressed in the unit the
+    sketch declared, and validation keeps meaning what it says.
+
+    @param   deviceClass  A Home Assistant number device class as an F() literal:
+                          "temperature", "pressure", "power", "frequency", "voltage",
+                          "humidity" and some fifty more. Lower case.
+    @return  The same handle, for chaining.
+
+    @note    The list is not the one a binary sensor draws from, and not quite the one
+             a signal draws from either: a number takes no "enum", "timestamp" or
+             "date". A class a host does not know fails its check and drops this one
+             control, so a name worth guessing at is better left out.
+
+    @warning Declare the matching unit with withUnit(). A converting class with no
+             unit leaves a host converting from nothing, and the value it shows is
+             then only as right as its assumption.
+
+    @code
+      Blaeck.onNumberCommand("SET_TEMP", onSetTemp)
+          .withRange(5.0f, 30.0f, 0.5f)
+          .withUnit(F("\xC2\xB0" "C"))
+          .withDeviceClass(F("temperature"));
+    @endcode
+  */
+  BlaeckNumberCommandRef &withDeviceClass(const __FlashStringHelper *deviceClass)
+  {
+    _setDeviceClass(deviceClass);
+    return *this;
+  }
+
+  /*!
     @brief   Carries this command's state as a number read straight from a variable.
 
     Saves the sketch formatting anything: the value is sent typed and the host
@@ -1184,6 +1307,27 @@ public:
   using BlaeckCommandRefShared<BlaeckSwitchCommandRef>::withOwnState;
 
   /*!
+    @brief   Says whether this switch drives a socket or something else.
+
+    Only changes the icon and the wording a host uses for on and off. Nothing about
+    the command changes, and leaving it out is right for most switches.
+
+    @param   deviceClass  "outlet" for a mains socket, "switch" for anything else.
+                          Those two are the whole list a switch may draw from - it is
+                          not the one a number or a binary sensor uses.
+    @return  The same handle, for chaining.
+
+    @code
+      Blaeck.onSwitchCommand("SET_RELAY", onSetRelay).withDeviceClass(F("outlet"));
+    @endcode
+  */
+  BlaeckSwitchCommandRef &withDeviceClass(const __FlashStringHelper *deviceClass)
+  {
+    _setDeviceClass(deviceClass);
+    return *this;
+  }
+
+  /*!
     @brief   Carries this switch's state as the bool it already is.
 
     The host renders it using the on and off payloads it declared, so the sketch
@@ -1259,6 +1403,30 @@ class BlaeckButtonCommandRef : public BlaeckCommandRefShared<BlaeckButtonCommand
 {
 public:
   BlaeckButtonCommandRef(BlaeckSerial *owner, int16_t index) : BlaeckCommandRefShared<BlaeckButtonCommandRef>(owner, index) {}
+
+  /*!
+    @brief   Says what pressing this button does.
+
+    Only changes the icon and how a host words the confirmation, but it is worth
+    saying on the two presses that are worth thinking twice about.
+
+    @param   deviceClass  "restart", "identify" or "update". Those three are the whole
+                          list a button may draw from, and it is not the one a number
+                          or a switch uses.
+    @return  The same handle, for chaining.
+
+    @note    A button is a trigger with no value, so diagnostic() usually belongs
+             alongside this: a reboot is not what someone opens a dashboard to see.
+
+    @code
+      Blaeck.onButtonCommand("REBOOT", onReboot).withDeviceClass(F("restart")).diagnostic();
+    @endcode
+  */
+  BlaeckButtonCommandRef &withDeviceClass(const __FlashStringHelper *deviceClass)
+  {
+    _setDeviceClass(deviceClass);
+    return *this;
+  }
 };
 
 class BlaeckTextCommandRef : public BlaeckCommandRefShared<BlaeckTextCommandRef>
