@@ -1067,72 +1067,14 @@ protected:
 // its kind all the way down. The repetition is the point: this reads as a table of what each
 // control accepts, and it is what an editor offers when the dot is typed.
 
-// The four every command handle shares. A template rather than a macro so each method is a real
-// declaration with a real comment: a comment inside a macro body documents nothing, because the
-// compiler and the editor both see only the expansion. TYPE is the handle deriving from this, so
-// each returns its own type and the chain keeps working.
+// The four every command handle shares, including a button's. A template rather than a macro so
+// each method is a real declaration with a real comment: a comment inside a macro body documents
+// nothing, because the compiler and the editor both see only the expansion. TYPE is the handle
+// deriving from this, so each returns its own type and the chain keeps working.
 template <class TYPE>
 class BlaeckCommandRefShared : public BlaeckCommandRefBase
 {
 public:
-  /*!
-    @brief   Points the command at a signal that mirrors its value.
-
-    A host then shows what the device holds rather than what was last sent, so a
-    value the firmware clamped or refused is visible. Leave it out for a control that
-    is assumed to have taken effect.
-
-    The signal is logged, which is what decides between this and withOwnState():
-    use this for a setpoint that belongs in the data next to what it controls, and
-    withOwnState() for one that does not. This names a signal that already exists,
-    where withOwnState() creates the channel it reports on.
-
-    @param   signalName  A signal already added with addSignal().
-    @return  The same handle, for chaining.
-
-    @code
-      Blaeck.addSignal(F("LED_State"), &ledState);
-      Blaeck.onSwitchCommand("LED", onLED).withStateFromSignal(F("LED_State"));
-    @endcode
-  */
-  TYPE &withStateFromSignal(const __FlashStringHelper *signalName)
-  {
-    _setStateSignal(signalName);
-    return _self();
-  }
-
-  /*!
-    @brief   Gives the command a state channel of its own, filled by a getter.
-
-    The counterpart to withStateFromSignal(), for a value that should not be logged:
-    this creates the channel rather than naming a signal that exists. The channel
-    belongs to the command, so addStateChannel() and writeState() both refuse the
-    name and the value can only come from one place. It needs no signals at all, so
-    a device that logs nothing can still report what its controls are set to.
-
-    Push a change with writeCommandState(); otherwise the channel is read only when
-    a host asks.
-
-    @param   channelName   Name for the channel. Takes a slot from the state channel
-                           table, so count it in withStateChannels().
-    @param   getStateText  Called to produce the current value as text.
-    @return  The same handle, for chaining.
-
-    @warning The getter runs while a frame is being assembled and must not send one,
-             for the reason given on withStateText().
-
-    @code
-      Blaeck.onNumberCommand("SET_OFFSET", onSetOffset)
-          .withRange(-100.0f, 100.0f, 0.1f)
-          .withOwnState(F("Offset"), offsetText);
-    @endcode
-  */
-  TYPE &withOwnState(const __FlashStringHelper *channelName, BlaeckStateTextGetter getStateText)
-  {
-    _setOwnState(channelName, getStateText);
-    return _self();
-  }
-
   /*!
     @brief   Declares the label a host shows in place of the name.
 
@@ -1220,19 +1162,90 @@ public:
 protected:
   BlaeckCommandRefShared(BlaeckSerial *owner, int16_t index) : BlaeckCommandRefBase(owner, index) {}
 
-private:
   TYPE &_self() { return *static_cast<TYPE *>(this); }
 };
 
-class BlaeckNumberCommandRef : public BlaeckCommandRefShared<BlaeckNumberCommandRef>
+// The two state modifiers, on a layer of their own because a button has no state to report.
+// Home Assistant's MQTT button subscribes to nothing - there is no state_topic in its schema,
+// and what it shows as the entity's state is a timestamp of the last press that Home Assistant
+// writes itself. So a state a button declared could never arrive anywhere, and saying so here
+// costs a compile error rather than a channel that quietly goes nowhere. Every other kind
+// derives from this; the button derives from the base above.
+template <class TYPE>
+class BlaeckCommandRefStateful : public BlaeckCommandRefShared<TYPE>
 {
 public:
-  BlaeckNumberCommandRef(BlaeckSerial *owner, int16_t index) : BlaeckCommandRefShared<BlaeckNumberCommandRef>(owner, index) {}
+  /*!
+    @brief   Points the command at a signal that mirrors its value.
+
+    A host then shows what the device holds rather than what was last sent, so a
+    value the firmware clamped or refused is visible. Leave it out for a control that
+    is assumed to have taken effect.
+
+    The signal is logged, which is what decides between this and withOwnState():
+    use this for a setpoint that belongs in the data next to what it controls, and
+    withOwnState() for one that does not. This names a signal that already exists,
+    where withOwnState() creates the channel it reports on.
+
+    @param   signalName  A signal already added with addSignal().
+    @return  The same handle, for chaining.
+
+    @code
+      Blaeck.addSignal(F("LED_State"), &ledState);
+      Blaeck.onSwitchCommand("LED", onLED).withStateFromSignal(F("LED_State"));
+    @endcode
+  */
+  TYPE &withStateFromSignal(const __FlashStringHelper *signalName)
+  {
+    this->_setStateSignal(signalName);
+    return this->_self();
+  }
+
+  /*!
+    @brief   Gives the command a state channel of its own, filled by a getter.
+
+    The counterpart to withStateFromSignal(), for a value that should not be logged:
+    this creates the channel rather than naming a signal that exists. The channel
+    belongs to the command, so addStateChannel() and writeState() both refuse the
+    name and the value can only come from one place. It needs no signals at all, so
+    a device that logs nothing can still report what its controls are set to.
+
+    Push a change with writeCommandState(); otherwise the channel is read only when
+    a host asks.
+
+    @param   channelName   Name for the channel. Takes a slot from the state channel
+                           table, so count it in withStateChannels().
+    @param   getStateText  Called to produce the current value as text.
+    @return  The same handle, for chaining.
+
+    @warning The getter runs while a frame is being assembled and must not send one,
+             for the reason given on withStateText().
+
+    @code
+      Blaeck.onNumberCommand("SET_OFFSET", onSetOffset)
+          .withRange(-100.0f, 100.0f, 0.1f)
+          .withOwnState(F("Offset"), offsetText);
+    @endcode
+  */
+  TYPE &withOwnState(const __FlashStringHelper *channelName, BlaeckStateTextGetter getStateText)
+  {
+    this->_setOwnState(channelName, getStateText);
+    return this->_self();
+  }
+
+protected:
+  BlaeckCommandRefStateful(BlaeckSerial *owner, int16_t index) : BlaeckCommandRefShared<TYPE>(owner, index) {}
+};
+
+class BlaeckNumberCommandRef : public BlaeckCommandRefStateful<BlaeckNumberCommandRef>
+{
+public:
+  BlaeckNumberCommandRef(BlaeckSerial *owner, int16_t index) : BlaeckCommandRefStateful<BlaeckNumberCommandRef>(owner, index) {}
 
   // Declaring withOwnState() below would otherwise hide the getter form inherited from the
   // base - C++ hides by name, not by signature. The macro this replaced pasted both into one
   // scope, so nothing had to say this.
-  using BlaeckCommandRefShared<BlaeckNumberCommandRef>::withOwnState;
+  using BlaeckCommandRefStateful<BlaeckNumberCommandRef>::withOwnState;
 
   /*!
     @brief   Declares the unit shown beside the input.
@@ -1418,10 +1431,10 @@ public:
   }
 };
 
-class BlaeckSwitchCommandRef : public BlaeckCommandRefShared<BlaeckSwitchCommandRef>
+class BlaeckSwitchCommandRef : public BlaeckCommandRefStateful<BlaeckSwitchCommandRef>
 {
 public:
-  BlaeckSwitchCommandRef(BlaeckSerial *owner, int16_t index) : BlaeckCommandRefShared<BlaeckSwitchCommandRef>(owner, index) {}
+  BlaeckSwitchCommandRef(BlaeckSerial *owner, int16_t index) : BlaeckCommandRefStateful<BlaeckSwitchCommandRef>(owner, index) {}
 
   // Declaring withOwnState() below would otherwise hide the getter form inherited from the
   // base - C++ hides by name, not by signature. The macro this replaced pasted both into one
@@ -1433,7 +1446,7 @@ public:
   // "0" whichever was written. Anything else reports nothing at all rather than guessing at
   // off. Use the bool overload below where there is a bool to point at; the getter is for a
   // switch whose position is worked out rather than stored.
-  using BlaeckCommandRefShared<BlaeckSwitchCommandRef>::withOwnState;
+  using BlaeckCommandRefStateful<BlaeckSwitchCommandRef>::withOwnState;
 
   /*!
     @brief   Says whether this switch drives a socket or something else.
@@ -1479,15 +1492,15 @@ public:
   }
 };
 
-class BlaeckSelectCommandRef : public BlaeckCommandRefShared<BlaeckSelectCommandRef>
+class BlaeckSelectCommandRef : public BlaeckCommandRefStateful<BlaeckSelectCommandRef>
 {
 public:
-  BlaeckSelectCommandRef(BlaeckSerial *owner, int16_t index) : BlaeckCommandRefShared<BlaeckSelectCommandRef>(owner, index) {}
+  BlaeckSelectCommandRef(BlaeckSerial *owner, int16_t index) : BlaeckCommandRefStateful<BlaeckSelectCommandRef>(owner, index) {}
 
   // Declaring withOwnState() below would otherwise hide the getter form inherited from the
   // base - C++ hides by name, not by signature. The macro this replaced pasted both into one
   // scope, so nothing had to say this.
-  using BlaeckCommandRefShared<BlaeckSelectCommandRef>::withOwnState;
+  using BlaeckCommandRefStateful<BlaeckSelectCommandRef>::withOwnState;
 
   /*!
     @brief   Carries this select's state as the option index the sketch switches on.
@@ -1558,15 +1571,15 @@ public:
   }
 };
 
-class BlaeckTextCommandRef : public BlaeckCommandRefShared<BlaeckTextCommandRef>
+class BlaeckTextCommandRef : public BlaeckCommandRefStateful<BlaeckTextCommandRef>
 {
 public:
-  BlaeckTextCommandRef(BlaeckSerial *owner, int16_t index) : BlaeckCommandRefShared<BlaeckTextCommandRef>(owner, index) {}
+  BlaeckTextCommandRef(BlaeckSerial *owner, int16_t index) : BlaeckCommandRefStateful<BlaeckTextCommandRef>(owner, index) {}
 
   // Declaring withOwnState() below would otherwise hide the getter form inherited from the
   // base - C++ hides by name, not by signature. The macro this replaced pasted both into one
   // scope, so nothing had to say this.
-  using BlaeckCommandRefShared<BlaeckTextCommandRef>::withOwnState;
+  using BlaeckCommandRefStateful<BlaeckTextCommandRef>::withOwnState;
 
   /*!
     @brief   Carries this control's state as the buffer the text already lives in.

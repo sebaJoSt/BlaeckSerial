@@ -232,8 +232,8 @@ does not compile rather than quietly doing nothing.
 | `withDeviceClass(F("temperature"))` | ● | ● | | ● | |
 | `withIcon(F("mdi:tune"))` | ● | ● | ● | ● | ● |
 | `withMaxLength(32)` | | | | | ● |
-| `withStateFromSignal(F("Name"))` | ● | ● | ● | ● | ● |
-| `withOwnState(F("Name"), getter)` | ● | ● | ● | ● | ● |
+| `withStateFromSignal(F("Name"))` | ● | ● | ● | | ● |
+| `withOwnState(F("Name"), getter)` | ● | ● | ● | | ● |
 | `withDisplayName(F("Frequency"))` | ● | ● | ● | ● | ● |
 | `config()` / `diagnostic()` | ● | ● | ● | ● | ● |
 
@@ -258,6 +258,11 @@ the command topic is read with, so what a device reports and what it accepts can
 There is one place this cannot reach: `withStateFromSignal` pointing at a *string* signal, since a
 signal is logged data and the library will not rewrite it — point a switch at a `bool`, or a select
 at its index, and that is moot.
+
+The button is the one kind offering neither, because a press is not a value: Home Assistant gives
+its button entity a timestamp of the last press that it writes itself, and subscribes to nothing.
+A state a button declared would have nowhere to arrive, so the modifiers are not on the handle and
+saying otherwise costs a compile error rather than a channel that goes nowhere.
 
 Resolving an option name needs somewhere to build it, and that buffer is `24` characters by
 default. A longer option is reported as nothing rather than as a truncated name that would match
