@@ -1211,6 +1211,20 @@ int BlaeckSerial::_registerCommand(const char *command, BlaeckCommandHandler han
     _rejectedCommandCount++;
     return -1;
   }
+  // A leading sigil opens the prefix section of a received frame, so a name starting with one
+  // could never be reached: the parser would take it for a prefix item and hand the handler
+  // table whatever followed. Refused at declaration rather than registered unreachable, which
+  // would look like a working command that is never called.
+  if (command[0] == '#' || command[0] == '@')
+  {
+    if (_debugStream != nullptr)
+    {
+      _debugStream->print("Command name starts with a reserved prefix character: ");
+      _debugStream->println(command);
+    }
+    _rejectedCommandCount++;
+    return -1;
+  }
 
   if (!_ensureCommandTable())
   {
@@ -1954,6 +1968,8 @@ void BlaeckSerial::_parseCommandTokens(const char *raw)
 {
   _parsedCommand[0] = '\0';
   _parsedParamCount = 0;
+  _parsedCorrelationId = 0;
+  _parsedPrefixLen = 0;
   // Characters were dropped while the frame was being received, so whatever follows is a
   // fragment however complete it looks. Reset here with the rest of the parse state rather
   // than after the empty-frame check, or an empty frame would inherit the previous verdict.
@@ -1973,6 +1989,40 @@ void BlaeckSerial::_parseCommandTokens(const char *raw)
 
   // Manual comma-scanner that preserves empty fields between consecutive commas.
   char *p = _parsedTokenBuffer;
+
+  // The prefix section: zero or more sigil-tagged items, each closed by ':', before the
+  // command name. Each item names itself, so order carries no meaning and a reader stops at
+  // the first character that is not a sigil it knows. This library knows only '#'; a routing
+  // '@' belongs to something that can forward, and a board that cannot route should answer
+  // UNKNOWN_COMMAND rather than quietly run a command addressed elsewhere - which is what
+  // leaving it unparsed does, since the name then keeps the prefix and matches nothing.
+  //
+  // A malformed item is not consumed either. Everything from the sigil onward stays part of
+  // the name, so it fails to match and is reported, rather than being silently dropped and
+  // leaving a command that ran without the id its sender is waiting for.
+  while (*p == '#')
+  {
+    const char *scan = p + 1;
+    uint32_t id = 0;
+    byte digits = 0;
+    while (*scan >= '0' && *scan <= '9' && digits < 5)
+    {
+      id = id * 10UL + (uint32_t)(*scan - '0');
+      scan++;
+      digits++;
+    }
+    // Zero means "no id" and is not a value a sender may use, so it is refused with the rest
+    // of the malformed forms rather than accepted as a number that says nothing.
+    if (digits == 0 || *scan != ':' || id == 0 || id > 65535UL)
+      break;
+    _parsedCorrelationId = (uint16_t)id;
+    p = (char *)scan + 1;
+  }
+  // Where the payload starts, so the ack can hash the command as its sender wrote it. The
+  // prefix is addressing, not content: a relay strips a routing item before a board ever sees
+  // it, so a hash taken over the received bytes would cover different characters depending on
+  // how the frame arrived, and would never match what the sender hashed.
+  _parsedPrefixLen = (byte)(p - _parsedTokenBuffer);
 
   // Extract command (first token before the first comma)
   char *tokenStart = p;
@@ -2111,12 +2161,26 @@ void BlaeckSerial::_writeCommandAck(const char *rawCommand, byte status, byte re
   // hash cannot, because the bytes are not the ones the sender wrote.
   uint32_t nameHash = (_parsedCommand[0] == '\0') ? 0UL : _fnv1a32(_parsedCommand);
 
+  // Past the prefix section, so the hash covers the command as its sender wrote it rather than
+  // as it happened to arrive. See _parseCommandTokens(). Guarded against a raw string shorter
+  // than the prefix, which cannot happen from the parse above but would read past the end here.
+  const char *payload = rawCommand;
+  if (payload != nullptr && _parsedPrefixLen > 0 && strlen(payload) >= _parsedPrefixLen)
+    payload += _parsedPrefixLen;
+
+  // The header carries back what the sender put in the prefix, and 0 when it sent none. That is
+  // what pairs an ack with its command: two commands of the same name can be outstanding at
+  // once, and a hash that identifies bytes cannot say which of them is being answered. The
+  // counter this replaced numbered acks in the order the device sent them, which told a host
+  // nothing it could use.
+  uint32_t ackMsgId = (uint32_t)_parsedCorrelationId;
+
   if (_bufReady())
   {
     _bufReset();
-    _bufHeader(0xA5, _commandAckMsgId++);
+    _bufHeader(0xA5, ackMsgId);
     // Payload: command hash (4 bytes, little-endian) + name hash (4) + status (1) + reason (1).
-    ulngCvt.val = _fnv1a32(rawCommand);
+    ulngCvt.val = _fnv1a32(payload);
     _bufBytes(ulngCvt.bval, 4);
     ulngCvt.val = nameHash;
     _bufBytes(ulngCvt.bval, 4);
@@ -2131,12 +2195,12 @@ void BlaeckSerial::_writeCommandAck(const char *rawCommand, byte status, byte re
     byte msg_key = 0xA5;
     StreamRef->write(msg_key);
     StreamRef->write(":");
-    ulngCvt.val = _commandAckMsgId++;
+    ulngCvt.val = ackMsgId;
     StreamRef->write(ulngCvt.bval, 4);
     StreamRef->write(":");
 
     // Payload: command hash (4 bytes, little-endian) + name hash (4) + status (1) + reason (1).
-    ulngCvt.val = _fnv1a32(rawCommand);
+    ulngCvt.val = _fnv1a32(payload);
     StreamRef->write(ulngCvt.bval, 4);
     ulngCvt.val = nameHash;
     StreamRef->write(ulngCvt.bval, 4);

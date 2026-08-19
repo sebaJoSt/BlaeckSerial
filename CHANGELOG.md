@@ -90,6 +90,13 @@ without being configured for that board in advance.
   device describes its own controls. They join `onCommand` / `onAnyCommand` from
   6.0.0, which stay for commands that carry no metadata. 
   Requires `BLAECK_ENABLE_COMMAND_META`.
+- **Correlation ids on commands.** A sender may prefix a command with `#42:` —
+  `<#42:SET_AMP,0.9>` — and the device echoes that number in the ack's message-id
+  header, so a host can tell which command an ack answers when several of the same
+  name are outstanding. Hand-typed commands are unaffected: no prefix, no change.
+  The ack's frame hash covers the command as written, after the prefix, so it still
+  verifies the bytes while the id does the pairing. A name may not begin with `#`
+  or `@`; such a name is refused at registration rather than left unreachable.
 - **State channels (`0x90` / `0x95`).** `addStateChannel(channelName[, value])` declares a
   channel that carries the current value of something — text, bool, or any numeric type,
   the overload settling the type and with it the handle (`withUnit()`/`withStateClass()`/

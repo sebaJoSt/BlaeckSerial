@@ -4873,8 +4873,13 @@ private:
   // Set while a frame is being received, once its characters no longer fit and are being
   // dropped. The receive loop is the only place that can see it happen.
   bool _receiveOverflowed = false;
-  // Monotonic message id stamped into the 0xA5 Command Ack frame header.
-  unsigned long _commandAckMsgId = 0;
+  // What the sender put in the frame's '#' prefix, echoed in the 0xA5 header so an ack can be
+  // paired with the command it answers. 0 when the frame carried none, which is also what a
+  // sender may not send.
+  uint16_t _parsedCorrelationId = 0;
+  // How many characters of the received frame the prefix section took. The ack hashes what
+  // follows it, so the hash covers the command as written rather than as addressed.
+  byte _parsedPrefixLen = 0;
 #if BLAECK_ENABLE_STATE_CHANNELS
   // Monotonic message id stamped into the 0x95 State frame header.
   unsigned long _stateMsgId = 0;
