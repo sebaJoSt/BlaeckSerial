@@ -16,19 +16,20 @@
     state    what a control is set to, not logged     -> Amplitude, Wave, "running Sine @ 1.00 Hz"
     event    a discrete event from a fixed list       -> idle_warning, resumed
 
-  Controls:
-    SET_FREQ    number  0..2 Hz, step 0.01              state: Frequency signal
-    SET_AMP     number  0..100, step 0.1                state: its own state channel
-    SET_OFFSET  number  -100..100, step 0.1             state: its own state channel
-    SET_WAVE    select  Sine/Square/Triangle/Sawtooth   state: its own state channel
-    SET_ENABLE  switch  off -> Output = Offset          state: its own state channel
-    SET_LABEL   text    max 32 bytes, config category   state: its own state channel,
+  Controls (shown under their display name, sent as their command name):
+    SET_FREQ    number  0..2 Hz, step 0.01              "Frequency"       state: Frequency signal
+    SET_AMP     number  0..100, step 0.1                "Amplitude"       state: own channel
+    SET_OFFSET  number  -100..100, step 0.1             "Offset"          state: own channel
+    SET_WAVE    select  Sine/Square/Triangle/Sawtooth   "Waveform"        state: own channel
+    SET_ENABLE  switch  off -> Output = Offset          "Output enabled"  state: own channel
+    SET_LABEL   text    max 32 bytes, config category   "Device label"    state: own channel,
                 and the name the status line reports under
-    SET_NOTE    text    max 24 bytes                    state: the RunNote signal
-    STATUS      button  writes the StatusOnDemand channel
+    SET_NOTE    text    max 24 bytes                    "Run note"        state: RunNote signal
+    STATUS      button  writes the StatusOnDemand channel   "Request status"
 
   Signals that describe themselves (Frequency declares nothing, and costs nothing):
-    Output      measurement, 3 decimals, mdi:sine-wave
+    Output      measurement, 3 decimals, mdi:sine-wave, shown as "Output" while the column
+                it is logged to stays "Output [V]"
     RunNote     free text, logged with every row - what SET_NOTE wrote
 
   Shown but never logged (state channels):
@@ -53,7 +54,7 @@
   at the Frequency signal instead, so its value is logged - one control that way, so both are
   shown in the example here.
 
-  
+
 
   Author: Sebastian Strobl, https://github.com/sebaJoSt/BlaeckSerial
 */
@@ -61,53 +62,38 @@
 #include "Arduino.h"
 #include "BlaeckSerial.h"
 
-// Instantiate a new BlaeckSerial object
 BlaeckSerial Blaeck;
 
 //---PUBLISHED AS SIGNALS, AND SO LOGGED
-// addSignal() keeps a pointer to these, so they have to be globals. What the waveform is
-// doing (Output) and the one setting worth a history (Frequency).
+// addSignal() keeps a pointer to these, so they have to be globals.
 float Output = 0.0;
 float Frequency = 1.0; // [Hz]
+char RunNote[25] = ""; // "swapped probe", "run 3 after warm-up"
+
+//---PUBLISHED AS A STATE CHANNEL, AND SO NOT LOGGED
+unsigned long Uptime = 0; // [s], about the board rather than the wave
 
 //---PUBLISHED AS THEIR COMMANDS' OWN STATE, AND SO NOT LOGGED
-// A control reports what it is set to, which is not a measurement: it changes when someone
-// changes it and is worth nothing between times. withOwnState() points the command straight
-// at the variable, so the value travels typed and the sketch never formats it.
 float Amplitude = 1.0;
 float Offset = 0.0;
+// The wave, as its position in the SET_WAVE option list: a select command reports which
+// option was picked, never its name, so these and withOptions() below must stay in step.
+enum Wave : byte { Sine, Square, Triangle, Sawtooth };
+byte waveIndex = Sine;
 bool Enabled = true;
 char DeviceLabel[33] = "wave-gen"; // free-text label set via SET_LABEL
 
-// The note SET_NOTE writes. A signal, not a state channel, because it is worth keeping: what
-// was happening at the time is the thing a row of readings cannot say for itself. The label
-// above is the other kind - what the device is, unchanged between runs, and not worth a column.
-char RunNote[25] = ""; // "swapped probe", "run 3 after warm-up"
-
-// The step each number control declares, named once so the range and the handler cannot
-// drift apart - a control that snapped to a step it no longer advertises would be worse
-// than one that did not snap at all.
-//
-// Held as how many steps fit in a unit, because that is the number the snap divides by, and
-// dividing is what gets this right: 0.1f is not exactly a tenth, so multiplying by it lands
-// on the wrong side of 0.9 even when the value was already correct. A division is correctly
-// rounded, so 9 / 10.0f is the nearest float to 0.9 and prints as "0.9".
-const float FreqStepsPerUnit = 100.0f;   // step 0.01 Hz
-const float AmpStepsPerUnit = 10.0f;     // step 0.1
-const float OffsetStepsPerUnit = 10.0f;  // step 0.1
-
-//---PUBLISHED AS A SIGNAL, BUT ABOUT THE BOARD RATHER THAN THE WAVE
-unsigned long Uptime = 0; // [s]
+// The step each number control declares
+const float FreqStep = 0.01f;  // Hz
+const float AmpStep = 0.1f;
+const float OffsetStep = 0.1f;
 
 //---GENERATOR STATE (never leaves the sketch)
 float phase = 0.0f; // normalized phase 0..1
 unsigned long lastMicros = 0;
-// The wave, as an index: what onSetWave() is handed and what UpdateWaveform() switches on.
-byte waveIndex = 0; // 0=Sine, 1=Square, 2=Triangle, 3=Sawtooth
 
 // The handle addSignal() returns, kept so the icon can be changed after setup() - see
-// ShowWaveInIcon(). Declared empty here and assigned in setup(); until then it names no
-// signal and does nothing when called.
+// ShowWaveInIcon()
 BlaeckNumericSignalRef OutputSignal;
 
 void setup()
@@ -128,13 +114,14 @@ void setup()
   Blaeck.DeviceHWVersion = "Arduino Mega 2560 Rev3";
   Blaeck.DeviceFWVersion = "1.0";
 
-  // addSignal() returns a handle describing how a host shows the signal. Every call is optional.
+  // Everything after addSignal() is optional, and each call changes how a host shows it.
   OutputSignal = Blaeck.addSignal(F("Output [V]"), &Output)
+                     .withDisplayName(F("Output"))
+                     .withUnit(F("V"))
                      .withStateClass(BLAECK_STATE_CLASS_MEASUREMENT)
                      .withDisplayPrecision(3)
-                     .withUnit(F("V"))
-                     .withDisplayName(F("Output"))
                      .withIcon(F("mdi:sine-wave"));
+
   Blaeck.addSignal(F("Frequency"), &Frequency);
 
   // A string signal: logged like any other, one text column in the table. Every data frame
@@ -142,40 +129,41 @@ void setup()
   Blaeck.addSignal(F("RunNote"), RunNote)
       .withIcon(F("mdi:note-text"));
 
-
   Blaeck.onNumberCommand("SET_FREQ", onSetFreq)
-      .withRange(0.0f, 2.0f, 1.0f / FreqStepsPerUnit)
+      .withRange(0.0f, 2.0f, FreqStep)
       .withUnit(F("Hz"))
       .withDisplayName(F("Frequency"))
       .withStateFromSignal(F("Frequency"));
   Blaeck.onNumberCommand("SET_AMP", onSetAmp)
-      .withRange(0.0f, 100.0f, 1.0f / AmpStepsPerUnit)
+      .withRange(0.0f, 100.0f, AmpStep)
+      .withDisplayName(F("Amplitude"))
       .withOwnState(F("Amplitude"), &Amplitude);
   Blaeck.onNumberCommand("SET_OFFSET", onSetOffset)
-      .withRange(-100.0f, 100.0f, 1.0f / OffsetStepsPerUnit)
+      .withRange(-100.0f, 100.0f, OffsetStep)
+      .withDisplayName(F("Offset"))
       .withOwnState(F("Offset"), &Offset);
   Blaeck.onSelectCommand("SET_WAVE", onSetWave)
       .withOptions(F("Sine,Square,Triangle,Sawtooth"))
+      .withDisplayName(F("Waveform"))
       .withOwnState(F("Wave"), &waveIndex);
   Blaeck.onSwitchCommand("SET_ENABLE", onSetEnable)
+      .withDisplayName(F("Output enabled"))
       .withOwnState(F("Enabled"), &Enabled);
   // Host percent-encodes the value; the device decodes it and enforces the 32-byte max.
   Blaeck.onTextCommand("SET_LABEL", onSetLabel)
       .withMaxLength(sizeof(DeviceLabel) - 1)
+      .withDisplayName(F("Device label"))
       .withOwnState(F("DeviceLabel"), DeviceLabel)
       .config();
-  // The other half of the pair: SET_LABEL keeps its value on a state channel, this one on a
-  // signal, so the note is written to the table beside the readings it explains. Everything
-  // else about the two is the same call.
+  // The pair: SET_LABEL keeps its value on a state channel, SET_NOTE on a signal, so only the
+  // note reaches the table. Nothing else about the two calls differs.
   Blaeck.onTextCommand("SET_NOTE", onSetNote)
       .withMaxLength(sizeof(RunNote) - 1)
+      .withDisplayName(F("Run note"))
       .withStateFromSignal(F("RunNote"));
-  Blaeck.onButtonCommand("STATUS", onStatus);
-
-  // Describes the board rather than the waveform, so it is filed as diagnostic. A channel
-  // rather than a signal: it is worth seeing and not worth a column, since a row already
-  // carries the time it was written. The device class is what lets a host offer minutes or
-  // hours - without one the unit is only a label.
+  Blaeck.onButtonCommand("STATUS", onStatus)
+      .withDisplayName(F("Request status"));
+  // The device class is what lets a host offer minutes or hours - without one the unit is only a label.
   Blaeck.addStateChannel(F("Uptime"), &Uptime)
       .withUnit(F("s"))
       .withDeviceClass(F("duration"))
@@ -185,13 +173,12 @@ void setup()
   Blaeck.addStateChannel(F("Status")).withIcon(F("mdi:pulse")).diagnostic();
   Blaeck.addStateChannel(F("StatusOnDemand")).withIcon(F("mdi:message-text")).diagnostic();
 
-  // Each event channel declares up-front the closed set of events it can report.
   // addEventType() does the same one name at a time, for a list built conditionally.
   Blaeck.addEventChannel(F("Activity"), F("idle_warning,resumed"))
       .withIcon(F("mdi:timer-sand"));
 
-  // Everything is declared: one summary of anything a table had no room for, naming the
-  // begin() call that would have kept it. Prints nothing when all of it fitted.
+  // Silent unless a table ran out of room, in which case it prints how many entries each
+  // dropped and the begin() call that would have fitted them.
   Blaeck.printRejections(&Serial);
 
   lastMicros = micros();
@@ -210,19 +197,17 @@ void loop()
 // Gives the Output signal the icon of the wave it is currently producing, so the entity in a
 // host changes shape with the control rather than staying whatever setup() said.
 //
-// Called every pass, unconditionally, which is the point: a modifier only marks its catalog
-// when the value actually differs, so this announces the signal config once per waveform
-// change and never in between. Written the naive way on purpose - if it were expensive to
-// call repeatedly, this is where it would show.
+// Safe to call every pass: setting an icon that is already set does nothing, so the signal
+// config goes out once per waveform change and not in between.
 void ShowWaveInIcon()
 {
   const __FlashStringHelper *icon;
   switch (waveIndex)
   {
-  case 1:  icon = F("mdi:square-wave"); break;
-  case 2:  icon = F("mdi:triangle-wave"); break;
-  case 3:  icon = F("mdi:sawtooth-wave"); break;
-  default: icon = F("mdi:sine-wave"); break;
+  case Square:   icon = F("mdi:square-wave"); break;
+  case Triangle: icon = F("mdi:triangle-wave"); break;
+  case Sawtooth: icon = F("mdi:sawtooth-wave"); break;
+  default:       icon = F("mdi:sine-wave"); break;
   }
 
   OutputSignal.withIcon(icon);
@@ -247,16 +232,16 @@ void UpdateWaveform()
   float w = 0.0f;
   switch (waveIndex)
   {
-  case 1: // Square
+  case Square:
     w = (phase < 0.5f) ? 1.0f : -1.0f;
     break;
-  case 2: // Triangle: -1 at phase 0, +1 at phase 0.5
+  case Triangle: // -1 at phase 0, +1 at phase 0.5
     w = 1.0f - 4.0f * fabsf(phase - 0.5f);
     break;
-  case 3: // Sawtooth: -1 .. +1 ramp
+  case Sawtooth: // -1 .. +1 ramp
     w = 2.0f * phase - 1.0f;
     break;
-  default: // Sine
+  default:
     w = sinf((float)TWO_PI * phase);
     break;
   }
@@ -276,8 +261,6 @@ void StatusEvery10s()
   lastStatusMs = millis();
   WriteStatus(F("Status"));
 
-  // A channel is pushed, where a signal is sampled: nothing sends Uptime unless the sketch
-  // says so. The no-text overload reads the variable the channel was declared with.
   Blaeck.writeState(F("Uptime"));
 }
 
@@ -293,7 +276,7 @@ void WriteStatus(const __FlashStringHelper *channel)
 
   // DeviceLabel is what SET_LABEL wrote. Reading it here is the whole point of storing it:
   // a control that only fills a variable no one looks at teaches the call and nothing else.
-  char text[80]; // fits "wave-gen: stopped Triangle @ 2.00 Hz"
+  char text[80]; // 60 at most: a 32-byte DeviceLabel, "stopped Triangle @ 2.00 Hz"
   snprintf(text, sizeof(text), "%s: %s %s @ %s Hz", DeviceLabel, runState, waveName, freqText);
   Blaeck.writeState(channel, text);
 }
@@ -325,39 +308,33 @@ void CheckActivity()
   warned = false;
 }
 
-// A number arrives as text and is read with atof(), which on AVR is not correctly rounded:
-// "0.9" can land one float above 0.9, and Home Assistant then shows 0.90000004 - the number
-// the board really holds, reported faithfully. Snapping to the step the control declares puts
-// it back where it was asked for; a value between two steps was never meant to exist.
-//
-// Multiply and divide are not interchangeable here. roundf(v / 0.1f) * 0.1f leaves the wrong
-// float alone and turns a right one into it, because 0.1f is a shade over a tenth and the
-// error survives the multiplication. Dividing by 10 is correctly rounded, so the result is
-// the closest float to the decimal the user typed.
-static float SnapToStep(const char *text, float stepsPerUnit)
+// AVR's atof() is not correctly rounded: "0.9" can arrive as 0.90000004 and reach a dashboard.
+// Snapping to the step fixes it; multiply then divide, as 0.1f is a shade over a tenth.
+static float SnapToStep(const char *text, float step)
 {
+  const float stepsPerUnit = 1.0f / step;
   return roundf((float)atof(text) * stepsPerUnit) / stepsPerUnit;
 }
 
 void onSetFreq(const char *command, const char *const *params, byte paramCount)
 {
-  Frequency = SnapToStep(params[0], FreqStepsPerUnit);
-  // The one control backed by a signal, so it reports by writing that signal - and the value
-  // is logged. The others carry their own state instead, which is not; see onSetAmp().
+  Frequency = SnapToStep(params[0], FreqStep);
+  // Reports by writing the signal it is backed by, so this value is logged. The others carry
+  // their own state instead, which is not; see onSetAmp().
   Blaeck.write("Frequency", Frequency);
 }
 
 void onSetAmp(const char *command, const char *const *params, byte paramCount)
 {
-  Amplitude = SnapToStep(params[0], AmpStepsPerUnit);
-  // Publishes the command's own state. Pushing is what makes the new value visible at once -
-  // the channel is otherwise only read when a host polls the catalog.
+  Amplitude = SnapToStep(params[0], AmpStep);
+  // Pushing is what makes the new value visible at once - the channel is otherwise only read
+  // when a host polls the catalog.
   Blaeck.writeCommandState(command);
 }
 
 void onSetOffset(const char *command, const char *const *params, byte paramCount)
 {
-  Offset = SnapToStep(params[0], OffsetStepsPerUnit);
+  Offset = SnapToStep(params[0], OffsetStep);
   Blaeck.writeCommandState(command);
 }
 
@@ -385,13 +362,11 @@ void onSetLabel(const char *command, const char *const *params, byte paramCount)
 void onSetNote(const char *command, const char *const *params, byte paramCount)
 {
   // Arrives decoded: a host percent-encodes the value, so a note may hold the characters the
-  // frame itself is built from - a comma, an angle bracket, a percent sign - and they reach
-  // here as typed. Never longer than withMaxLength() above.
+  // frame itself is built from - a comma, an angle bracket, a percent sign.
   strcpy(RunNote, params[0]);
 }
 
 void onStatus(const char *command, const char *const *params, byte paramCount)
 {
-  // Updates only on button press, independent of the 10 s writes to "Status".
   WriteStatus(F("StatusOnDemand"));
 }
