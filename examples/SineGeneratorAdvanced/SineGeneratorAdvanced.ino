@@ -18,7 +18,7 @@
   The commands are registered with the typed helpers, so the device describes
   itself in <BLAECK.WRITE_COMMANDS> and a host (e.g. Loggbok / Home Assistant)
   can build controls for it: the two bounds are numbers with a range and a
-  state channel of their own, and the four actions are buttons.
+  state channel of their own, and the three actions are buttons.
 
   Splitting the range into "set the bounds, then press apply" is what makes
   that possible. One command taking first and last with magic values for
@@ -113,7 +113,7 @@ void setup()
   Blaeck.DeviceFWVersion = FW_VERSION;
 
   // Typed: each becomes a dashboard control. The bounds are numbers keeping their value on a
-  // state channel of their own; applying them is a button, as is STATUS.
+  // state channel of their own; applying them is a button.
   //
   // A bound is a setting, not a measurement, so it is not a signal: a signal is a column in
   // every logged row, and these two would be a constant repeated on each one. The state
@@ -142,14 +142,11 @@ void setup()
       .withPressPayload(F("1," STRINGIFY(MAXIMUM_SIGNALS)))
       .withDisplayName(F("Activate all signals"))
       .withIcon(F("mdi:select-all"));
-  Blaeck.onButtonCommand("STATUS", onStatus)
-      .withDisplayName(F("Request status"))
-      .diagnostic();
 
   // State channels are declared up-front so the host can announce a text
-  // sensor for "Status" before the first line is written. Diagnostic, like the button that
-  // asks for it: a status line describes the board rather than the signals it generates, so
-  // it belongs beside the device info instead of among the controls.
+  // sensor for "Status" before the first line is written. Diagnostic: a status line describes
+  // the board rather than the signals it generates, so it belongs beside the device info
+  // instead of among the controls.
   //
   // The value comes from a getter rather than a stored string, so a host asking for the
   // catalog is answered with the count as it is at that moment - there is nothing to go stale,
@@ -163,6 +160,11 @@ void setup()
   // registered with onCommand() and stay untyped. A host still sees them in the catalog and
   // can offer them in a command palette. One name per topic, so the library matches them the
   // way it matches every other command.
+  //
+  // STATUS is here for the same reason. Its multi-line report is worth having at the terminal,
+  // but as a button it would only have offered to refresh a channel that already keeps itself
+  // current - a control that does nothing the host has not already been told.
+  Blaeck.onCommand("STATUS", onStatus);
   Blaeck.onCommand("LS", onList);
   Blaeck.onCommand("LS?", onHelpList);
   Blaeck.onCommand("SIGNAL_FIRST?", onHelpSignalFirst);
