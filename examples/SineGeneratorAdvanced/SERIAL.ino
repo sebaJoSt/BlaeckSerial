@@ -70,11 +70,6 @@ void PrintInfo(bool IsStartUp)
     Serial.print(F("none"));
   Serial.println();
 
-  //--FREE RAM
-  sinfo(), Serial.print(F("Free Ram: "));
-  Serial.print(freeRam());
-  Serial.println(F(" bytes"));
-
   //--SIGNAL INFO -- ACTIVATED SIGNALS
   if (IsStartUp == false)
   {

@@ -5,7 +5,7 @@
   from the Arduino board to your PC.
 
   Requirements:
-  - EEPROMEx Library
+  - none beyond the library itself: EEPROM comes with the board's core
 
   Features:
   - EEPROM stores state (firmware version marker, signal activation mask)
@@ -31,21 +31,12 @@
 
 #include "Arduino.h"
 #include "BlaeckSerial.h"
-#include <EEPROMex.h>
+#include <EEPROM.h>
 
 //---FIRMWARE
 // FW_VERSION[6] = "X.xxx" +  '\0' (total 6 chars)
 // Updating FW_VERSION initializes EEPROM
 const char FW_VERSION[6] = "1.000";
-
-// EEPROM
-struct EEPROMaddress
-{ // use int for all addresses
-  int firmware_version;
-  int signalActivated;
-  int signalFirst;
-  int signalLast;
-} eepromaddress;
 
 //---INSTANCES
 BlaeckSerial Blaeck;
@@ -69,6 +60,29 @@ struct BlaeckSignal
 // dashboard shows the range the next button press will apply to.
 byte signalFirst = 1;
 byte signalLast = MAXIMUM_SIGNALS;
+
+//---EEPROM LAYOUT
+// Offsets are fixed at compile time instead of handed out by an allocator at boot. The
+// layout is known here, and a constant cannot drift between the write and the read the way
+// an allocator can when someone reorders the calls that hand the addresses out.
+constexpr int EEPROM_ADDR_FW_VERSION = 0;
+constexpr int EEPROM_ADDR_SIGNAL_ACTIVATED = EEPROM_ADDR_FW_VERSION + sizeof(FW_VERSION);
+constexpr int EEPROM_ADDR_SIGNAL_FIRST = EEPROM_ADDR_SIGNAL_ACTIVATED + (MAXIMUM_SIGNALS + 1);
+constexpr int EEPROM_ADDR_SIGNAL_LAST = EEPROM_ADDR_SIGNAL_FIRST + sizeof(byte);
+constexpr int EEPROM_BYTES = EEPROM_ADDR_SIGNAL_LAST + sizeof(byte);
+
+// AVR writes straight through to real EEPROM, so both of these are nothing there. The cores
+// that only emulate EEPROM in flash need a size up front and a commit afterwards, and
+// wrapping that here is what lets the rest of the sketch read and write the same way on all
+// of them. EEPROM.put() already compares before it writes, so an unchanged value costs no
+// erase cycle on either kind of board.
+#if defined(ARDUINO_ARCH_AVR)
+inline void EepromBegin() {}
+inline void EepromCommit() {}
+#else
+inline void EepromBegin() { EEPROM.begin(EEPROM_BYTES); }
+inline void EepromCommit() { EEPROM.commit(); }
+#endif
 
 // Forward declarations for command handlers
 void onSetSignalFirst(const char *command, const char *const *params, byte paramCount);
@@ -222,11 +236,4 @@ void UpdateLoggingSignals()
       Blaeck.addSignal(F("Sine_"), &sine[i].value).withNameSuffix(i);
     }
   }
-}
-
-int freeRam()
-{
-  extern int __heap_start, *__brkval;
-  int v;
-  return (int)&v - (__brkval == 0 ? (int)&__heap_start : (int)__brkval);
 }

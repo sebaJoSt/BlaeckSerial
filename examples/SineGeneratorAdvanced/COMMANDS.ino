@@ -12,7 +12,8 @@ void onSetSignalFirst(const char *command, const char *const *params, byte param
   if (paramCount >= 1 && params[0][0] != '\0')
   {
     signalFirst = (byte)atoi(params[0]);
-    EEPROM.updateByte(eepromaddress.signalFirst, signalFirst);
+    EEPROM.put(EEPROM_ADDR_SIGNAL_FIRST, signalFirst);
+    EepromCommit();
     // Pushes the bound's own state channel, so the control shows the new value at once -
     // the channel is otherwise only read when a host polls the catalog.
     Blaeck.writeCommandState(command);
@@ -24,7 +25,8 @@ void onSetSignalLast(const char *command, const char *const *params, byte paramC
   if (paramCount >= 1 && params[0][0] != '\0')
   {
     signalLast = (byte)atoi(params[0]);
-    EEPROM.updateByte(eepromaddress.signalLast, signalLast);
+    EEPROM.put(EEPROM_ADDR_SIGNAL_LAST, signalLast);
+    EepromCommit();
     Blaeck.writeCommandState(command);
   }
 }
@@ -126,7 +128,8 @@ void PersistActivatedSignals()
   {
     isActivated[i] = sine[i].isActivated;
   }
-  EEPROM.updateBlock<bool>(eepromaddress.signalActivated, isActivated, MAXIMUM_SIGNALS + 1);
+  EEPROM.put(EEPROM_ADDR_SIGNAL_ACTIVATED, isActivated);
+  EepromCommit();
 }
 
 void onStatus(const char *command, const char *const *params, byte paramCount)
