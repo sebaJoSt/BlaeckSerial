@@ -10,8 +10,8 @@
   Features:
   - EEPROM stores state (firmware version marker, signal activation mask)
   - Signals can be (de-)activated over a range, set with <SIGNAL_FIRST> and
-    <SIGNAL_LAST> and applied with <SIGNAL_ACTIVATE_RANGE> /
-    <SIGNAL_DEACTIVATE_RANGE>, or all at once with <SIGNAL_ACTIVATE_ALL>,
+    <SIGNAL_LAST> and applied with <SIGNAL_ACTIVATE> /
+    <SIGNAL_DEACTIVATE>, or all at once with <SIGNAL_ACTIVATE_ALL>,
     which is the same handler with its arguments declared up front
   - Print status with <STATUS>, which also pushes a one-line summary to a host
 
@@ -21,12 +21,12 @@
   state channel of their own, and the four actions are buttons.
 
   Splitting the range into "set the bounds, then press apply" is what makes
-  that possible. A single <SIGNAL_ACTIVATE,first,last> command with magic
-  values for all/none/odd/even maps to no dashboard control at all.
+  that possible. One command taking first and last with magic values for
+  all/none/odd/even maps to no dashboard control at all.
 
-  <LS> and <command?> are still answered by a plain onAnyCommand catch-all -
-  free-form help text is not something a dashboard can model, so it stays
-  untyped on purpose.
+  <LS> and <command?> are plain onCommand() registrations - free-form help
+  text is not something a dashboard can model, so it stays untyped on purpose,
+  but the library still does the matching and a host still sees the names.
 */
 
 #include "Arduino.h"
@@ -73,10 +73,17 @@ byte signalLast = MAXIMUM_SIGNALS;
 // Forward declarations for command handlers
 void onSetSignalFirst(const char *command, const char *const *params, byte paramCount);
 void onSetSignalLast(const char *command, const char *const *params, byte paramCount);
-void onSignalActivateRange(const char *command, const char *const *params, byte paramCount);
-void onSignalDeactivateRange(const char *command, const char *const *params, byte paramCount);
+void onSignalActivate(const char *command, const char *const *params, byte paramCount);
+void onSignalDeactivate(const char *command, const char *const *params, byte paramCount);
 void onStatus(const char *command, const char *const *params, byte paramCount);
-void onHelpOrList(const char *command, const char *const *params, byte paramCount);
+void onList(const char *command, const char *const *params, byte paramCount);
+void onHelpList(const char *command, const char *const *params, byte paramCount);
+void onHelpSignalFirst(const char *command, const char *const *params, byte paramCount);
+void onHelpSignalLast(const char *command, const char *const *params, byte paramCount);
+void onHelpSignalActivate(const char *command, const char *const *params, byte paramCount);
+void onHelpSignalDeactivate(const char *command, const char *const *params, byte paramCount);
+void onHelpSignalActivateAll(const char *command, const char *const *params, byte paramCount);
+void onHelpStatus(const char *command, const char *const *params, byte paramCount);
 void ApplySignalRange(bool activate, byte lo, byte hi);
 void PersistActivatedSignals();
 
@@ -92,7 +99,13 @@ void setup()
   EEPROMConfiguration();
 
   Serial.begin(115200);
-  Blaeck.begin(&Serial, MAXIMUM_SIGNALS);
+  // Sized rather than left to the default: six commands and eight help topics is fewer than
+  // the sixteen an AVR board gets for free, and the three state channels are fewer than the
+  // eight it would otherwise reserve.
+  Blaeck.begin(&Serial)
+      .withSignals(MAXIMUM_SIGNALS)
+      .withCommands(14)
+      .withStateChannels(3);
 
   Blaeck.DeviceName = "Advanced Sine Number Generator";
   Blaeck.DeviceHWVersion = "Arduino Mega 2560 Rev3";
@@ -116,15 +129,15 @@ void setup()
       .withMode(BLAECK_NUMBER_MODE_BOX)
       .withDisplayName(F("Last signal"))
       .withOwnState(F("Signal_Last"), &signalLast);
-  Blaeck.onButtonCommand("SIGNAL_ACTIVATE_RANGE", onSignalActivateRange)
+  Blaeck.onButtonCommand("SIGNAL_ACTIVATE", onSignalActivate)
       .withDisplayName(F("Activate range"));
-  Blaeck.onButtonCommand("SIGNAL_DEACTIVATE_RANGE", onSignalDeactivateRange)
+  Blaeck.onButtonCommand("SIGNAL_DEACTIVATE", onSignalDeactivate)
       .withDisplayName(F("Deactivate range"));
   // The same handler again, with the arguments already filled in: one press activates
   // everything instead of setting both bounds first. A preset is a second command sharing the
   // handler rather than a second payload on the first, because a button is one entity per
   // command name.
-  Blaeck.onButtonCommand("SIGNAL_ACTIVATE_ALL", onSignalActivateRange)
+  Blaeck.onButtonCommand("SIGNAL_ACTIVATE_ALL", onSignalActivate)
       .withPressPayload(F("1," STRINGIFY(MAXIMUM_SIGNALS)))
       .withDisplayName(F("Activate all signals"))
       .withIcon(F("mdi:select-all"));
@@ -138,9 +151,18 @@ void setup()
   // it belongs beside the device info instead of among the controls.
   Blaeck.addStateChannel(F("Status")).withIcon(F("mdi:message-text")).diagnostic();
 
-  // Plain catch-all: <LS> and <command?> answer with free-form help text,
-  // which no dashboard control can represent, so it stays untyped.
-  Blaeck.onAnyCommand(onHelpOrList);
+  // Plain: help text is free-form, which no dashboard control can represent, so these are
+  // registered with onCommand() and stay untyped. A host still sees them in the catalog and
+  // can offer them in a command palette. One name per topic, so the library matches them the
+  // way it matches every other command.
+  Blaeck.onCommand("LS", onList);
+  Blaeck.onCommand("LS?", onHelpList);
+  Blaeck.onCommand("SIGNAL_FIRST?", onHelpSignalFirst);
+  Blaeck.onCommand("SIGNAL_LAST?", onHelpSignalLast);
+  Blaeck.onCommand("SIGNAL_ACTIVATE?", onHelpSignalActivate);
+  Blaeck.onCommand("SIGNAL_DEACTIVATE?", onHelpSignalDeactivate);
+  Blaeck.onCommand("SIGNAL_ACTIVATE_ALL?", onHelpSignalActivateAll);
+  Blaeck.onCommand("STATUS?", onHelpStatus);
 
   // Signals for Logging with BlaeckSerial
   // Blaeck.addSignal..

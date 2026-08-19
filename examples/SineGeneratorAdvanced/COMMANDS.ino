@@ -29,10 +29,10 @@ void onSetSignalLast(const char *command, const char *const *params, byte paramC
   }
 }
 
-void onSignalActivateRange(const char *command, const char *const *params, byte paramCount)
+void onSignalActivate(const char *command, const char *const *params, byte paramCount)
 {
   (void)command;
-  // A button's parameters are optional: SIGNAL_ACTIVATE_RANGE sends none and applies the
+  // A button's parameters are optional: SIGNAL_ACTIVATE sends none and applies the
   // bounds SIGNAL_FIRST and SIGNAL_LAST last set, while SIGNAL_ACTIVATE_ALL declares a press
   // payload and the two numbers arrive here instead. Nothing has validated them - a button is
   // the one kind the library passes through unchecked - so they go to the same clamping the
@@ -43,7 +43,7 @@ void onSignalActivateRange(const char *command, const char *const *params, byte 
     ApplySignalRange(true, signalFirst, signalLast);
 }
 
-void onSignalDeactivateRange(const char *command, const char *const *params, byte paramCount)
+void onSignalDeactivate(const char *command, const char *const *params, byte paramCount)
 {
   (void)command;
   if (paramCount >= 2)
@@ -148,81 +148,106 @@ void onStatus(const char *command, const char *const *params, byte paramCount)
   Blaeck.writeState(F("Status"), text);
 }
 
-// Catch-all handler for help commands (?) and LS
-void onHelpOrList(const char *command, const char *const *params, byte paramCount)
+// ---------------------------------------------------------------------------
+// Help, one handler per topic.
+//
+// These were a strcmp chain inside onAnyCommand(). Registering each name instead
+// lets the library do the matching it already does for every other command, so a
+// help topic is declared the same way the command it describes is - and adding a
+// command without its help now leaves an obvious hole rather than a silent one.
+//
+// They register with onCommand(), which makes them BLAECK_CMD_PLAIN: listed in the
+// command catalog so a host can offer them, but carrying no control, because a
+// paragraph of text is not something a dashboard can render.
+//
+// Nothing installs onAnyCommand() any more. With no catch-all, a command that
+// matches nothing is answered as unknown instead of being acknowledged as accepted
+// on the grounds that the catch-all saw it.
+// ---------------------------------------------------------------------------
+
+void onList(const char *command, const char *const *params, byte paramCount)
 {
+  (void)command;
   (void)params;
   (void)paramCount;
-
-  if (strcmp(command, "LS?") == 0)
-  {
-    shelp(), Serial.println(F("Lists all available commands"));
-  }
-  else if (strcmp(command, "LS") == 0)
-  {
-    sinfo(), Serial.println(F("<LS> <STATUS> <SIGNAL_FIRST> <SIGNAL_LAST> <SIGNAL_ACTIVATE_RANGE> <SIGNAL_DEACTIVATE_RANGE> <SIGNAL_ACTIVATE_ALL>"));
-    sinfo(), Serial.println(F("<BLAECK.ACTIVATE> <BLAECK.DEACTIVATE> <BLAECK.WRITE_SYMBOLS> <BLAECK.WRITE_COMMANDS> <BLAECK.WRITE_DATA> <BLAECK.GET_DEVICES>"));
-    sinfo(), Serial.println(F("Enter <command?> for instructions, e.g. <STATUS?>"));
-  }
-  else if (strcmp(command, "SIGNAL_FIRST?") == 0)
-  {
-    shelp(), Serial.print(F("<SIGNAL_FIRST, 1-"));
-    Serial.print(MAXIMUM_SIGNALS);
-    Serial.println(F(">"));
-    shelp(), Serial.println(F("Sets the first signal of the range"));
-  }
-  else if (strcmp(command, "SIGNAL_LAST?") == 0)
-  {
-    shelp(), Serial.print(F("<SIGNAL_LAST, 1-"));
-    Serial.print(MAXIMUM_SIGNALS);
-    Serial.println(F(">"));
-    shelp(), Serial.println(F("Sets the last signal of the range"));
-  }
-  else if (strcmp(command, "SIGNAL_ACTIVATE_RANGE?") == 0)
-  {
-    shelp(), Serial.println(F("Activates every signal in the current range"));
-    shelp(), Serial.println(F("e.g. <SIGNAL_FIRST,1> <SIGNAL_LAST,10> <SIGNAL_ACTIVATE_RANGE>"));
-    shelp(), Serial.println(F("Or give the bounds directly: <SIGNAL_ACTIVATE_RANGE,1,10>"));
-    shelp(), Serial.println(F("Signals outside the range keep their state"));
-  }
-  else if (strcmp(command, "SIGNAL_DEACTIVATE_RANGE?") == 0)
-  {
-    shelp(), Serial.println(F("Deactivates every signal in the current range"));
-    shelp(), Serial.println(F("e.g. <SIGNAL_FIRST,1> <SIGNAL_LAST,25> <SIGNAL_DEACTIVATE_RANGE> clears all"));
-    shelp(), Serial.println(F("Or give the bounds directly: <SIGNAL_DEACTIVATE_RANGE,1,25>"));
-  }
-  else if (strcmp(command, "SIGNAL_ACTIVATE_ALL?") == 0)
-  {
-    shelp(), Serial.print(F("Activates every signal, 1-"));
-    Serial.print(MAXIMUM_SIGNALS);
-    Serial.println(F(", whatever the current range is"));
-    shelp(), Serial.println(F("Same as <SIGNAL_ACTIVATE_RANGE> with the bounds given: the two are one handler"));
-  }
-  else if (strcmp(command, "STATUS?") == 0)
-  {
-    shelp(), Serial.println(F("Requests the current state"));
-  }
-  else if (strcmp(command, "BLAECK.ACTIVATE?") == 0)
-  {
-    shelp(), Serial.println(F("<BLAECK.ACTIVATE,first,second,third,fourth byte>"));
-    shelp(), Serial.println(F("Activates Logging in Blaeck format"));
-    shelp(), Serial.println(F("e.g. <BLAECK.ACTIVATE,96,234> logs every 60000 ms"));
-    shelp(), Serial.println(F("Interval: 0 to 4294967295 ms (little-endian 4-byte value)"));
-  }
-  else if (strcmp(command, "BLAECK.DEACTIVATE?") == 0)
-  {
-    shelp(), Serial.println(F("Deactivates Logging in Blaeck format"));
-  }
-  else if (strcmp(command, "BLAECK.WRITE_SYMBOLS?") == 0)
-  {
-    shelp(), Serial.println(F("Writes the symbols in Blaeck format"));
-  }
-  else if (strcmp(command, "BLAECK.WRITE_COMMANDS?") == 0)
-  {
-    shelp(), Serial.println(F("Writes the command list in Blaeck format"));
-  }
-  else if (strcmp(command, "BLAECK.WRITE_DATA?") == 0)
-  {
-    shelp(), Serial.println(F("Writes the logging data in Blaeck format"));
-  }
+  sinfo(), Serial.println(F("<LS> <STATUS> <SIGNAL_FIRST> <SIGNAL_LAST> <SIGNAL_ACTIVATE> <SIGNAL_DEACTIVATE> <SIGNAL_ACTIVATE_ALL>"));
+  sinfo(), Serial.println(F("Enter <command?> for instructions, e.g. <STATUS?>"));
+  // The BLAECK.* commands come from the library, not this sketch, so it lists them without
+  // describing them - a copy of their documentation here would go stale on its own.
+  sinfo(), Serial.println(F("From BlaeckSerial itself: <BLAECK.ACTIVATE> <BLAECK.DEACTIVATE> <BLAECK.WRITE_SYMBOLS> <BLAECK.WRITE_COMMANDS> <BLAECK.WRITE_DATA> <BLAECK.GET_DEVICES>"));
 }
+
+void onHelpList(const char *command, const char *const *params, byte paramCount)
+{
+  (void)command;
+  (void)params;
+  (void)paramCount;
+  shelp(), Serial.println(F("Lists all available commands"));
+}
+
+void onHelpSignalFirst(const char *command, const char *const *params, byte paramCount)
+{
+  (void)command;
+  (void)params;
+  (void)paramCount;
+  shelp(), Serial.print(F("<SIGNAL_FIRST, 1-"));
+  Serial.print(MAXIMUM_SIGNALS);
+  Serial.println(F(">"));
+  shelp(), Serial.println(F("Sets the first signal of the range"));
+}
+
+void onHelpSignalLast(const char *command, const char *const *params, byte paramCount)
+{
+  (void)command;
+  (void)params;
+  (void)paramCount;
+  shelp(), Serial.print(F("<SIGNAL_LAST, 1-"));
+  Serial.print(MAXIMUM_SIGNALS);
+  Serial.println(F(">"));
+  shelp(), Serial.println(F("Sets the last signal of the range"));
+}
+
+void onHelpSignalActivate(const char *command, const char *const *params, byte paramCount)
+{
+  (void)command;
+  (void)params;
+  (void)paramCount;
+  shelp(), Serial.println(F("Activates every signal in the current range"));
+  shelp(), Serial.println(F("e.g. <SIGNAL_FIRST,1> <SIGNAL_LAST,10> <SIGNAL_ACTIVATE>"));
+  shelp(), Serial.println(F("Or give the bounds directly: <SIGNAL_ACTIVATE,1,10>"));
+  shelp(), Serial.println(F("Signals outside the range keep their state"));
+}
+
+void onHelpSignalDeactivate(const char *command, const char *const *params, byte paramCount)
+{
+  (void)command;
+  (void)params;
+  (void)paramCount;
+  shelp(), Serial.println(F("Deactivates every signal in the current range"));
+  shelp(), Serial.println(F("e.g. <SIGNAL_FIRST,1> <SIGNAL_LAST,25> <SIGNAL_DEACTIVATE> clears all"));
+  shelp(), Serial.println(F("Or give the bounds directly: <SIGNAL_DEACTIVATE,1,25>"));
+}
+
+void onHelpSignalActivateAll(const char *command, const char *const *params, byte paramCount)
+{
+  (void)command;
+  (void)params;
+  (void)paramCount;
+  shelp(), Serial.print(F("Activates every signal, 1-"));
+  Serial.print(MAXIMUM_SIGNALS);
+  Serial.println(F(", whatever the current range is"));
+  shelp(), Serial.println(F("Same as <SIGNAL_ACTIVATE> with the bounds given: the two are one handler"));
+}
+
+void onHelpStatus(const char *command, const char *const *params, byte paramCount)
+{
+  (void)command;
+  (void)params;
+  (void)paramCount;
+  shelp(), Serial.println(F("Requests the current state"));
+}
+
+
+
+
+
