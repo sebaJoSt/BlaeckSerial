@@ -4873,10 +4873,11 @@ private:
   // Set while a frame is being received, once its characters no longer fit and are being
   // dropped. The receive loop is the only place that can see it happen.
   bool _receiveOverflowed = false;
-  // What the sender put in the frame's '#' prefix, echoed in the 0xA5 header so an ack can be
-  // paired with the command it answers. 0 when the frame carried none, which is also what a
-  // sender may not send.
-  uint16_t _parsedCorrelationId = 0;
+  // The message id the sender put in the frame's '#' prefix, echoed in the 0xA5 header so an
+  // ack can be paired with the command it answers - the same field, and the same meaning, that
+  // a BLAECK.* response echoes from its parameters. 0 when the frame carried none, which is
+  // also what a sender may not send.
+  uint16_t _parsedPrefixMsgId = 0;
   // How many characters of the received frame the prefix section took. The ack hashes what
   // follows it, so the hash covers the command as written rather than as addressed.
   byte _parsedPrefixLen = 0;

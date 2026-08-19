@@ -296,10 +296,10 @@ than read, and a display name is how the screen says "Frequency" while the wire 
 `SET_FREQ`.
 
 Because a name is what arrives on the wire, it may not begin with `#` or `@`. Those open the
-prefix a host may put in front of a command — `<#42:SET_FREQ,1000>` asks the device to echo `42`
-in its acknowledgement, so the host can tell that ack from the one for the `SET_FREQ` it sent a
-moment earlier. A name starting with one of them would be read as a prefix and never reached, so
-registration refuses it and says so on the debug stream.
+prefix a host may put in front of a command — `<#42:SET_FREQ,1000>` gives the command the message
+id `42`, and the device echoes it in its acknowledgement, so the host can tell that ack from the
+one for the `SET_FREQ` it sent a moment earlier. A name starting with one of them would be read
+as a prefix and never reached, so registration refuses it and says so on the debug stream.
 
 `withMode` asks for a typed box or a dragged slider. It is a hint about entry and not about
 validity — the range is what bounds the value — so leaving it out is the right answer for most

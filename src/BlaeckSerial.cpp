@@ -1968,7 +1968,7 @@ void BlaeckSerial::_parseCommandTokens(const char *raw)
 {
   _parsedCommand[0] = '\0';
   _parsedParamCount = 0;
-  _parsedCorrelationId = 0;
+  _parsedPrefixMsgId = 0;
   _parsedPrefixLen = 0;
   // Characters were dropped while the frame was being received, so whatever follows is a
   // fragment however complete it looks. Reset here with the rest of the parse state rather
@@ -2015,7 +2015,7 @@ void BlaeckSerial::_parseCommandTokens(const char *raw)
     // of the malformed forms rather than accepted as a number that says nothing.
     if (digits == 0 || *scan != ':' || id == 0 || id > 65535UL)
       break;
-    _parsedCorrelationId = (uint16_t)id;
+    _parsedPrefixMsgId = (uint16_t)id;
     p = (char *)scan + 1;
   }
   // Where the payload starts, so the ack can hash the command as its sender wrote it. The
@@ -2168,12 +2168,13 @@ void BlaeckSerial::_writeCommandAck(const char *rawCommand, byte status, byte re
   if (payload != nullptr && _parsedPrefixLen > 0 && strlen(payload) >= _parsedPrefixLen)
     payload += _parsedPrefixLen;
 
-  // The header carries back what the sender put in the prefix, and 0 when it sent none. That is
-  // what pairs an ack with its command: two commands of the same name can be outstanding at
-  // once, and a hash that identifies bytes cannot say which of them is being answered. The
+  // The header carries back the message id the sender put in the prefix, and 0 when it sent
+  // none. That is what pairs an ack with its command: two commands of the same name can be
+  // outstanding at once, and a hash that identifies bytes cannot say which of them is being
+  // answered. It is the same field a BLAECK.* response echoes, and means the same thing; the
   // counter this replaced numbered acks in the order the device sent them, which told a host
   // nothing it could use.
-  uint32_t ackMsgId = (uint32_t)_parsedCorrelationId;
+  uint32_t ackMsgId = (uint32_t)_parsedPrefixMsgId;
 
   if (_bufReady())
   {
