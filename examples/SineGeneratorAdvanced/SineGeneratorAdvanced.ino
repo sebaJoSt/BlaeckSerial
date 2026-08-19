@@ -11,13 +11,14 @@
   - EEPROM stores state (firmware version marker, signal activation mask)
   - Signals can be (de-)activated over a range, set with <SIGNAL_FIRST> and
     <SIGNAL_LAST> and applied with <SIGNAL_ACTIVATE_RANGE> /
-    <SIGNAL_DEACTIVATE_RANGE>
+    <SIGNAL_DEACTIVATE_RANGE>, or all at once with <SIGNAL_ACTIVATE_ALL>,
+    which is the same handler with its arguments declared up front
   - Print status with <STATUS>, which also pushes a one-line summary to a host
 
   The commands are registered with the typed helpers, so the device describes
   itself in <BLAECK.WRITE_COMMANDS> and a host (e.g. Loggbok / Home Assistant)
   can build controls for it: the two bounds are numbers with a range and a
-  mirrored state signal, and the three actions are buttons.
+  mirrored state signal, and the four actions are buttons.
 
   Splitting the range into "set the bounds, then press apply" is what makes
   that possible. A single <SIGNAL_ACTIVATE,first,last> command with magic
@@ -51,6 +52,11 @@ BlaeckSerial Blaeck;
 
 //---SIGNALS
 #define MAXIMUM_SIGNALS 25
+// A press payload is a string literal, so the upper bound has to be spelled into one. Going
+// through the macro keeps it in step with MAXIMUM_SIGNALS instead of leaving a "25" behind
+// that nothing would flag when the count changes.
+#define STRINGIFY_(x) #x
+#define STRINGIFY(x) STRINGIFY_(x)
 struct BlaeckSignal
 {
   bool isActivated;
@@ -71,7 +77,7 @@ void onSignalActivateRange(const char *command, const char *const *params, byte 
 void onSignalDeactivateRange(const char *command, const char *const *params, byte paramCount);
 void onStatus(const char *command, const char *const *params, byte paramCount);
 void onHelpOrList(const char *command, const char *const *params, byte paramCount);
-void ApplySignalRange(bool activate);
+void ApplySignalRange(bool activate, byte lo, byte hi);
 void PersistActivatedSignals();
 
 //---MEASUREMENT
@@ -101,8 +107,18 @@ void setup()
   Blaeck.onNumberCommand("SIGNAL_LAST", onSetSignalLast)
       .withRange(1.0f, (float)MAXIMUM_SIGNALS, 1.0f)
       .withStateFromSignal(F("Signal_Last"));
-  Blaeck.onButtonCommand("SIGNAL_ACTIVATE_RANGE", onSignalActivateRange);
-  Blaeck.onButtonCommand("SIGNAL_DEACTIVATE_RANGE", onSignalDeactivateRange);
+  Blaeck.onButtonCommand("SIGNAL_ACTIVATE_RANGE", onSignalActivateRange)
+      .withDisplayName(F("Activate range"));
+  Blaeck.onButtonCommand("SIGNAL_DEACTIVATE_RANGE", onSignalDeactivateRange)
+      .withDisplayName(F("Deactivate range"));
+  // The same handler again, with the arguments already filled in: one press activates
+  // everything instead of setting both bounds first. A preset is a second command sharing the
+  // handler rather than a second payload on the first, because a button is one entity per
+  // command name.
+  Blaeck.onButtonCommand("SIGNAL_ACTIVATE_ALL", onSignalActivateRange)
+      .withPressPayload(F("1," STRINGIFY(MAXIMUM_SIGNALS)))
+      .withDisplayName(F("Activate all signals"))
+      .withIcon(F("mdi:select-all"));
   Blaeck.onButtonCommand("STATUS", onStatus);
 
   // State channels are declared up-front so the host can announce a text

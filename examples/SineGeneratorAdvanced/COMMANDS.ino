@@ -32,26 +32,31 @@ void onSetSignalLast(const char *command, const char *const *params, byte paramC
 void onSignalActivateRange(const char *command, const char *const *params, byte paramCount)
 {
   (void)command;
-  (void)params;
-  (void)paramCount;
-  ApplySignalRange(true);
+  // A button's parameters are optional: SIGNAL_ACTIVATE_RANGE sends none and applies the
+  // bounds SIGNAL_FIRST and SIGNAL_LAST last set, while SIGNAL_ACTIVATE_ALL declares a press
+  // payload and the two numbers arrive here instead. Nothing has validated them - a button is
+  // the one kind the library passes through unchecked - so they go to the same clamping the
+  // stored bounds get.
+  if (paramCount >= 2)
+    ApplySignalRange(true, (byte)atoi(params[0]), (byte)atoi(params[1]));
+  else
+    ApplySignalRange(true, signalFirst, signalLast);
 }
 
 void onSignalDeactivateRange(const char *command, const char *const *params, byte paramCount)
 {
   (void)command;
-  (void)params;
-  (void)paramCount;
-  ApplySignalRange(false);
+  if (paramCount >= 2)
+    ApplySignalRange(false, (byte)atoi(params[0]), (byte)atoi(params[1]));
+  else
+    ApplySignalRange(false, signalFirst, signalLast);
 }
 
-// Applies the current bounds. Only the signals inside the range change, so
+// Applies the bounds it is given. Only the signals inside the range change, so
 // activating 1-10 and then 15-20 leaves both ranges on - use the deactivate
 // button to clear what you no longer want.
-void ApplySignalRange(bool activate)
+void ApplySignalRange(bool activate, byte lo, byte hi)
 {
-  byte lo = signalFirst;
-  byte hi = signalLast;
   if (lo > hi)
   {
     byte tmp = lo;

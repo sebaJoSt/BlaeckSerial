@@ -138,14 +138,18 @@ void setup()
   Blaeck.onNumberCommand("SET_AMP", onSetAmp)
       .withRange(0.0f, 100.0f, AmpStep)
       .withDisplayName(F("Amplitude"))
+      .withMode(BLAECK_NUMBER_MODE_SLIDER)
       .withOwnState(F("Amplitude"), &Amplitude);
   Blaeck.onNumberCommand("SET_OFFSET", onSetOffset)
       .withRange(-100.0f, 100.0f, OffsetStep)
       .withDisplayName(F("Offset"))
       .withOwnState(F("Offset"), &Offset);
+  // A select takes no device class - Home Assistant has none for it - so an icon is the only
+  // thing this control can say about how it should look.
   Blaeck.onSelectCommand("SET_WAVE", onSetWave)
       .withOptions(F("Sine,Square,Triangle,Sawtooth"))
       .withDisplayName(F("Waveform"))
+      .withIcon(F("mdi:waveform"))
       .withOwnState(F("Wave"), &waveIndex);
   Blaeck.onSwitchCommand("SET_ENABLE", onSetEnable)
       .withDisplayName(F("Output enabled"))
@@ -154,6 +158,7 @@ void setup()
   Blaeck.onTextCommand("SET_LABEL", onSetLabel)
       .withMaxLength(sizeof(DeviceLabel) - 1)
       .withDisplayName(F("Device label"))
+      .withIcon(F("mdi:tag"))
       .withOwnState(F("DeviceLabel"), DeviceLabel)
       .config();
   // The pair: SET_LABEL keeps its value on a state channel, SET_NOTE on a signal, so only the
