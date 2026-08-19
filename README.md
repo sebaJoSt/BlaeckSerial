@@ -242,6 +242,14 @@ where that value lives: `withStateFromSignal` names a signal you already added, 
 logged alongside what it controls, while `withOwnState` creates a state channel the command owns,
 which is not logged. Naming versus creating is why only one of the two takes a source argument.
 
+Whichever you use, the value is read in the command's own vocabulary. A select reports an option
+name, not an index. A switch reports `1` or `0` — the same two values its handler accepts — and a
+getter on a switch is normalised for you: return `"ON"`, `"true"`, `"yes"` or any of their opposites
+in whatever case suits your code, and `1` or `0` goes out. Return something that is neither and the
+channel reports nothing rather than guessing, and says so once on the debug stream. There is one
+place this cannot reach: `withStateFromSignal` pointing at a *string* signal, since a signal is
+logged data and the library will not rewrite it — point a switch at a `bool` and that is moot.
+
 `withDisplayName` labels the control something other than its name. A command name is an
 identifier — the host sends `SET_FREQ` back to invoke it — so it is written to be matched rather
 than read, and a display name is how the screen says "Frequency" while the wire keeps saying

@@ -643,6 +643,64 @@ inline bool flashStrEmpty(const __FlashStringHelper *value)
 bool optionsAccepted(const __FlashStringHelper *optionsCsv, Stream *debug,
                      const char *name, bool nameInFlash);
 
+// What a switch's own-state getter said, reduced to the "1" or "0" a switch speaks everywhere
+// else - the two values its handler accepts, and the two payloads a host is told to match
+// against. A sketch may return whatever reads best in its own code; the spellings below are
+// the ones anyone would reach for, in either case.
+//
+// Anything else is not guessed at. It returns nullptr, which every caller already treats as
+// "nothing to report" - honest about not knowing, where "0" would assert that the switch is
+// off. A getter returning nothing keeps that meaning too.
+inline const char *switchStateText(const char *value)
+{
+  if (value == nullptr)
+    return nullptr;
+
+  // Lowercased into a buffer sized to the longest spelling below, so anything longer is
+  // already not one of them and leaves early. Compared by length and character rather than
+  // with strcasecmp, which is not on every core this library builds for, and without a table
+  // of literals, which on AVR would sit in RAM for the life of the sketch.
+  char w[6];
+  byte n = 0;
+  while (value[n] != '\0')
+  {
+    if (n >= sizeof(w) - 1)
+      return nullptr;
+    char c = value[n];
+    w[n] = (c >= 'A' && c <= 'Z') ? (char)(c + 32) : c;
+    n++;
+  }
+  w[n] = '\0';
+
+  // Static, so what is returned outlives this call - the caller reads it after the getter's
+  // own buffer is out of reach.
+  static const char kOn[] = "1";
+  static const char kOff[] = "0";
+
+  switch (n)
+  {
+  case 1:
+    if (w[0] == '1') return kOn;
+    if (w[0] == '0') return kOff;
+    break;
+  case 2:
+    if (w[0] == 'o' && w[1] == 'n') return kOn;
+    if (w[0] == 'n' && w[1] == 'o') return kOff;
+    break;
+  case 3:
+    if (w[0] == 'y' && w[1] == 'e' && w[2] == 's') return kOn;
+    if (w[0] == 'o' && w[1] == 'f' && w[2] == 'f') return kOff;
+    break;
+  case 4:
+    if (w[0] == 't' && w[1] == 'r' && w[2] == 'u' && w[3] == 'e') return kOn;
+    break;
+  case 5:
+    if (w[0] == 'f' && w[1] == 'a' && w[2] == 'l' && w[3] == 's' && w[4] == 'e') return kOff;
+    break;
+  }
+  return nullptr;
+}
+
 struct CommandHandlerEntry
 {
   char command[MAX_COMMAND_NAME_COUNT];
@@ -707,6 +765,14 @@ struct StateChannelEntry
   // withOwnState(), which is the one case where the two cannot be told apart: both are
   // a string channel with a pointer.
   bool stateIsSelectIndex = false;
+  // The getter above belongs to a switch command, so what it returns is normalised to "1" or
+  // "0" before it leaves. Set only where the two cannot be told apart: a text channel with a
+  // getter, which is every own-state form but the typed bool one.
+  bool stateIsSwitchBool = false;
+  // Latches the warning below, so a getter returning something unreadable is reported once
+  // rather than on every push. Mutable because the channel is read through a const reference
+  // where the getter runs, and this records only that the complaint has been made.
+  mutable bool switchStateWarned = false;
   bool truncationWarned = false;
   bool inUse = false;
 };
@@ -1355,6 +1421,13 @@ public:
   // Declaring withOwnState() below would otherwise hide the getter form inherited from the
   // base - C++ hides by name, not by signature. The macro this replaced pasted both into one
   // scope, so nothing had to say this.
+  //
+  // The inherited getter form works here as it does elsewhere, with one difference: what it
+  // returns is read as on or off rather than passed through. "1", "on", "true" and "yes" are
+  // on, "0", "off", "false" and "no" are off, in either case, and the channel carries "1" or
+  // "0" whichever was written. Anything else reports nothing at all rather than guessing at
+  // off. Use the bool overload below where there is a bool to point at; the getter is for a
+  // switch whose position is worked out rather than stored.
   using BlaeckCommandRefShared<BlaeckSwitchCommandRef>::withOwnState;
 
   /*!

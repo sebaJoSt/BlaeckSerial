@@ -1483,6 +1483,14 @@ bool BlaeckSerial::_declareOwnState(uint16_t handlerIndex, const __FlashStringHe
   if (ch >= 0)
   {
     _stateChannels[ch].stateIsSelectIndex = selectIndex;
+    // A switch reports on and off, and a host matches that text against the two payloads it
+    // was given - which are the switch's own vocabulary, "1" and "0". A getter returning
+    // "ON" matches neither, and Home Assistant's switch has no branch for a payload it does
+    // not recognise: the entity keeps the value it had, which at startup is none, so the
+    // control sits at unknown for good and nothing anywhere says why. Normalised on the way
+    // out instead, so a sketch may spell it however reads best in its own code.
+    if (cmd.kind == BLAECK_CMD_SWITCH && getStateText != nullptr)
+      _stateChannels[ch].stateIsSwitchBool = true;
     if (cmd.kind == BLAECK_CMD_SELECT && cmd.options != nullptr)
       _stateChannels[ch].options = cmd.options;
   }
@@ -2574,7 +2582,34 @@ void BlaeckSerial::writeStateChannels(unsigned long msg_id)
 const char *BlaeckSerial::_channelText(const StateChannelEntry &e, char *buf, byte bufSize) const
 {
   if (e.getStateText != nullptr)
-    return e.getStateText();
+  {
+    const char *t = e.getStateText();
+    if (!e.stateIsSwitchBool)
+      return t;
+
+    const char *canonical = blaeck_detail::switchStateText(t);
+    // Text that is neither on nor off in any spelling this library knows. Reporting nothing
+    // is the honest answer - "0" would assert the switch is off - but nothing is also what a
+    // sketch sees when it has simply spelled the value some other way, so say which it is.
+    // Once per channel: the getter runs on every push, and a wrong one is wrong every time.
+    if (canonical == nullptr && t != nullptr && t[0] != '\0' && !e.switchStateWarned)
+    {
+      e.switchStateWarned = true;
+      if (_debugStream != nullptr)
+      {
+        _debugStream->print(F("Switch state not recognised on channel: "));
+        if (e.nameInFlash)
+          _debugStream->print(reinterpret_cast<const __FlashStringHelper *>(e.name));
+        else
+          _debugStream->print(e.name);
+        _debugStream->print(F(" returned \""));
+        _debugStream->print(t);
+        _debugStream->println(F("\". Expected 1/on/true/yes or 0/off/false/no. "
+                                "Nothing is reported and the control stays unknown."));
+      }
+    }
+    return canonical;
+  }
 
   // Only a string channel keeps text here; _channelValueBytes() reads every other type and
   // never touches this pointer.
