@@ -181,7 +181,7 @@ void setup()
 
   // addEventType() does the same one name at a time, for a list built conditionally.
   Blaeck.addEventChannel(F("Activity"), F("idle_warning,resumed"))
-      .withIcon(F("mdi:timer-sand"));
+      .withIcon(F("mdi:bell-alert"));
 
   // Silent unless a table ran out of room, in which case it prints how many entries each
   // dropped and the begin() call that would have fitted them.
