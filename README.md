@@ -202,15 +202,15 @@ with a length limit:
  Blaeck.onNumberCommand("SET_FREQ", onSetFreq)
      .withRange(0.0f, 2.0f, 0.01f)
      .withUnit(F("Hz"))
-     .withStateSignal(F("Frequency"));
+     .withStateFromSignal(F("Frequency"));
 
  Blaeck.onSelectCommand("SET_WAVE", onSetWave)
      .withOptions(F("Sine,Square,Triangle,Sawtooth"))
-     .withStateSignal(F("WaveName"));
+     .withStateFromSignal(F("WaveName"));
 
  Blaeck.onTextCommand("SET_LABEL", onSetLabel)
      .withMaxLength(sizeof(DeviceLabel) - 1)
-     .withStateSignal(F("DeviceLabel"))
+     .withStateFromSignal(F("DeviceLabel"))
      .config();
 ```
 
@@ -229,14 +229,15 @@ does not compile rather than quietly doing nothing.
 | `withOptions(F("A,B,C"))` — required | | | ● | | |
 | `withUnit(F("Hz"))` | ● | | | | |
 | `withMaxLength(32)` | | | | | ● |
-| `withStateSignal(F("Name"))` | ● | ● | ● | ● | ● |
+| `withStateFromSignal(F("Name"))` | ● | ● | ● | ● | ● |
 | `withOwnState(F("Name"), getter)` | ● | ● | ● | ● | ● |
 | `withDisplayName(F("Frequency"))` | ● | ● | ● | ● | ● |
 | `config()` / `diagnostic()` | ● | ● | ● | ● | ● |
 
-`withStateSignal` names the signal that mirrors the command's value, so a dashboard shows what the
-device holds rather than what was last sent. `withOwnState` has the command carry its own value
-instead, on a state channel it owns — for a control with no signal behind it.
+Both make a dashboard show what the device holds rather than what was last sent. They differ in
+where that value lives: `withStateFromSignal` names a signal you already added, so the value is
+logged alongside what it controls, while `withOwnState` creates a state channel the command owns,
+which is not logged. Naming versus creating is why only one of the two takes a source argument.
 
 `withDisplayName` labels the control something other than its name. A command name is an
 identifier — the host sends `SET_FREQ` back to invoke it — so it is written to be matched rather

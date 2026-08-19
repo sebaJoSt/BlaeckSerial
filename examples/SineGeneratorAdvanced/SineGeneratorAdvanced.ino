@@ -97,10 +97,10 @@ void setup()
   // range and a mirrored signal; applying them is a button, as is STATUS.
   Blaeck.onNumberCommand("SIGNAL_FIRST", onSetSignalFirst)
       .withRange(1.0f, (float)MAXIMUM_SIGNALS, 1.0f)
-      .withStateSignal(F("Signal_First"));
+      .withStateFromSignal(F("Signal_First"));
   Blaeck.onNumberCommand("SIGNAL_LAST", onSetSignalLast)
       .withRange(1.0f, (float)MAXIMUM_SIGNALS, 1.0f)
-      .withStateSignal(F("Signal_Last"));
+      .withStateFromSignal(F("Signal_Last"));
   Blaeck.onButtonCommand("SIGNAL_ACTIVATE_RANGE", onSignalActivateRange);
   Blaeck.onButtonCommand("SIGNAL_DEACTIVATE_RANGE", onSignalDeactivateRange);
   Blaeck.onButtonCommand("STATUS", onStatus);

@@ -926,15 +926,20 @@ public:
     value the firmware clamped or refused is visible. Leave it out for a control that
     is assumed to have taken effect.
 
+    The signal is logged, which is what decides between this and withOwnState():
+    use this for a setpoint that belongs in the data next to what it controls, and
+    withOwnState() for one that does not. This names a signal that already exists,
+    where withOwnState() creates the channel it reports on.
+
     @param   signalName  A signal already added with addSignal().
     @return  The same handle, for chaining.
 
     @code
       Blaeck.addSignal(F("LED_State"), &ledState);
-      Blaeck.onSwitchCommand("LED", onLED).withStateSignal(F("LED_State"));
+      Blaeck.onSwitchCommand("LED", onLED).withStateFromSignal(F("LED_State"));
     @endcode
   */
-  TYPE &withStateSignal(const __FlashStringHelper *signalName)
+  TYPE &withStateFromSignal(const __FlashStringHelper *signalName)
   {
     _setStateSignal(signalName);
     return _self();
@@ -943,11 +948,11 @@ public:
   /*!
     @brief   Gives the command a state channel of its own, filled by a getter.
 
-    An alternative to withStateSignal() for a control whose value is not a logged
-    measurement. The channel belongs to the command, so addStateChannel() and
-    writeState() both refuse the name and the value can only come from one place.
-    It needs no signals at all, so a device that logs nothing can still report what
-    its controls are set to.
+    The counterpart to withStateFromSignal(), for a value that should not be logged:
+    this creates the channel rather than naming a signal that exists. The channel
+    belongs to the command, so addStateChannel() and writeState() both refuse the
+    name and the value can only come from one place. It needs no signals at all, so
+    a device that logs nothing can still report what its controls are set to.
 
     Push a change with writeCommandState(); otherwise the channel is read only when
     a host asks.
@@ -3623,7 +3628,7 @@ public:
   //   Blaeck.onNumberCommand("SET_FREQ", onSetFreq)
   //       .withRange(0.0f, 2.0f, 0.01f)
   //       .withUnit(F("Hz"))
-  //       .withStateSignal(F("Frequency"));
+  //       .withStateFromSignal(F("Frequency"));
   //
   // The kind is the factory's name because it decides the entity and is not optional; every
   // modifier is. Each helper hands back the handle for its own kind, so a modifier that does

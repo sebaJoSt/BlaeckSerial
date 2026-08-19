@@ -147,7 +147,7 @@ void setup()
       .withRange(0.0f, 2.0f, 1.0f / FreqStepsPerUnit)
       .withUnit(F("Hz"))
       .withDisplayName(F("Frequency"))
-      .withStateSignal(F("Frequency"));
+      .withStateFromSignal(F("Frequency"));
   Blaeck.onNumberCommand("SET_AMP", onSetAmp)
       .withRange(0.0f, 100.0f, 1.0f / AmpStepsPerUnit)
       .withOwnState(F("Amplitude"), &Amplitude);
@@ -169,7 +169,7 @@ void setup()
   // else about the two is the same call.
   Blaeck.onTextCommand("SET_NOTE", onSetNote)
       .withMaxLength(sizeof(RunNote) - 1)
-      .withStateSignal(F("RunNote"));
+      .withStateFromSignal(F("RunNote"));
   Blaeck.onButtonCommand("STATUS", onStatus);
 
   // Describes the board rather than the waveform, so it is filed as diagnostic. A channel
