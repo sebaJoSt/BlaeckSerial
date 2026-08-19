@@ -765,14 +765,19 @@ struct StateChannelEntry
   // withOwnState(), which is the one case where the two cannot be told apart: both are
   // a string channel with a pointer.
   bool stateIsSelectIndex = false;
+  // The counterpart: a select channel carrying the option name itself, from a getter or from
+  // a buffer the sketch keeps. Checked against the declared list rather than resolved from it.
+  bool stateIsSelectName = false;
   // The getter above belongs to a switch command, so what it returns is normalised to "1" or
   // "0" before it leaves. Set only where the two cannot be told apart: a text channel with a
   // getter, which is every own-state form but the typed bool one.
   bool stateIsSwitchBool = false;
-  // Latches the warning below, so a getter returning something unreadable is reported once
-  // rather than on every push. Mutable because the channel is read through a const reference
-  // where the getter runs, and this records only that the complaint has been made.
-  mutable bool switchStateWarned = false;
+  // Latches the warning below, so a value the library cannot report is complained about once
+  // rather than on every push. A channel belongs to one command, so a switch's unreadable text
+  // and a select's overlong option name can share it. Mutable because the channel is read
+  // through a const reference where the value is fetched, and this records only that the
+  // complaint has been made.
+  mutable bool stateWarned = false;
   bool truncationWarned = false;
   bool inUse = false;
 };
@@ -4655,6 +4660,18 @@ private:
   // stateValue points at, or the option an index names. Resolved into `buf` only in the
   // last case; the others hand back a pointer they already had.
   const char *_channelText(const StateChannelEntry &e, char *buf, byte bufSize) const;
+
+  // The opening of every complaint about a channel: the sentence, then the channel's own name
+  // read the way it was stored. Four warnings differ only in what follows, and reading a flash
+  // name as if it were RAM is silent garbage on AVR rather than a crash, so the branch is
+  // written once here. Says nothing when no debug stream is attached.
+  void _debugChannel(const __FlashStringHelper *prefix, const StateChannelEntry &e) const;
+
+  // A select reporting an option by name rather than by index: checked against the list the
+  // command declared, using the same matcher the command topic is read with, so what a device
+  // reports and what it accepts cannot drift apart. Returns nullptr for a name that is not on
+  // the list, and complains once.
+  const char *_checkedSelectName(const StateChannelEntry &e, const char *text) const;
 
   // The 0x90 flag word for one channel. Both writer paths call this so the bits are decided
   // once: the buffered and unbuffered writers are otherwise the same code twice, and a flag

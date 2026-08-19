@@ -1491,6 +1491,11 @@ bool BlaeckSerial::_declareOwnState(uint16_t handlerIndex, const __FlashStringHe
     // out instead, so a sketch may spell it however reads best in its own code.
     if (cmd.kind == BLAECK_CMD_SWITCH && getStateText != nullptr)
       _stateChannels[ch].stateIsSwitchBool = true;
+    // A select reports an option name unless it reports an index this library resolves. Both
+    // the getter form and the buffer form hand over text the sketch chose, and only the list
+    // says whether that text is an option at all.
+    if (cmd.kind == BLAECK_CMD_SELECT && !selectIndex)
+      _stateChannels[ch].stateIsSelectName = true;
     if (cmd.kind == BLAECK_CMD_SELECT && cmd.options != nullptr)
       _stateChannels[ch].options = cmd.options;
   }
@@ -2501,14 +2506,9 @@ void BlaeckSerial::_writeStateFrame(int channelIndex, const char *text, unsigned
   if (rawLen > 255 && !e.truncationWarned)
   {
     e.truncationWarned = true;
+    _debugChannel(F("State text truncated to 255 bytes on channel: "), e);
     if (_debugStream != nullptr)
-    {
-      _debugStream->print(F("State text truncated to 255 bytes on channel: "));
-      if (e.nameInFlash)
-        _debugStream->println(reinterpret_cast<const __FlashStringHelper *>(e.name));
-      else
-        _debugStream->println(e.name);
-    }
+      _debugStream->println();
   }
 
   if (_bufReady())
@@ -2579,29 +2579,74 @@ void BlaeckSerial::writeStateChannels(unsigned long msg_id)
 }
 
 #if BLAECK_ENABLE_STATE_CHANNELS
+void BlaeckSerial::_debugChannel(const __FlashStringHelper *prefix, const StateChannelEntry &e) const
+{
+  if (_debugStream == nullptr)
+    return;
+  _debugStream->print(prefix);
+  if (e.nameInFlash)
+    _debugStream->print(reinterpret_cast<const __FlashStringHelper *>(e.name));
+  else
+    _debugStream->print(e.name);
+}
+
+const char *BlaeckSerial::_checkedSelectName(const StateChannelEntry &e, const char *text) const
+{
+  // No answer yet is not a mistake: a getter may have none, and a buffer may be empty until
+  // the first selection. Passed on for the caller to send as no value.
+  if (text == nullptr || text[0] == '\0')
+    return text;
+
+#if BLAECK_ENABLE_COMMAND_META
+  if (e.options == nullptr)
+    return text;
+
+  // The matcher the command topic is read with, so a name is reported exactly when the same
+  // name would be accepted back.
+  if (_flashCsvIndexOf(e.options, text) >= 0)
+    return text;
+
+  // Home Assistant logs a name that is not on the list and keeps the option it had, so the
+  // control goes on showing a stale selection - which reads as a device that did not change.
+  if (!e.stateWarned)
+  {
+    e.stateWarned = true;
+    _debugChannel(F("Select state is not a declared option on channel: "), e);
+    if (_debugStream != nullptr)
+    {
+      _debugStream->print(F(" returned \""));
+      _debugStream->print(text);
+      _debugStream->print(F("\", allowed ["));
+      _debugStream->print(e.options);
+      _debugStream->println(F("]. Nothing is reported and the control keeps its last value."));
+    }
+  }
+  return nullptr;
+#else
+  return text;
+#endif
+}
+
 const char *BlaeckSerial::_channelText(const StateChannelEntry &e, char *buf, byte bufSize) const
 {
   if (e.getStateText != nullptr)
   {
     const char *t = e.getStateText();
+    if (e.stateIsSelectName)
+      return _checkedSelectName(e, t);
     if (!e.stateIsSwitchBool)
       return t;
 
     const char *canonical = blaeck_detail::switchStateText(t);
-    // Text that is neither on nor off in any spelling this library knows. Reporting nothing
-    // is the honest answer - "0" would assert the switch is off - but nothing is also what a
-    // sketch sees when it has simply spelled the value some other way, so say which it is.
-    // Once per channel: the getter runs on every push, and a wrong one is wrong every time.
-    if (canonical == nullptr && t != nullptr && t[0] != '\0' && !e.switchStateWarned)
+    // Neither on nor off in any spelling this library knows. Reporting nothing is honest - "0"
+    // would assert the switch is off - but nothing is also what a sketch sees when it has just
+    // spelled the value another way, so say which it is. Once: the getter runs on every push.
+    if (canonical == nullptr && t != nullptr && t[0] != '\0' && !e.stateWarned)
     {
-      e.switchStateWarned = true;
+      e.stateWarned = true;
+      _debugChannel(F("Switch state not recognised on channel: "), e);
       if (_debugStream != nullptr)
       {
-        _debugStream->print(F("Switch state not recognised on channel: "));
-        if (e.nameInFlash)
-          _debugStream->print(reinterpret_cast<const __FlashStringHelper *>(e.name));
-        else
-          _debugStream->print(e.name);
         _debugStream->print(F(" returned \""));
         _debugStream->print(t);
         _debugStream->println(F("\". Expected 1/on/true/yes or 0/off/false/no. "
@@ -2617,8 +2662,10 @@ const char *BlaeckSerial::_channelText(const StateChannelEntry &e, char *buf, by
     return nullptr;
 
   if (!e.stateIsSelectIndex)
-    return (const char *)e.stateValue;
-
+  {
+    const char *t = (const char *)e.stateValue;
+    return e.stateIsSelectName ? _checkedSelectName(e, t) : t;
+  }
   if (e.options == nullptr || buf == nullptr || bufSize == 0)
     return nullptr;
 
@@ -2638,8 +2685,28 @@ const char *BlaeckSerial::_channelText(const StateChannelEntry &e, char *buf, by
   }
   byte len = 0;
   byte c;
-  while ((c = pgm_read_byte(p + at + len)) != 0 && c != ',' && len + 1 < bufSize)
+  while ((c = pgm_read_byte(p + at + len)) != 0 && c != ',')
   {
+    // Stopped by the buffer, not by the end of the name. getSelectOptionNameAt() refuses this
+    // for the same reason: half a name matches nothing on the list a host was given. Only this
+    // leg is bounded - the catalog carries full names and the command topic accepts them - so
+    // truncating here would break reporting alone, and quietly.
+    if ((unsigned int)len + 1 >= bufSize)
+    {
+      if (!e.stateWarned)
+      {
+        e.stateWarned = true;
+        _debugChannel(F("Select option too long to report on channel: "), e);
+        if (_debugStream != nullptr)
+        {
+          _debugStream->print(F(" needs more than "));
+          _debugStream->print((unsigned int)bufSize - 1);
+          _debugStream->println(F(" characters. Nothing is reported; raise "
+                                  "BLAECK_STATE_MAX_OPTION_CHARS or shorten the option."));
+        }
+      }
+      return nullptr;
+    }
     buf[len] = (char)c;
     len++;
   }

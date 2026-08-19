@@ -243,12 +243,26 @@ logged alongside what it controls, while `withOwnState` creates a state channel 
 which is not logged. Naming versus creating is why only one of the two takes a source argument.
 
 Whichever you use, the value is read in the command's own vocabulary. A select reports an option
-name, not an index. A switch reports `1` or `0` — the same two values its handler accepts — and a
-getter on a switch is normalised for you: return `"ON"`, `"true"`, `"yes"` or any of their opposites
-in whatever case suits your code, and `1` or `0` goes out. Return something that is neither and the
-channel reports nothing rather than guessing, and says so once on the debug stream. There is one
-place this cannot reach: `withStateFromSignal` pointing at a *string* signal, since a signal is
-logged data and the library will not rewrite it — point a switch at a `bool` and that is moot.
+name, not an index — pass `&index` and the library resolves the name from the list for you, so
+nothing has to hold that text or keep it in step. A switch reports `1` or `0` — the same two values
+its handler accepts — and a getter on a switch is normalised for you: return `"ON"`, `"true"`,
+`"yes"` or any of their opposites in whatever case suits your code, and `1` or `0` goes out.
+
+Report something the vocabulary has no room for — a switch state that is neither on nor off, a
+select name that is not on the declared list — and the channel reports nothing rather than
+something wrong, and says so once on the debug stream. Nothing is what a host already does with a
+value it cannot place: Home Assistant keeps the last selection and logs the bad one, so a wrong
+name reads as a control that simply did not move. A select name is checked with the same matcher
+the command topic is read with, so what a device reports and what it accepts cannot drift apart.
+
+There is one place this cannot reach: `withStateFromSignal` pointing at a *string* signal, since a
+signal is logged data and the library will not rewrite it — point a switch at a `bool`, or a select
+at its index, and that is moot.
+
+Resolving an option name needs somewhere to build it, and that buffer is `24` characters by
+default. A longer option is reported as nothing rather than as a truncated name that would match
+nothing on the list — raise `BLAECK_STATE_MAX_OPTION_CHARS` if your options need it. Only this leg
+is bounded: the full names go out in the catalog, and the full names are accepted back.
 
 `withDisplayName` labels the control something other than its name. A command name is an
 identifier — the host sends `SET_FREQ` back to invoke it — so it is written to be matched rather
