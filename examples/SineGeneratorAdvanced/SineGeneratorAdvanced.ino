@@ -85,6 +85,7 @@ void onHelpSignalDeactivate(const char *command, const char *const *params, byte
 void onHelpSignalActivateAll(const char *command, const char *const *params, byte paramCount);
 void onHelpStatus(const char *command, const char *const *params, byte paramCount);
 void ApplySignalRange(bool activate, byte lo, byte hi);
+const char *StatusText();
 void PersistActivatedSignals();
 
 //---MEASUREMENT
@@ -149,7 +150,14 @@ void setup()
   // sensor for "Status" before the first line is written. Diagnostic, like the button that
   // asks for it: a status line describes the board rather than the signals it generates, so
   // it belongs beside the device info instead of among the controls.
-  Blaeck.addStateChannel(F("Status")).withIcon(F("mdi:message-text")).diagnostic();
+  //
+  // The value comes from a getter rather than a stored string, so a host asking for the
+  // catalog is answered with the count as it is at that moment - there is nothing to go stale,
+  // and a host that connects long after the last change still gets the truth.
+  Blaeck.addStateChannel(F("Status"))
+      .withStateText(StatusText)
+      .withIcon(F("mdi:message-text"))
+      .diagnostic();
 
   // Plain: help text is free-form, which no dashboard control can represent, so these are
   // registered with onCommand() and stay untyped. A host still sees them in the catalog and

@@ -113,6 +113,10 @@ void ApplySignalRange(bool activate, byte lo, byte hi)
 
   PersistActivatedSignals();
   UpdateLoggingSignals();
+
+  // The set of active signals is what Status reports, so pushing it here is what keeps the
+  // host in step: pressing STATUS is then a way to ask, not the only way to find out.
+  Blaeck.writeState(F("Status"));
 }
 
 void PersistActivatedSignals()
@@ -131,21 +135,27 @@ void onStatus(const char *command, const char *const *params, byte paramCount)
   (void)params;
   (void)paramCount;
 
-  // The terminal gets the full multi-line report, as before.
+  // The terminal gets the full multi-line report; a Blaeck host skips anything that is not a
+  // frame, so it would see none of it. The one-line summary goes out as a frame instead.
   PrintInfo(false);
+  Blaeck.writeState(F("Status"));
+}
 
-  // A Blaeck host skips anything that is not a frame, so it would see none of
-  // that. Push a one-line summary on a state channel as well, written only
-  // on a button press.
+// What the Status channel reports, built when it is asked for rather than stored. The library
+// calls this while a frame is being assembled, so it only reads and formats - starting a frame
+// of its own here would corrupt the one it interrupted.
+const char *StatusText()
+{
+  // Static, so what is returned outlives this call: the library reads it after the return.
+  static char text[32];
   byte active = 0;
   for (byte i = 1; i <= MAXIMUM_SIGNALS; i++)
   {
     if (sine[i].isActivated)
       active++;
   }
-  char text[48];
   snprintf(text, sizeof(text), "%u of %u signals active", (unsigned)active, (unsigned)MAXIMUM_SIGNALS);
-  Blaeck.writeState(F("Status"), text);
+  return text;
 }
 
 // ---------------------------------------------------------------------------
