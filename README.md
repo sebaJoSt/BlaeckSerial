@@ -230,6 +230,7 @@ does not compile rather than quietly doing nothing.
 | `withUnit(F("Hz"))` | ● | | | | |
 | `withMode(BLAECK_NUMBER_MODE_BOX)` | ● | | | | |
 | `withDeviceClass(F("temperature"))` | ● | ● | | ● | |
+| `withIcon(F("mdi:tune"))` | ● | ● | ● | ● | ● |
 | `withMaxLength(32)` | | | | | ● |
 | `withStateFromSignal(F("Name"))` | ● | ● | ● | ● | ● |
 | `withOwnState(F("Name"), getter)` | ● | ● | ● | ● | ● |
@@ -262,6 +263,16 @@ is shown in the reader's own units. That conversion runs both ways and never rea
 a control declared in Celsius is typed in Fahrenheit and arrives back in Celsius — so the range
 stays expressed in the unit the sketch declared and `withRange` keeps meaning what it says. Declare
 the matching `withUnit` alongside it, or the host converts from an assumption.
+
+`withIcon` is the same idea with none of the meaning: every kind takes one, and it changes only the
+picture. Prefer a device class where one fits, since a host derives an icon from it and the wording
+and units come with it; reach for an icon where no class applies — a select and a text field have
+none at all — or where the sketch wants a particular one anyway.
+
+One limit worth knowing about the step: Home Assistant refuses anything below `0.001`, and refuses
+the whole control rather than just the step. The library sends what you declared either way — the
+wire has no such floor and neither do other hosts — but it says so on the debug stream when you ask
+for finer, since otherwise a control simply never appears.
 
 All metadata strings must be `F()` literals: they are stored as pointers, never copied.
 

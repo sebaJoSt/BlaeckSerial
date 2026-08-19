@@ -655,6 +655,7 @@ struct CommandHandlerEntry
   float meta_step = 0.0f;
   const __FlashStringHelper *unit = nullptr;
   const __FlashStringHelper *deviceClass = nullptr;
+  const __FlashStringHelper *icon = nullptr;
   const __FlashStringHelper *displayName = nullptr;
   const __FlashStringHelper *options = nullptr;
   const __FlashStringHelper *stateSignal = nullptr;
@@ -799,6 +800,10 @@ protected:
   // step at all and is dropped rather than announced.
   void _warnStepIgnored(float st) const;
 
+  // A step this library keeps and sends, but that a host may not accept. Reported because
+  // what is lost is the whole control rather than the step, and nothing else says so.
+  void _warnStepTooFine(float st) const;
+
   // Whether a list has anything in it. A list with no entries is not a list: a host has
   // nothing to offer and _validateTypedCommand() has nothing to accept, so the command is
   // dead at both ends - the same reasoning addEventChannel() applies to a channel declared
@@ -824,6 +829,12 @@ protected:
       // worth reporting.
       if (st != 0.0f && !(st > 0.0f))
         _warnStepIgnored(st);
+      // Sent as declared either way - the wire has no such limit and neither does this
+      // library - but a host may. Home Assistant refuses a step below 0.001 at the point it
+      // reads the announcement, and refuses the whole control with it rather than the step
+      // alone, so a sketch asking for finer resolution loses the control and is told nothing.
+      else if (st > 0.0f && st < 0.001f)
+        _warnStepTooFine(st);
     }
 #else
     (void)mn; (void)mx; (void)st;
@@ -866,6 +877,24 @@ protected:
     }
 #else
     (void)deviceClass;
+#endif
+  }
+
+  void _setIcon(const __FlashStringHelper *icon)
+  {
+#if BLAECK_ENABLE_COMMAND_META
+    if (blaeck_detail::flashStrEmpty(icon))
+      icon = nullptr;
+    if (auto *e = _entry())
+    {
+      if (e->icon != icon)
+      {
+        e->icon = icon;
+        _markDirty();
+      }
+    }
+#else
+    (void)icon;
 #endif
   }
 
@@ -1056,6 +1085,28 @@ public:
   TYPE &withDisplayName(const __FlashStringHelper *displayName)
   {
     _setDisplayName(displayName);
+    return _self();
+  }
+
+  /*!
+    @brief   Declares the icon a host shows beside the control.
+
+    Every kind takes one, and it is the one modifier that is purely a picture: it
+    changes nothing about what the control accepts or reports. Where a device class
+    is available it is the better choice, since a host derives an icon from it and
+    gets the wording and units that go with it too; reach for an icon when no class
+    fits, or when the sketch wants a particular one anyway.
+
+    @param   icon  Material Design Icons name, as an F() literal.
+    @return  The same handle, for chaining.
+
+    @code
+      Blaeck.onButtonCommand("CALIBRATE", onCalibrate).withIcon(F("mdi:tune"));
+    @endcode
+  */
+  TYPE &withIcon(const __FlashStringHelper *icon)
+  {
+    _setIcon(icon);
     return _self();
   }
 
@@ -4834,6 +4885,26 @@ inline void BlaeckCommandRefBase::_warnStepIgnored(float st) const
   }
   _owner->_debugStream->print(st);
   _owner->_debugStream->println(F(". No resolution is declared and the host chooses one."));
+#else
+  (void)st;
+#endif
+}
+
+inline void BlaeckCommandRefBase::_warnStepTooFine(float st) const
+{
+#if BLAECK_ENABLE_COMMAND_META
+  if (_owner == nullptr || _owner->_debugStream == nullptr)
+    return;
+  _owner->_debugStream->print(F("step below 0.001: "));
+  if (auto *e = _entry())
+  {
+    _owner->_debugStream->print(e->command);
+    _owner->_debugStream->print(' ');
+  }
+  // Six places, because the default two print the very value being complained about as 0.00.
+  _owner->_debugStream->print(st, 6);
+  _owner->_debugStream->println(F(". Sent as declared, but Home Assistant refuses the whole "
+                                  "control rather than only the step."));
 #else
   (void)st;
 #endif
