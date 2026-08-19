@@ -128,11 +128,15 @@ void setup()
       .withPressPayload(F("1," STRINGIFY(MAXIMUM_SIGNALS)))
       .withDisplayName(F("Activate all signals"))
       .withIcon(F("mdi:select-all"));
-  Blaeck.onButtonCommand("STATUS", onStatus);
+  Blaeck.onButtonCommand("STATUS", onStatus)
+      .withDisplayName(F("Request status"))
+      .diagnostic();
 
   // State channels are declared up-front so the host can announce a text
-  // sensor for "Status" before the first line is written.
-  Blaeck.addStateChannel(F("Status")).withIcon(F("mdi:message-text"));
+  // sensor for "Status" before the first line is written. Diagnostic, like the button that
+  // asks for it: a status line describes the board rather than the signals it generates, so
+  // it belongs beside the device info instead of among the controls.
+  Blaeck.addStateChannel(F("Status")).withIcon(F("mdi:message-text")).diagnostic();
 
   // Plain catch-all: <LS> and <command?> answer with free-form help text,
   // which no dashboard control can represent, so it stays untyped.

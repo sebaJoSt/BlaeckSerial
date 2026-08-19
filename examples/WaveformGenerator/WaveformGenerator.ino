@@ -168,7 +168,8 @@ void setup()
       .withDisplayName(F("Run note"))
       .withStateFromSignal(F("RunNote"));
   Blaeck.onButtonCommand("STATUS", onStatus)
-      .withDisplayName(F("Request status"));
+      .withDisplayName(F("Request status"))
+      .diagnostic();
   // The device class is what lets a host offer minutes or hours - without one the unit is only a label.
   Blaeck.addStateChannel(F("Uptime"), &Uptime)
       .withUnit(F("s"))
