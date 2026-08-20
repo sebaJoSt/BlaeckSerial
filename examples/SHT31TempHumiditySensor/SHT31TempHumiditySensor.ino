@@ -29,7 +29,15 @@ void setup()
 {
   Serial.begin(115200);
 
-  sht31.begin(0x44);
+  if (!sht31.begin(0x44))
+  {
+    // Carry on regardless: the device still appears, reporting NaN for both values,
+    // which says more to a host than never connecting at all.
+    Serial.println(F("No SHT31 answered at 0x44"));
+  }
+
+  // Clears condensation off the sensor. It warms the element, so a reading taken
+  // with it on is too high.
   // sht31.heater(true);
 
   // Setup BlaeckSerial
@@ -48,8 +56,23 @@ void setup()
 
 void loop()
 {
+  ReadSensor();
+
+  // Reads what has come in and writes the signals when the interval is up.
+  Blaeck.tick();
+}
+
+// A measurement takes about 15 ms of blocking I2C, so it runs on its own schedule
+// rather than on every pass of loop().
+void ReadSensor()
+{
+  static unsigned long lastRead = 0;
+
+  if (millis() - lastRead < 1000)
+    return;
+  lastRead = millis();
+
+  // Both are NaN while the sensor is unreachable, which a host shows as unavailable.
   temperature = sht31.readTemperature();
   humidity = sht31.readHumidity();
-
-  Blaeck.tick();
 }
