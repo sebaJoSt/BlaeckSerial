@@ -2,8 +2,9 @@
 <a href="url"><img src="https://user-images.githubusercontent.com/388152/186109775-c7f1bb61-4cc0-4dc1-9969-49c2f2e1303f.png"  alt="BlaeckSerial Logo SeeSaw Font" height="70"></a>
 ===
 
-BlaeckSerial is an Arduino library. It sends measurements over the serial port as binary data,
-using the [Blaeck protocol](https://sebajost.github.io/blaeck-protocol/).
+BlaeckSerial is an Arduino library. It sends any value your sketch holds — sensor readings,
+calculated results, text — over the serial port as binary data, using the
+[Blaeck protocol](https://sebajost.github.io/blaeck-protocol/).
 
 It is the first part of a chain:
 
