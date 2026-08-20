@@ -17,5 +17,22 @@
 # It is machine-specific (absolute paths, one board) and gitignored. Rebuild it
 # after switching boards or adding a library; a stale one is not an error, the
 # editor just falls back to guessing.
+#
+# The database covers the one sketch it was built from. Every other file falls back
+# to whatever include paths the editor was given, and those must include the avr-gcc
+# toolchain's own headers - not just the Arduino core:
+#
+#   <arduino15>/packages/arduino/tools/avr-gcc/<ver>/avr/include
+#   <arduino15>/packages/arduino/tools/avr-gcc/<ver>/lib/gcc/avr/<ver>/include
+#   <arduino15>/packages/arduino/hardware/avr/<ver>/libraries/*/src   (EEPROM and friends)
+#
+# Arduino.h includes <avr/pgmspace.h> on its 28th line. Miss that path and the include
+# fails, every type after it is unknown, and one sketch reports ninety-odd problems.
+#
+# What no configuration fixes: a sketch calls functions defined further down the file,
+# and the Arduino build inserts the prototypes. An editor reading the raw .ino as C++
+# does not, so each example reports one "was not declared in this scope". The extra
+# .ino files of a multi-file sketch are worse - they are appended to the main one at
+# build time and have no includes of their own.
 CompileFlags:
   CompilationDatabase: .development/ccdb
