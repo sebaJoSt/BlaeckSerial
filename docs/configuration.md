@@ -44,11 +44,10 @@ Two slots are easy to miss. A command that reports its own value with `withOwnSt
 state channel as well as a command slot. Event types share one table across every channel, so
 `withEventTypes()` is the sum, not the largest.
 
-A table is allocated in full by the first entry added to it, and never grows. So a table your
+A table is allocated in full by the first entry added to it, and never grows. A table your
 sketch never touches costs nothing, and raising a number costs SRAM whether or not you fill the
-slots. Once a table exists its size is fixed: a `with...()` call after the first entry has been
-added is refused and says so. Put the whole chain in `setup()` before any `add...()` call and
-that cannot happen.
+slots. Put the whole `begin()` chain before any `add...()` call: once a table exists its size is
+fixed, and a later `with...()` is refused.
 
 ## Finding out what did not fit
 
@@ -133,24 +132,16 @@ This reaches every file. Nothing else to do.
 
 BlaeckSerial includes a `BlaeckSerialConfig.h` if it can find one. In an Arduino build it
 cannot: your sketch folder is not on the compiler's include path, so a config file next to your
-`.ino` is ignored without a word. No IDE preference and no `sketch.yaml` key adds compiler
-flags - only the core's own files can.
+`.ino` is ignored without a word. That is the Arduino build system, not this library
+([arduino-cli#501](https://github.com/arduino/arduino-cli/issues/501)).
 
-This is the Arduino build system rather than this library. A sketch-local settings header was
-asked for in 2015 in
-[arduino-builder#15](https://github.com/arduino/arduino-builder/issues/15), which was closed,
-and libraries still cannot extend the include path
-([arduino-cli#501](https://github.com/arduino/arduino-cli/issues/501), open since 2019).
+The simplest fix is to put the config where the include path already reaches, at
+`libraries/BlaeckSerial/src/BlaeckSerialConfig.h`. It works in the IDE and the CLI. The catch is
+that it now belongs to the library: it applies to every sketch you build, and updating the
+library overwrites it.
 
-Three ways round it.
-
-**a) Build with arduino-cli.** Put the config next to your sketch:
-
-```
-MySketch/
-  MySketch.ino
-  BlaeckSerialConfig.h
-```
+To keep the config with the sketch instead, put it in the sketch folder and add the folder to
+the include path yourself:
 
 ```bash
 arduino-cli compile --fqbn <board> \
@@ -158,23 +149,7 @@ arduino-cli compile --fqbn <board> \
   MySketch
 ```
 
-`{build.source.path}` is your sketch folder, so every file finds the config. Nothing in your
-Arduino installation is touched and the setting travels with the sketch. This is the only one
-your CI can reproduce exactly.
-
-**b) Put the config in the library**, at `libraries/BlaeckSerial/src/BlaeckSerialConfig.h`. That
-folder is already on the include path, so every file sees it, in the IDE as well as the CLI. The
-catch is that it now belongs to the library: it applies to every sketch you build, and updating
-the library overwrites it.
-
-**c) Stay in the IDE.** Same sketch folder as (a), plus a `platform.local.txt` next to your
-core's `platform.txt`, containing:
-
-```
-compiler.cpp.extra_flags=-I{build.source.path}
-```
-
-On Windows, for the AVR core, that file goes at
-`C:\Users\<you>\AppData\Local\Arduino15\packages\arduino\hardware\avr\1.8.8\platform.local.txt`.
-On macOS and Linux it is `~/.arduino15/packages/...`, same tail. It is per core, so repeat it
-for esp32, samd, renesas_uno and anything else you build for.
+`{build.source.path}` is your sketch folder. Nothing in your Arduino installation is touched,
+and this is the one your CI can reproduce. The IDE has no place to pass that flag, so building
+there needs the same line in a `platform.local.txt` next to your core's `platform.txt` - per
+core, so once for avr, again for esp32, and so on.

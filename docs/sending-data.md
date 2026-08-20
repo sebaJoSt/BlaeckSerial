@@ -158,16 +158,16 @@ It runs in normal `loop()` context, so `Serial` and `delay()` are safe in it.
 By default the data carries no time and the host stamps it when it arrives. That is fine when
 the link is quick and nothing buffers.
 
-For a time the device itself stands behind, pick a mode in `setup()`:
+For a time the device itself stands behind, pick a mode in `setup()`. `BLAECK_MICROS` needs
+nothing else - the library reads `micros()` and counts the overflows, so the number keeps
+climbing past the 71 minutes a 32-bit microsecond counter holds. It counts them as data is
+written, so a device that writes less often than that needs a real clock instead:
 
 ```cpp
 Blaeck.setTimestampMode(BLAECK_MICROS);
 ```
 
-`BLAECK_MICROS` needs nothing else. The library reads `micros()` and tracks the overflow, so
-the count keeps climbing past the 71 minutes a 32-bit microsecond counter holds. It notices that
-overflow as data is written, so a device that writes less often than every 71 minutes misses one
-and needs a real clock instead.
+`BLAECK_UNIX` takes the time from a clock only your sketch can reach, so it needs a callback:
 
 ```cpp
 unsigned long long unixMicros()
@@ -179,17 +179,10 @@ Blaeck.setTimestampCallback(unixMicros);
 Blaeck.setTimestampMode(BLAECK_UNIX);
 ```
 
-`BLAECK_UNIX` takes the time from a clock only your sketch can reach: an RTC, or a time fetched
-over the network. Without a callback it stamps zero and every reading lands in 1970, so check
-it:
+Without one it stamps zero and every reading lands in 1970. `hasValidTimestampCallback()` says
+whether you have one.
 
-```cpp
-if (!Blaeck.hasValidTimestampCallback())
-  Serial.println(F("no clock - timestamps will be zero"));
-```
-
-Set the mode once, in `setup()`. Switching it partway through a log restarts the overflow
-tracking, and the timestamps either side of the change do not belong on one axis.
+Set the mode once, in `setup()`. Timestamps from either side of a change are not comparable.
 
 ## Buffered writes
 
