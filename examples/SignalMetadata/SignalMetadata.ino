@@ -1,8 +1,8 @@
 /*
   SignalMetadata.ino
 
-  One signal of every shape a device can declare, so a dashboard's rendering can be checked
-  side by side: numeric values with units and statistics, a counter, a diagnostic, binary
+  Every kind of metadata a signal can carry, one signal each, to compare how a dashboard
+  renders them: numeric values with units and statistics, a counter, a diagnostic, binary
   sensors, a fixed set of names, and values that declare nothing at all.
 
   Everything moves on its own, so nothing needs poking to see it change.
@@ -49,7 +49,7 @@ void setup()
   Blaeck.DeviceFWVersion = "1.0";
 
   // A measurement: goes up and down, meaningful at any instant. The device class is what lets
-  // Home Assistant can convert it - without one the unit is only a label.
+  // Home Assistant convert it - without one the unit is only a label.
   Blaeck.addSignal(F("Temperature"), &Temperature)
       .withUnit(F("\xC2\xB0" "C"))
       .withDeviceClass(F("temperature"))
@@ -78,12 +78,8 @@ void setup()
       .diagnostic()
       .disabledByDefault();
 
-  // Never changes value. Without forceUpdate an identical reading is not a state change at all,
-  // so "last changed" freezes and a device still sending every second looks exactly like one
-  // that died an hour ago. With it, "last changed" ticks over on every reading.
-  //
-  // The more-info dialog is where to see this. A history timeline merges neighbouring identical
-  // states into one band, so both versions look the same there.
+  // Never changes value. Without forceUpdate an identical reading is not a state change, so
+  // "last changed" freezes and a live board looks like one that died an hour ago.
   Blaeck.addSignal(F("Heartbeat"), &Heartbeat)
       .forceUpdate();
 
