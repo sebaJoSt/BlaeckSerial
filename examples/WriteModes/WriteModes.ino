@@ -1,21 +1,23 @@
 /*
   WriteModes.ino
 
-  This sketch demonstrates two different data transmission patterns:
+  Three signals, each sent a different way, so that when a value goes out is no
+  longer decided by the interval alone.
 
-  1. Direct Write (Sine_1):
-     - Data is immediately transmitted after updating
-     - Updates every 100ms using Blaeck.write()
+    Sine_1  write() sends the value the moment it is set, without waiting for
+            the interval. This is what event driven data needs: a limit switch
+            or an alarm is worth little if it arrives a minute late.
 
-  2. Interval Mode (Sine_2 & Sine_3):
-     - Data is marked as updated but transmitted only when tickUpdated() is called
-     - Sine_2:
-        - updates every 2 seconds
-        - Data is calculated and stored in the signal variable
-        - Signal is marked as updated using Blaeck.markSignalUpdated()
-     - Sine_3
-        - updates every 10 seconds
-        - Same as Sine_2, but Blaeck.update() combines updating and marking in a single function call
+    Sine_2  the variable is set directly, then markSignalUpdated() flags it.
+
+    Sine_3  update() does both of those steps in one call.
+
+  Sine_2 and Sine_3 leave the sending to tickUpdated(), which goes out on the
+  interval like tick() does but carries only what actually changed. Where
+  signals update slowly, that saves most of the traffic.
+
+  Author: Sebastian Strobl,
+  More information on: https://github.com/sebaJoSt/BlaeckSerial
 */
 
 #include "Arduino.h"
@@ -31,17 +33,27 @@ float sine_1;
 float sine_2;
 float sine_3;
 
-unsigned long updateLastTimeDone_s1 = 0;
-unsigned long updateInterval_s1 = 100; // 100ms interval
-bool updateFirstTime_s1 = true;
+// Each signal runs on its own schedule, so each gets its own timer.
+struct Timer
+{
+  unsigned long interval;
+  unsigned long lastRun;
+  bool firstRun;
 
-unsigned long updateLastTimeDone_s2 = 0;
-unsigned long updateInterval_s2 = 2000; // 2s interval
-bool updateFirstTime_s2 = true;
+  bool isDue()
+  {
+    if (!firstRun && millis() - lastRun < interval)
+      return false;
 
-unsigned long updateLastTimeDone_s3 = 0;
-unsigned long updateInterval_s3 = 10000; // 10s interval
-bool updateFirstTime_s3 = true;
+    firstRun = false;
+    lastRun = millis();
+    return true;
+  }
+};
+
+Timer timer_1 = {100, 0, true};
+Timer timer_2 = {2000, 0, true};
+Timer timer_3 = {10000, 0, true};
 
 void setup()
 {
@@ -71,41 +83,30 @@ void loop()
   UpdateSecondSine();
   UpdateThirdSine();
 
+  // Reads what has come in and sends the signals marked above.
   Blaeck.tickUpdated();
 }
 
+// Sent right here, every 100 ms, whatever the interval is set to.
 void TransmitFirstSine()
 {
-  if ((millis() - updateLastTimeDone_s1 >= updateInterval_s1) || updateFirstTime_s1)
-  {
-    updateLastTimeDone_s1 = millis();
-    updateFirstTime_s1 = false;
-
-    float calcSine = sin(millis() * 0.00005);
-    Blaeck.write("Sine_1", calcSine);
-  }
+  if (timer_1.isDue())
+    Blaeck.write("Sine_1", sin(millis() * 0.00005));
 }
 
+// Set the variable yourself, then say it changed.
 void UpdateSecondSine()
 {
-  if ((millis() - updateLastTimeDone_s2 >= updateInterval_s2) || updateFirstTime_s2)
+  if (timer_2.isDue())
   {
-    updateLastTimeDone_s2 = millis();
-    updateFirstTime_s2 = false;
-
     sine_2 = sin(millis() * 0.00005);
     Blaeck.markSignalUpdated("Sine_2");
   }
 }
 
+// The same thing, in one call.
 void UpdateThirdSine()
 {
-  if ((millis() - updateLastTimeDone_s3 >= updateInterval_s3) || updateFirstTime_s3)
-  {
-    updateLastTimeDone_s3 = millis();
-    updateFirstTime_s3 = false;
-
-    float calcSine = sin(millis() * 0.00005);
-    Blaeck.update("Sine_3", calcSine);
-  }
+  if (timer_3.isDue())
+    Blaeck.update("Sine_3", sin(millis() * 0.00005));
 }
