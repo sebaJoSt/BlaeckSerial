@@ -1,10 +1,18 @@
 /*
   TimeStampModes.ino
 
-  This is a sample sketch to show the different timestamp modes of the BlaeckSerial library. This example uses the
-  included RTC library of the Arduino UNO R4 board but it can be easily adapted to other real-time clock libraries.
+  Every data frame can carry a time, and this sketch shows the three modes it
+  can be sent in. Pick one with TIMESTAMP_MODE below, then flash the board.
 
-  Comment/uncomment the desired timestamp mode in setup() to test it.
+    BLAECK_NO_TIMESTAMP  no time is sent, so the host timestamps on arrival
+    BLAECK_MICROS        micros() since power-up, supplied by the library
+    BLAECK_UNIX          the wall clock, the only mode needing a clock source
+
+  Requires an RTC. This sketch uses the one built into the Arduino UNO R4;
+  another board just needs its own RTC library inside GetRTCUnixTimeMicros().
+
+  Author: Sebastian Strobl,
+  More information on: https://github.com/sebaJoSt/BlaeckSerial
 */
 
 #include "Arduino.h"
@@ -12,6 +20,9 @@
 #include "BlaeckSerial.h"
 
 #define ExampleVersion "1.0"
+
+// The mode to run. This is the only line to change when trying another one.
+#define TIMESTAMP_MODE BLAECK_UNIX
 
 // Instantiate a new BlaeckSerial object
 BlaeckSerial Blaeck;
@@ -39,29 +50,24 @@ void setup()
       1        // Maximal signal count used;
   );
 
-  Blaeck.DeviceName = "Sine Generator";
+  Blaeck.DeviceName = "Timestamp Modes";
   Blaeck.DeviceHWVersion = "Arduino UNO R4";
   Blaeck.DeviceFWVersion = ExampleVersion;
 
   Blaeck.addSignal(F("Sine_1"), &sine);
 
-  // Unix timestamp from RTC transmitted with the data
-  Blaeck.setTimestampMode(BLAECK_UNIX);
-  Blaeck.setTimestampCallback(GetRTCUnixTimeMicros);
+  Blaeck.setTimestampMode(TIMESTAMP_MODE);
 
-  // micros() are transmitted with the data
-  // Blaeck.setTimestampMode(BLAECK_MICROS);
-
-  // default mode, no time information transmitted with the data
-  // Blaeck.setTimestampMode(BLAECK_NO_TIMESTAMP);
+  // Only BLAECK_UNIX needs a clock source. The other two modes bring their own.
+  if (TIMESTAMP_MODE == BLAECK_UNIX)
+    Blaeck.setTimestampCallback(GetRTCUnixTimeMicros);
 }
 
 void loop()
 {
   UpdateSineNumbers();
 
-  /*Keeps watching for serial input (Serial.read) and
-    transmits the data at the user-set interval (Serial.write)*/
+  // Reads what has come in and writes the signals when the interval is up.
   Blaeck.tick();
 }
 
@@ -73,8 +79,8 @@ void UpdateSineNumbers()
 unsigned long long GetRTCUnixTimeMicros()
 {
   RTCTime currentTime;
-  // Get current time from RTC (seconds precision)
   RTC.getTime(currentTime);
 
+  // The RTC counts whole seconds, so the microsecond part is always zero.
   return (unsigned long long)currentTime.getUnixTime() * 1000000ULL;
 }
