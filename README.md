@@ -8,7 +8,7 @@ calculated results, text - over the serial port as binary data, using the
 
 It is the first part of a chain:
 
-1. **Your Arduino sketch** uses BlaeckSerial to register each variable it sends as a *signal* —
+1. **Your Arduino sketch** uses BlaeckSerial to register each variable it sends as a *signal* -
    a temperature, a counter, a switch position. You can also register the commands the board
    accepts and the events it fires.
 2. **Loggbok**, a measurement logging tool, reads the signals over the serial port and stores
@@ -80,7 +80,7 @@ per second, and `<BLAECK.DEACTIVATE>` to stop. Your sketch does not need to know
 ## Examples
 
 The examples are in `examples/`. In the Arduino IDE, open them with
-**File → Examples → BlaeckSerial**.
+**File > Examples > BlaeckSerial**.
 
 Start with **Basic**. **WaveformGenerator** uses every feature and shows what a complete
 dashboard looks like.

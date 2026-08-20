@@ -46,8 +46,8 @@ void loop()
 ```
 
 - The handler is a plain function, written outside `setup()` and `loop()`. Every handler has
-  these three parameters, whatever the command carries. `params` holds the parameters as text —
-  here `params[0]` is `1.5` — and `paramCount` says how many arrived.
+  these three parameters, whatever the command carries. `params` holds the parameters as text -
+  here `params[0]` is `1.5` - and `paramCount` says how many arrived.
 - `onNumberCommand()` in `setup()` ties the name `SET_FREQ` to the function, and says the
   control is a number between 0 and 2.
 - `Blaeck.tick()` in `loop()` is what reads the serial port and calls the handler. A sketch
@@ -103,7 +103,7 @@ Blaeck.onNumberCommand("SET_TEMP", onSetTemp)
     .withMode(BLAECK_NUMBER_MODE_BOX);
 ```
 
-`withRange(min, max, step)` is the range accepted. `step` is display resolution only — a value
+`withRange(min, max, step)` is the range accepted. `step` is display resolution only - a value
 between two steps is still accepted, so round it yourself if the sketch needs that.
 `withUnit()` labels the input. `withDeviceClass()` names the quantity and needs the matching
 unit; Home Assistant then converts for a reader whose units differ, and the value arrives back
@@ -118,7 +118,7 @@ Blaeck.onSelectCommand("SET_WAVE", onSetWave)
 ```
 
 The handler is handed the position in the list, counting from 0, whether the option was sent by
-name or by number. Do not name an option `none` — Home Assistant reads that as nothing
+name or by number. Do not name an option `none` - Home Assistant reads that as nothing
 selected. `getSelectOptionNameAt()` gives you the text of a position, so the sketch does not
 have to keep the names twice.
 
@@ -132,7 +132,7 @@ Blaeck.onTextCommand("SET_LABEL", onSetLabel)
 
 `withMaxLength()` is the longest value accepted, 255 at most and 255 by default. Anything
 longer is refused, so your handler can copy what it is given. `withMode()` asks Home Assistant
-to mask the field while it is typed. That hides the value on screen and nowhere else — it still
+to mask the field while it is typed. That hides the value on screen and nowhere else - it still
 travels the wire as plain characters.
 
 **Switch**
@@ -182,7 +182,7 @@ Blaeck.onNumberCommand("SET_OFFSET", onSetOffset)
 `writeCommandState()` sends it, and `command` is the name the handler was already given.
 Without that call the value is only sent when a host asks for it.
 
-The channel costs a slot in the state channel table — see [State channels](state-channels.md).
+The channel costs a slot in the state channel table - see [State channels](state-channels.md).
 
 The other way is to report on a signal:
 
@@ -202,7 +202,7 @@ Blaeck.onNumberCommand("SET_FREQ", onSetFreq)
 ```
 
 `withStateFromSignal()` points the command at a signal you already added. There is no
-`writeCommandState()` here — the signal reports the value, so `Blaeck.write()` sends it. Leave
+`writeCommandState()` here - the signal reports the value, so `Blaeck.write()` sends it. Leave
 that call out and the control catches up on the next logged reading.
 
 That is the whole difference between the two: a signal is logged, a state channel is not. Use a
@@ -214,7 +214,7 @@ could never arrive.
 ## When a command does not fit
 
 The command table has a fixed size. Registering more commands than it holds drops the extra
-ones — see [Configuration](configuration.md) for how to make it bigger.
+ones - see [Configuration](configuration.md) for how to make it bigger.
 
 Ask whether that happened:
 

@@ -22,7 +22,7 @@ Blaeck.begin(&Serial)
 
 The defaults are sized for the board:
 
-| | Small AVR (≤ 2 kB SRAM) | Mega and larger AVR | ESP32, SAMD, RP2040, … |
+| | Small AVR (<= 2 kB SRAM) | Mega and larger AVR | ESP32, SAMD, RP2040, ... |
 |---|---|---|---|
 | `withSignals` | 8 | 24 | 64 |
 | `withStateChannels` | 3 | 8 | 32 |
@@ -31,7 +31,7 @@ The defaults are sized for the board:
 | `withCommands` | 6 | 16 | 32 |
 
 What each entry costs on AVR: a signal 9 bytes, an event type 5, an event channel 10, a state
-channel 26, a command 48. RAM is what you are really sizing against — a Mega's 8 kB is gone at
+channel 26, a command 48. RAM is what you are really sizing against - a Mega's 8 kB is gone at
 a few hundred of anything.
 
 Two things spend a slot you might not count. A command that reports its own value with
@@ -40,8 +40,8 @@ shared by every channel, so `withEventTypes()` is the sum across channels.
 
 A table is allocated in full by the first entry added to it, and never grows. So a table your
 sketch never touches costs nothing, and raising a number costs SRAM whether or not the slots
-are filled. Once a table exists its size is fixed: a `with…()` call after the first entry has
-been added is refused and says so on the debug stream. Both forms above run before any `add…()`
+are filled. Once a table exists its size is fixed: a `with...()` call after the first entry has
+been added is refused and says so on the debug stream. Both forms above run before any `add...()`
 call, so either is safe.
 
 ## What did not fit
@@ -76,7 +76,7 @@ Blaeck.DeviceHWVersion = "Arduino Mega 2560 Rev3";
 Blaeck.DeviceFWVersion = "1.0";
 ```
 
-They default to `"Unknown"`, `"n/a"` and `"n/a"`. They are kept as pointers, not copied — a
+They default to `"Unknown"`, `"n/a"` and `"n/a"`. They are kept as pointers, not copied - a
 quoted literal is always safe, and a name built at runtime has to live in a global buffer.
 
 ## Compile-time settings
@@ -104,7 +104,7 @@ Values, which change a limit:
 | `BLAECK_BUFFERED_WRITES_DEFAULT` | `false` on AVR and mbed cores, `true` elsewhere. Also settable at runtime with `setBufferedWrites()` |
 | `BLAECK_STATE_MAX_OPTION_CHARS` | 24. Room for one resolved select option while a frame is built |
 
-> **An override must reach every translation unit — your sketch *and* `BlaeckSerial.cpp`.**
+> **An override must reach every translation unit - your sketch *and* `BlaeckSerial.cpp`.**
 > These values size members of `class BlaeckSerial`. A setting seen by only one of them gives
 > the class two different layouts and corrupts memory silently. In particular, do not `#define`
 > them at the top of your `.ino`: that reaches your sketch and never the library.
@@ -122,7 +122,7 @@ Reaches every unit. Nothing else to do.
 BlaeckSerial includes a `BlaeckSerialConfig.h` if it can find one. In the Arduino build it
 cannot: the sketch folder is not on the compiler's include path, so a config file next to your
 `.ino` is silently ignored. There is no IDE preference and no `sketch.yaml` key that adds
-compiler flags — only the core's own files can.
+compiler flags - only the core's own files can.
 
 This is a limitation of the Arduino build system, not of this library. A sketch-local settings
 header was asked for in 2015 in
@@ -164,6 +164,6 @@ compiler.cpp.extra_flags=-I{build.source.path}
 
 On Windows, for the AVR core, that file goes at
 `C:\Users\<you>\AppData\Local\Arduino15\packages\arduino\hardware\avr\1.8.8\platform.local.txt`
-(macOS and Linux: `~/.arduino15/packages/…`, same tail). It is per core, so repeat it for
+(macOS and Linux: `~/.arduino15/packages/...`, same tail). It is per core, so repeat it for
 esp32, samd, renesas_uno and any other you build for. Without this file the config is ignored
 without a word.

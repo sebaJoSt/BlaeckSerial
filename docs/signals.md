@@ -128,7 +128,7 @@ of RAM, one you say nothing about costs 2.
 ## When a signal does not fit
 
 The signal table has a fixed size. If you register more signals than it holds, the extra ones
-are dropped — see [Configuration](configuration.md) for how to make it bigger.
+are dropped - see [Configuration](configuration.md) for how to make it bigger.
 
 Ask whether that happened:
 

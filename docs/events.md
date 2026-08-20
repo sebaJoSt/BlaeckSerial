@@ -4,7 +4,7 @@ An event is something that happened: a threshold was crossed, a motor stalled, a
 
 It is the third of the three kinds, and the one with no value at all. A signal is a value
 sampled over and over. A state channel is a value that stands until it changes. An event has
-neither — it is an occurrence, at one moment, with nothing to read afterwards.
+neither - it is an occurrence, at one moment, with nothing to read afterwards.
 
 ## Declaring a channel
 
@@ -15,8 +15,8 @@ Blaeck.addEventChannel(F("Activity"), F("idle_warning,resumed"))
     .withIcon(F("mdi:pulse"));
 ```
 
-The list is not optional. What travels on the wire is a pair of numbers — which channel, which
-type — so a host can only read an event against the list it was given. That is also why the
+The list is not optional. What travels on the wire is a pair of numbers - which channel, which
+type - so a host can only read an event against the list it was given. That is also why the
 order matters: position fixes each type's number, so you may add to the end of a list, but
 never reorder it.
 
@@ -32,7 +32,7 @@ if (hasBatteryMonitor)
 `addEventType()` returns false if the type is blank, is already on the list, names a channel
 that was never declared, or does not fit.
 
-Event types are written as identifiers — `idle_warning`, not `Idle warning`. Home Assistant
+Event types are written as identifiers - `idle_warning`, not `Idle warning`. Home Assistant
 shows them as they are.
 
 ## Reporting an event
@@ -65,7 +65,7 @@ stored as pointers.
 ## Sizing
 
 Two tables are involved. One holds the channels. The other holds the types, and it is shared by
-every channel — four channels of five types each need room for twenty types, not for twenty per
+every channel - four channels of five types each need room for twenty types, not for twenty per
 channel.
 
 ```cpp

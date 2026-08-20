@@ -48,7 +48,7 @@ Blaeck.writeState(F("Uptime"));
 ```
 
 That is for one that points at a variable: there is nothing to pass, because the channel
-already knows where to look. It is the only way to send a numeric channel — passing text to one
+already knows where to look. It is the only way to send a numeric channel - passing text to one
 is dropped, and the debug stream says so.
 
 Send a value whenever it changes. Without a `writeState()` the value is only read when a host
@@ -74,7 +74,7 @@ push one to keep it in step. Push anyway with `writeState(F("Status"))` when som
 that a host should see at once.
 
 The function runs while a frame is being assembled. It must only read variables and format
-text — a `writeState()`, `writeEvent()` or `write()` inside it corrupts the frame being built.
+text - a `writeState()`, `writeEvent()` or `write()` inside it corrupts the frame being built.
 
 Only text channels take a function. A numeric channel points at the variable, and anything a
 function would have worked out can be assigned to a variable first.
@@ -100,7 +100,7 @@ The same idea as a signal, and mostly the same calls:
 be in the list.
 
 Device classes come from a different list for each type. `F("temperature")` on a number,
-`F("timestamp")` or `F("date")` on text, `F("door")` or `F("motion")` on a `bool` — a `bool`
+`F("timestamp")` or `F("date")` on text, `F("door")` or `F("motion")` on a `bool` - a `bool`
 channel is a binary sensor, and some names mean different things on the two lists. A name from
 the wrong list does not fail quietly: the entity never appears at all.
 
@@ -117,7 +117,7 @@ It comes out of this table all the same, so count it when sizing.
 ## When a channel does not fit
 
 The state channel table has a fixed size, and every channel counts against it, including the
-ones commands own — see [Configuration](configuration.md).
+ones commands own - see [Configuration](configuration.md).
 
 ```cpp
 if (Blaeck.hasRejectedStateChannels())

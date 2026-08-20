@@ -15,7 +15,7 @@ again:
 ```
 
 `Blaeck.tick()` in `loop()` is what honours it. It reads whatever arrived, dispatches commands,
-and sends every signal once the interval has elapsed — so it does nothing at all until a host
+and sends every signal once the interval has elapsed - so it does nothing at all until a host
 has asked for data:
 
 ```cpp
@@ -95,7 +95,7 @@ void loop()
 }
 ```
 
-`update()` sends nothing by itself — that is the whole difference from `write()`.
+`update()` sends nothing by itself - that is the whole difference from `write()`.
 
 `writeUpdatedData()` sends the changed ones now, without waiting for the interval.
 `markSignalUpdated()` marks one without changing its value, `markAllSignalsUpdated()` marks
@@ -141,7 +141,7 @@ Blaeck.setTimestampCallback(unixMicros);
 Blaeck.setTimestampMode(BLAECK_UNIX);
 ```
 
-`BLAECK_UNIX` takes the time from a clock only your sketch can reach — an RTC, or an
+`BLAECK_UNIX` takes the time from a clock only your sketch can reach - an RTC, or an
 NTP-backed time. Without a callback it stamps zero, so every reading lands in 1970. Check with
 `hasValidTimestampCallback()`, which is the one that answers whether the data really carries a
 time.
