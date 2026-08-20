@@ -37,9 +37,8 @@ without being configured for that board in advance.
   modes, slave discovery/scanning, per-signal `prefixSlaveID`, the `@<slaveID>:`
   command-routing prefix, master-side command-catalog aggregation, and the
   `<Wire.h>` dependency. BlaeckSerial is now single-board only.
-  The on-the-wire frame layout is unchanged — the per-record master/slave-config
-  and slave-ID bytes are still emitted (always `0`), so existing Blaeck hosts
-  (e.g. Loggbok) need no changes.
+  Nothing moved in the frame layout on their account: the per-record master/slave-config
+  and slave-ID bytes are still emitted, always `0`.
 
 - **Command parameters are no longer trimmed.** A leading space is part of the value, so
   `<SET_LABEL, hi>` sets `" hi"` rather than `"hi"`. Write `<SET_LABEL,hi>` to send the
@@ -93,9 +92,9 @@ without being configured for that board in advance.
 - **Message ids on commands.** A sender may prefix a command with `#42:` —
   `<#42:SET_AMP,0.9>` — and the device echoes that number in the ack's message-id
   header, so a host can tell which command an ack answers when several of the same
-  name are outstanding. It is the same message id a `BLAECK.*` request sends in its
-  parameters and gets back in the response header; typed commands simply had nowhere
-  to put one, because every parameter belongs to the handler.
+  name are outstanding. It is the same message id a `BLAECK.*` request carries in the
+  same prefix and gets back in the response header; a command frame simply has nowhere
+  else to put one, because every parameter belongs to the handler.
   Hand-typed commands are unaffected: no prefix, no change.
   The ack's frame hash covers the command as written, after the prefix, so it still
   verifies the bytes while the id does the pairing. A name may not begin with `#`
@@ -134,8 +133,17 @@ without being configured for that board in advance.
   unaffected. Typed commands take it too.
 - New `WaveformGenerator` example: one fully controllable waveform, exercising
   typed commands, state channels, event channels and string signals together.
+- **`getIntervalMs()` and `isTimedDataActive()`** report the interval a host asked for and
+  whether timed data is being sent — the two things a sketch could not previously read.
+  `getIntervalMs()` returned the lock mode before, not the rate.
 
 ### Changed
+- **How a host talks to the device changed.** Built-ins take their message id in the `#id:`
+  prefix instead of `MsgID[0..3]` parameters, `BLAECK.ACTIVATE` takes a plain decimal
+  interval, every command is acknowledged including built-ins, and a data frame marks itself
+  as requested rather than carrying a magic message id. Nothing a sketch writes is affected;
+  a host or script that speaks the protocol directly needs updating. See the
+  [protocol documentation](https://sebajost.github.io/blaeck-protocol/protocol/commands).
 - **`F("")` now means "not declared".** `withUnit`, `withIcon` and `withDeviceClass` stored an
   empty literal and announced it as a blank; it is now read the same as leaving the call out,
   so a value built conditionally can say "nothing" without the sketch branching around the
@@ -171,8 +179,7 @@ without being configured for that board in advance.
   now read the same parse as everything else, and the 6.x parser is gone with its buffers —
   160 bytes of SRAM on a Mega, 80 on an Uno, about 1 KB of flash, 128 bytes less stack while
   parsing, and half the work per command. All four buffers were private, so nothing about
-  this is visible from a sketch, and message ids are assembled from the same fields in the
-  same order.
+  this is visible from a sketch.
 - **A `BLAECK.*` command is no longer truncated before it is matched.** The parse buffer was
   sized for a registered command name (24 characters on AVR), which is shorter than
   `BLAECK.WRITE_STATE_CHANNELS`. It now holds whichever of the two is longer — 4 bytes on
@@ -212,6 +219,11 @@ without being configured for that board in advance.
   corrupted state rather than a compiler error.
 
 ### Removed
+- **The interval lock (breaking).** `setIntervalMs()`, `BLAECK_INTERVAL_OFF` and
+  `BLAECK_INTERVAL_CLIENT` are gone, so a 6.x sketch calling the setter no longer
+  compiles. The host owns the rate: `BLAECK.ACTIVATE` sets it and nothing on the device
+  overrides it. A sketch wanting its own cadence drives `writeAllData()` from its own
+  timing and is never activated.
 - **`setCommandCallback(...)` (breaking).** Deprecated since 6.0.0 and warned about
   at runtime ever since. Sketches still using it now fail to compile: replace
   `setCommandCallback(cb)` with `onAnyCommand(cb)` and change the handler signature
