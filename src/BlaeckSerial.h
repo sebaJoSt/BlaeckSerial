@@ -43,7 +43,7 @@
 //   Arduino IDE:  a BlaeckSerialConfig.h in your sketch folder is NOT picked
 //                 up without extra setup, because the sketch folder is not on
 //                 the compiler's include path. See "Configuration" in
-//                 README.md for the three ways to do it.
+//                 docs/configuration.md for the three ways to do it.
 #if defined __has_include
   #if __has_include(<BlaeckSerialConfig.h>)
     #include <BlaeckSerialConfig.h>
