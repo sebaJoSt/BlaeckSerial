@@ -1,8 +1,8 @@
 /*
   SineGeneratorBasic.ino
 
-  This is a sample sketch to show how to use the BlaeckSerial library to transmit five sine
-  waves from the Arduino board to your PC, each a fifth of a period behind the one before.
+  This is a sample sketch to show how to use the BlaeckSerial library to transmit five
+  evenly phase-shifted sine waves from the Arduino board to Loggbok.
 */
 
 #include "Arduino.h"

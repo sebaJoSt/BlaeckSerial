@@ -1,7 +1,8 @@
 /*
   WaveformGenerator.ino
 
-  A dashboard-friendly demo: BlaeckSerial -> Loggbok (MQTT bridge) -> Home Assistant (MQTT Discovery).
+  A dashboard-friendly demo: BlaeckSerial -> Loggbok (serial host and MQTT bridge) ->
+  MQTT broker -> Home Assistant (MQTT client and dashboard).
 
   One fully controllable waveform, driven entirely over MQTT. The device describes what it
   exposes - its signals, controls, state channels and events - and Loggbok turns that into Home
@@ -33,7 +34,7 @@
     RunNote     free text, logged with every row - what SET_NOTE wrote
 
   Shown but never logged (state channels):
-    Uptime      seconds since boot, which a host may show in minutes or hours instead
+    Uptime      seconds since boot, which Home Assistant may show in minutes or hours instead
     Status      the same line every 10 s; StatusOnDemand, the same on the STATUS button
 
   --- HOW A CONTROL GETS ITS VALUE BACK ---
@@ -114,7 +115,7 @@ void setup()
   Blaeck.DeviceHWVersion = "Arduino Mega 2560 Rev3";
   Blaeck.DeviceFWVersion = "1.0";
 
-  // Everything after addSignal() is optional, and each call changes how a host shows it.
+  // Everything after addSignal() is optional, and each call changes how Home Assistant shows it.
   OutputSignal = Blaeck.addSignal(F("Output [V]"), &Output)
                      .withDisplayName(F("Output"))
                      .withUnit(F("V"))
@@ -154,7 +155,7 @@ void setup()
   Blaeck.onSwitchCommand("SET_ENABLE", onSetEnable)
       .withDisplayName(F("Output enabled"))
       .withOwnState(F("Enabled"), &Enabled);
-  // Host percent-encodes the value; the device decodes it and enforces the 32-byte max.
+  // Loggbok percent-encodes the value; the device decodes it and enforces the 32-byte max.
   Blaeck.onTextCommand("SET_LABEL", onSetLabel)
       .withMaxLength(sizeof(DeviceLabel) - 1)
       .withDisplayName(F("Device label"))
@@ -170,7 +171,7 @@ void setup()
   Blaeck.onButtonCommand("STATUS", onStatus)
       .withDisplayName(F("Request status"))
       .diagnostic();
-  // The device class is what lets a host offer minutes or hours - without one the unit is only a label.
+  // The device class is what lets Home Assistant offer minutes or hours - without one the unit is only a label.
   Blaeck.addStateChannel(F("Uptime"), &Uptime)
       .withUnit(F("s"))
       .withDeviceClass(F("duration"))
@@ -201,8 +202,8 @@ void loop()
   CheckActivity();
 }
 
-// Gives the Output signal the icon of the wave it is currently producing, so the entity in a
-// host changes shape with the control rather than staying whatever setup() said.
+// Gives the Output signal the icon of the wave it is currently producing, so the corresponding
+// Home Assistant entity changes with the control rather than staying as setup() configured it.
 //
 // Safe to call every pass: setting an icon that is already set does nothing, so the signal
 // config goes out once per waveform change and not in between.
@@ -335,7 +336,7 @@ void onSetAmp(const char *command, const char *const *params, byte paramCount)
 {
   Amplitude = SnapToStep(params[0], AmpStep);
   // Pushing is what makes the new value visible at once - the channel is otherwise only read
-  // when a host polls the catalog.
+  // when Loggbok polls the catalog.
   Blaeck.writeCommandState(command);
 }
 
@@ -347,7 +348,8 @@ void onSetOffset(const char *command, const char *const *params, byte paramCount
 
 void onSetWave(const char *command, const char *const *params, byte paramCount)
 {
-  // params[0] is always the option index, whatever the host sent.
+  // params[0] is the selected option index: Home Assistant sends the selection to Loggbok,
+  // which forwards it to the device.
   waveIndex = (byte)atoi(params[0]);
   Blaeck.writeCommandState(command);
 }
@@ -368,7 +370,7 @@ void onSetLabel(const char *command, const char *const *params, byte paramCount)
 
 void onSetNote(const char *command, const char *const *params, byte paramCount)
 {
-  // Arrives decoded: a host percent-encodes the value, so a note may hold the characters the
+  // Arrives decoded: Loggbok percent-encodes the value, so a note may hold the characters the
   // frame itself is built from - a comma, an angle bracket, a percent sign.
   strcpy(RunNote, params[0]);
 }

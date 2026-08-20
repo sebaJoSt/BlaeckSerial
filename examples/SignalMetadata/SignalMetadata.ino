@@ -8,9 +8,9 @@
   Everything moves on its own, so nothing needs poking to see it change.
 
   What to look for once it is logging:
-    Temperature      a unit and a device class, so a host may offer °F instead
+    Temperature      a unit and a device class, so Home Assistant may offer °F instead
     EnergyTotal      total_increasing - the shape long-term statistics are built from
-    Uptime           seconds, converted to minutes or hours by the host if it prefers
+    Uptime           seconds, converted to minutes or hours by Home Assistant if it prefers
     SignalStrength   diagnostic and switched off until enabled: look for it under Diagnostic
     Heartbeat        never changes value: watch "last changed" in its more-info dialog
     Plain            declares nothing - the default rendering, for comparison
@@ -49,14 +49,14 @@ void setup()
   Blaeck.DeviceFWVersion = "1.0";
 
   // A measurement: goes up and down, meaningful at any instant. The device class is what lets
-  // a host convert it - without one the unit is only a label.
+  // Home Assistant can convert it - without one the unit is only a label.
   Blaeck.addSignal(F("Temperature"), &Temperature)
       .withUnit(F("\xC2\xB0" "C"))
       .withDeviceClass(F("temperature"))
       .withStateClass(BLAECK_STATE_CLASS_MEASUREMENT)
       .withDisplayPrecision(1);
 
-  // A running total that only ever grows. Reported as total_increasing so a host can build
+  // A running total that only ever grows. Reported as total_increasing so Home Assistant can build
   // consumption from it rather than averaging it.
   Blaeck.addSignal(F("EnergyTotal"), &EnergyTotal)
       .withUnit(F("kWh"))

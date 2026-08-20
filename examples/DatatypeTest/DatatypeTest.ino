@@ -49,7 +49,7 @@ void setup()
   // Initialize BlaeckSerial
   Blaeck.begin(&Serial, 27);
 
-  // Reported by <BLAECK.GET_DEVICES>, and used by a host to name the device
+  // Used by Loggbok to identify the device
   Blaeck.DeviceName = "Datatype Test";
   Blaeck.DeviceHWVersion = "Arduino Mega 2560 Rev3";
   Blaeck.DeviceFWVersion = ExampleVersion;

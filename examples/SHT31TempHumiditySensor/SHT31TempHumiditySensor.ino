@@ -1,27 +1,14 @@
 /*
   SHT31TempHumiditySensor.ino
 
-  This is an example for the SHT31 Temperature & Humidity Sensor.
-  The sensor uses I2C to communicate, 2 pins are required to interface.
-  This example requires Adafruit SHT31 Libray to be installed.
+  Reads temperature and humidity from an Adafruit SHT31 sensor over I2C,
+  then sends both values to Loggbok.
+
+  Requires the Adafruit SHT31 library.
 
   Author: Sebastian Strobl,
   More information on: https://github.com/sebaJoSt/BlaeckSerial
 
-  Setup:
-    Upload the sketch to your Arduino.
-    Open the Serial Monitor and set the baudrate to 115200 baud.
-    Type the following commands and press enter:
-
-    <BLAECK.GET_DEVICES>              Writes the device's information to the PC
-    <BLAECK.WRITE_SYMBOLS>            Writes the symbol list to the PC
-    <BLAECK.WRITE_COMMANDS>           Writes the command list to the PC
-    <BLAECK.WRITE_DATA>               Writes the temperature and humidity from the sensor to the PC
-    <BLAECK.ACTIVATE,96,234>          The data is written every 60 seconds (60 000ms)
-                                      first Byte:  0b01100000 = 96 DEC
-                                      second Byte: 0b11101010 = 234 DEC
-                                      Minimum: 0[milliseconds] Maximum: 4 294 967 295[milliseconds]
-    <BLAECK.DEACTIVATE>               Stops writing the data every 60s
 */
 
 #include "Arduino.h"

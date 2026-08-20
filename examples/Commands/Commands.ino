@@ -1,8 +1,7 @@
 /*
   Commands.ino
 
-  This is a sample sketch to show how to use BlaeckSerial to
-  implement your own serial commands.
+  This is a sample sketch to show how to implement your own commands.
 
   It registers two kinds of command, on purpose:
 
@@ -12,31 +11,31 @@
     Typed    onSwitchCommand(...)   You declare what the command is. The
              onButtonCommand(...)   library validates the value before your
                                     handler runs, and describes the command
-                                    so a host (e.g. Loggbok / Home Assistant)
-                                    can create an entity for it by itself.
+                                    so it can be turned into a control.
 
-  Every registered command is listed in <BLAECK.WRITE_COMMANDS>, plain ones
-  included, so a host can offer a complete command palette. What differs is
-  the metadata: a plain entry says only "this command exists", while a typed
-  entry carries its kind, its allowed values and its state signal - which is
-  what a dashboard needs to build a control for it.
+  Only a typed command carries enough to build a control: its kind, its
+  allowed values and the signal that reports its state. Loggbok publishes
+  that as an MQTT Discovery config, and Home Assistant creates the entity
+  from it. A plain command is listed by name only, so it stays a command you
+  send over serial - for bringing a board up or poking at it from a serial
+  monitor - and never becomes a control.
 
   <SwitchLED> and <LED> both switch the same on-board LED, one plain and one
-  typed, so you can compare the two entries side by side in that list.
+  typed, so the difference is visible on one piece of hardware.
 
-  A typed switch also names a state signal (here "LED_State"), so a
-  dashboard can display the current state, not just send new ones.
+  How each one reports back:
 
-  How a command reports back differs accordingly:
-
-    <SwitchLED>   Serial.println(...)      Serial Monitor only. A Blaeck host
-                                           skips anything that is not a frame.
-    <LED>         its state signal         The dashboard follows LED_State.
+    <SwitchLED>   Serial.println(...)      Plain text, readable in a serial
+                                           monitor. Not a frame, so Loggbok
+                                           passes over it.
+    <LED>         its state signal         LED_State says what the pin is
+                                           actually doing, so the control
+                                           follows the board instead of
+                                           assuming the command worked.
     <Ping>        writeState(...)          A button has no state signal, so it
-                                           pushes a line to a named state
-                                           channel ("Status"). It is written
-                                           only on a press, so the host gets an
-                                           answer when it asks for one.
+                                           writes the "Status" state channel
+                                           and Home Assistant shows that as a
+                                           text sensor.
 
   Author: Sebastian Strobl,
   More information on: https://github.com/sebaJoSt/BlaeckSerial
@@ -67,35 +66,24 @@
             it is attached to digital pin 13. LED_BUILTIN is set to the correct LED pin
             independent of which board is used.
 
-  Using the sketch:
-    - Upload the sketch to your Arduino.
-    - Open the Serial Monitor and set the baudrate to 115200 baud.
-    - Type the following commands and press enter:
+  Typed, and so also controls in Home Assistant:
 
-        Your own commands:
-        <SwitchLED,1>                 Turn on the LED   (plain)
-        <SwitchLED,0>                 Turn off the LED  (plain)
+        <LED,1>                       Turn on the LED
+        <LED,0>                       Turn off the LED
+        <LED,7>                       Rejected: a switch only accepts 0 or 1
+        <Ping>                        Takes no value. Answers on the "Status"
+                                      state channel with how long the board
+                                      has been running.
+
+  Plain, and so serial only:
+
+        <SwitchLED,1>                 Turn on the LED
+        <SwitchLED,0>                 Turn off the LED
         <SwitchLED,ON>                Also accepts text: a plain command
         <SwitchLED,OFF>               parses its value itself
-        <SwitchLED,>                  Empty param -> uses default (OFF)
-        <LED,1>                       Turn on the LED   (typed switch)
-        <LED,0>                       Turn off the LED  (typed switch)
-        <LED,7>                       Rejected: a switch only accepts 0 or 1
-        <Ping>                        Typed button, takes no value. The board
-                                      answers on the "Status" state channel
-                                      with how long it has been running, so the
-                                      reply reaches a host and not just the
-                                      Serial Monitor.
+        <SwitchLED,>                  Empty parameter -> uses default (OFF)
         <Print,Bye Bye,1>             String parameters
 
-        Built-in Blaeck commands:
-        <BLAECK.GET_DEVICES>          Writes the device's information to the PC
-        <BLAECK.WRITE_SYMBOLS>        Writes the symbol list to the PC
-        <BLAECK.WRITE_COMMANDS>       Writes the command list to the PC
-                                      All four commands appear here. The typed
-                                      ones carry their kind and metadata, the
-                                      plain ones only their name.
-        <BLAECK.WRITE_DATA>           Writes the data to the PC
 */
 
 #include "Arduino.h"
@@ -110,7 +98,7 @@ BlaeckSerial Blaeck;
 const int ledPin = LED_BUILTIN;
 
 // Mirrors the LED state. Registered as a signal so the typed <LED> command
-// can point at it, which lets a dashboard show the state it is controlling.
+// can point at it, which is what lets its control show the state it sets.
 bool ledState = false;
 
 void onSwitchLED(const char *command, const char *const *params, byte paramCount);
@@ -130,7 +118,7 @@ void setup()
   // Setup BlaeckSerial, room for one signal
   Blaeck.begin(&Serial, 1);
 
-  // Reported by <BLAECK.GET_DEVICES>, and used by a host to name the device
+  // Names the device wherever it turns up
   Blaeck.DeviceName = "Command Demo";
   Blaeck.DeviceHWVersion = "Arduino Mega 2560 Rev3";
   Blaeck.DeviceFWVersion = ExampleVersion;
@@ -138,19 +126,18 @@ void setup()
   // The state signal the typed switch below refers to
   Blaeck.addSignal(F("LED_State"), &ledState);
 
-  // Plain: you parse the parameters yourself. Listed by name only, so a host
-  // knows the command exists but cannot build a control for it.
+  // Plain: you parse the parameters yourself. Listed by name only, so it can
+  // be sent, but there is nothing to build a control from.
   Blaeck.onCommand("SwitchLED", onSwitchLED);
   Blaeck.onCommand("Print", onPrint);
 
-  // Typed: validated by the library, and listed with the metadata a host needs
-  // to create an entity. A switch is 0/1 and mirrors a state signal; a button
-  // carries no value.
+  // Typed: validated by the library, and listed with what a control needs.
+  // A switch is 0/1 and points at a state signal; a button carries no value.
   Blaeck.onSwitchCommand("LED", onLED).withStateFromSignal(F("LED_State"));
   Blaeck.onButtonCommand("Ping", onPing);
 
-  // State channels are declared up-front so the host can announce a text
-  // sensor for "Status" before the first line is written.
+  // Declared up-front, so the "Status" text sensor exists before the first
+  // line is ever written to it.
   Blaeck.addStateChannel(F("Status")).withIcon(F("mdi:message-text"));
 }
 
@@ -165,8 +152,8 @@ void loop()
 }
 
 /* Plain command. You get the raw parameters and decide what they mean,
-   including what an empty one should do. Nothing about this command is
-   advertised, so a host cannot discover it.
+   including what an empty one should do. Nothing about it is described,
+   so it stays something you send rather than something you click.
 */
 void onSwitchLED(const char *command, const char *const *params, byte paramCount)
 {
@@ -230,14 +217,13 @@ void onLED(const char *command, const char *const *params, byte paramCount)
 
 /* Typed button. Carries no value, so there is nothing to parse.
 
-   A button has no state signal, so writeState() is how it reports back: it
-   pushes a line to a named 0x95 state channel, which a host can surface as
-   a text sensor. Serial.println() would only reach the Serial Monitor - a
-   Blaeck host skips anything that is not a frame.
+   A button has no state signal, so writeState() is how it answers: it writes
+   the "Status" state channel, which is a frame and reaches Home Assistant as
+   a text sensor. Serial.println() would only reach a serial monitor.
 
-   The channel is only written on a button press, so a sensor bound to it
-   updates when asked rather than continuously. Calling writeState() from
-   loop() on a timer instead would give the same channel a steady heartbeat.
+   The channel is written on a press and not otherwise, so the sensor updates
+   when asked. Calling writeState() from loop() on a timer would instead give
+   the same channel a steady heartbeat.
 */
 void onPing(const char *command, const char *const *params, byte paramCount)
 {
@@ -280,7 +266,7 @@ void onPrint(const char *command, const char *const *params, byte paramCount)
 }
 
 // Keeps the pin and the state signal in step, so whichever command was used
-// the dashboard sees the same value.
+// the reported state is the same.
 void setLed(bool on)
 {
   ledState = on;

@@ -1813,7 +1813,7 @@ bool BlaeckSerial::recvWithStartEndMarkers()
   return newData;
 }
 
-void BlaeckSerial::_setChannelName(const char *&slot, bool &inFlash, const char *ram, const __FlashStringHelper *flash)
+bool BlaeckSerial::_setChannelName(const char *&slot, bool &inFlash, const char *ram, const __FlashStringHelper *flash)
 {
   // Whatever the slot held: a copy is freed, a flash name owns nothing. A slot is written
   // twice whenever a channel is re-declared or taken over by a command.
@@ -1826,10 +1826,10 @@ void BlaeckSerial::_setChannelName(const char *&slot, bool &inFlash, const char 
   {
     slot = reinterpret_cast<const char *>(flash);
     inFlash = true;
-    return;
+    return true;
   }
   if (ram == nullptr)
-    return;
+    return true;
 
   // Copied, so the caller's buffer is free the moment this returns.
   size_t needed = strlen(ram) + 1;
@@ -1838,8 +1838,9 @@ void BlaeckSerial::_setChannelName(const char *&slot, bool &inFlash, const char 
   {
     memcpy(copy, ram, needed);
     slot = copy;
+    return true;
   }
-  // Out of RAM leaves the name empty rather than the channel missing, as it does for a signal.
+  return false;
 }
 
 bool BlaeckSerial::_channelNameEquals(const char *stored, bool inFlash, const char *candidate)
@@ -2307,7 +2308,16 @@ int BlaeckSerial::_registerStateChannel(const char *channelName, const __FlashSt
   {
     if (!_stateChannels[i].inUse)
     {
-      _setChannelName(_stateChannels[i].name, _stateChannels[i].nameInFlash, channelName, flashName);
+      if (!_setChannelName(_stateChannels[i].name, _stateChannels[i].nameInFlash, channelName, flashName))
+      {
+        if (_debugStream != nullptr)
+        {
+          _debugStream->print(F("State channel name allocation failed: "));
+          _debugStream->println(channelName);
+        }
+        _rejectedStateChannelCount++;
+        return -1;
+      }
       _stateChannels[i].icon = nullptr;
       _stateChannels[i].diagnostic = false;
       _stateChannels[i].deviceClass = nullptr;
@@ -3125,7 +3135,16 @@ int BlaeckSerial::_registerEventChannel(const char *channelName, const __FlashSt
   {
     if (!_eventChannels[i].inUse)
     {
-      _setChannelName(_eventChannels[i].name, _eventChannels[i].nameInFlash, channelName, flashName);
+      if (!_setChannelName(_eventChannels[i].name, _eventChannels[i].nameInFlash, channelName, flashName))
+      {
+        if (_debugStream != nullptr)
+        {
+          _debugStream->print(F("Event channel name allocation failed: "));
+          _debugStream->println(channelName);
+        }
+        _rejectedEventChannelCount++;
+        return -1;
+      }
       _eventChannels[i].icon = nullptr;
       _eventChannels[i].deviceClass = nullptr;
       _eventChannels[i].diagnostic = false;

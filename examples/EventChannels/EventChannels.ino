@@ -1,7 +1,8 @@
 /*
   EventChannels.ino
 
-  Every shape an event channel can declare, so a host's rendering can be checked side by side.
+  Every shape an event channel can declare, so Home Assistant's rendering of data received
+  through Loggbok can be checked side by side.
   An event is an occurrence, not a state: it carries no value and nothing to switch off again,
   which is what separates it from a bool signal.
 
@@ -129,7 +130,7 @@ void FireEvents()
 
   // A type the channel never declared is dropped by the device: writeEvent() resolves the name
   // against the 0x80 catalog and sends nothing when it does not match. Uncomment to watch it
-  // produce no event at all, rather than an event a host has to reject.
+  // produce no event at all, rather than an event Home Assistant has to reject.
   // Blaeck.writeEvent(F("Motion"), F("motion_maybe"));
 
   EventCount++;

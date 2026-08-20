@@ -1,32 +1,15 @@
 /*
   SineGeneratorAdvanced.ino
 
-  This is a sample sketch to show how to use the BlaeckSerial library to transmit sine waves
-  from the Arduino board to your PC.
+  This example sends configurable sine-wave signals from the Arduino to Loggbok.
+  Loggbok forwards the data and device metadata through MQTT to Home Assistant.
 
   Requirements:
   - none beyond the library itself: EEPROM comes with the board's core
 
   Features:
-  - EEPROM stores state (firmware version marker, signal activation mask)
-  - Signals can be (de-)activated over a range, set with <SIGNAL_FIRST> and
-    <SIGNAL_LAST> and applied with <SIGNAL_ACTIVATE> /
-    <SIGNAL_DEACTIVATE>, or all at once with <SIGNAL_ACTIVATE_ALL>,
-    which is the same handler with its arguments declared up front
-  - Print status with <STATUS>, which also pushes a one-line summary to a host
-
-  The commands are registered with the typed helpers, so the device describes
-  itself in <BLAECK.WRITE_COMMANDS> and a host (e.g. Loggbok / Home Assistant)
-  can build controls for it: the two bounds are numbers with a range and a
-  state channel of their own, and the three actions are buttons.
-
-  Splitting the range into "set the bounds, then press apply" is what makes
-  that possible. One command taking first and last with magic values for
-  all/none/odd/even maps to no dashboard control at all.
-
-  <LS> and <command?> are plain onCommand() registrations - free-form help
-  text is not something a dashboard can model, so it stays untyped on purpose,
-  but the library still does the matching and a host still sees the names.
+  - EEPROM stores which signals are exposed.
+  - Typed commands activate or deactivate signal ranges in the BlaeckSerial catalog.
 */
 
 #include "Arduino.h"
@@ -43,11 +26,6 @@ BlaeckSerial Blaeck;
 
 //---SIGNALS
 #define MAXIMUM_SIGNALS 25
-// A press payload is a string literal, so the upper bound has to be spelled into one. Going
-// through the macro keeps it in step with MAXIMUM_SIGNALS instead of leaving a "25" behind
-// that nothing would flag when the count changes.
-#define STRINGIFY_(x) #x
-#define STRINGIFY(x) STRINGIFY_(x)
 struct BlaeckSignal
 {
   bool isActivated;
@@ -56,8 +34,8 @@ struct BlaeckSignal
 // unused: sine[0]
 
 //---SIGNAL RANGE
-// Bounds for the activate/deactivate buttons. Mirrored as signals so a
-// dashboard shows the range the next button press will apply to.
+// Bounds for the activate/deactivate buttons. Stored as command-owned state so
+// Home Assistant shows the range the next button press will apply to.
 byte signalFirst = 1;
 byte signalLast = MAXIMUM_SIGNALS;
 
@@ -89,17 +67,8 @@ void onSetSignalFirst(const char *command, const char *const *params, byte param
 void onSetSignalLast(const char *command, const char *const *params, byte paramCount);
 void onSignalActivate(const char *command, const char *const *params, byte paramCount);
 void onSignalDeactivate(const char *command, const char *const *params, byte paramCount);
-void onStatus(const char *command, const char *const *params, byte paramCount);
-void onList(const char *command, const char *const *params, byte paramCount);
-void onHelpList(const char *command, const char *const *params, byte paramCount);
-void onHelpSignalFirst(const char *command, const char *const *params, byte paramCount);
-void onHelpSignalLast(const char *command, const char *const *params, byte paramCount);
-void onHelpSignalActivate(const char *command, const char *const *params, byte paramCount);
-void onHelpSignalDeactivate(const char *command, const char *const *params, byte paramCount);
-void onHelpSignalActivateAll(const char *command, const char *const *params, byte paramCount);
-void onHelpStatus(const char *command, const char *const *params, byte paramCount);
+void onSignalActivateAll(const char *command, const char *const *params, byte paramCount);
 void ApplySignalRange(bool activate, byte lo, byte hi);
-const char *StatusText();
 void PersistActivatedSignals();
 
 //---MEASUREMENT
@@ -114,13 +83,11 @@ void setup()
   EEPROMConfiguration();
 
   Serial.begin(115200);
-  // Sized rather than left to the default: six commands and eight help topics is fewer than
-  // the sixteen an AVR board gets for free, and the three state channels are fewer than the
-  // eight it would otherwise reserve.
+  // Sized explicitly for the five commands and three state channels this example declares.
   Blaeck.begin(&Serial)
       .withSignals(MAXIMUM_SIGNALS)
-      .withCommands(14)
-      .withStateChannels(3);
+      .withCommands(5)
+      .withStateChannels(2);
 
   Blaeck.DeviceName = "Advanced Sine Number Generator";
   Blaeck.DeviceHWVersion = "Arduino Mega 2560 Rev3";
@@ -148,51 +115,11 @@ void setup()
       .withDisplayName(F("Activate range"));
   Blaeck.onButtonCommand("SIGNAL_DEACTIVATE", onSignalDeactivate)
       .withDisplayName(F("Deactivate range"));
-  // The same handler again, with the arguments already filled in: one press activates
-  // everything instead of setting both bounds first. A preset is a second command sharing the
-  // handler rather than a second payload on the first, because a button is one entity per
-  // command name.
-  Blaeck.onButtonCommand("SIGNAL_ACTIVATE_ALL", onSignalActivate)
-      .withPressPayload(F("1," STRINGIFY(MAXIMUM_SIGNALS)))
+  Blaeck.onButtonCommand("SIGNAL_ACTIVATE_ALL", onSignalActivateAll)
       .withDisplayName(F("Activate all signals"))
       .withIcon(F("mdi:select-all"));
 
-  // State channels are declared up-front so the host can announce a text
-  // sensor for "Status" before the first line is written. Diagnostic: a status line describes
-  // the board rather than the signals it generates, so it belongs beside the device info
-  // instead of among the controls.
-  //
-  // The value comes from a getter rather than a stored string, so a host asking for the
-  // catalog is answered with the count as it is at that moment - there is nothing to go stale,
-  // and a host that connects long after the last change still gets the truth.
-  Blaeck.addStateChannel(F("Status"))
-      .withStateText(StatusText)
-      .withIcon(F("mdi:message-text"))
-      .diagnostic();
-
-  // Plain: help text is free-form, which no dashboard control can represent, so these are
-  // registered with onCommand() and stay untyped. A host still sees them in the catalog and
-  // can offer them in a command palette. One name per topic, so the library matches them the
-  // way it matches every other command.
-  //
-  // STATUS is here for the same reason. Its multi-line report is worth having at the terminal,
-  // but as a button it would only have offered to refresh a channel that already keeps itself
-  // current - a control that does nothing the host has not already been told.
-  Blaeck.onCommand("STATUS", onStatus);
-  Blaeck.onCommand("LS", onList);
-  Blaeck.onCommand("LS?", onHelpList);
-  Blaeck.onCommand("SIGNAL_FIRST?", onHelpSignalFirst);
-  Blaeck.onCommand("SIGNAL_LAST?", onHelpSignalLast);
-  Blaeck.onCommand("SIGNAL_ACTIVATE?", onHelpSignalActivate);
-  Blaeck.onCommand("SIGNAL_DEACTIVATE?", onHelpSignalDeactivate);
-  Blaeck.onCommand("SIGNAL_ACTIVATE_ALL?", onHelpSignalActivateAll);
-  Blaeck.onCommand("STATUS?", onHelpStatus);
-
-  // Signals for Logging with BlaeckSerial
-  // Blaeck.addSignal..
   UpdateLoggingSignals();
-
-  PrintInfo(true);
 }
 
 void loop()
@@ -200,8 +127,7 @@ void loop()
 
   UpdateSineNumbers();
 
-  /*Keeps watching for serial input (Serial.read) and
-    transmits the data at the user-set interval (Serial.write)*/
+  // Processes Loggbok commands and transmits updated signals.
   Blaeck.tick();
 }
 

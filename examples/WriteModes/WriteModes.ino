@@ -15,7 +15,7 @@
         - Signal is marked as updated using Blaeck.markSignalUpdated()
      - Sine_3
         - updates every 10 seconds
-        - Sames as Sine_2, but Blaeck.update() combines updating and marking in a single function call
+        - Same as Sine_2, but Blaeck.update() combines updating and marking in a single function call
 */
 
 #include "Arduino.h"

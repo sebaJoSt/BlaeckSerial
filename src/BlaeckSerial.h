@@ -3958,7 +3958,7 @@ public:
 
   // Stores a channel name: a flash pointer as it stands, a RAM name as a copy this library
   // owns. Mirrors _setSignalName, including why the pointer is tested before the flag.
-  static void _setChannelName(const char *&slot, bool &inFlash, const char *ram, const __FlashStringHelper *flash);
+  static bool _setChannelName(const char *&slot, bool &inFlash, const char *ram, const __FlashStringHelper *flash);
   // Equality against a stored channel name, whichever memory it lives in.
   static bool _channelNameEquals(const char *stored, bool inFlash, const char *candidate);
   static bool _channelNameEqualsFlash(const char *stored, bool inFlash, const __FlashStringHelper *candidate);

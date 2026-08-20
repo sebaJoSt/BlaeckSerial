@@ -1,26 +1,15 @@
 /*
   Basic.ino
 
-  This is a sample sketch to show how to use the BlaeckSerial library to transmit data
-  from the Arduino board to your PC every minute (or the user-set interval).
+  The smallest useful sketch: two numbers, registered as signals, sent out on
+  the interval the host asks for.
+
+  A signal is a value that gets sampled and logged. Registering one is all it
+  takes - tick() reads it and writes the frame, so nothing here has to know
+  when a transmission is due.
 
   Author: Sebastian Strobl,
   More information on: https://github.com/sebaJoSt/BlaeckSerial
-
-  Setup:
-    Upload the sketch to your Arduino.
-    Open the Serial Monitor and set the baudrate to 115200 baud.
-    Type the following commands and press enter:
-
-    <BLAECK.GET_DEVICES>              Writes the device's information to the PC
-    <BLAECK.WRITE_SYMBOLS>            Writes the symbol list to the PC
-    <BLAECK.WRITE_COMMANDS>           Writes the command list to the PC
-    <BLAECK.WRITE_DATA>               Writes the data to the PC
-    <BLAECK.ACTIVATE,96,234>          The data is written every 60 seconds (60 000ms)
-                                      first Byte:  0b01100000 = 96 DEC
-                                      second Byte: 0b11101010 = 234 DEC
-                                      Minimum: 0[milliseconds] Maximum: 4 294 967 295[milliseconds]
-    <BLAECK.DEACTIVATE>               Stops writing the data every 60s
 */
 
 #include "Arduino.h"
@@ -43,36 +32,25 @@ void setup()
   // Setup BlaeckSerial
   Blaeck.begin(
       &Serial, // Serial reference
-      2        // Maximal signal count used;
+      2        // Maximal signal count used
   );
 
+  // Names the device wherever it turns up
   Blaeck.DeviceName = "Random Number Generator";
   Blaeck.DeviceHWVersion = "Arduino Mega 2560 Rev3";
   Blaeck.DeviceFWVersion = ExampleVersion;
 
-  // Add signals to BlaeckSerial. F() keeps the names in flash: a plain literal is copied
-  // into RAM at startup and copied again into the name the signal keeps, while F() leaves
-  // it where it is and the signal stores a 2-byte pointer. That is most of what a signal
-  // costs in SRAM on an Uno or Nano.
+  // F() keeps the name in flash instead of SRAM, which is worth having on an
+  // Uno or Nano and costs nothing anywhere else.
   Blaeck.addSignal(F("Small Number"), &randomSmallNumber);
   Blaeck.addSignal(F("Big Number"), &randomBigNumber);
-
-  /* A name built at runtime cannot use F() - pass the buffer instead, which is
-     copied:
-       char name[16];
-       snprintf(name, sizeof(name), "Sensor_%d", i);
-       Blaeck.addSignal(name, &value);
-     Other architectures (ESP32, SAMD, ...) handle RAM differently and gain
-     little from F(), but it costs them nothing either. */
-
 }
 
 void loop()
 {
   UpdateRandomNumbers();
 
-  /*Keeps watching for serial input (Serial.read) and
-    transmits the data at the user-set interval (Serial.write)*/
+  // Reads what has come in and writes the signals when the interval is up.
   Blaeck.tick();
 }
 

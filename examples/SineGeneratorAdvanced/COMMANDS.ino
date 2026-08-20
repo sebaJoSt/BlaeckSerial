@@ -1,10 +1,3 @@
-// Command syntax (onCommand API):
-//   <COMMAND,PARAM01,PARAM02,...,PARAM10>
-//   <- AVR: up to 48 chars, non-AVR: up to 96 chars ->
-//   Parameters are string tokens; convert with atoi/atol/atof as needed.
-//   Empty parameters are preserved positionally and default to empty string / 0.
-//   To check if a parameter was provided: params[i][0] == '\0' means empty.
-
 // The library has already checked that the value is within [1, MAXIMUM_SIGNALS]
 // before these run, so an out-of-range bound never reaches the sketch.
 void onSetSignalFirst(const char *command, const char *const *params, byte paramCount)
@@ -15,7 +8,7 @@ void onSetSignalFirst(const char *command, const char *const *params, byte param
     EEPROM.put(EEPROM_ADDR_SIGNAL_FIRST, signalFirst);
     EepromCommit();
     // Pushes the bound's own state channel, so the control shows the new value at once -
-    // the channel is otherwise only read when a host polls the catalog.
+    // the channel is otherwise only read when Loggbok polls the catalog.
     Blaeck.writeCommandState(command);
   }
 }
@@ -54,6 +47,14 @@ void onSignalDeactivate(const char *command, const char *const *params, byte par
     ApplySignalRange(false, signalFirst, signalLast);
 }
 
+void onSignalActivateAll(const char *command, const char *const *params, byte paramCount)
+{
+  (void)command;
+  (void)params;
+  (void)paramCount;
+  ApplySignalRange(true, 1, MAXIMUM_SIGNALS);
+}
+
 // Applies the bounds it is given. Only the signals inside the range change, so
 // activating 1-10 and then 15-20 leaves both ranges on - use the deactivate
 // button to clear what you no longer want.
@@ -75,50 +76,9 @@ void ApplySignalRange(bool activate, byte lo, byte hi)
     sine[i].isActivated = activate;
   }
 
-  sinfo(), Serial.print(activate ? F("Activated") : F("Deactivated"));
-  Serial.print(F(" signals "));
-  Serial.print(lo);
-  Serial.print(F(" - "));
-  Serial.println(hi);
-
-  sinfo(), Serial.print(F("Activated signals ("));
-  byte active_count = 0;
-  for (byte i = 1; i <= MAXIMUM_SIGNALS; i++)
-  {
-    if (sine[i].isActivated)
-    {
-      active_count += 1;
-    }
-  }
-  Serial.print(active_count);
-  Serial.print(F("): "));
-
-  active_count = 0;
-  for (byte i = 1; i <= MAXIMUM_SIGNALS; i++)
-  {
-
-    if (sine[i].isActivated)
-    {
-      if (active_count == 0)
-        Serial.print(i);
-      if (active_count > 0)
-      {
-        Serial.print(F(", "));
-        Serial.print(i);
-      }
-      active_count += 1;
-    }
-  }
-  if (active_count == 0)
-    Serial.print(F("none"));
-  Serial.println();
-
   PersistActivatedSignals();
   UpdateLoggingSignals();
 
-  // The set of active signals is what Status reports, so pushing it here is what keeps the
-  // host in step: pressing STATUS is then a way to ask, not the only way to find out.
-  Blaeck.writeState(F("Status"));
 }
 
 void PersistActivatedSignals()
@@ -131,136 +91,3 @@ void PersistActivatedSignals()
   EEPROM.put(EEPROM_ADDR_SIGNAL_ACTIVATED, isActivated);
   EepromCommit();
 }
-
-void onStatus(const char *command, const char *const *params, byte paramCount)
-{
-  (void)command;
-  (void)params;
-  (void)paramCount;
-
-  // The terminal gets the full multi-line report; a Blaeck host skips anything that is not a
-  // frame, so it would see none of it. The one-line summary goes out as a frame instead.
-  PrintInfo(false);
-  Blaeck.writeState(F("Status"));
-}
-
-// What the Status channel reports, built when it is asked for rather than stored. The library
-// calls this while a frame is being assembled, so it only reads and formats - starting a frame
-// of its own here would corrupt the one it interrupted.
-const char *StatusText()
-{
-  // Static, so what is returned outlives this call: the library reads it after the return.
-  static char text[32];
-  byte active = 0;
-  for (byte i = 1; i <= MAXIMUM_SIGNALS; i++)
-  {
-    if (sine[i].isActivated)
-      active++;
-  }
-  snprintf(text, sizeof(text), "%u of %u signals active", (unsigned)active, (unsigned)MAXIMUM_SIGNALS);
-  return text;
-}
-
-// ---------------------------------------------------------------------------
-// Help, one handler per topic.
-//
-// These were a strcmp chain inside onAnyCommand(). Registering each name instead
-// lets the library do the matching it already does for every other command, so a
-// help topic is declared the same way the command it describes is - and adding a
-// command without its help now leaves an obvious hole rather than a silent one.
-//
-// They register with onCommand(), which makes them BLAECK_CMD_PLAIN: listed in the
-// command catalog so a host can offer them, but carrying no control, because a
-// paragraph of text is not something a dashboard can render.
-//
-// Nothing installs onAnyCommand() any more. With no catch-all, a command that
-// matches nothing is answered as unknown instead of being acknowledged as accepted
-// on the grounds that the catch-all saw it.
-// ---------------------------------------------------------------------------
-
-void onList(const char *command, const char *const *params, byte paramCount)
-{
-  (void)command;
-  (void)params;
-  (void)paramCount;
-  sinfo(), Serial.println(F("<LS> <STATUS> <SIGNAL_FIRST> <SIGNAL_LAST> <SIGNAL_ACTIVATE> <SIGNAL_DEACTIVATE> <SIGNAL_ACTIVATE_ALL>"));
-  sinfo(), Serial.println(F("Enter <command?> for instructions, e.g. <STATUS?>"));
-  // The BLAECK.* commands come from the library, not this sketch, so it lists them without
-  // describing them - a copy of their documentation here would go stale on its own.
-  sinfo(), Serial.println(F("From BlaeckSerial itself: <BLAECK.ACTIVATE> <BLAECK.DEACTIVATE> <BLAECK.WRITE_SYMBOLS> <BLAECK.WRITE_COMMANDS> <BLAECK.WRITE_DATA> <BLAECK.GET_DEVICES>"));
-}
-
-void onHelpList(const char *command, const char *const *params, byte paramCount)
-{
-  (void)command;
-  (void)params;
-  (void)paramCount;
-  shelp(), Serial.println(F("Lists all available commands"));
-}
-
-void onHelpSignalFirst(const char *command, const char *const *params, byte paramCount)
-{
-  (void)command;
-  (void)params;
-  (void)paramCount;
-  shelp(), Serial.print(F("<SIGNAL_FIRST, 1-"));
-  Serial.print(MAXIMUM_SIGNALS);
-  Serial.println(F(">"));
-  shelp(), Serial.println(F("Sets the first signal of the range"));
-}
-
-void onHelpSignalLast(const char *command, const char *const *params, byte paramCount)
-{
-  (void)command;
-  (void)params;
-  (void)paramCount;
-  shelp(), Serial.print(F("<SIGNAL_LAST, 1-"));
-  Serial.print(MAXIMUM_SIGNALS);
-  Serial.println(F(">"));
-  shelp(), Serial.println(F("Sets the last signal of the range"));
-}
-
-void onHelpSignalActivate(const char *command, const char *const *params, byte paramCount)
-{
-  (void)command;
-  (void)params;
-  (void)paramCount;
-  shelp(), Serial.println(F("Activates every signal in the current range"));
-  shelp(), Serial.println(F("e.g. <SIGNAL_FIRST,1> <SIGNAL_LAST,10> <SIGNAL_ACTIVATE>"));
-  shelp(), Serial.println(F("Or give the bounds directly: <SIGNAL_ACTIVATE,1,10>"));
-  shelp(), Serial.println(F("Signals outside the range keep their state"));
-}
-
-void onHelpSignalDeactivate(const char *command, const char *const *params, byte paramCount)
-{
-  (void)command;
-  (void)params;
-  (void)paramCount;
-  shelp(), Serial.println(F("Deactivates every signal in the current range"));
-  shelp(), Serial.println(F("e.g. <SIGNAL_FIRST,1> <SIGNAL_LAST,25> <SIGNAL_DEACTIVATE> clears all"));
-  shelp(), Serial.println(F("Or give the bounds directly: <SIGNAL_DEACTIVATE,1,25>"));
-}
-
-void onHelpSignalActivateAll(const char *command, const char *const *params, byte paramCount)
-{
-  (void)command;
-  (void)params;
-  (void)paramCount;
-  shelp(), Serial.print(F("Activates every signal, 1-"));
-  Serial.print(MAXIMUM_SIGNALS);
-  Serial.println(F(", whatever the current range is"));
-  shelp(), Serial.println(F("Same as <SIGNAL_ACTIVATE> with the bounds given: the two are one handler"));
-}
-
-void onHelpStatus(const char *command, const char *const *params, byte paramCount)
-{
-  (void)command;
-  (void)params;
-  (void)paramCount;
-  shelp(), Serial.println(F("Requests the current state"));
-}
-
-
-
-
-
