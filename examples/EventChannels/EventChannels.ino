@@ -1,13 +1,13 @@
 /*
   EventChannels.ino
 
-  Every shape an event channel can declare, so Home Assistant's rendering of data received
-  through Loggbok can be checked side by side.
+  Every kind of metadata an event channel can carry, one channel each, to compare how a
+  dashboard renders them.
   An event is an occurrence, not a state: it carries no value and nothing to switch off again,
   which is what separates it from a bool signal.
 
-  Four event channels and ten types is what this sketch declares, and the begin() chain below
-  says so - on a small AVR the defaults would hold two channels and eight types.
+  This sketch declares four event channels and ten types, which is why the begin() chain below
+  asks for them - on a small AVR the defaults would hold two channels and eight types.
 
   What to look for once it is logging:
     Doorbell    device class doorbell, which requires a "ring" type - see the note below
@@ -65,7 +65,7 @@ void setup()
   // declare only the interactions the hardware can actually produce. These four are a press
   // and a hold, each with a start and an end.
   Blaeck.addEventChannel(F("Button"),
-                               F("press_start,press_end,long_press_start,long_press_end"))
+                         F("press_start,press_end,long_press_start,long_press_end"))
       .withIcon(F("mdi:gesture-tap-button"))
       .withDeviceClass(F("button"));
 
@@ -112,6 +112,8 @@ void FireEvents()
     return;
   lastFired = millis();
 
+  bool sentEvent = true;
+
   switch (step)
   {
   case 0: Blaeck.writeEvent(F("Doorbell"), F("ring")); break;
@@ -125,14 +127,17 @@ void FireEvents()
   case 8:
     if (HAS_OVERHEAT_SENSOR)
       Blaeck.writeEvent(F("System"), F("overheated"));
+    else
+      sentEvent = false;
     break;
   }
 
   // A type the channel never declared is dropped by the device: writeEvent() resolves the name
-  // against the 0x80 catalog and sends nothing when it does not match. Uncomment to watch it
-  // produce no event at all, rather than an event Home Assistant has to reject.
+  // against the 0x80 catalog and sends nothing when it does not match.
   // Blaeck.writeEvent(F("Motion"), F("motion_maybe"));
 
-  EventCount++;
+  if (sentEvent)
+    EventCount++;
+
   step = (step + 1) % 9;
 }
