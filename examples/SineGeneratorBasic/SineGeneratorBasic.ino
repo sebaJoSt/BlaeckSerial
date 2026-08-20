@@ -32,31 +32,22 @@ void setup()
   Blaeck.DeviceHWVersion = "Arduino Mega 2560 Rev3";
   Blaeck.DeviceFWVersion = ExampleVersion;
 
-  // The prefix stays in flash and the number is produced when the name is sent, so
-  // "Sine_1".."Sine_5" cost no SRAM at all. Building them with snprintf into a reused
-  // buffer works too, and is what you need for a name that is not a prefix plus a
-  // number - but every such name is then copied to the heap.
+  // The prefix stays in flash and the number is added when the name is sent, so
+  // "Sine_1".."Sine_5" cost no SRAM at all.
   for (int i = 0; i < SIGNAL_COUNT; i++)
   {
     Blaeck.addSignal(F("Sine_"), &sine[i]).withNameSuffix(i + 1);
   }
 
-  // One look covers every addSignal() above.
-  if (Blaeck.hasRejectedSignals())
-  {
-    Serial.print("Signals not added: ");
-    Serial.println(Blaeck.getRejectedSignalCount());
-  }
-  // Or ask about every table at once, with the call that would have made room:
-  //   Blaeck.printRejections(&Serial);
+  // Prints only if a signal was dropped, and names the call that would have made room.
+  Blaeck.printRejections(&Serial);
 }
 
 void loop()
 {
   UpdateSineNumbers();
 
-  /*Keeps watching for serial input (Serial.read) and
-    transmits the data at the user-set interval (Serial.write)*/
+  // Reads what has come in and writes the signals when the interval is up.
   Blaeck.tick();
 }
 
