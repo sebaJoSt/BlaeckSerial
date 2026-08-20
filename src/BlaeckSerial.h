@@ -3805,13 +3805,17 @@ public:
     cannot build a control for it. Use a typed helper - onNumberCommand(),
     onSwitchCommand() and the rest - where it should appear as a control.
 
-    @param   command  Name a host sends to invoke it.
+    @param   command  Name a host sends to invoke it. It may not begin with `#` or `@`,
+                      which open a received frame's prefix section, nor with `BLAECK.`,
+                      which is the library's own namespace. Such a name is refused
+                      rather than registered where nothing can reach it cleanly.
     @param   handler  Called with the raw parameters, whatever they are.
 
     @note    No registration returns anything to check. A command that fails to
-             register - table full, name too long, a null argument - is reported on
-             the debug stream and counted, so one look at hasRejectedCommands()
-             after them all answers for every command, whichever helper declared it.
+             register - table full, name too long, a reserved name, a null argument -
+             is reported on the debug stream and counted, so one look at
+             hasRejectedCommands() after them all answers for every command,
+             whichever helper declared it.
 
     @code
       Blaeck.onCommand("SwitchLED", onSwitchLED);

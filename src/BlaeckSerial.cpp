@@ -1240,6 +1240,20 @@ int BlaeckSerial::_registerCommand(const char *command, BlaeckCommandHandler han
     _rejectedCommandCount++;
     return -1;
   }
+  // BLAECK. is the library's own namespace, matched in read() before the handler table is
+  // consulted. A name in it is either shadowed - the built-in answers and this handler runs
+  // after it, on one frame - or it is a command a host is offered in the catalog that no rule
+  // says the library will keep out of its own way. Refused for the same reason as a sigil.
+  if (strncmp(command, "BLAECK.", 7) == 0)
+  {
+    if (_debugStream != nullptr)
+    {
+      _debugStream->print("Command name uses the reserved BLAECK. namespace: ");
+      _debugStream->println(command);
+    }
+    _rejectedCommandCount++;
+    return -1;
+  }
 
   if (!_ensureCommandTable())
   {
