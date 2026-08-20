@@ -10,6 +10,7 @@
   Features:
   - EEPROM stores which signals are activated.
   - Typed commands activate or deactivate signal ranges in the BlaeckSerial catalog.
+  - Preset buttons carry their arguments in the press itself.
 */
 
 #include "Arduino.h"
@@ -32,6 +33,11 @@ struct BlaeckSignal
   float value;
 } sine[MAXIMUM_SIGNALS + 1];
 // unused: sine[0]
+
+// A press payload is text, so the count has to be spelled out to go in one. These two
+// macros do that spelling, which keeps the payloads correct when MAXIMUM_SIGNALS changes.
+#define STRINGIFY(x) #x
+#define TOSTRING(x) STRINGIFY(x)
 
 //---SIGNAL RANGE
 // Bounds for the activate/deactivate buttons. Stored as command-owned state so
@@ -67,7 +73,6 @@ void onSetSignalFirst(const char *command, const char *const *params, byte param
 void onSetSignalLast(const char *command, const char *const *params, byte paramCount);
 void onSignalActivate(const char *command, const char *const *params, byte paramCount);
 void onSignalDeactivate(const char *command, const char *const *params, byte paramCount);
-void onSignalActivateAll(const char *command, const char *const *params, byte paramCount);
 void ApplySignalRange(bool activate, byte lo, byte hi);
 void PersistActivatedSignals();
 
@@ -82,10 +87,10 @@ void setup()
   EEPROMConfiguration();
 
   Serial.begin(115200);
-  // Sized explicitly for the five commands and two state channels this example declares.
+  // Sized explicitly for the six commands and two state channels this example declares.
   Blaeck.begin(&Serial)
       .withSignals(MAXIMUM_SIGNALS)
-      .withCommands(5)
+      .withCommands(6)
       .withStateChannels(2);
 
   Blaeck.DeviceName = "Advanced Sine Number Generator";
@@ -103,20 +108,30 @@ void setup()
   Blaeck.onNumberCommand("SIGNAL_FIRST", onSetSignalFirst)
       .withRange(1.0f, (float)MAXIMUM_SIGNALS, 1.0f)
       .withMode(BLAECK_NUMBER_MODE_BOX)
-      .withDisplayName(F("First signal"))
+      .withDisplayName(F("Range from"))
       .withOwnState(F("Signal_First"), &signalFirst);
   Blaeck.onNumberCommand("SIGNAL_LAST", onSetSignalLast)
       .withRange(1.0f, (float)MAXIMUM_SIGNALS, 1.0f)
       .withMode(BLAECK_NUMBER_MODE_BOX)
-      .withDisplayName(F("Last signal"))
+      .withDisplayName(F("Range to"))
       .withOwnState(F("Signal_Last"), &signalLast);
   Blaeck.onButtonCommand("SIGNAL_ACTIVATE", onSignalActivate)
       .withDisplayName(F("Activate range"));
   Blaeck.onButtonCommand("SIGNAL_DEACTIVATE", onSignalDeactivate)
       .withDisplayName(F("Deactivate range"));
-  Blaeck.onButtonCommand("SIGNAL_ACTIVATE_ALL", onSignalActivateAll)
+
+  // The same two handlers again, this time with the arguments already filled in. A press
+  // payload is what makes a preset possible: the label says what it does and the press
+  // sends the range, so no dashboard control is needed to pick one. It belongs to the
+  // command name, so each preset is its own command over code that already exists.
+  Blaeck.onButtonCommand("SIGNAL_ACTIVATE_ALL", onSignalActivate)
+      .withPressPayload(F("1," TOSTRING(MAXIMUM_SIGNALS)))
       .withDisplayName(F("Activate all signals"))
       .withIcon(F("mdi:select-all"));
+  Blaeck.onButtonCommand("SIGNAL_DEACTIVATE_ALL", onSignalDeactivate)
+      .withPressPayload(F("1," TOSTRING(MAXIMUM_SIGNALS)))
+      .withDisplayName(F("Deactivate all signals"))
+      .withIcon(F("mdi:select-off"));
 
   UpdateLoggingSignals();
 }

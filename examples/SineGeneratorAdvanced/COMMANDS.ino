@@ -27,10 +27,11 @@ void onSetSignalLast(const char *command, const char *const *params, byte paramC
 void onSignalActivate(const char *command, const char *const *params, byte paramCount)
 {
   (void)command;
-  // A button's parameters are optional. Pressed from a dashboard it sends none and applies the
-  // bounds SIGNAL_FIRST and SIGNAL_LAST last set. Sent over serial as <SIGNAL_ACTIVATE,3,7> it
-  // carries its own range, which nothing has validated - a button is the one kind the library
-  // passes through unchecked - so it goes to the same clamping the stored bounds get.
+  // Two buttons run this. "Activate range" presses with nothing and applies the bounds
+  // SIGNAL_FIRST and SIGNAL_LAST hold; "Activate all signals" presses with the payload it
+  // declared and applies that. A button's parameters are the one kind the library passes
+  // through unchecked - there is no declared signature to check them against - so both
+  // paths end at the same clamping.
   if (paramCount >= 2)
     ApplySignalRange(true, (byte)atoi(params[0]), (byte)atoi(params[1]));
   else
@@ -44,14 +45,6 @@ void onSignalDeactivate(const char *command, const char *const *params, byte par
     ApplySignalRange(false, (byte)atoi(params[0]), (byte)atoi(params[1]));
   else
     ApplySignalRange(false, signalFirst, signalLast);
-}
-
-void onSignalActivateAll(const char *command, const char *const *params, byte paramCount)
-{
-  (void)command;
-  (void)params;
-  (void)paramCount;
-  ApplySignalRange(true, 1, MAXIMUM_SIGNALS);
 }
 
 // Applies the bounds it is given. Only the signals inside the range change, so
