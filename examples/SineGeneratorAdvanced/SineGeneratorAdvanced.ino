@@ -8,7 +8,7 @@
   - none beyond the library itself: EEPROM comes with the board's core
 
   Features:
-  - EEPROM stores which signals are exposed.
+  - EEPROM stores which signals are activated.
   - Typed commands activate or deactivate signal ranges in the BlaeckSerial catalog.
 */
 
@@ -78,12 +78,11 @@ bool measurementFirstTime = true;
 
 void setup()
 {
-
   // EEPROM
   EEPROMConfiguration();
 
   Serial.begin(115200);
-  // Sized explicitly for the five commands and three state channels this example declares.
+  // Sized explicitly for the five commands and two state channels this example declares.
   Blaeck.begin(&Serial)
       .withSignals(MAXIMUM_SIGNALS)
       .withCommands(5)
@@ -124,7 +123,6 @@ void setup()
 
 void loop()
 {
-
   UpdateSineNumbers();
 
   // Processes Loggbok commands and transmits updated signals.

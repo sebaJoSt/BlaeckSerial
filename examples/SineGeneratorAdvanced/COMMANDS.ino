@@ -27,11 +27,10 @@ void onSetSignalLast(const char *command, const char *const *params, byte paramC
 void onSignalActivate(const char *command, const char *const *params, byte paramCount)
 {
   (void)command;
-  // A button's parameters are optional: SIGNAL_ACTIVATE sends none and applies the
-  // bounds SIGNAL_FIRST and SIGNAL_LAST last set, while SIGNAL_ACTIVATE_ALL declares a press
-  // payload and the two numbers arrive here instead. Nothing has validated them - a button is
-  // the one kind the library passes through unchecked - so they go to the same clamping the
-  // stored bounds get.
+  // A button's parameters are optional. Pressed from a dashboard it sends none and applies the
+  // bounds SIGNAL_FIRST and SIGNAL_LAST last set. Sent over serial as <SIGNAL_ACTIVATE,3,7> it
+  // carries its own range, which nothing has validated - a button is the one kind the library
+  // passes through unchecked - so it goes to the same clamping the stored bounds get.
   if (paramCount >= 2)
     ApplySignalRange(true, (byte)atoi(params[0]), (byte)atoi(params[1]));
   else
@@ -78,7 +77,6 @@ void ApplySignalRange(bool activate, byte lo, byte hi)
 
   PersistActivatedSignals();
   UpdateLoggingSignals();
-
 }
 
 void PersistActivatedSignals()
