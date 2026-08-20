@@ -1,24 +1,29 @@
 # Sending data
 
-Signal values travel in one of three ways: on a schedule the host asks for, on an occasion your
-sketch decides, or only when something has changed. This page covers all three, and what a
-sketch can attach to the data on the way out.
+Your sketch does not decide how often it logs. The host does, and your sketch answers.
 
-## The host owns the schedule
-
-Your sketch does not choose how often it logs. A host asks for an interval and can stop it
-again:
-
-```
-<BLAECK.ACTIVATE,1000>
-<BLAECK.DEACTIVATE>
-```
-
-`Blaeck.tick()` in `loop()` is what honours it. It reads whatever arrived, dispatches commands,
-and sends every signal once the interval has elapsed - so it does nothing at all until a host
-has asked for data:
+## A sketch that logs
 
 ```cpp
+#include <BlaeckSerial.h>
+
+BlaeckSerial Blaeck;
+
+float temperature = 0.0;
+
+float readSensor()
+{
+  return analogRead(A0) * 0.1;
+}
+
+void setup()
+{
+  Serial.begin(115200);
+  Blaeck.begin(&Serial);
+
+  Blaeck.addSignal(F("Temperature"), &temperature);
+}
+
 void loop()
 {
   temperature = readSensor();
@@ -26,53 +31,59 @@ void loop()
 }
 ```
 
-Two smaller calls do the halves separately. `Blaeck.read()` only reads and dispatches, for a
-device that answers commands but logs nothing. `Blaeck.timedWriteAllData()` only sends when
-due, for one that logs but answers nothing.
+`Blaeck.tick()` does two things on every pass: it reads whatever arrived on the serial port and
+runs the command handlers, and it sends every signal once the interval has elapsed.
 
-Ask what the host decided:
+Until a host asks, it sends nothing:
+
+```
+<BLAECK.ACTIVATE,1000>      one reading per second
+<BLAECK.DEACTIVATE>         stop
+```
+
+Loggbok sends these for you. You can type them into the serial monitor to see the data for
+yourself.
+
+Two smaller calls do one half each. `Blaeck.read()` only reads and dispatches, for a device
+that answers commands and logs nothing. `Blaeck.timedWriteAllData()` only sends, for one that
+logs and answers nothing.
+
+Your sketch cannot set the interval, but it can read what the host asked for:
 
 ```cpp
 if (Blaeck.isTimedDataActive())
   Serial.println(Blaeck.getIntervalMs());
 ```
 
-Nothing on the device can set the interval. Reading it is for showing it, or for keeping it
-across a power cut.
+That is worth doing to show the interval on a state channel, or to remember it across a power
+cut.
 
-## Sending on your own occasion
+## Sending when something happens
 
-`writeAllData()` sends every signal now, whatever the schedule says:
+The interval is for logging. Some values are worth sending the moment they change, and two
+calls do that whatever the interval says.
+
+`writeAllData()` sends every signal now:
 
 ```cpp
 if (temperature > 40.0)
   Blaeck.writeAllData();
 ```
 
-`write()` sends one signal, and stores the value as it goes:
+`write()` sends one signal, and stores the value on the way:
 
 ```cpp
 Blaeck.write("Temperature", readSensor());
 ```
 
-Both are independent of the interval, so a board no host has activated can still send when
-something happens.
-
-A name is looked up by walking the signals and comparing names, which costs more the more
-signals there are. In anything that runs often, resolve the name once and use the number:
-
-```cpp
-int tempIndex = Blaeck.findSignalIndex("Temperature");
-
-Blaeck.write(tempIndex, readSensor());
-```
-
-Writing both edges of a short-lived value is what makes the logged data say how long it lasted:
+Send both edges of a short-lived value, and the logged data says how long it lasted. Leave the
+end of it to a host's timeout and that duration exists nowhere:
 
 ```cpp
 if (triggered && !pulse)
 {
   pulse = true;
+  pulseSince = millis();
   Blaeck.write("Pulse", pulse);
 }
 if (pulse && millis() - pulseSince >= 2000)
@@ -82,10 +93,19 @@ if (pulse && millis() - pulseSince >= 2000)
 }
 ```
 
+`write()` finds the signal by walking the list and comparing names, which costs more the more
+signals there are. Where it runs often, look the name up once and pass the number:
+
+```cpp
+int tempIndex = Blaeck.findSignalIndex("Temperature");   // in setup()
+
+Blaeck.write(tempIndex, readSensor());                   // in loop()
+```
+
 ## Sending only what changed
 
-Where values change rarely, sending all of them on every interval is waste. `update()` stores a
-value and marks the signal as changed; `tickUpdated()` then sends only the marked ones:
+Where values change rarely, sending all of them every second is waste. `update()` stores a value
+and marks the signal as changed. `tickUpdated()` is then `tick()` for the marked ones only:
 
 ```cpp
 void loop()
@@ -95,17 +115,14 @@ void loop()
 }
 ```
 
-`update()` sends nothing by itself - that is the whole difference from `write()`.
+`update()` sends nothing by itself. That is its whole difference from `write()`.
 
-`writeUpdatedData()` sends the changed ones now, without waiting for the interval.
-`markSignalUpdated()` marks one without changing its value, `markAllSignalsUpdated()` marks
-every signal, `clearAllUpdateFlags()` forgets the marks, and `hasUpdatedSignals()` says whether
-any are set.
+`writeUpdatedData()` sends the changed ones at once, without waiting for the interval.
 
-## Sampling just before a write
+## Reading the sensors at the right moment
 
-Rather than reading sensors on a timer of your own and hoping the two line up, name a function
-to run immediately before signal data goes out:
+Sampling in `loop()` means the reading is however old the last pass left it. Name a function
+instead and it runs immediately before signal data goes out:
 
 ```cpp
 void readAllSensors()
@@ -120,16 +137,19 @@ It runs in normal `loop()` context, so `Serial` and `delay()` are safe in it.
 
 ## Timestamps
 
-By default the data carries no time and the host stamps it on arrival. Two modes change that:
+By default the data carries no time and the host stamps it when it arrives. That is fine when
+the link is quick and nothing buffers.
+
+For a time the device itself stands behind, pick a mode in `setup()`:
 
 ```cpp
 Blaeck.setTimestampMode(BLAECK_MICROS);
 ```
 
-`BLAECK_MICROS` needs nothing further. The library supplies `micros()` and tracks the overflow,
-so the count keeps climbing past the 71 minutes a 32-bit microsecond counter holds. It tracks
-that overflow as data is written, so a device writing less often than every 71 minutes misses
-one and wants a real clock instead.
+`BLAECK_MICROS` needs nothing else. The library reads `micros()` and tracks the overflow, so
+the count keeps climbing past the 71 minutes a 32-bit microsecond counter holds. It notices that
+overflow as data is written, so a device that writes less often than every 71 minutes misses one
+and needs a real clock instead.
 
 ```cpp
 unsigned long long unixMicros()
@@ -141,47 +161,37 @@ Blaeck.setTimestampCallback(unixMicros);
 Blaeck.setTimestampMode(BLAECK_UNIX);
 ```
 
-`BLAECK_UNIX` takes the time from a clock only your sketch can reach - an RTC, or an
-NTP-backed time. Without a callback it stamps zero, so every reading lands in 1970. Check with
-`hasValidTimestampCallback()`, which is the one that answers whether the data really carries a
-time.
-
-Set the mode in `setup()`. Switching it partway through a log restarts the overflow tracking,
-and the timestamps either side of the change do not belong on one axis.
-
-You can also stamp a write yourself, for values recorded earlier or a clock the callback cannot
-reach:
+`BLAECK_UNIX` takes the time from a clock only your sketch can reach: an RTC, or a time fetched
+over the network. Without a callback it stamps zero and every reading lands in 1970, so check
+it:
 
 ```cpp
-Blaeck.writeAllData(42, 1723600000000000ULL);
+if (!Blaeck.hasValidTimestampCallback())
+  Serial.println(F("no clock - timestamps will be zero"));
 ```
 
-The number before it is a message ID: a host sends one with a request and gets it back on the
-answer. Leave both out and the library supplies them.
+Set the mode once, in `setup()`. Switching it partway through a log restarts the overflow
+tracking, and the timestamps either side of the change do not belong on one axis.
 
 ## Buffered writes
 
-A frame is either assembled in RAM and sent in one call, or written out piece by piece as it is
-produced. Buffering costs `60 + signals * 30` bytes of SRAM and is easier on a USB bridge;
-writing directly costs no RAM at all.
+Data is either assembled in RAM and sent in one call, or written out piece by piece as it is
+produced. Buffering costs `60 + signals * 30` bytes of SRAM and suits a USB bridge that dislikes
+many small writes; writing directly costs no RAM at all.
 
-The default is per board: off on AVR and on the mbed cores, on everywhere else. Change it if
-you have a reason to:
+The default is per board: off on AVR and the mbed cores, on everywhere else. Those defaults are
+there because of real faults on real boards, so change this only with a reason:
 
 ```cpp
 Blaeck.setBufferedWrites(true);
 ```
 
-`isBufferedWrites()` reports what is in force, which is worth checking on AVR, where it is off
-unless asked for.
+## The catalogs
 
-## What a host reads first
+A value on the wire names its signal by position, not by name. So before any of it means
+anything, a host has to have the list of signals, and the lists of commands, state channels and
+event channels with it.
 
-Before any of this means anything, a host needs the catalogs: the signal list, and the metadata,
-commands, state channels and event channels that go with it. They are sent when the device
-starts and again whenever anything in them changes, so a sketch rarely calls one itself.
-
-`writeSymbols()`, `writeSignalConfig()`, `writeCommands()`, `writeStateChannels()`,
-`writeEventChannels()` and `writeDevices()` send them on demand. A value names its signal or
-channel by position in one of these lists, which is why a list that changed is always sent
-ahead of the next value.
+Your sketch does not have to send these. They go out when the device starts, again whenever a
+host asks, and again whenever you change what the device declares - always ahead of the next
+value, so nothing is ever read against a list that has moved.

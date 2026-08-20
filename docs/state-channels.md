@@ -1,62 +1,77 @@
 # State channels
 
-A state channel reports a current value that is shown but never logged: a status line, an
-uptime, what a control is set to.
+A state channel reports a value that is shown but never logged: a status line, an uptime, what
+a control is set to.
 
-That is the whole difference from a signal. A signal is sampled on every interval and kept as
-history, so a year of it fills a table. A state channel has one value, the one it holds now.
-Use a signal for what you want to look back at, and a state channel for what only matters at
-this moment.
+That is the difference from a signal. A signal is sampled on every interval and kept, so a
+month of it fills a table you can look back at. A state channel has one value, the one it holds
+now. Nothing is kept, and nothing is written to the database.
 
-## Declaring a channel
-
-Point the channel at a variable and it reads that variable whenever the value is wanted:
+## A sketch with two channels
 
 ```cpp
+#include <BlaeckSerial.h>
+
+BlaeckSerial Blaeck;
+
 unsigned long uptime = 0;
+char status[40] = "starting";
 
-Blaeck.addStateChannel(F("Uptime"), &uptime).withUnit(F("s"));
+void setup()
+{
+  Serial.begin(115200);
+  Blaeck.begin(&Serial);
+
+  Blaeck.addStateChannel(F("Uptime"), &uptime).withUnit(F("s"));
+  Blaeck.addStateChannel(F("Status"), status).withIcon(F("mdi:message-text"));
+}
+
+void loop()
+{
+  Blaeck.tick();
+
+  if (millis() / 1000UL != uptime)
+  {
+    uptime = millis() / 1000UL;
+    Blaeck.writeState(F("Uptime"));
+  }
+}
 ```
 
-The types are the same as a signal's: the nine numeric ones, `bool`, and a `char` buffer. As
-with a signal, the variable has to be a global.
+- `addStateChannel()` takes a name and the address of the variable to read. The variable has to
+  be a global, as a signal's does.
+- `writeState()` sends the value. There is nothing to pass, because the channel already knows
+  where to look.
+- The `if` is the point of the whole thing. A state channel is sent when it changes, not on a
+  schedule, so nothing goes out on the passes where the second has not ticked over.
 
-A channel with no variable behind it carries only what you write to it:
+Home Assistant shows two sensors. Neither ends up in the database.
+
+## What a channel can carry
+
+The types are a signal's: the nine numeric ones, `bool`, and a `char` buffer. A `bool` channel
+becomes a binary sensor.
+
+Pass no variable and the channel carries only what you hand it:
 
 ```cpp
-Blaeck.addStateChannel(F("Status")).withIcon(F("mdi:message-text"));
-```
+Blaeck.addStateChannel(F("Status"));
 
-Unlike a signal name, a channel name is copied, so a name built at runtime needs no buffer kept
-alive afterwards.
-
-## Sending a value
-
-`writeState()` sends one. Which form you use depends on what the channel was given:
-
-```cpp
 char text[40];
 snprintf(text, sizeof(text), "running at %u Hz", frequency);
 Blaeck.writeState(F("Status"), text);
 ```
 
-That is for a channel declared with no variable. Text longer than 255 bytes is cut short.
+Text longer than 255 bytes is cut short. This second form is for text channels only - passing
+text to a numeric channel is dropped, and the debug stream says so.
 
-```cpp
-uptime = millis() / 1000UL;
-Blaeck.writeState(F("Uptime"));
-```
+Channel names are copied, unlike signal names, so a name built in a buffer needs nothing kept
+alive afterwards.
 
-That is for one that points at a variable: there is nothing to pass, because the channel
-already knows where to look. It is the only way to send a numeric channel - passing text to one
-is dropped, and the debug stream says so.
+## Text the channel works out for itself
 
-Send a value whenever it changes. Without a `writeState()` the value is only read when a host
-asks for it, so a dashboard can sit on an old one for a long time.
-
-## Text a channel builds for itself
-
-A text channel can name a function that produces its value instead:
+Sending on change means remembering to send. A text channel can name a function instead, and
+that function runs whenever the value is wanted:
 
 ```cpp
 const char *statusText()
@@ -69,55 +84,47 @@ const char *statusText()
 Blaeck.addStateChannel(F("Status")).withStateText(statusText);
 ```
 
-The function runs when a host asks, so the value cannot go stale and the sketch never has to
-push one to keep it in step. Push anyway with `writeState(F("Status"))` when something happens
-that a host should see at once.
+Nothing has to push this one to keep it current: it is worked out when it is read, so it cannot
+be stale. Push it anyway with `writeState(F("Status"))` when something happens that a host
+should see at once.
 
-The function runs while a frame is being assembled. It must only read variables and format
-text - a `writeState()`, `writeEvent()` or `write()` inside it corrupts the frame being built.
+The function runs while a frame is being built. It may read variables and format text, and
+nothing else - a `write()`, `writeState()` or `writeEvent()` inside it breaks the frame it
+interrupts.
 
-Only text channels take a function. A numeric channel points at the variable, and anything a
-function would have worked out can be assigned to a variable first.
+Only text takes a function. A numeric channel points at a variable, and anything a function
+would have worked out can be put in one first.
 
 ## Describing a channel
 
-The same idea as a signal, and mostly the same calls:
+The calls are the ones on [Signals](signals.md), and they mean the same here: `withUnit()`,
+`withStateClass()` and `withDisplayPrecision()` on a number, `withIcon()`, `withDeviceClass()`,
+`diagnostic()`, `disabledByDefault()` and `forceUpdate()` on anything.
 
-| Call | What it does | Numbers | Text | Bool |
-|---|---|:-:|:-:|:-:|
-| `withUnit(F("s"))` | Unit shown after the value | ● | | |
-| `withStateClass(...)` | `BLAECK_STATE_CLASS_MEASUREMENT`, `_TOTAL` or `_TOTAL_INCREASING` | ● | | |
-| `withDisplayPrecision(1)` | Number of decimal places | ● | | |
-| `withStateText(getter)` | The function that produces the value | | ● | |
-| `withOptions(F("a,b,c"))` | The complete set of values this channel reports | | ● | |
-| `withDeviceClass(F("timestamp"))` | What the value is | ● | ● | ● |
-| `withIcon(F("mdi:pulse"))` | A [Material Design Icons](https://pictogrammers.com/library/mdi/) name | ● | ● | ● |
-| `diagnostic()` | Marks it as information about the device | ● | ● | ● |
-| `disabledByDefault()` | Registered, but switched off until someone enables it | ● | ● | ● |
-| `forceUpdate()` | Report every value, even one identical to the last | ● | ● | ● |
+Two are particular to a state channel:
 
-`withOptions()` needs `withDeviceClass(F("enum"))`, and every value the channel reports has to
-be in the list.
+| Call | What it does |
+|---|---|
+| `withStateText(getter)` | Names the function that produces the value. Text only |
+| `withOptions(F("a,b,c"))` | The complete set of values this channel reports. Text only, and needs `withDeviceClass(F("enum"))` |
 
-Device classes come from a different list for each type. `F("temperature")` on a number,
-`F("timestamp")` or `F("date")` on text, `F("door")` or `F("motion")` on a `bool` - a `bool`
-channel is a binary sensor, and some names mean different things on the two lists. A name from
-the wrong list does not fail quietly: the entity never appears at all.
-
-Strings must be `F()` literals, and are stored as pointers rather than copied.
+Device classes come from a different list for each type: `F("temperature")` on a number,
+`F("timestamp")` or `F("date")` on text, `F("door")` or `F("motion")` on a `bool`. Some names
+are on two lists meaning different things - `battery` is a percentage on a number and low or
+normal on a `bool`. A name from the wrong list does not fail quietly: the entity never appears.
 
 ## Channels a command owns
 
-A command that reports its own value with `withOwnState()` creates a channel here. It is the
-command's: `addStateChannel()` refuses the name, and it is sent with `writeCommandState()`
-rather than `writeState()`. See [Commands](commands.md).
+A command that reports its own value with `withOwnState()` creates a channel here. It belongs
+to the command: `addStateChannel()` refuses the name, and it is sent with `writeCommandState()`
+instead. See [Commands](commands.md).
 
-It comes out of this table all the same, so count it when sizing.
+It takes a slot from the same table all the same.
 
 ## When a channel does not fit
 
-The state channel table has a fixed size, and every channel counts against it, including the
-ones commands own - see [Configuration](configuration.md).
+The table has a fixed size. Count the channels commands own along with your own - see
+[Configuration](configuration.md).
 
 ```cpp
 if (Blaeck.hasRejectedStateChannels())
@@ -126,5 +133,5 @@ if (Blaeck.hasRejectedStateChannels())
 }
 ```
 
-A command whose channel was dropped keeps no state at all, so a full table costs a control's
-value rather than just a channel.
+A command whose channel was dropped keeps no state at all, so a full table costs a control its
+value rather than costing you a channel.

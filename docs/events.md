@@ -2,53 +2,94 @@
 
 An event is something that happened: a threshold was crossed, a motor stalled, a run finished.
 
-It is the third of the three kinds, and the one with no value at all. A signal is a value
-sampled over and over. A state channel is a value that stands until it changes. An event has
-neither - it is an occurrence, at one moment, with nothing to read afterwards.
+It is the third kind, and the one with no value. A signal is a value sampled again and again. A
+state channel is a value that stands until it changes. An event is a moment, with nothing to
+read afterwards.
 
-## Declaring a channel
-
-An event channel names every event it can ever report, up front:
+## A sketch that reports two events
 
 ```cpp
-Blaeck.addEventChannel(F("Activity"), F("idle_warning,resumed"))
-    .withIcon(F("mdi:pulse"));
+#include <BlaeckSerial.h>
+
+BlaeckSerial Blaeck;
+
+float temperature = 0.0;
+bool tooHot = false;
+
+float readSensor()
+{
+  return analogRead(A0) * 0.1;
+}
+
+void setup()
+{
+  Serial.begin(115200);
+  Blaeck.begin(&Serial);
+
+  Blaeck.addSignal(F("Temperature"), &temperature);
+  Blaeck.addEventChannel(F("Alarm"), F("overheated,cooled_down"))
+      .withIcon(F("mdi:thermometer-alert"));
+}
+
+void loop()
+{
+  Blaeck.tick();
+
+  temperature = readSensor();
+
+  if (temperature > 60.0 && !tooHot)
+  {
+    tooHot = true;
+    Blaeck.writeEvent(F("Alarm"), F("overheated"));
+  }
+  if (temperature < 55.0 && tooHot)
+  {
+    tooHot = false;
+    Blaeck.writeEvent(F("Alarm"), F("cooled_down"));
+  }
+}
 ```
 
-The list is not optional. What travels on the wire is a pair of numbers - which channel, which
-type - so a host can only read an event against the list it was given. That is also why the
-order matters: position fixes each type's number, so you may add to the end of a list, but
-never reorder it.
+- `addEventChannel()` takes a name and every event that channel will ever report, as one
+  comma-separated list.
+- `writeEvent()` reports one of them. It is fire and forget: a host may show it, and it is never
+  logged.
+- `tooHot` is what keeps one crossing from firing an event on every pass of `loop()`. The
+  library does no such filtering - you decide what counts as having happened.
 
-Add a type that only some boards have:
+Home Assistant shows an event entity that fires twice per overheating.
+
+## The list of types
+
+The list is not optional, and its order matters.
+
+What travels on the wire is a pair of numbers: which channel, which type. A host reads them
+against the list it was given, so position is what identifies a type. You may add to the end of
+a list. Reordering it, or removing an entry from the middle, changes what every later type
+means.
+
+Types read as identifiers - `cooled_down`, not `Cooled down`. Home Assistant shows them as
+written.
+
+A type the board only has sometimes can be added on its own:
 
 ```cpp
-Blaeck.addEventChannel(F("Activity"), F("idle_warning,resumed"));
+Blaeck.addEventChannel(F("Alarm"), F("overheated,cooled_down"));
 
 if (hasBatteryMonitor)
-  Blaeck.addEventType(F("Activity"), F("low_battery"));
+  Blaeck.addEventType(F("Alarm"), F("low_battery"));
 ```
 
-`addEventType()` returns false if the type is blank, is already on the list, names a channel
-that was never declared, or does not fit.
+It returns false if the type is blank, is already on the list, names a channel that was never
+declared, or does not fit.
 
-Event types are written as identifiers - `idle_warning`, not `Idle warning`. Home Assistant
-shows them as they are.
+## Saying how much
 
-## Reporting an event
+An event carries nothing but its own name, so the wording is fixed when you compile. There is
+no way to attach a temperature to `overheated`.
 
-```cpp
-Blaeck.writeEvent(F("Activity"), F("idle_warning"));
-```
-
-Fire and forget. A host may show it, and it is never logged as data.
-
-The type has to be one the channel declared. An event on a channel or type that was never
-declared is dropped without a word.
-
-Because an event carries nothing else, the wording is fixed when the sketch is compiled. If you
-need to say how long, how many or how far, that is a value: report it on a state channel, or
-log it as a signal.
+Where a number matters, something else carries it. Log it as a signal if you want it in the
+history, or put it on a [state channel](state-channels.md) if it only has to be visible.
 
 ## Describing a channel
 
@@ -59,14 +100,13 @@ log it as a signal.
 | `diagnostic()` | Marks it as information about the device rather than what it does |
 | `disabledByDefault()` | Registered, but switched off until someone enables it |
 
-Strings must be `F()` literals. The channel name is copied; the types and everything above are
-stored as pointers.
+The channel name is copied. The type list and the strings above are stored as pointers, so they
+have to be `F()` literals.
 
-## Sizing
+## When a channel or type does not fit
 
-Two tables are involved. One holds the channels. The other holds the types, and it is shared by
-every channel - four channels of five types each need room for twenty types, not for twenty per
-channel.
+Two tables are involved. One holds the channels. The other holds the types, and every channel
+draws from it - four channels of five types each need room for twenty types, not twenty each.
 
 ```cpp
 Blaeck.begin(&Serial)
@@ -74,8 +114,8 @@ Blaeck.begin(&Serial)
     .withEventTypes(20);
 ```
 
-A type costs 5 bytes on AVR, the cheapest entry the library keeps. See
-[Configuration](configuration.md) for the defaults.
+See [Configuration](configuration.md) for the defaults. A type costs 5 bytes on AVR, the
+cheapest entry the library keeps, so this is a cheap table to be generous with.
 
 ```cpp
 if (Blaeck.hasRejectedEventChannels())
@@ -84,5 +124,5 @@ if (Blaeck.hasRejectedEventChannels())
 }
 ```
 
-A dropped type is worse than a dropped channel: the channel still reports, but one of the things
-it was meant to say is missing.
+That covers both tables. A dropped type is the quieter failure of the two: the channel still
+works, and one of the things it was meant to report simply never arrives.
