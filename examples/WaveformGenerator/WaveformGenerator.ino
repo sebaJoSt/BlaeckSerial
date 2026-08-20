@@ -76,8 +76,8 @@ unsigned long Uptime = 0; // [s], about the board rather than the wave
 //---PUBLISHED AS THEIR COMMANDS' OWN STATE, AND SO NOT LOGGED
 float Amplitude = 1.0;
 float Offset = 0.0;
-// The wave, as its position in the SET_WAVE option list: a select command reports which
-// option was picked, never its name, so these and withOptions() below must stay in step.
+// The wave, as its position in the SET_WAVE option list: the handler is handed that index,
+// the state reports the name it stands for, so these and withOptions() below must stay in step.
 enum Wave : byte { Sine, Square, Triangle, Sawtooth };
 byte waveIndex = Sine;
 bool Enabled = true;
