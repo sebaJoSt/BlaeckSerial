@@ -55,11 +55,17 @@ becomes a binary sensor.
 Pass no variable and the channel carries only what you hand it:
 
 ```cpp
-Blaeck.addStateChannel(F("Status"));
+void setup()
+{
+  Blaeck.addStateChannel(F("Status"));
+}
 
-char text[40];
-snprintf(text, sizeof(text), "running at %u Hz", frequency);
-Blaeck.writeState(F("Status"), text);
+void reportStatus()
+{
+  char text[40];
+  snprintf(text, sizeof(text), "running at %u Hz", frequency);
+  Blaeck.writeState(F("Status"), text);
+}
 ```
 
 Text longer than 255 bytes is cut short. This second form is for text channels only - passing

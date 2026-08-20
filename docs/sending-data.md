@@ -80,16 +80,24 @@ Send both edges of a short-lived value, and the logged data says how long it las
 end of it to a host's timeout and that duration exists nowhere:
 
 ```cpp
-if (triggered && !pulse)
+bool pulse = false;
+unsigned long pulseSince = 0;
+
+void loop()
 {
-  pulse = true;
-  pulseSince = millis();
-  Blaeck.write("Pulse", pulse);
-}
-if (pulse && millis() - pulseSince >= 2000)
-{
-  pulse = false;
-  Blaeck.write("Pulse", pulse);
+  Blaeck.tick();
+
+  if (triggered() && !pulse)
+  {
+    pulse = true;
+    pulseSince = millis();
+    Blaeck.write("Pulse", pulse);
+  }
+  if (pulse && millis() - pulseSince >= 2000)
+  {
+    pulse = false;
+    Blaeck.write("Pulse", pulse);
+  }
 }
 ```
 
@@ -97,9 +105,18 @@ if (pulse && millis() - pulseSince >= 2000)
 signals there are. Where it runs often, look the name up once and pass the number:
 
 ```cpp
-int tempIndex = Blaeck.findSignalIndex("Temperature");   // in setup()
+int tempIndex = -1;
 
-Blaeck.write(tempIndex, readSensor());                   // in loop()
+void setup()
+{
+  // ... after addSignal()
+  tempIndex = Blaeck.findSignalIndex("Temperature");
+}
+
+void loop()
+{
+  Blaeck.write(tempIndex, readSensor());
+}
 ```
 
 ## Sending only what changed
@@ -121,8 +138,9 @@ void loop()
 
 ## Reading the sensors at the right moment
 
-Sampling in `loop()` means the reading is however old the last pass left it. Name a function
-instead and it runs immediately before signal data goes out:
+The first sketch on this page reads its sensor on every pass of `loop()`. That works, and it
+means every reading sent is up to one pass old. Where that matters, name a function instead and
+it runs immediately before signal data goes out:
 
 ```cpp
 void readAllSensors()
