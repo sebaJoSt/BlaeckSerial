@@ -103,13 +103,12 @@ void setup()
 
   // Sizing every table the sketch fills, so nothing is left to a default: three signals, eight
   // commands, eight state channels - three declared here and five by the commands'
-  // withOwnState - and three event channels, of which this sketch declares one. Every one of
-  // these calls is optional.
+  // withOwnState - and one event channel. Every one of these calls is optional.
   Blaeck.begin(&Serial)
       .withSignals(3)
       .withCommands(8)
       .withStateChannels(8)
-      .withEventChannels(3);
+      .withEventChannels(1);
 
   Blaeck.DeviceName = "Waveform Generator Demo";
   Blaeck.DeviceHWVersion = "Arduino Mega 2560 Rev3";
@@ -373,6 +372,8 @@ void onSetNote(const char *command, const char *const *params, byte paramCount)
   // Arrives decoded: Loggbok percent-encodes the value, so a note may hold the characters the
   // frame itself is built from - a comma, an angle bracket, a percent sign.
   strcpy(RunNote, params[0]);
+  // Backed by a signal, like SET_FREQ, so writing it is what reports the value back.
+  Blaeck.write("RunNote", RunNote);
 }
 
 void onStatus(const char *command, const char *const *params, byte paramCount)
