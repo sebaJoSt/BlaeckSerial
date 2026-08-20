@@ -65,20 +65,20 @@ void BlaeckSerial::_flushCatalogs()
   // clears what setup() marked without anything being sent twice.
 #if BLAECK_ENABLE_STATE_CHANNELS
   if (_stateCatalogDirty)
-    this->writeStateChannels(1);
+    this->writeStateChannels(0);
 #endif
 
 #if BLAECK_ENABLE_EVENTS
   if (_eventCatalogDirty)
-    this->writeEventChannels(1);
+    this->writeEventChannels(0);
 #endif
 
   if (_commandCatalogDirty)
-    this->writeCommands(1);
+    this->writeCommands(0);
 
 #if BLAECK_ENABLE_SIGNAL_META
   if (_signalConfigDirty)
-    this->writeSignalConfig(1);
+    this->writeSignalConfig(0);
 #endif
 }
 
@@ -1122,65 +1122,80 @@ void BlaeckSerial::read()
       _debugStream->println(">");
     }
 
-    if (equalsFlash(_parsedCommand, F(BLAECK_BUILTIN_WRITE_SYMBOLS)))
+    // Frame level, and before anything acts on it: what was parsed is not what was sent, so
+    // a built-in whose name survived the cut must not run on the remains either.
+    if (_parsedTruncated)
     {
-      unsigned long msg_id = _parsedMsgId();
-
-      this->writeSymbols(msg_id);
+      _writeCommandAck(receivedChars, 1, BLAECK_ACK_TRUNCATED);
     }
-    else if (equalsFlash(_parsedCommand, F(BLAECK_BUILTIN_WRITE_SIGNAL_CONFIG)))
+    else
     {
-      unsigned long msg_id = _parsedMsgId();
+      // Acknowledged before the answer goes out, so a host waiting on a catalog can tell a
+      // request that arrived from one that did not. The handler dispatch below is told not to
+      // acknowledge a second time, since every command produces exactly one ack.
+      bool builtinMatched = true;
+      const unsigned long msg_id = _parsedPrefixMsgId;
 
-      this->writeSignalConfig(msg_id);
-    }
-    else if (equalsFlash(_parsedCommand, F(BLAECK_BUILTIN_WRITE_DATA)))
-    {
-      unsigned long msg_id = _parsedMsgId();
-
-      this->writeAllData(msg_id);
-    }
-    else if (equalsFlash(_parsedCommand, F(BLAECK_BUILTIN_GET_DEVICES)))
-    {
-      unsigned long msg_id = _parsedMsgId();
-
-      this->writeDevices(msg_id);
-    }
-    else if (equalsFlash(_parsedCommand, F(BLAECK_BUILTIN_WRITE_COMMANDS)))
-    {
-      unsigned long msg_id = _parsedMsgId();
-
-      this->writeCommands(msg_id);
-    }
-    else if (equalsFlash(_parsedCommand, F(BLAECK_BUILTIN_WRITE_STATE_CHANNELS)))
-    {
-      unsigned long msg_id = _parsedMsgId();
-
-      this->writeStateChannels(msg_id);
-    }
-    else if (equalsFlash(_parsedCommand, F(BLAECK_BUILTIN_WRITE_EVENT_CHANNELS)))
-    {
-      unsigned long msg_id = _parsedMsgId();
-
-      this->writeEventChannels(msg_id);
-    }
-    else if (equalsFlash(_parsedCommand, F(BLAECK_BUILTIN_ACTIVATE)))
-    {
-      if (_fixedInterval_ms == BLAECK_INTERVAL_CLIENT)
+      if (equalsFlash(_parsedCommand, F(BLAECK_BUILTIN_WRITE_SYMBOLS)))
       {
-        unsigned long timedInterval_ms = _parsedMsgId();
+        _writeCommandAck(receivedChars, 0, BLAECK_ACK_OK);
+        this->writeSymbols(msg_id);
+      }
+      else if (equalsFlash(_parsedCommand, F(BLAECK_BUILTIN_WRITE_SIGNAL_CONFIG)))
+      {
+        _writeCommandAck(receivedChars, 0, BLAECK_ACK_OK);
+        this->writeSignalConfig(msg_id);
+      }
+      else if (equalsFlash(_parsedCommand, F(BLAECK_BUILTIN_WRITE_DATA)))
+      {
+        _writeCommandAck(receivedChars, 0, BLAECK_ACK_OK);
+        // The one place a data frame answers a request, so the one place the bit is set.
+        _frameRequested = true;
+        this->writeAllData(msg_id);
+        _frameRequested = false;
+      }
+      else if (equalsFlash(_parsedCommand, F(BLAECK_BUILTIN_GET_DEVICES)))
+      {
+        _writeCommandAck(receivedChars, 0, BLAECK_ACK_OK);
+        this->writeDevices(msg_id);
+      }
+      else if (equalsFlash(_parsedCommand, F(BLAECK_BUILTIN_WRITE_COMMANDS)))
+      {
+        _writeCommandAck(receivedChars, 0, BLAECK_ACK_OK);
+        this->writeCommands(msg_id);
+      }
+      else if (equalsFlash(_parsedCommand, F(BLAECK_BUILTIN_WRITE_STATE_CHANNELS)))
+      {
+        _writeCommandAck(receivedChars, 0, BLAECK_ACK_OK);
+        this->writeStateChannels(msg_id);
+      }
+      else if (equalsFlash(_parsedCommand, F(BLAECK_BUILTIN_WRITE_EVENT_CHANNELS)))
+      {
+        _writeCommandAck(receivedChars, 0, BLAECK_ACK_OK);
+        this->writeEventChannels(msg_id);
+      }
+      else if (equalsFlash(_parsedCommand, F(BLAECK_BUILTIN_ACTIVATE)))
+      {
+        // strtoul rather than atoi: an interval is a millisecond count, and atoi on AVR is
+        // 16-bit, so anything above 32767 ms would come through as a different number.
+        unsigned long timedInterval_ms = 0;
+        if (_parsedParamCount > 0 && _parsedParamPtrs[0] != nullptr)
+          timedInterval_ms = strtoul(_parsedParamPtrs[0], nullptr, 10);
+        _writeCommandAck(receivedChars, 0, BLAECK_ACK_OK);
         this->_setTimedDataState(true, timedInterval_ms);
       }
-    }
-    else if (equalsFlash(_parsedCommand, F(BLAECK_BUILTIN_DEACTIVATE)))
-    {
-      if (_fixedInterval_ms == BLAECK_INTERVAL_CLIENT)
+      else if (equalsFlash(_parsedCommand, F(BLAECK_BUILTIN_DEACTIVATE)))
       {
+        _writeCommandAck(receivedChars, 0, BLAECK_ACK_OK);
         this->_setTimedDataState(false, _timedInterval_ms);
       }
-    }
+      else
+      {
+        builtinMatched = false;
+      }
 
-    _dispatchRegisteredHandlers();
+      _dispatchRegisteredHandlers(!builtinMatched);
+    }
   }
 
   // A handler dispatched above may have declared, re-styled or cleared something. This is
@@ -1784,21 +1799,6 @@ bool BlaeckSerial::recvWithStartEndMarkers()
   return newData;
 }
 
-// The four little-endian bytes a built-in BLAECK.* command carries, as one number. A field
-// the frame did not carry reads as 0, which is what the fixed parameter array it replaced
-// held for an absent token. The value goes through int exactly as that array did, so a
-// field outside 0-255 lands on the wire the same way it always has rather than being
-// quietly masked into a different number.
-unsigned long BlaeckSerial::_parsedMsgId() const
-{
-  unsigned long v = 0;
-  for (byte i = 0; i < 4; i++)
-  {
-    if (i < _parsedParamCount && _parsedParamPtrs[i] != nullptr)
-      v |= ((unsigned long)(int)atoi(_parsedParamPtrs[i])) << (8 * i);
-  }
-  return v;
-}
 void BlaeckSerial::_setChannelName(const char *&slot, bool &inFlash, const char *ram, const __FlashStringHelper *flash)
 {
   // Whatever the slot held: a copy is freed, a flash name owns nothing. A slot is written
@@ -2076,14 +2076,8 @@ void BlaeckSerial::_dispatchRegisteredHandlers(bool sendAck)
     return;
   }
 
-  // Frame level, so it covers plain commands and the any-handler as well: what was parsed is
-  // not what was sent, and nothing should act on the remains.
-  if (_parsedTruncated)
-  {
-    if (sendAck && strncmp(_parsedCommand, "BLAECK.", 7) != 0)
-      _writeCommandAck(receivedChars, 1, BLAECK_ACK_TRUNCATED);
-    return;
-  }
+  // Truncation is caught in read(), before a built-in can act on the remains, so nothing
+  // reaches here with a frame that was cut.
 
   byte ackStatus = 1;                  // 0 = accepted, 1 = rejected
   byte ackReason = BLAECK_ACK_UNKNOWN; // reason reported when rejected
@@ -2129,9 +2123,11 @@ void BlaeckSerial::_dispatchRegisteredHandlers(bool sendAck)
     }
   }
 
-  // Acknowledge every non-internal command back to the sender. BLAECK.* frames
-  // are handled in read() and must not be acked here.
-  if (sendAck && strncmp(_parsedCommand, "BLAECK.", 7) != 0)
+  // Every command is acknowledged, built-ins included. A built-in that matched was already
+  // acknowledged in read(), ahead of its answer, and passes sendAck false so it is not
+  // acknowledged twice. A BLAECK.* name that matched nothing arrives here with sendAck true
+  // and is answered UNKNOWN, like any other name the device does not have.
+  if (sendAck)
   {
     _writeCommandAck(receivedChars, ackStatus, ackReason);
   }
@@ -2642,7 +2638,7 @@ void BlaeckSerial::_writeStateFrame(int channelIndex, const char *text, unsigned
 
 void BlaeckSerial::writeStateChannels()
 {
-  this->writeStateChannels(1);
+  this->writeStateChannels(0);
 }
 
 void BlaeckSerial::writeStateChannels(unsigned long msg_id)
@@ -3027,7 +3023,7 @@ void BlaeckSerial::clearAllStateChannels() {}
 // whether or not the feature is on. -1 is the index a refused registration returns, so the
 // handle it produces is the same inert one every stub above hands back.
 int BlaeckSerial::_registerStateChannel(const char *, const __FlashStringHelper *, dataType, const void *) { return -1; }
-void BlaeckSerial::writeStateChannels() { this->writeStateChannels(1); }
+void BlaeckSerial::writeStateChannels() { this->writeStateChannels(0); }
 void BlaeckSerial::writeStateChannels(unsigned long msg_id) { this->_writeEmptyFrame(0x90, msg_id); }
 void BlaeckSerial::writeState(const char *, const char *) {}
 void BlaeckSerial::writeState(const char *) {}
@@ -3372,7 +3368,7 @@ bool BlaeckSerial::_flashStringEquals(const __FlashStringHelper *a, const __Flas
 
 void BlaeckSerial::writeEventChannels()
 {
-  this->writeEventChannels(1);
+  this->writeEventChannels(0);
 }
 
 void BlaeckSerial::writeEventChannels(unsigned long msg_id)
@@ -3623,7 +3619,7 @@ void BlaeckSerial::clearAllEventChannels() {}
 // whether or not the feature is on. -1 is the index a refused registration returns, so the
 // handle it produces is the same inert one the stub above hands back.
 int BlaeckSerial::_registerEventChannel(const char *, const __FlashStringHelper *, const __FlashStringHelper *) { return -1; }
-void BlaeckSerial::writeEventChannels() { this->writeEventChannels(1); }
+void BlaeckSerial::writeEventChannels() { this->writeEventChannels(0); }
 void BlaeckSerial::writeEventChannels(unsigned long msg_id) { this->_writeEmptyFrame(0x80, msg_id); }
 void BlaeckSerial::writeEvent(const char *, const __FlashStringHelper *) {}
 void BlaeckSerial::writeEvent(const char *, const __FlashStringHelper *, unsigned long) {}
@@ -3870,32 +3866,9 @@ void BlaeckSerial::_setTimedDataState(bool timedActivated, unsigned long timedIn
   }
 }
 
-void BlaeckSerial::setIntervalMs(long interval_ms)
-{
-  if (interval_ms >= 0)
-  {
-    _fixedInterval_ms = interval_ms;
-    this->_setTimedDataState(true, (unsigned long)interval_ms);
-  }
-  else if (interval_ms == BLAECK_INTERVAL_OFF)
-  {
-    _fixedInterval_ms = BLAECK_INTERVAL_OFF;
-    this->_setTimedDataState(false, _timedInterval_ms);
-  }
-  else if (interval_ms == BLAECK_INTERVAL_CLIENT)
-  {
-    _fixedInterval_ms = BLAECK_INTERVAL_CLIENT;
-  }
-  else if (_debugStream != nullptr)
-  {
-    _debugStream->print("Invalid interval mode: ");
-    _debugStream->println(interval_ms);
-  }
-}
-
 void BlaeckSerial::writeSymbols()
 {
-  this->writeSymbols(1);
+  this->writeSymbols(0);
 }
 void BlaeckSerial::writeSymbols(unsigned long msg_id)
 {
@@ -3905,7 +3878,7 @@ void BlaeckSerial::writeSymbols(unsigned long msg_id)
 #if BLAECK_ENABLE_SIGNAL_META
 void BlaeckSerial::writeSignalConfig()
 {
-  this->writeSignalConfig(1);
+  this->writeSignalConfig(0);
 }
 void BlaeckSerial::writeSignalConfig(unsigned long msg_id)
 {
@@ -3916,14 +3889,14 @@ void BlaeckSerial::writeSignalConfig(unsigned long msg_id)
 // BLAECK_ENABLE_SIGNAL_META=0: signals still stream, they just carry no
 // presentation metadata. The catalog answers with an empty list so a polling
 // host learns that immediately (see _writeEmptyFrame).
-void BlaeckSerial::writeSignalConfig() { this->writeSignalConfig(1); }
+void BlaeckSerial::writeSignalConfig() { this->writeSignalConfig(0); }
 void BlaeckSerial::writeSignalConfig(unsigned long msg_id) { this->_writeEmptyFrame(0xF0, msg_id); }
 #endif
 
 #if BLAECK_ENABLE_COMMAND_META
 void BlaeckSerial::writeCommands()
 {
-  this->writeCommands(1);
+  this->writeCommands(0);
 }
 void BlaeckSerial::writeCommands(unsigned long msg_id)
 {
@@ -3934,7 +3907,7 @@ void BlaeckSerial::writeCommands(unsigned long msg_id)
 // BLAECK_ENABLE_COMMAND_META=0: commands still run, they just carry no
 // discovery metadata. The catalog answers with an empty list so a polling
 // host learns that immediately (see _writeEmptyFrame).
-void BlaeckSerial::writeCommands() { this->writeCommands(1); }
+void BlaeckSerial::writeCommands() { this->writeCommands(0); }
 // Clears the flag like the full writer does. Registration sets it whether or not metadata
 // is compiled in, and an empty catalog is still the answer to it - without this the flush
 // would send that frame again on every read().
@@ -4403,7 +4376,7 @@ void BlaeckSerial::write(int signalIndex, const char *value, unsigned long messa
 
 void BlaeckSerial::writeAllData()
 {
-  this->writeAllData(1);
+  this->writeAllData(0);
 }
 
 void BlaeckSerial::writeAllData(unsigned long msg_id)
@@ -4419,7 +4392,7 @@ void BlaeckSerial::writeAllData(unsigned long msg_id, unsigned long long timesta
 
 void BlaeckSerial::writeUpdatedData()
 {
-  this->writeUpdatedData(1);
+  this->writeUpdatedData(0);
 }
 
 void BlaeckSerial::writeUpdatedData(unsigned long msg_id)
@@ -4444,8 +4417,9 @@ void BlaeckSerial::writeData(unsigned long msg_id, int signalIndex_start, int si
 
 void BlaeckSerial::timedWriteAllData()
 {
-  unsigned long id = (_fixedInterval_ms >= 0) ? 185273100 : 185273099;
-  this->timedWriteAllData(id);
+  // A timed frame answers no request, so it carries no id. What it is - timed rather than
+  // asked for - is in the frame's flags byte instead.
+  this->timedWriteAllData(0);
 }
 
 void BlaeckSerial::timedWriteAllData(unsigned long msg_id)
@@ -4460,8 +4434,7 @@ void BlaeckSerial::timedWriteAllData(unsigned long msg_id, unsigned long long ti
 
 void BlaeckSerial::timedWriteUpdatedData()
 {
-  unsigned long id = (_fixedInterval_ms >= 0) ? 185273100 : 185273099;
-  this->timedWriteUpdatedData(id);
+  this->timedWriteUpdatedData(0);
 }
 
 void BlaeckSerial::timedWriteUpdatedData(unsigned long msg_id)
@@ -4617,7 +4590,7 @@ void BlaeckSerial::_bufDevice(const char *name, const char *hw, const char *fw)
 
 void BlaeckSerial::writeRestarted()
 {
-  this->writeRestarted(1);
+  this->writeRestarted(0);
 }
 
 void BlaeckSerial::writeRestarted(unsigned long msg_id)
@@ -4710,7 +4683,7 @@ void BlaeckSerial::writeRestarted(unsigned long msg_id)
 
 void BlaeckSerial::writeDevices()
 {
-  this->writeDevices(1);
+  this->writeDevices(0);
 }
 
 void BlaeckSerial::writeDevices(unsigned long msg_id)
@@ -4783,7 +4756,7 @@ void BlaeckSerial::writeDataFrame(unsigned long msg_id, int signalIndex_start, i
     _bufBytes(ulngCvt.bval, 4); _bufByte(':');
 
     bool restartFlagSnapshot = _sendRestartFlag;
-    _bufByte(restartFlagSnapshot ? 1 : 0);
+    _bufByte(_frameFlags(restartFlagSnapshot));
     _bufByte(':');
 
     _bufByte((byte)(_schemaHash & 0xFF));
@@ -4881,9 +4854,9 @@ void BlaeckSerial::writeDataFrame(unsigned long msg_id, int signalIndex_start, i
     StreamRef->write(":");
     _crc.add(':');
 
-    byte restart_flag = _sendRestartFlag ? 1 : 0;
-    StreamRef->write(restart_flag);
-    _crc.add(restart_flag);
+    byte frame_flags = _frameFlags(_sendRestartFlag);
+    StreamRef->write(frame_flags);
+    _crc.add(frame_flags);
     _sendRestartFlag = false;
 
     StreamRef->write(":");
@@ -5512,8 +5485,7 @@ void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
 
 void BlaeckSerial::tickUpdated()
 {
-  unsigned long id = (_fixedInterval_ms >= 0) ? 185273100 : 185273099;
-  this->tickUpdated(id);
+  this->tickUpdated(0);
 }
 
 void BlaeckSerial::tickUpdated(unsigned long msg_id)
@@ -5523,8 +5495,7 @@ void BlaeckSerial::tickUpdated(unsigned long msg_id)
 
 void BlaeckSerial::tick()
 {
-  unsigned long id = (_fixedInterval_ms >= 0) ? 185273100 : 185273099;
-  this->tick(id);
+  this->tick(0);
 }
 
 void BlaeckSerial::tick(unsigned long msg_id)

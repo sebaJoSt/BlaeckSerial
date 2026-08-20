@@ -352,12 +352,6 @@ enum BlaeckTimestampMode
   BLAECK_RTC = BLAECK_UNIX // Deprecated alias
 };
 
-enum BlaeckIntervalMode
-{
-  BLAECK_INTERVAL_CLIENT = -1,
-  BLAECK_INTERVAL_OFF = -2
-};
-
 // paramCount is 0 only for a plain onCommand or a button. Every typed command declared that it
 // takes a value, so a frame without one is rejected before dispatch and never reaches a handler
 // - query or toggle semantics belong on a plain command, which declares no contract and is
@@ -3330,8 +3324,8 @@ public:
     @brief   Stores a signal's value and sends it at once, by name.
 
     Independent of the timed interval, so a sketch can push a value the moment
-    something happens and stream nothing the rest of the time - pair it with
-    setIntervalMs(BLAECK_INTERVAL_OFF).
+    something happens - and, on a device no host ever activates, stream nothing
+    the rest of the time.
 
     @param   signalName  Name the signal was added under.
     @param   value       What to store and send.
@@ -3585,7 +3579,8 @@ public:
     of loop(). This is the half of tick() that writes; call it directly for a device
     that sends data but answers no commands.
 
-    The interval is whatever setIntervalMs() fixed, or whatever the host asked for.
+    The interval is whatever the host asked for with BLAECK.ACTIVATE, readable with
+    getIntervalMs().
 
     @code
       void loop()
@@ -3749,35 +3744,37 @@ public:
   */
   void tickUpdated(unsigned long messageID);
 
-  // ----- Timed Data configuruation -----
+  // ----- Timed Data -----
 
   /*!
-    @brief   Fixes how often timed data is sent, or who decides.
+    @brief   Reports how often timed data is being sent, in milliseconds.
 
-    @param   interval_ms  A value of 0 or more locks that interval in milliseconds and
-                          BLAECK.ACTIVATE / BLAECK.DEACTIVATE stop having an effect.
-                          BLAECK_INTERVAL_OFF locks timed data off, ignoring ACTIVATE.
-                          BLAECK_INTERVAL_CLIENT leaves it to the host, the default.
-    @note    A value that is none of these is refused and the previous mode stays.
+    The host owns this: it is whatever the last BLAECK.ACTIVATE asked for. A sketch
+    cannot set it, so this is how a sketch observes a decision made on its behalf -
+    to show it on a state channel, or to keep it across a power cut.
+
+    @return  The interval in ms. Meaningless while isTimedDataActive() is false,
+             where it holds whatever was last asked for.
 
     @code
-      Blaeck.setIntervalMs(BLAECK_INTERVAL_OFF);
+      if (Blaeck.isTimedDataActive())
+        Serial.println(Blaeck.getIntervalMs());
     @endcode
   */
-  void setIntervalMs(long interval_ms);
+  unsigned long getIntervalMs() const { return _timedInterval_ms; }
   /*!
-    @brief   Reports the interval as set, in milliseconds.
+    @brief   Reports whether timed data is being sent at all.
 
-    @return  The interval in ms, or one of the BLAECK_INTERVAL_* modes - so a
-             negative return is a mode rather than a duration. In client-controlled
-             mode this reports the mode, not whatever a host has since asked for.
+    Switched by BLAECK.ACTIVATE and BLAECK.DEACTIVATE, and by nothing on the device.
+
+    @return  True between an ACTIVATE and the DEACTIVATE that ends it.
 
     @code
-      if (Blaeck.getIntervalMs() == BLAECK_INTERVAL_OFF)
-        Serial.println(F("timed data is locked off"));
+      if (!Blaeck.isTimedDataActive())
+        Serial.println(F("nobody has asked for data yet"));
     @endcode
   */
-  long getIntervalMs() const { return _fixedInterval_ms; }
+  bool isTimedDataActive() const { return _timedActivated; }
 
   // ----- Read  -----
 
@@ -4372,10 +4369,6 @@ private:
   void _printSignalName(const Signal &s);
   void _setTimedDataState(bool timedActivated, unsigned long timedInterval_ms);
   void _parseCommandTokens(const char *raw);
-  // The four little-endian bytes a built-in BLAECK.* command carries, as one number:
-  // a message id on most of them, the interval on BLAECK.ACTIVATE. A field the frame
-  // did not carry counts as 0, which is what the old fixed parameter array held.
-  unsigned long _parsedMsgId() const;
   // Acts on what _parseCommandTokens() last produced; read() parses each frame once and
   // both the built-in commands and the registered handlers work from that.
   void _dispatchRegisteredHandlers(bool sendAck = true);
@@ -4528,6 +4521,19 @@ private:
 
   bool _writeRestartedAlreadyDone = false;
   bool _sendRestartFlag = true;
+  // True only while a data frame requested by BLAECK.WRITE_DATA is being written. Set around
+  // that one call rather than passed down, because the value is wanted at the bottom of a
+  // chain of overloads that all have their own public signatures.
+  bool _frameRequested = false;
+
+  // The data frame's flags byte, built in one place so the buffered writer and the direct one
+  // cannot disagree about it. Bit 0 says this is the first frame after a restart, bit 1 that
+  // the frame answers a request rather than the interval a host set. Bits 2-7 are reserved and
+  // sent clear.
+  byte _frameFlags(bool restarted) const
+  {
+    return (byte)((restarted ? 0x01 : 0x00) | (_frameRequested ? 0x02 : 0x00));
+  }
 
   // Micros overflow tracking for D2 (uint64 timestamp)
   unsigned long _prevMicros = 0;
@@ -4538,7 +4544,6 @@ private:
   unsigned long _timedFirstTimeDone_ms = 0;
   unsigned long _timedSetPoint_ms = 0;
   unsigned long _timedInterval_ms = 1000;
-  long _fixedInterval_ms = BLAECK_INTERVAL_CLIENT;
 
   // ── Table sizes ───────────────────────────────────────────────────
   // Which table a capacity call names. One setter for all of them, so the rule

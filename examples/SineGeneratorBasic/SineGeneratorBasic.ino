@@ -49,10 +49,6 @@ void setup()
   }
   // Or ask about every table at once, with the call that would have made room:
   //   Blaeck.printRejections(&Serial);
-
-  /*Uncomment for fixed interval lock (ms)
-    - ignores ACTIVATE/DEACTIVATE while locked */
-  // Blaeck.setIntervalMs(60000);
 }
 
 void loop()

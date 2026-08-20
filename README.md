@@ -141,23 +141,21 @@ void loop()
 
 See the [protocol documentation](https://sebajost.github.io/blaeck-protocol/protocol/commands) for the full list of serial commands and their parameters.
 
-### Interval lock mode
+### Timed data
 
-By default, timed data is client-controlled (`BLAECK.ACTIVATE` / `BLAECK.DEACTIVATE`).
-You can lock interval behavior from sketch code:
+The host owns the rate. `BLAECK.ACTIVATE` starts timed data at the interval it names,
+`BLAECK.DEACTIVATE` stops it, and nothing in the sketch overrides either. A sketch that
+wants its own cadence calls `writeAllData()` from its own timing and never activates.
+
+Both settings are readable:
 
 ```CPP
-// Fixed interval lock: always send every 500 ms, ignore ACTIVATE/DEACTIVATE
-Blaeck.setIntervalMs(500);
-
-// Off lock: disable timed data and ignore ACTIVATE
-Blaeck.setIntervalMs(BLAECK_INTERVAL_OFF);
-
-// Back to client control (default behavior)
-Blaeck.setIntervalMs(BLAECK_INTERVAL_CLIENT);
+Blaeck.isTimedDataActive();  // has a host activated timed data?
+Blaeck.getIntervalMs();      // at what interval?
 ```
 
-`setTimedData(...)` has been removed. Use `setIntervalMs(...)` instead.
+`setIntervalMs(...)` has been removed, along with `BLAECK_INTERVAL_OFF` and
+`BLAECK_INTERVAL_CLIENT`.
 
 ### Command handler API
 

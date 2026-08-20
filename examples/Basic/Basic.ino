@@ -65,9 +65,6 @@ void setup()
      Other architectures (ESP32, SAMD, ...) handle RAM differently and gain
      little from F(), but it costs them nothing either. */
 
-  /*Uncomment for fixed interval lock (ms)
-    - ignores ACTIVATE/DEACTIVATE while locked */
-  // Blaeck.setIntervalMs(60000);
 }
 
 void loop()
