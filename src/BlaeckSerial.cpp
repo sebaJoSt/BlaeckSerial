@@ -2249,7 +2249,7 @@ int BlaeckSerial::_registerStateChannel(const char *channelName, const __FlashSt
 
   // A channel a command owns is that command's alone: its value comes from the getter it was
   // registered with, and nowhere else.
-  int owned = _findStateChannel(channelName);
+  int owned = flashName != nullptr ? _findStateChannel(flashName) : _findStateChannel(channelName);
   if (owned >= 0 && _stateChannels[owned].ownedByCommand)
   {
     if (_debugStream != nullptr)
@@ -3100,7 +3100,7 @@ int BlaeckSerial::_registerEventChannel(const char *channelName, const __FlashSt
   // Re-declaring a channel updates it rather than consuming a slot, so the metadata starts
   // empty. Its already-declared event types keep their indices: those are wire positions other
   // frames refer to, and clearing them would renumber events a host has already been told about.
-  int existing = _findEventChannel(channelName);
+  int existing = flashName != nullptr ? _findEventChannel(flashName) : _findEventChannel(channelName);
   if (existing >= 0)
   {
     _eventChannels[existing].icon = nullptr;

@@ -45,7 +45,7 @@
 
     Command:         <COMMAND,PARAMETER01,PARAMETER02,...,PARAMETER10>
                      <-  full payload size is architecture-dependent ->
-                     AVR: up to 48 chars, non-AVR: up to 96 chars
+                     AVR: up to 48 chars, non-AVR: up to 128 chars
                      <-         --  max. 10 parameters ---          ->
 
     COMMAND:         String token (handler key used in onCommand)

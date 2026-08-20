@@ -165,7 +165,7 @@ Available callbacks:
 
 Command parser defaults are architecture-aware:
 - AVR (`__AVR__`): 48 command chars, 6 registered handlers (12 on larger-SRAM AVR such as the Mega 2560), 24 command-name chars, 10 params
-- Non-AVR: 96 command chars, 12 registered handlers, 40 command-name chars, 10 params
+- Non-AVR: 128 command chars, 32 registered handlers, 40 command-name chars, 10 params
 
 See [Configuration](#configuration) to change them.
 
@@ -518,4 +518,3 @@ Or ask directly: `hasRejections()`, or the per-table `hasRejectedSignals()`,
 ## Protocol
 
 Full protocol specification with version history: [sebajost.github.io/blaeck-protocol](https://sebajost.github.io/blaeck-protocol/blaeckserial/overview)
-

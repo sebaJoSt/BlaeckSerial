@@ -109,11 +109,11 @@ without being configured for that board in advance.
   declared up-front; values on undeclared channels are dropped, and a state is never stored
   as signal data. Size the table with `begin(&Serial).withStateChannels(n)`.
   Requires `BLAECK_ENABLE_STATE_CHANNELS`.
-- **Event channels (`0x80` / `0x85`).** `addEventChannel(channelName[, icon[,
-  diagnostic[, eventTypes]]])` declares a channel and the closed set of events it may
-  report — `F("idle_warning,resumed")`, position defining each index — or
-  `addEventType(channelName, F("..."))` adds them one at a time, for a list built
-  conditionally; `writeEvent(channelName, F("..."))` reports one occurrence. An event carries no text, 
+- **Event channels (`0x80` / `0x85`).** `addEventChannel(channelName, eventTypes)` declares a
+  channel and the closed set of events it may report — `F("idle_warning,resumed")`, position
+  defining each index. Use the returned handle's `.withIcon()` and `.diagnostic()` modifiers
+  for presentation, or `addEventType(channelName, F("..."))` to add types conditionally.
+  `writeEvent(channelName, F("..."))` reports one occurrence. An event carries no text,
   so its wording is fixed at compile time — use a state channel for anything with a runtime value.
   Events on undeclared channels or types are dropped. Size the tables with
   `begin(&Serial).withEventChannels(n).withEventTypes(n)` (types share one pool across

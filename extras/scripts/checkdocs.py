@@ -226,6 +226,8 @@ def public_api(tu, path):
             continue
         if not c.location.file or c.location.file.name.replace('\\\\', "/").lower() != want:
             continue
+        if c.semantic_parent is not None and c.semantic_parent.kind == ci.CursorKind.NAMESPACE:
+            continue
         if c.access_specifier not in (ci.AccessSpecifier.PUBLIC, ci.AccessSpecifier.INVALID):
             continue
         if c.spelling.startswith("_"):
