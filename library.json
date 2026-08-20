@@ -27,6 +27,7 @@
     "include": [
       "src",
       "examples",
+      "docs",
       "README.md",
       "SUPPORT.md",
       "LICENSE.md",
