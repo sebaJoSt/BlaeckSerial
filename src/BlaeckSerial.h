@@ -4887,15 +4887,11 @@ private:
   // follows it, so the hash covers the command as written rather than as addressed.
   byte _parsedPrefixLen = 0;
 #if BLAECK_ENABLE_STATE_CHANNELS
-  // Monotonic message id stamped into the 0x95 State frame header.
-  unsigned long _stateMsgId = 0;
   // Set when this catalog no longer describes what the host was last told, cleared by any
   // send of it. See _flushCatalogs().
   bool _stateCatalogDirty = false;
 #endif
 #if BLAECK_ENABLE_EVENTS
-  // Monotonic message id stamped into the 0x85 Event frame header.
-  unsigned long _eventMsgId = 0;
   bool _eventCatalogDirty = false;
 #endif
 #if BLAECK_ENABLE_COMMAND_META

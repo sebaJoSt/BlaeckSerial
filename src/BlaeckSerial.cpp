@@ -1367,7 +1367,7 @@ void BlaeckSerial::clearAllCommandHandlers()
 
 void BlaeckSerial::writeCommandState(const char *command)
 {
-  this->writeCommandState(command, 1);
+  this->writeCommandState(command, 0);
 }
 
 void BlaeckSerial::writeCommandState(const char *command, unsigned long messageID)
@@ -2214,7 +2214,9 @@ void BlaeckSerial::_writeCommandAck(const char *rawCommand, byte status, byte re
 #if BLAECK_ENABLE_STATE_CHANNELS
 void BlaeckSerial::writeState(const char *channelName, const char *text)
 {
-  this->writeState(channelName, text, _stateMsgId++);
+  // A push answers no request, so it carries no id. It numbered itself once - which told a
+  // host the order the device sent things in, and nothing it could pair with.
+  this->writeState(channelName, text, 0);
 }
 
 int BlaeckSerial::_registerStateChannel(const char *channelName, const __FlashStringHelper *flashName,
@@ -2510,7 +2512,9 @@ void BlaeckSerial::writeState(const char *channelName, const char *text, unsigne
 // way to push a numeric channel.
 void BlaeckSerial::writeState(const char *channelName)
 {
-  this->writeState(channelName, _stateMsgId++);
+  // 0UL, not 0: a bare 0 is also a null pointer constant, so it matches the text overload
+  // just as well and the call is ambiguous.
+  this->writeState(channelName, 0UL);
 }
 
 void BlaeckSerial::writeState(const char *channelName, unsigned long messageID)
@@ -3529,7 +3533,7 @@ void BlaeckSerial::writeEventChannelsFrame(unsigned long msg_id)
 
 void BlaeckSerial::writeEvent(const char *channelName, const __FlashStringHelper *eventType)
 {
-  this->writeEvent(channelName, eventType, _eventMsgId++);
+  this->writeEvent(channelName, eventType, 0);
 }
 
 void BlaeckSerial::writeEvent(const char *channelName, const __FlashStringHelper *eventType, unsigned long messageID)
@@ -5763,11 +5767,11 @@ bool BlaeckSerial::addEventType(const __FlashStringHelper *channelName, const __
 void BlaeckSerial::writeEvent(const __FlashStringHelper *channelName, const __FlashStringHelper *eventType)
 {
 #if BLAECK_ENABLE_EVENTS
-  writeEvent(channelName, eventType, _eventMsgId++);
+  writeEvent(channelName, eventType, 0);
 #else
-  // The counter is compiled out with the events it numbers. The call still happens, so the
-  // overload behaves exactly like the one a sketch would have called instead: nothing.
-  writeEvent(channelName, eventType, 1);
+  // The call still happens with events compiled out, so the overload behaves exactly like the
+  // one a sketch would have called instead: nothing.
+  writeEvent(channelName, eventType, 0);
 #endif
 }
 
