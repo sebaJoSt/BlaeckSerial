@@ -402,6 +402,21 @@ typedef void (*BlaeckAnyCommandHandler)(const char *command, const char *const *
 // nullptr means "no value right now" and leaves the channel's value out of the catalog.
 typedef const char *(*BlaeckStateTextGetter)();
 
+// The same idea for a channel carrying a number, one per type so the function returns what the
+// channel was declared as and there is no mapping to remember. Read where the pointer form would
+// have read the variable, so a value worked out from other state cannot lag the state it is
+// worked out from - which a variable holding a calculation can.
+typedef bool (*BlaeckStateBoolGetter)();
+typedef byte (*BlaeckStateByteGetter)();
+typedef short (*BlaeckStateShortGetter)();
+typedef unsigned short (*BlaeckStateUShortGetter)();
+typedef int (*BlaeckStateIntGetter)();
+typedef unsigned int (*BlaeckStateUIntGetter)();
+typedef long (*BlaeckStateLongGetter)();
+typedef unsigned long (*BlaeckStateULongGetter)();
+typedef float (*BlaeckStateFloatGetter)();
+typedef double (*BlaeckStateDoubleGetter)();
+
 // Command kind for Home Assistant discovery (0xA0 Command List frame).
 enum BlaeckCommandKind
 {
@@ -698,11 +713,13 @@ inline bool flashStrEmpty(const __FlashStringHelper *value)
 bool optionsAccepted(const __FlashStringHelper *optionsCsv, Stream *debug,
                      const char *name, bool nameInFlash);
 
-// Whether a channel is still free to take a getter. A channel reports its value one way, and
-// _channelText() asks a getter before it reads a variable - so a getter added to a channel
-// declared with one would silence it rather than join it.
-bool stateTextAccepted(const void *stateValue, Stream *debug,
-                       const char *name, bool nameInFlash);
+// Whether a channel is still free to take a getter, and whether the getter returns what the
+// channel carries. A channel reports its value one way, and a getter is asked before a variable
+// is read - so one added to a channel declared with a variable would silence it rather than join
+// it. A getter of the wrong type would be called through the wrong signature.
+bool stateGetterAccepted(const void *stateValue, dataType want, dataType have,
+                         const __FlashStringHelper *method, Stream *debug,
+                         const char *name, bool nameInFlash);
 
 // What a switch's own-state getter said, reduced to the "1" or "0" a switch speaks everywhere
 // else - the two values its handler accepts, and the two payloads a host is told to match
@@ -802,7 +819,14 @@ struct StateChannelEntry
   // Asked for the channel's value while the 0x90 catalog is built, so what the
   // catalog reports cannot lag behind the sketch - there is no stored copy to
   // go stale, and nothing the sketch has to remember to refresh.
-  BlaeckStateTextGetter getStateText = nullptr;
+  // A channel is asked for its value one way, and valueType says which member is live: text
+  // channels use the first, every other type the second. Both are function pointers of the same
+  // width, so carrying both costs an entry nothing.
+  union
+  {
+    BlaeckStateTextGetter getStateText = nullptr;
+    void (*getNumber)();
+  };
   const __FlashStringHelper *deviceClass = nullptr;
   const __FlashStringHelper *options = nullptr;
   const __FlashStringHelper *unit = nullptr;
@@ -2564,6 +2588,196 @@ public:
     _setDisplayPrecision(decimals);
     return *this;
   }
+
+  /*!
+    @brief   Makes the channel work its value out when it is wanted.
+
+    For a value derived from other state - an average, a percentage, a relationship
+    between two variables. A channel pointed at a variable reports the variable, which
+    is the value itself and so cannot be out of date; a variable holding a calculation
+    is a copy of one, and is only right until something it was worked out from moves.
+
+    The getter is asked while the catalog is built, which happens at startup, when the
+    channel list changes, and whenever a host asks - moments the sketch cannot
+    anticipate, and so cannot refresh a variable for.
+
+    @param   getStateValue  Called to produce the value. Must return what the channel
+                            was declared as; a getter of another type is refused and
+                            says so on the debug stream.
+    @return  The same handle, for chaining.
+
+    @warning The getter runs while a frame is being assembled, so it must not send one.
+             Read variables and compute - nothing else.
+
+    @code
+      Blaeck.addStateChannel(F("Efficiency"), BlaeckFloat).withStateValue(efficiency);
+    @endcode
+  */
+  BlaeckNumericStateRef &withStateValue(BlaeckStateByteGetter getStateValue)
+  {
+    if (auto *e = _entry())
+    {
+    const dataType want = Blaeck_byte;
+      if (!blaeck_detail::stateGetterAccepted(e->stateValue, want, e->valueType,
+                                              F("withStateValue"), _debugStream(), e->name, e->nameInFlash))
+        return *this;
+      if (e->getNumber != (void (*)())getStateValue)
+      {
+        e->getNumber = (void (*)())getStateValue;
+        _markDirty();
+      }
+    }
+    return *this;
+  }
+
+  BlaeckNumericStateRef &withStateValue(BlaeckStateShortGetter getStateValue)
+  {
+    if (auto *e = _entry())
+    {
+    const dataType want = Blaeck_short;
+      if (!blaeck_detail::stateGetterAccepted(e->stateValue, want, e->valueType,
+                                              F("withStateValue"), _debugStream(), e->name, e->nameInFlash))
+        return *this;
+      if (e->getNumber != (void (*)())getStateValue)
+      {
+        e->getNumber = (void (*)())getStateValue;
+        _markDirty();
+      }
+    }
+    return *this;
+  }
+
+  BlaeckNumericStateRef &withStateValue(BlaeckStateUShortGetter getStateValue)
+  {
+    if (auto *e = _entry())
+    {
+    const dataType want = Blaeck_ushort;
+      if (!blaeck_detail::stateGetterAccepted(e->stateValue, want, e->valueType,
+                                              F("withStateValue"), _debugStream(), e->name, e->nameInFlash))
+        return *this;
+      if (e->getNumber != (void (*)())getStateValue)
+      {
+        e->getNumber = (void (*)())getStateValue;
+        _markDirty();
+      }
+    }
+    return *this;
+  }
+
+  BlaeckNumericStateRef &withStateValue(BlaeckStateIntGetter getStateValue)
+  {
+    if (auto *e = _entry())
+    {
+#ifdef __AVR__
+    const dataType want = Blaeck_int;
+#else
+    const dataType want = Blaeck_long;
+#endif
+      if (!blaeck_detail::stateGetterAccepted(e->stateValue, want, e->valueType,
+                                              F("withStateValue"), _debugStream(), e->name, e->nameInFlash))
+        return *this;
+      if (e->getNumber != (void (*)())getStateValue)
+      {
+        e->getNumber = (void (*)())getStateValue;
+        _markDirty();
+      }
+    }
+    return *this;
+  }
+
+  BlaeckNumericStateRef &withStateValue(BlaeckStateUIntGetter getStateValue)
+  {
+    if (auto *e = _entry())
+    {
+#ifdef __AVR__
+    const dataType want = Blaeck_uint;
+#else
+    const dataType want = Blaeck_ulong;
+#endif
+      if (!blaeck_detail::stateGetterAccepted(e->stateValue, want, e->valueType,
+                                              F("withStateValue"), _debugStream(), e->name, e->nameInFlash))
+        return *this;
+      if (e->getNumber != (void (*)())getStateValue)
+      {
+        e->getNumber = (void (*)())getStateValue;
+        _markDirty();
+      }
+    }
+    return *this;
+  }
+
+  BlaeckNumericStateRef &withStateValue(BlaeckStateLongGetter getStateValue)
+  {
+    if (auto *e = _entry())
+    {
+    const dataType want = Blaeck_long;
+      if (!blaeck_detail::stateGetterAccepted(e->stateValue, want, e->valueType,
+                                              F("withStateValue"), _debugStream(), e->name, e->nameInFlash))
+        return *this;
+      if (e->getNumber != (void (*)())getStateValue)
+      {
+        e->getNumber = (void (*)())getStateValue;
+        _markDirty();
+      }
+    }
+    return *this;
+  }
+
+  BlaeckNumericStateRef &withStateValue(BlaeckStateULongGetter getStateValue)
+  {
+    if (auto *e = _entry())
+    {
+    const dataType want = Blaeck_ulong;
+      if (!blaeck_detail::stateGetterAccepted(e->stateValue, want, e->valueType,
+                                              F("withStateValue"), _debugStream(), e->name, e->nameInFlash))
+        return *this;
+      if (e->getNumber != (void (*)())getStateValue)
+      {
+        e->getNumber = (void (*)())getStateValue;
+        _markDirty();
+      }
+    }
+    return *this;
+  }
+
+  BlaeckNumericStateRef &withStateValue(BlaeckStateFloatGetter getStateValue)
+  {
+    if (auto *e = _entry())
+    {
+    const dataType want = Blaeck_float;
+      if (!blaeck_detail::stateGetterAccepted(e->stateValue, want, e->valueType,
+                                              F("withStateValue"), _debugStream(), e->name, e->nameInFlash))
+        return *this;
+      if (e->getNumber != (void (*)())getStateValue)
+      {
+        e->getNumber = (void (*)())getStateValue;
+        _markDirty();
+      }
+    }
+    return *this;
+  }
+
+  BlaeckNumericStateRef &withStateValue(BlaeckStateDoubleGetter getStateValue)
+  {
+    if (auto *e = _entry())
+    {
+#ifdef __AVR__
+    const dataType want = Blaeck_float;
+#else
+    const dataType want = Blaeck_double;
+#endif
+      if (!blaeck_detail::stateGetterAccepted(e->stateValue, want, e->valueType,
+                                              F("withStateValue"), _debugStream(), e->name, e->nameInFlash))
+        return *this;
+      if (e->getNumber != (void (*)())getStateValue)
+      {
+        e->getNumber = (void (*)())getStateValue;
+        _markDirty();
+      }
+    }
+    return *this;
+  }
+
 };
 
 // A channel carrying text. Mirrors BlaeckTextSignalRef: no unit, no decimals to round and
@@ -2604,7 +2818,8 @@ public:
     if (auto *e = _entry())
     {
       // Refused rather than stored, the way withOptions() refuses a list it cannot use.
-      if (!blaeck_detail::stateTextAccepted(e->stateValue, _debugStream(), e->name, e->nameInFlash))
+      if (!blaeck_detail::stateGetterAccepted(e->stateValue, Blaeck_string, e->valueType,
+                                              F("withStateText"), _debugStream(), e->name, e->nameInFlash))
         return *this;
       if (e->getStateText != getStateText)
       {
@@ -2667,6 +2882,47 @@ class BlaeckBoolStateRef : public BlaeckStateRefShared<BlaeckBoolStateRef>
 {
 public:
   BlaeckBoolStateRef(BlaeckSerial *owner, int16_t index) : BlaeckStateRefShared<BlaeckBoolStateRef>(owner, index) {}
+
+  /*!
+    @brief   Makes the channel work its value out when it is wanted.
+
+    For a value derived from other state - an average, a percentage, a relationship
+    between two variables. A channel pointed at a variable reports the variable, which
+    is the value itself and so cannot be out of date; a variable holding a calculation
+    is a copy of one, and is only right until something it was worked out from moves.
+
+    The getter is asked while the catalog is built, which happens at startup, when the
+    channel list changes, and whenever a host asks - moments the sketch cannot
+    anticipate, and so cannot refresh a variable for.
+
+    @param   getStateValue  Called to produce the value. Must return what the channel
+                            was declared as; a getter of another type is refused and
+                            says so on the debug stream.
+    @return  The same handle, for chaining.
+
+    @warning The getter runs while a frame is being assembled, so it must not send one.
+             Read variables and compute - nothing else.
+
+    @code
+      Blaeck.addStateChannel(F("Running"), BlaeckBool).withStateValue(isRunning);
+    @endcode
+  */
+  BlaeckBoolStateRef &withStateValue(BlaeckStateBoolGetter getStateValue)
+  {
+    if (auto *e = _entry())
+    {
+    const dataType want = Blaeck_bool;
+      if (!blaeck_detail::stateGetterAccepted(e->stateValue, want, e->valueType,
+                                              F("withStateValue"), _debugStream(), e->name, e->nameInFlash))
+        return *this;
+      if (e->getNumber != (void (*)())getStateValue)
+      {
+        e->getNumber = (void (*)())getStateValue;
+        _markDirty();
+      }
+    }
+    return *this;
+  }
 };
 
 

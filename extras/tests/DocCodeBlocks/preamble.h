@@ -68,6 +68,10 @@ inline const char *offsetText()
   return buf;
 }
 
+// Work a value out when it is wanted, for the withStateValue() forms.
+inline float efficiency() { return 0.5f; }
+inline bool isRunning() { return true; }
+
 // --- A signal a switch command can mirror ---
 bool ledState = false;
 

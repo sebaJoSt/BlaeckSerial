@@ -113,8 +113,23 @@ The function runs while a frame is being built. It may read variables and format
 nothing else - a `write()`, `writeState()` or `writeEvent()` inside it breaks the frame it
 interrupts.
 
-Only text takes a function. A numeric channel points at a variable, and anything a function
-would have worked out can be put in one first.
+A number or a `bool` can do the same with `withStateValue()`, one overload per type so the
+function returns what the channel was declared as:
+
+```cpp
+float efficiency() { return output / input; }
+
+Blaeck.addStateChannel(F("Efficiency"), BlaeckFloat).withStateValue(efficiency);
+```
+
+Use it when the value is *worked out* from other state rather than held. A channel pointed at a
+variable reports the variable, which is the value itself and cannot be out of date. A variable
+holding a calculation is a copy of one, and is only right until something it was worked out from
+moves - and the catalog is rebuilt at moments the sketch cannot anticipate, so there is nowhere
+to put the recalculation.
+
+A getter of the wrong type is refused and says so; declare the channel with the type the getter
+returns.
 
 A channel has one source, not two. `withStateText()` on a channel declared with a variable is
 ignored and says so on the debug stream, rather than quietly taking over from the variable.
@@ -130,6 +145,7 @@ Two are particular to a state channel:
 | Call | What it does |
 |---|---|
 | `withStateText(getter)` | Names the function that produces the value. Text only |
+| `withStateValue(getter)` | The same for a number or a `bool`. The getter returns the channel's own type |
 | `withOptions(F("a,b,c"))` | The complete set of values this channel reports. Text only, and needs `withDeviceClass(F("enum"))` |
 
 Device classes come from a different list for each type: `F("temperature")` on a number,

@@ -890,15 +890,19 @@ bool blaeck_detail::optionsAccepted(const __FlashStringHelper *optionsCsv, Strea
   return false;
 }
 
-bool blaeck_detail::stateTextAccepted(const void *stateValue, Stream *debug,
-                                      const char *name, bool nameInFlash)
+bool blaeck_detail::stateGetterAccepted(const void *stateValue, dataType want, dataType have,
+                                        const __FlashStringHelper *method, Stream *debug,
+                                        const char *name, bool nameInFlash)
 {
-  if (stateValue == nullptr)
+  const bool taken = (stateValue != nullptr);
+  if (!taken && want == have)
     return true;
 
   if (debug != nullptr)
   {
-    debug->print(F("withStateText ignored, channel was declared with a variable: "));
+    debug->print(method);
+    debug->print(taken ? F(" ignored, channel was declared with a variable: ")
+                       : F(" ignored, the getter does not return what the channel carries: "));
     if (name != nullptr)
     {
       if (nameInFlash)
@@ -906,7 +910,9 @@ bool blaeck_detail::stateTextAccepted(const void *stateValue, Stream *debug,
       else
         debug->print(name);
     }
-    debug->println(F(". The getter would be read instead of the variable, so neither is trusted."));
+    debug->println(taken
+                       ? F(". The getter would be read instead of the variable, so neither is trusted.")
+                       : F(". Declare the channel with the type the getter returns."));
   }
   return false;
 }
@@ -2871,6 +2877,26 @@ const char *BlaeckSerial::_channelText(const StateChannelEntry &e, char *buf, by
 #if BLAECK_ENABLE_STATE_CHANNELS
 byte BlaeckSerial::_channelValueBytes(const StateChannelEntry &e, byte *out)
 {
+  // Asked before a variable is read, and cast back to the signature it was stored as -
+  // withStateValue() refuses a getter whose type is not the channel's, so valueType names it.
+  if (e.getNumber != nullptr && e.valueType != Blaeck_string)
+  {
+    switch (e.valueType)
+    {
+    case (Blaeck_bool):   boolCvt.val   = ((BlaeckStateBoolGetter)e.getNumber)();   memcpy(out, boolCvt.bval, 1);   return 1;
+    case (Blaeck_byte):   out[0]        = ((BlaeckStateByteGetter)e.getNumber)();                                   return 1;
+    case (Blaeck_short):  shortCvt.val  = ((BlaeckStateShortGetter)e.getNumber)();  memcpy(out, shortCvt.bval, 2);  return 2;
+    case (Blaeck_ushort): ushortCvt.val = ((BlaeckStateUShortGetter)e.getNumber)(); memcpy(out, ushortCvt.bval, 2); return 2;
+    case (Blaeck_int):    intCvt.val    = ((BlaeckStateIntGetter)e.getNumber)();    memcpy(out, intCvt.bval, 2);    return 2;
+    case (Blaeck_uint):   uintCvt.val   = ((BlaeckStateUIntGetter)e.getNumber)();   memcpy(out, uintCvt.bval, 2);   return 2;
+    case (Blaeck_long):   lngCvt.val    = ((BlaeckStateLongGetter)e.getNumber)();   memcpy(out, lngCvt.bval, 4);    return 4;
+    case (Blaeck_ulong):  ulngCvt.val   = ((BlaeckStateULongGetter)e.getNumber)();  memcpy(out, ulngCvt.bval, 4);   return 4;
+    case (Blaeck_float):  fltCvt.val    = ((BlaeckStateFloatGetter)e.getNumber)();  memcpy(out, fltCvt.bval, 4);    return 4;
+    case (Blaeck_double): dblCvt.val    = ((BlaeckStateDoubleGetter)e.getNumber)(); memcpy(out, dblCvt.bval, 8);    return 8;
+    default:                                                                                                        return 0;
+    }
+  }
+
   if (e.stateValue == nullptr)
     return 0;
 
