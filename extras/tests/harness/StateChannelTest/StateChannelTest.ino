@@ -141,6 +141,11 @@ void setup()
   Blaeck.addStateChannel(F("C_double"), BlaeckDouble);
   Blaeck.addStateChannel(F("C_text"), BlaeckText);
 
+  // Never written, and asked for its value every cycle. A channel declared by tag holds nothing
+  // until something writes one, and there is no way to say that in a 0x95 frame - so the frame
+  // must not be sent at all. Sent, a number would go out under the string encoding.
+  Blaeck.addStateChannel(F("C_never"), BlaeckLong).diagnostic();
+
   Blaeck.printRejections(&Serial);
 
   Serial.println(F("---- state channel test ----"));
@@ -258,7 +263,8 @@ void PushEverything()
       F("A_bool"), F("A_byte"), F("A_short"), F("A_ushort"), F("A_int"), F("A_uint"),
       F("A_long"), F("A_ulong"), F("A_float"), F("A_double"), F("A_text"),
       F("B_bool"), F("B_byte"), F("B_short"), F("B_ushort"), F("B_int"), F("B_uint"),
-      F("B_long"), F("B_ulong"), F("B_float"), F("B_double"), F("B_text"), F("B_overlong")};
+      F("B_long"), F("B_ulong"), F("B_float"), F("B_double"), F("B_text"), F("B_overlong"),
+      F("C_never")};
   for (byte i = 0; i < sizeof(readers) / sizeof(readers[0]); i++)
     Blaeck.writeState(readers[i]);
 

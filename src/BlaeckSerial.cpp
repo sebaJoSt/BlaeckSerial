@@ -2736,6 +2736,16 @@ void BlaeckSerial::_writeStateFrame(int channelIndex, const char *text, const by
   else
     valueLen = _channelValueBytes(e, valueBytes);
 
+  // Nothing to report, so nothing is sent. A getter may answer nullptr, and a channel declared
+  // by tag holds no value until something writes one - and the frame has no way to say so: a
+  // number is fixed width, and a string is a length that may legitimately be zero. Sent anyway,
+  // a number would go out under the string encoding and leave the host reading its footer as
+  // data, while text would arrive as an empty payload - which on a retained topic deletes it.
+  //
+  // An empty string is a different thing and still goes: that is a deliberate clear.
+  if (valueLen == 0 && text == nullptr)
+    return;
+
   if (text == nullptr)
     text = "";
 
