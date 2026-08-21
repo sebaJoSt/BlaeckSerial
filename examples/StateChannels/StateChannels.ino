@@ -17,7 +17,7 @@
   declares one channel per combination and marks each with its letter.
 
   What to look for once it is logging:
-    A   Mode / Uptime / DoorOpen        read a variable the sketch keeps
+    A   Mode / Temperature / DoorOpen   read a variable the sketch keeps
     B   Status / Efficiency / Running   worked out when read, so never stale
     C   LastError / SetPoint / SelfTest empty until something writes them
 
@@ -37,9 +37,13 @@
 
 BlaeckSerial Blaeck;
 
+// The one signal, so a logging session has something to log. State channels are never logged,
+// which is the whole difference between the two.
+unsigned long Uptime = 0;
+
 // A: a channel keeps a pointer to these, so they have to be globals - as a signal's do.
 char Mode[16] = "starting";
-unsigned long Uptime = 0;
+float Temperature = 20.0f;
 bool DoorOpen = false;
 
 // B: read by the getters below. No channel points at them - they are what the getters are
@@ -62,7 +66,8 @@ void setup()
   Blaeck.DeviceHWVersion = "Arduino Mega 2560 Rev3";
   Blaeck.DeviceFWVersion = "1.0";
 
-  // A logging session needs something to log; state channels are never logged themselves.
+  // A logging session needs something to log; state channels are never logged themselves,
+  // so this signal is the only thing here that reaches a database.
   Blaeck.addSignal(F("Uptime"), &Uptime).withUnit(F("s"));
 
   // --- A: POINTER - the channel reads a variable you keep --------------------------------
@@ -72,9 +77,10 @@ void setup()
   Blaeck.addStateChannel(F("Mode"), Mode)
       .withIcon(F("mdi:state-machine"));
 
-  Blaeck.addStateChannel(F("Uptime"), &Uptime)
-      .withUnit(F("s"))
-      .withDeviceClass(F("duration"));
+  Blaeck.addStateChannel(F("Temperature"), &Temperature)
+      .withUnit(F("C"))
+      .withDeviceClass(F("temperature"))
+      .withDisplayPrecision(1);
 
   Blaeck.addStateChannel(F("DoorOpen"), &DoorOpen)
       .withDeviceClass(F("door"));
@@ -155,7 +161,7 @@ bool isRunning()
   return Mode[0] == 'r' && !Fault;
 }
 
-// ---- Moving the variables A reports -------------------------------------------------------
+// ---- Moving what A reports and what B is worked out from ----------------------------------
 
 void UpdateTheVariables()
 {
@@ -164,13 +170,21 @@ void UpdateTheVariables()
     return;
   last = millis();
 
-  Output = (float)(millis() % 1000) / 1000.0f;
+  // What B is worked out from. Both move, and independently, which is the case a variable
+  // holding the ratio could not keep up with.
+  Output = (float)((millis() / 100) % 100) / 100.0f;
+  Input = 1.0f + (float)Clients * 0.5f;
   Clients = (byte)((millis() / 2000) % 4);
+
+  // What A reports. Each is pushed where the sketch already knows it changed - that push is
+  // what reaches a host, since nothing else asks a channel for its value on a timer.
+  Temperature += DoorOpen ? -0.4f : 0.3f;
   DoorOpen = !DoorOpen;
+  Blaeck.writeState(F("Temperature"));
+  Blaeck.writeState(F("DoorOpen"));
 
   if (Uptime >= 5 && strcmp(Mode, "running") != 0)
   {
-    // The variable is the value, so it is set where the sketch already knows it changed.
     strcpy(Mode, "running");
     Blaeck.writeState(F("Mode"));
   }
