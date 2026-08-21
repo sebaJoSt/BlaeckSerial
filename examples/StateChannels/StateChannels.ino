@@ -8,19 +8,20 @@
   There are three ways a channel gets its value, and the question that picks one is always the
   same: where does the value live?
 
-    a variable you keep        pass a pointer   - the channel reads it
-    worked out from other state  a getter       - asked when the value is wanted
-    nowhere until something happens  a tag      - carries only what writeState() hands it
+    A  POINTER  the value is a variable you keep      the channel reads it
+    B  GETTER   the value is worked out from others   a function is asked for it
+    C  TAG      there is no value until something     writeState() hands it over
+                happens
 
-  Text, numbers and bool all support all three. This sketch declares one channel per
-  combination, so a dashboard shows them together.
+  Text, numbers and bool all support all three, so there are nine combinations. This sketch
+  declares one channel per combination and marks each with its letter.
 
   What to look for once it is logging:
-    Mode / Uptime / DoorOpen        read a variable the sketch keeps
-    Status / Efficiency / Running   worked out when asked, never pushed
-    LastError / SetPoint / SelfTest empty until something writes them
+    A   Mode / Uptime / DoorOpen        read a variable the sketch keeps
+    B   Status / Efficiency / Running   worked out when asked, never pushed
+    C   LastError / SetPoint / SelfTest empty until something writes them
 
-  The last row is the reason tags exist. A channel pointed at a variable always reports
+  C is the one a pointer cannot imitate. A channel pointed at a variable always reports
   something, and 0 or false cannot be told apart from a reading not yet taken. A channel
   declared with a tag reports nothing at all until it has something to say.
 
@@ -32,13 +33,13 @@
 
 BlaeckSerial Blaeck;
 
-// A channel keeps a pointer to these, so they have to be globals - as a signal's do.
+// A: a channel keeps a pointer to these, so they have to be globals - as a signal's do.
 char Mode[16] = "starting";
 unsigned long Uptime = 0;
 bool DoorOpen = false;
 
-// Read by the getters below. Nothing points at them: they are what the getters are worked
-// out from, which is the whole difference between the first row and the second.
+// B: read by the getters below. No channel points at them - they are what the getters are
+// worked out from, which is the whole difference between A and B.
 float Output = 0.0f;
 float Input = 1.0f;
 byte Clients = 0;
@@ -60,7 +61,7 @@ void setup()
   // A logging session needs something to log; state channels are never logged themselves.
   Blaeck.addSignal(F("Uptime"), &Uptime).withUnit(F("s"));
 
-  // --- The channel reads a variable you keep ---------------------------------------------
+  // --- A: POINTER - the channel reads a variable you keep --------------------------------
   // Cheapest, and right whenever the value already lives somewhere. The variable *is* the
   // value, so what the channel reports cannot be out of date.
 
@@ -74,7 +75,7 @@ void setup()
   Blaeck.addStateChannel(F("DoorOpen"), &DoorOpen)
       .withDeviceClass(F("door"));
 
-  // --- The channel works the value out when asked ----------------------------------------
+  // --- B: GETTER - the channel works the value out when asked ----------------------------
   // For a value *derived* from other state. A variable holding a calculation is a copy of one,
   // right only until something it was worked out from moves - and the catalog is rebuilt at
   // moments the sketch cannot anticipate: at startup, when the channel list changes, and
@@ -94,7 +95,7 @@ void setup()
   Blaeck.addStateChannel(F("Running"), BlaeckBool)
       .withStateValue(isRunning);
 
-  // --- The channel holds nothing until something happens ---------------------------------
+  // --- C: TAG - the channel holds nothing until something happens ------------------------
   // Declared with a tag naming the type. Until writeState() is called the catalog says the
   // channel has no value, which is the honest answer for something that has not happened yet -
   // and the one thing a pointer cannot express.
@@ -123,7 +124,7 @@ void loop()
   ReportWhatHappened();
 }
 
-// ---- Getters -----------------------------------------------------------------------------
+// ---- B: the getters ----------------------------------------------------------------------
 // Each is worked out from two or more variables, which is why none of them is a variable.
 
 const char *statusText()
@@ -144,7 +145,7 @@ bool isRunning()
   return Mode[0] == 'r' && !Fault;
 }
 
-// ---- Moving the variables the first row reports -------------------------------------------
+// ---- Moving the variables A reports -------------------------------------------------------
 
 void UpdateTheVariables()
 {
@@ -165,7 +166,7 @@ void UpdateTheVariables()
   }
 }
 
-// ---- Writing the channels that hold nothing -----------------------------------------------
+// ---- C: writing the channels that hold nothing --------------------------------------------
 
 void ReportWhatHappened()
 {
