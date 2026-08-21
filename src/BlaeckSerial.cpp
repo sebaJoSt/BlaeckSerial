@@ -2870,7 +2870,10 @@ const char *BlaeckSerial::_checkedSelectName(const StateChannelEntry &e, const c
 
 const char *BlaeckSerial::_channelText(const StateChannelEntry &e, char *buf, byte bufSize) const
 {
-  if (e.getStateText != nullptr)
+  // valueType first, always. getStateText shares its storage with getNumber, so on a numeric
+  // channel the slot is non-null but holds a getter of another signature entirely - calling it
+  // here would run it as if it returned text and take strlen() of whatever came back.
+  if (e.valueType == Blaeck_string && e.getStateText != nullptr)
   {
     const char *t = e.getStateText();
     if (e.stateIsSelectName)
