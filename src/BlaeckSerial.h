@@ -5116,7 +5116,8 @@ private:
   void _writeStateFrame(int channelIndex, const char *text, const byte *pushed = nullptr, byte pushedLen = 0);
   // A pushed number as the bytes of the declared type; see the definition for why one switch.
   byte _valueBytes(dataType declared, long s, unsigned long u, double d, byte *out);
-  // The guards every numeric writeState() overload passes through before it can send.
+  // The guards every writeState() push passes through, text and numeric alike; -1 to refuse.
+  int _stateChannelForPush(const char *channelName, bool wantText);
   void _writeStateNumber(const char *channelName, long s, unsigned long u, double d);
 #endif
 #if BLAECK_ENABLE_EVENTS

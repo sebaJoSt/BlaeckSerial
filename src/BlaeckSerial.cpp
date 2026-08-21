@@ -2529,70 +2529,17 @@ int BlaeckSerial::_findStateChannel(const char *channelName) const
 
 void BlaeckSerial::writeState(const char *channelName, const char *text)
 {
-  // 0x95 "State" frame: the current value of a declared channel, device -> host.
-  //   msConfig(1) slaveID(1) channelIndex(2, LE uint16)  valueType(1)  value
-  // The two leading bytes are the channel's device identity, written zero here and
-  // rewritten by an aggregator relaying several boards - the same slot every catalog
-  // frame carries. They make channelIndex mean "position in that device's 0x90 list",
-  // so a relay rewrites identity and never has to renumber an index it forwards.
-  // channelIndex is the channel's position in the 0x90 catalog, so that frame
-  // must be received first. Two bytes: a device may declare more channels than a
-  // single byte can name, and the catalog itself has never carried an index or a
-  // count - entries are read in order. Channels are never removed, only cleared as a whole,
-  // so the slot index and the catalog position cannot drift apart.
-  // No CRC (like the 0xA0/0xA5 frames). The host may surface it (e.g. a Home
-  // Assistant text sensor announced from the 0x90 channel catalog); it is never
-  // treated as signal/telemetry data and is not stored.
-  if (StreamRef == nullptr)
-    return;
-
-  // Only declared channels are sent: the host announces its entities from the
-  // 0x90 catalog, so a line on an undeclared channel would have nowhere to go.
-  int channelIndex = _findStateChannel(channelName);
+  int channelIndex = _stateChannelForPush(channelName, true);
   if (channelIndex < 0)
-  {
-    if (_debugStream != nullptr)
-    {
-      _debugStream->print(F("State dropped, channel not declared with addStateChannel(): "));
-      _debugStream->println(channelName != nullptr ? channelName : "");
-    }
     return;
-  }
 
-  // A channel a command owns reports what its getter says and nothing else. A line pushed
-  // here would show until the next catalog poll and then be silently replaced, which is worse
-  // than refusing it. Use writeCommandState() to publish the getter's value.
-  if (_stateChannels[channelIndex].ownedByCommand)
+  // A text channel's variable is the caller's buffer, and repointing it at whatever was just
+  // handed in would leave the channel reading a buffer that may not outlive the call.
+  if (_stateChannels[channelIndex].stateValue != nullptr)
   {
     if (_debugStream != nullptr)
     {
-      _debugStream->print(F("State dropped, channel belongs to a command's own state; use writeCommandState() for: "));
-      _debugStream->println(channelName);
-    }
-    return;
-  }
-
-  // Text on a channel declared as a number would go out under a numeric valueType and be read
-  // as four bytes of a float - a plausible wrong number with nothing to show it went wrong.
-  // Refuse it here; writeState(channelName) reports the variable instead.
-  if (_stateChannels[channelIndex].valueType != Blaeck_string)
-  {
-    if (_debugStream != nullptr)
-    {
-      _debugStream->print(F("State dropped, channel carries a number; use writeState(channelName) for: "));
-      _debugStream->println(channelName);
-    }
-    return;
-  }
-
-  // The channel reads its own value, and the next 0x90 catalog resolves it again - so a pushed
-  // line would show until that poll and then be replaced without a word.
-  if (_stateChannels[channelIndex].getStateText != nullptr ||
-      _stateChannels[channelIndex].stateValue != nullptr)
-  {
-    if (_debugStream != nullptr)
-    {
-      _debugStream->print(F("State dropped, channel reports its own value; use writeState(channelName) for: "));
+      _debugStream->print(F("State dropped, channel reads its own buffer; use writeState(channelName) for: "));
       _debugStream->println(channelName);
     }
     return;
@@ -2639,13 +2586,18 @@ void BlaeckSerial::writeState(const char *channelName)
 // The 0x95 frame itself. Split out because writeCommandState() has to reach it for a channel
 // writeState() deliberately refuses - the guard is about who may choose the text, not about
 // how it is sent.
-// The same guards the text form applies, for the same reasons: only a declared channel, never
-// one a command owns, never one that reads its own value - and a channel carrying text has
-// nowhere to put a number.
-void BlaeckSerial::_writeStateNumber(const char *channelName, long s, unsigned long u, double d)
+// The channel a push may go to, or -1 with a debug line saying why not. Shared so the text and
+// numeric forms cannot drift apart: they refuse for the same reasons, and each mirrors the
+// other's type message.
+//
+// A channel whose value comes from a getter is refused - there is nothing to push into, and the
+// pushed value would be replaced the next time the getter is asked. A channel holding a variable
+// is not refused: the caller stores into it, as write() does for a signal, so what was pushed is
+// what the channel goes on reporting.
+int BlaeckSerial::_stateChannelForPush(const char *channelName, bool wantText)
 {
   if (StreamRef == nullptr)
-    return;
+    return -1;
 
   int channelIndex = _findStateChannel(channelName);
   if (channelIndex < 0)
@@ -2655,7 +2607,7 @@ void BlaeckSerial::_writeStateNumber(const char *channelName, long s, unsigned l
       _debugStream->print(F("State dropped, channel not declared with addStateChannel(): "));
       _debugStream->println(channelName != nullptr ? channelName : "");
     }
-    return;
+    return -1;
   }
 
   const StateChannelEntry &e = _stateChannels[channelIndex];
@@ -2666,31 +2618,50 @@ void BlaeckSerial::_writeStateNumber(const char *channelName, long s, unsigned l
       _debugStream->print(F("State dropped, channel belongs to a command's own state; use writeCommandState() for: "));
       _debugStream->println(channelName);
     }
-    return;
+    return -1;
   }
 
-  if (e.valueType == Blaeck_string)
+  const bool isText = (e.valueType == Blaeck_string);
+  if (isText != wantText)
   {
     if (_debugStream != nullptr)
     {
-      _debugStream->print(F("State dropped, channel carries text; use writeState(channelName, text) for: "));
+      _debugStream->print(isText ? F("State dropped, channel carries text; use writeState(channelName, text) for: ")
+                                 : F("State dropped, channel carries a number; use writeState(channelName, value) for: "));
       _debugStream->println(channelName);
     }
-    return;
+    return -1;
   }
 
-  if (e.getNumber != nullptr || e.stateValue != nullptr)
+  const bool hasGetter = isText ? (e.getStateText != nullptr) : (e.getNumber != nullptr);
+  if (hasGetter)
   {
     if (_debugStream != nullptr)
     {
-      _debugStream->print(F("State dropped, channel reports its own value; use writeState(channelName) for: "));
+      _debugStream->print(F("State dropped, channel works its value out for itself; use writeState(channelName) for: "));
       _debugStream->println(channelName);
     }
-    return;
+    return -1;
   }
 
+  return channelIndex;
+}
+
+void BlaeckSerial::_writeStateNumber(const char *channelName, long s, unsigned long u, double d)
+{
+  int channelIndex = _stateChannelForPush(channelName, false);
+  if (channelIndex < 0)
+    return;
+
+  const StateChannelEntry &e = _stateChannels[channelIndex];
   byte pushed[8];
   byte len = _valueBytes(e.valueType, s, u, d, pushed);
+
+  // Stored where the channel reads, so the value survives the next catalog poll instead of
+  // being replaced by it. These are the declared type's own bytes, so a copy is the assignment.
+  if (e.stateValue != nullptr && len > 0)
+    memcpy(const_cast<void *>(e.stateValue), pushed, len);
+
   _writeStateFrame(channelIndex, nullptr, pushed, len);
 }
 
