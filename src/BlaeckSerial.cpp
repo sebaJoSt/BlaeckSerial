@@ -900,149 +900,113 @@ bool blaeck_detail::stateTextAccepted(const void *stateValue, Stream *debug,
   return false;
 }
 
+// Store a value into whatever the signal was declared as, converting on the way in, and say
+// whether there was somewhere to put it. The declared type governs: an int literal handed to a
+// long signal, or sin()'s double handed to a float one, lands as the signal's own type instead
+// of being dropped for not matching the overload it arrived through.
+//
+// Three of them because no single C++ type carries the other ten without loss - a double is four
+// bytes on AVR and cannot hold a long, so the integer families need their own.
+//
+// A string signal has nowhere to put a number and reports false; write() then sends nothing.
+#define BLAECK_STORE_CASES(v)                                                                  \
+  switch (Signals[signalIndex].DataType)                                                       \
+  {                                                                                            \
+  case (Blaeck_bool):   *((bool *)Signals[signalIndex].Address)           = ((v) != 0); break; \
+  case (Blaeck_byte):   *((byte *)Signals[signalIndex].Address)           = (byte)(v); break;  \
+  case (Blaeck_short):  *((short *)Signals[signalIndex].Address)          = (short)(v); break; \
+  case (Blaeck_ushort): *((unsigned short *)Signals[signalIndex].Address) = (unsigned short)(v); break; \
+  case (Blaeck_int):    *((int *)Signals[signalIndex].Address)            = (int)(v); break;   \
+  case (Blaeck_uint):   *((unsigned int *)Signals[signalIndex].Address)   = (unsigned int)(v); break; \
+  case (Blaeck_long):   *((long *)Signals[signalIndex].Address)           = (long)(v); break;  \
+  case (Blaeck_ulong):  *((unsigned long *)Signals[signalIndex].Address)  = (unsigned long)(v); break; \
+  case (Blaeck_float):  *((float *)Signals[signalIndex].Address)          = (float)(v); break; \
+  case (Blaeck_double): *((double *)Signals[signalIndex].Address)         = (double)(v); break;\
+  default: return false;                                                                       \
+  }                                                                                            \
+  return true;
+
+bool BlaeckSerial::_storeSigned(int signalIndex, long value)
+{
+  if (signalIndex < 0 || signalIndex >= _signalIndex)
+    return false;
+  BLAECK_STORE_CASES(value)
+}
+
+bool BlaeckSerial::_storeUnsigned(int signalIndex, unsigned long value)
+{
+  if (signalIndex < 0 || signalIndex >= _signalIndex)
+    return false;
+  BLAECK_STORE_CASES(value)
+}
+
+bool BlaeckSerial::_storeFloating(int signalIndex, double value)
+{
+  if (signalIndex < 0 || signalIndex >= _signalIndex)
+    return false;
+  BLAECK_STORE_CASES(value)
+}
+
+#undef BLAECK_STORE_CASES
+
 void BlaeckSerial::update(int signalIndex, bool value)
 {
-  if (signalIndex >= 0 && signalIndex < _signalIndex)
-  {
-    if (Signals[signalIndex].DataType == Blaeck_bool)
-    {
-      *((bool *)Signals[signalIndex].Address) = value;
-      Signals[signalIndex].Updated = true;
-    }
-  }
+  if (_storeSigned(signalIndex, value))
+    Signals[signalIndex].Updated = true;
 }
 
 void BlaeckSerial::update(int signalIndex, byte value)
 {
-  if (signalIndex >= 0 && signalIndex < _signalIndex)
-  {
-    if (Signals[signalIndex].DataType == Blaeck_byte)
-    {
-      *((byte *)Signals[signalIndex].Address) = value;
-      Signals[signalIndex].Updated = true;
-    }
-  }
+  if (_storeUnsigned(signalIndex, value))
+    Signals[signalIndex].Updated = true;
 }
 
 void BlaeckSerial::update(int signalIndex, short value)
 {
-  if (signalIndex >= 0 && signalIndex < _signalIndex)
-  {
-    if (Signals[signalIndex].DataType == Blaeck_short)
-    {
-      *((short *)Signals[signalIndex].Address) = value;
-      Signals[signalIndex].Updated = true;
-    }
-  }
+  if (_storeSigned(signalIndex, value))
+    Signals[signalIndex].Updated = true;
 }
 
 void BlaeckSerial::update(int signalIndex, unsigned short value)
 {
-  if (signalIndex >= 0 && signalIndex < _signalIndex)
-  {
-    if (Signals[signalIndex].DataType == Blaeck_ushort)
-    {
-      *((unsigned short *)Signals[signalIndex].Address) = value;
-      Signals[signalIndex].Updated = true;
-    }
-  }
+  if (_storeUnsigned(signalIndex, value))
+    Signals[signalIndex].Updated = true;
 }
 
 void BlaeckSerial::update(int signalIndex, int value)
 {
-  if (signalIndex >= 0 && signalIndex < _signalIndex)
-  {
-#ifdef __AVR__
-    if (Signals[signalIndex].DataType == Blaeck_int)
-    {
-      *((int *)Signals[signalIndex].Address) = value;
-      Signals[signalIndex].Updated = true;
-    }
-#else
-    if (Signals[signalIndex].DataType == Blaeck_long)
-    {
-      *((int *)Signals[signalIndex].Address) = value;
-      Signals[signalIndex].Updated = true;
-    }
-#endif
-  }
+  if (_storeSigned(signalIndex, value))
+    Signals[signalIndex].Updated = true;
 }
 
 void BlaeckSerial::update(int signalIndex, unsigned int value)
 {
-  if (signalIndex >= 0 && signalIndex < _signalIndex)
-  {
-#ifdef __AVR__
-    if (Signals[signalIndex].DataType == Blaeck_uint)
-    {
-      *((unsigned int *)Signals[signalIndex].Address) = value;
-      Signals[signalIndex].Updated = true;
-    }
-#else
-    if (Signals[signalIndex].DataType == Blaeck_ulong)
-    {
-      *((unsigned int *)Signals[signalIndex].Address) = value;
-      Signals[signalIndex].Updated = true;
-    }
-#endif
-  }
+  if (_storeUnsigned(signalIndex, value))
+    Signals[signalIndex].Updated = true;
 }
 
 void BlaeckSerial::update(int signalIndex, long value)
 {
-  if (signalIndex >= 0 && signalIndex < _signalIndex)
-  {
-    if (Signals[signalIndex].DataType == Blaeck_long)
-    {
-      *((long *)Signals[signalIndex].Address) = value;
-      Signals[signalIndex].Updated = true;
-    }
-  }
+  if (_storeSigned(signalIndex, value))
+    Signals[signalIndex].Updated = true;
 }
 
 void BlaeckSerial::update(int signalIndex, unsigned long value)
 {
-  if (signalIndex >= 0 && signalIndex < _signalIndex)
-  {
-    if (Signals[signalIndex].DataType == Blaeck_ulong)
-    {
-      *((unsigned long *)Signals[signalIndex].Address) = value;
-      Signals[signalIndex].Updated = true;
-    }
-  }
+  if (_storeUnsigned(signalIndex, value))
+    Signals[signalIndex].Updated = true;
 }
 
 void BlaeckSerial::update(int signalIndex, float value)
 {
-  if (signalIndex >= 0 && signalIndex < _signalIndex)
-  {
-    if (Signals[signalIndex].DataType == Blaeck_float)
-    {
-      *((float *)Signals[signalIndex].Address) = value;
-      Signals[signalIndex].Updated = true;
-    }
-  }
+  if (_storeFloating(signalIndex, value))
+    Signals[signalIndex].Updated = true;
 }
 
 void BlaeckSerial::update(int signalIndex, double value)
 {
-  if (signalIndex >= 0 && signalIndex < _signalIndex)
-  {
-#ifdef __AVR__
-    // On AVR, double is same as float
-    if (Signals[signalIndex].DataType == Blaeck_float)
-    {
-      *((float *)Signals[signalIndex].Address) = (float)value;
-      Signals[signalIndex].Updated = true;
-    }
-#else
-    if (Signals[signalIndex].DataType == Blaeck_double)
-    {
-      *((double *)Signals[signalIndex].Address) = value;
-      Signals[signalIndex].Updated = true;
-    }
-#endif
-  }
+  if (_storeFloating(signalIndex, value))
+    Signals[signalIndex].Updated = true;
 }
 
 void BlaeckSerial::update(int signalIndex, const char *value)
@@ -4220,142 +4184,53 @@ void BlaeckSerial::write(int signalIndex, double value)
 
 void BlaeckSerial::write(int signalIndex, bool value, unsigned long long timestamp)
 {
-  if (signalIndex >= 0 && signalIndex < _signalIndex)
-  {
-    if (Signals[signalIndex].DataType == Blaeck_bool)
-    {
-      *((bool *)Signals[signalIndex].Address) = value;
-      this->writeDataFrame(0, signalIndex, signalIndex, false, timestamp);
-    }
-  }
+  if (_storeSigned(signalIndex, value))
+    this->writeDataFrame(0, signalIndex, signalIndex, false, timestamp);
 }
 void BlaeckSerial::write(int signalIndex, byte value, unsigned long long timestamp)
 {
-  if (signalIndex >= 0 && signalIndex < _signalIndex)
-  {
-    if (Signals[signalIndex].DataType == Blaeck_byte)
-    {
-      *((byte *)Signals[signalIndex].Address) = value;
-      this->writeDataFrame(0, signalIndex, signalIndex, false, timestamp);
-    }
-  }
+  if (_storeUnsigned(signalIndex, value))
+    this->writeDataFrame(0, signalIndex, signalIndex, false, timestamp);
 }
 void BlaeckSerial::write(int signalIndex, short value, unsigned long long timestamp)
 {
-  if (signalIndex >= 0 && signalIndex < _signalIndex)
-  {
-    if (Signals[signalIndex].DataType == Blaeck_short)
-    {
-      *((short *)Signals[signalIndex].Address) = value;
-      this->writeDataFrame(0, signalIndex, signalIndex, false, timestamp);
-    }
-  }
+  if (_storeSigned(signalIndex, value))
+    this->writeDataFrame(0, signalIndex, signalIndex, false, timestamp);
 }
 void BlaeckSerial::write(int signalIndex, unsigned short value, unsigned long long timestamp)
 {
-  if (signalIndex >= 0 && signalIndex < _signalIndex)
-  {
-    if (Signals[signalIndex].DataType == Blaeck_ushort)
-    {
-      *((unsigned short *)Signals[signalIndex].Address) = value;
-      this->writeDataFrame(0, signalIndex, signalIndex, false, timestamp);
-    }
-  }
+  if (_storeUnsigned(signalIndex, value))
+    this->writeDataFrame(0, signalIndex, signalIndex, false, timestamp);
 }
 void BlaeckSerial::write(int signalIndex, int value, unsigned long long timestamp)
 {
-  if (signalIndex >= 0 && signalIndex < _signalIndex)
-  {
-#ifdef __AVR__
-    // On AVR, int stays as Blaeck_int (2 bytes)
-    if (Signals[signalIndex].DataType == Blaeck_int)
-    {
-      *((int *)Signals[signalIndex].Address) = value;
-      this->writeDataFrame(0, signalIndex, signalIndex, false, timestamp);
-    }
-#else
-    // On 32-bit platforms, int is mapped to Blaeck_long (4 bytes)
-    if (Signals[signalIndex].DataType == Blaeck_long)
-    {
-      *((int *)Signals[signalIndex].Address) = value;
-      this->writeDataFrame(0, signalIndex, signalIndex, false, timestamp);
-    }
-#endif
-  }
+  if (_storeSigned(signalIndex, value))
+    this->writeDataFrame(0, signalIndex, signalIndex, false, timestamp);
 }
 void BlaeckSerial::write(int signalIndex, unsigned int value, unsigned long long timestamp)
 {
-  if (signalIndex >= 0 && signalIndex < _signalIndex)
-  {
-#ifdef __AVR__
-    // On AVR, unsigned int stays as Blaeck_uint (2 bytes)
-    if (Signals[signalIndex].DataType == Blaeck_uint)
-    {
-      *((unsigned int *)Signals[signalIndex].Address) = value;
-      this->writeDataFrame(0, signalIndex, signalIndex, false, timestamp);
-    }
-#else
-    // On 32-bit platforms, unsigned int is mapped to Blaeck_ulong (4 bytes)
-    if (Signals[signalIndex].DataType == Blaeck_ulong)
-    {
-      *((unsigned int *)Signals[signalIndex].Address) = value;
-      this->writeDataFrame(0, signalIndex, signalIndex, false, timestamp);
-    }
-#endif
-  }
+  if (_storeUnsigned(signalIndex, value))
+    this->writeDataFrame(0, signalIndex, signalIndex, false, timestamp);
 }
 void BlaeckSerial::write(int signalIndex, long value, unsigned long long timestamp)
 {
-  if (signalIndex >= 0 && signalIndex < _signalIndex)
-  {
-    if (Signals[signalIndex].DataType == Blaeck_long)
-    {
-      *((long *)Signals[signalIndex].Address) = value;
-      this->writeDataFrame(0, signalIndex, signalIndex, false, timestamp);
-    }
-  }
+  if (_storeSigned(signalIndex, value))
+    this->writeDataFrame(0, signalIndex, signalIndex, false, timestamp);
 }
 void BlaeckSerial::write(int signalIndex, unsigned long value, unsigned long long timestamp)
 {
-  if (signalIndex >= 0 && signalIndex < _signalIndex)
-  {
-    if (Signals[signalIndex].DataType == Blaeck_ulong)
-    {
-      *((unsigned long *)Signals[signalIndex].Address) = value;
-      this->writeDataFrame(0, signalIndex, signalIndex, false, timestamp);
-    }
-  }
+  if (_storeUnsigned(signalIndex, value))
+    this->writeDataFrame(0, signalIndex, signalIndex, false, timestamp);
 }
 void BlaeckSerial::write(int signalIndex, float value, unsigned long long timestamp)
 {
-  if (signalIndex >= 0 && signalIndex < _signalIndex)
-  {
-    if (Signals[signalIndex].DataType == Blaeck_float)
-    {
-      *((float *)Signals[signalIndex].Address) = value;
-      this->writeDataFrame(0, signalIndex, signalIndex, false, timestamp);
-    }
-  }
+  if (_storeFloating(signalIndex, value))
+    this->writeDataFrame(0, signalIndex, signalIndex, false, timestamp);
 }
 void BlaeckSerial::write(int signalIndex, double value, unsigned long long timestamp)
 {
-  if (signalIndex >= 0 && signalIndex < _signalIndex)
-  {
-#ifdef __AVR__
-    // On AVR, double is same as float
-    if (Signals[signalIndex].DataType == Blaeck_float)
-    {
-      *((float *)Signals[signalIndex].Address) = (float)value;
-      this->writeDataFrame(0, signalIndex, signalIndex, false, timestamp);
-    }
-#else
-    if (Signals[signalIndex].DataType == Blaeck_double)
-    {
-      *((double *)Signals[signalIndex].Address) = value;
-      this->writeDataFrame(0, signalIndex, signalIndex, false, timestamp);
-    }
-#endif
-  }
+  if (_storeFloating(signalIndex, value))
+    this->writeDataFrame(0, signalIndex, signalIndex, false, timestamp);
 }
 
 void BlaeckSerial::write(const char *signalName, const char *value)

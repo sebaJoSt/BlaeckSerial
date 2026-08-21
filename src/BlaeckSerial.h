@@ -4320,6 +4320,12 @@ private:
 
   void writeAllData(unsigned long messageID, unsigned long long timestamp);
 
+  // Store a value as the signal's declared type, converting; false when there is no such signal
+  // or it carries text. Three, because no one C++ type carries the other ten without loss.
+  bool _storeSigned(int signalIndex, long value);
+  bool _storeUnsigned(int signalIndex, unsigned long value);
+  bool _storeFloating(int signalIndex, double value);
+
   void writeData(unsigned long messageID, int signalIndex_start, int signalIndex_end, bool onlyUpdated, unsigned long long timestamp);
   void writeDataFrame(unsigned long MessageID, int signalIndex_start, int signalIndex_end, bool onlyUpdated, unsigned long long timestamp);
 
