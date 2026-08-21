@@ -3490,6 +3490,44 @@ public:
   void writeState(const __FlashStringHelper *channelName);
 
   /*!
+    @brief   Reports a number on a channel declared by tag.
+
+    For a channel that holds no variable of its own. The value is converted to
+    whatever the channel was declared as, so the literal you write does not have to
+    match it - 20 on a float channel sends 20.0.
+
+    @param   channelName  A channel declared with a tag. One declared with a variable
+                          or a getter reads its own value and refuses this.
+    @param   value        Converted to the channel's declared type.
+
+    @code
+      Blaeck.writeState(F("Temperature"), 20.5f);
+    @endcode
+  */
+  void writeState(const char *channelName, bool value);
+  void writeState(const char *channelName, byte value);
+  void writeState(const char *channelName, short value);
+  void writeState(const char *channelName, unsigned short value);
+  void writeState(const char *channelName, int value);
+  void writeState(const char *channelName, unsigned int value);
+  void writeState(const char *channelName, long value);
+  void writeState(const char *channelName, unsigned long value);
+  void writeState(const char *channelName, float value);
+  void writeState(const char *channelName, double value);
+
+  // The same ten, named with F().
+  void writeState(const __FlashStringHelper *channelName, bool value);
+  void writeState(const __FlashStringHelper *channelName, byte value);
+  void writeState(const __FlashStringHelper *channelName, short value);
+  void writeState(const __FlashStringHelper *channelName, unsigned short value);
+  void writeState(const __FlashStringHelper *channelName, int value);
+  void writeState(const __FlashStringHelper *channelName, unsigned int value);
+  void writeState(const __FlashStringHelper *channelName, long value);
+  void writeState(const __FlashStringHelper *channelName, unsigned long value);
+  void writeState(const __FlashStringHelper *channelName, float value);
+  void writeState(const __FlashStringHelper *channelName, double value);
+
+  /*!
     @brief   Publishes a command's own state now.
 
     Asks the getter the command was registered with and sends the value on the channel
@@ -5075,7 +5113,11 @@ private:
   static bool _flashStringEqualsName(const __FlashStringHelper *flashName, const char *name);
   // The 0x95 frame itself, by channel index. Reached by writeState() after its guards and by
   // writeCommandState() for a channel those guards deliberately refuse.
-  void _writeStateFrame(int channelIndex, const char *text);
+  void _writeStateFrame(int channelIndex, const char *text, const byte *pushed = nullptr, byte pushedLen = 0);
+  // A pushed number as the bytes of the declared type; see the definition for why one switch.
+  byte _valueBytes(dataType declared, long s, unsigned long u, double d, byte *out);
+  // The guards every numeric writeState() overload passes through before it can send.
+  void _writeStateNumber(const char *channelName, long s, unsigned long u, double d);
 #endif
 #if BLAECK_ENABLE_EVENTS
   typedef blaeck_detail::EventChannelEntry EventChannelEntry;

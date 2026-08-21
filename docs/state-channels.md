@@ -82,6 +82,19 @@ and one per numeric type - `BlaeckByte`, `BlaeckShort`, `BlaeckUShort`, `BlaeckI
 four bytes, so `BlaeckDouble` names the same channel `BlaeckFloat` does, exactly as `double *`
 and `float *` already do.
 
+A number or a `bool` works the same way:
+
+```cpp
+Blaeck.addStateChannel(F("Temperature"), BlaeckFloat);
+
+Blaeck.writeState(F("Temperature"), 20);      // sends 20.0
+```
+
+The value is converted to whatever the channel was declared as, so the literal does not have to
+match it - `20` on a float channel sends 20.0. Until something is written, the channel reports no
+value at all, which is the point of declaring it this way: a channel pointed at a variable is
+always asserting something, and `0` or `false` cannot be told apart from a reading not yet taken.
+
 Text is dropped on a text channel that already has a variable too. That channel reads its own
 value, so a pushed line would show until the next catalog poll and then be replaced without a
 word. Send it with `writeState(F("Status"))` and no text, which reports what the channel holds.
