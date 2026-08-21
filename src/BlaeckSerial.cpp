@@ -2429,7 +2429,15 @@ BlaeckNumericStateRef BlaeckSerial::addStateChannel(const char *channelName, flo
 
 BlaeckNumericStateRef BlaeckSerial::addStateChannel(const char *channelName, double *value)
 {
+#ifdef __AVR__
+  /*On the Uno and other ATMEGA based boards, the double implementation occupies 4 bytes
+  and is exactly the same as the float, with no gain in precision. Registering it as a
+  double would have the value writer copy 8 bytes out of a 4-byte union member, sending
+  four bytes of stale memory as the top half of the number.*/
+  return BlaeckNumericStateRef(this, (int16_t)_registerStateChannel(channelName, nullptr, Blaeck_float, value));
+#else
   return BlaeckNumericStateRef(this, (int16_t)_registerStateChannel(channelName, nullptr, Blaeck_double, value));
+#endif
 }
 
 bool BlaeckSerial::_flashStringEqualsName(const __FlashStringHelper *flashName, const char *name)
@@ -5667,7 +5675,12 @@ BlaeckNumericStateRef BlaeckSerial::addStateChannel(const __FlashStringHelper *c
 
 BlaeckNumericStateRef BlaeckSerial::addStateChannel(const __FlashStringHelper *channelName, double *value)
 {
+#ifdef __AVR__
+  // Mapped down for the reason given on the const char* overload.
+  return BlaeckNumericStateRef(this, (int16_t)_registerStateChannel(nullptr, channelName, Blaeck_float, value));
+#else
   return BlaeckNumericStateRef(this, (int16_t)_registerStateChannel(nullptr, channelName, Blaeck_double, value));
+#endif
 }
 
 void BlaeckSerial::writeState(const __FlashStringHelper *channelName, const char *text)

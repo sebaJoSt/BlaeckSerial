@@ -1482,12 +1482,19 @@ public:
     return *this;
   }
 
-  // Carries this command's state as a double, 32-bit on AVR and 64-bit elsewhere, read directly
-  // instead of asking a getter for text. Sent typed, so the host renders the number and the
-  // sketch never formats one. One overload per numeric type, as addSignal() has.
+  // Carries this command's state as a double, read directly instead of asking a getter for text.
+  // Sent typed, so the host renders the number and the sketch never formats one. One overload per
+  // numeric type, as addSignal() has.
+  //
+  // Declared as a float on AVR, where a double is the same four bytes: sent as a double it would
+  // be read out of the union eight bytes at a time, four of them stale.
   BlaeckNumberCommandRef &withOwnState(const __FlashStringHelper *channelName, double *value)
   {
+#ifdef __AVR__
+    _setOwnState(channelName, Blaeck_float, value);
+#else
     _setOwnState(channelName, Blaeck_double, value);
+#endif
     return *this;
   }
 };
