@@ -186,7 +186,9 @@ void UpdateTheVariables()
   Blaeck.writeState(F("Temperature"));
   Blaeck.writeState(F("DoorOpen"));
 
-  if (Uptime >= 5 && strcmp(Mode, "running") != 0)
+  // Late enough that a host connecting after the device has booted still sees the change
+  // happen, rather than finding it already made.
+  if (Uptime >= 60 && strcmp(Mode, "running") != 0)
   {
     strcpy(Mode, "running");
     Blaeck.writeState(F("Mode"));
