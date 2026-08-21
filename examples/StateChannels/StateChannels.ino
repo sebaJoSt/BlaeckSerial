@@ -18,8 +18,12 @@
 
   What to look for once it is logging:
     A   Mode / Uptime / DoorOpen        read a variable the sketch keeps
-    B   Status / Efficiency / Running   worked out when asked, never pushed
+    B   Status / Efficiency / Running   worked out when read, so never stale
     C   LastError / SetPoint / SelfTest empty until something writes them
+
+  A and B both need a push to reach a host - writeState(name), with no value, because both
+  already know where their value comes from. The difference is what that value is worth: A
+  reports a variable, B works one out at the moment it is asked. Only C is handed a value.
 
   C is the one a pointer cannot imitate. A channel pointed at a variable always reports
   something, and 0 or false cannot be told apart from a reading not yet taken. A channel
@@ -81,6 +85,11 @@ void setup()
   // moments the sketch cannot anticipate: at startup, when the channel list changes, and
   // whenever a host asks. A getter has no copy to fall out of step.
   //
+  // The getter guarantees the value is current whenever it is read; it does not decide when
+  // anyone is told. A host is told when the catalog is rebuilt - at startup, when the channel
+  // list changes, or when it asks - and whenever the sketch pushes with writeState(name), which
+  // takes no value because the getter supplies it. PushTheDerived() below does that on a timer.
+  //
   // The getter runs while a frame is being assembled. Read variables and compute, nothing else.
 
   Blaeck.addStateChannel(F("Status"), BlaeckText)
@@ -121,6 +130,7 @@ void loop()
   Uptime = millis() / 1000;
   Blaeck.tick();
   UpdateTheVariables();
+  PushTheDerived();
   ReportWhatHappened();
 }
 
@@ -164,6 +174,23 @@ void UpdateTheVariables()
     strcpy(Mode, "running");
     Blaeck.writeState(F("Mode"));
   }
+}
+
+// ---- B: telling a host what the getters now say -------------------------------------------
+// The getters are asked when the catalog is built, which is rare. These pushes are what make a
+// dashboard move: writeState(name) with no value asks the getter and sends the answer. Nothing
+// here recalculates - that is the getter's job, and it cannot be out of date when it runs.
+
+void PushTheDerived()
+{
+  static unsigned long last = 0;
+  if (millis() - last < 3000)
+    return;
+  last = millis();
+
+  Blaeck.writeState(F("Status"));
+  Blaeck.writeState(F("Efficiency"));
+  Blaeck.writeState(F("Running"));
 }
 
 // ---- C: writing the channels that hold nothing --------------------------------------------
