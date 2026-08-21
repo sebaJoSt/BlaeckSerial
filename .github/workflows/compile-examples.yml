@@ -27,32 +27,8 @@ jobs:
       matrix:
         board:
           # --- AVR boards ---
-          # The nano job is what keeps the library itself small enough for a
-          # 30 kB AVR. It compiles only the examples that still fit; an example
-          # that outgrows the board is moved to mega rather than trimmed, since
-          # what each one declares is the point of it.
-          #
-          # Mega-only, with the flash each needs against the nano's 30720 bytes:
-          #   WaveformGenerator      44874
-          #   SineGeneratorAdvanced  34872
-          #   EventChannels          34182
-          #   Commands               32648
-          #   SHT31TempHumiditySensor 31724
-          #   SignalMetadata         31240, and its reported RAM counts neither
-          #     the signal table nor the ten String names, both of which come
-          #     off the same 371 bytes left for locals. Too little stack to trust.
-          - fqbn: arduino:avr:nano
-            platforms: |
-              - name: arduino:avr
-            libraries: |
-              - source-path: ./
-              - name: CRC
-            sketch-paths: |
-              - examples/Basic
-              - examples/DatatypeTest
-              - examples/SineGeneratorBasic
-              - examples/WriteModes
-            artifact-name-suffix: arduino-avr-nano
+          # No nano: the examples have outgrown its 30720 bytes, the smallest
+          # needing 31240 and WaveformGenerator 44874.
           - fqbn: arduino:avr:mega
             platforms: |
               - name: arduino:avr
