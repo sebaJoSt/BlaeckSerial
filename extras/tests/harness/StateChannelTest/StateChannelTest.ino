@@ -22,6 +22,11 @@
 
 BlaeckSerial Blaeck;
 
+// Whether this build writes C_once at all, and what it writes. Set true, flash, let it
+// publish; set false, flash again. The value tells the two builds apart on a dashboard.
+#define ARM_C_ONCE true
+#define ARM_C_ONCE_VALUE 111
+
 // ---- A: variables the channels point at ---------------------------------------------------
 bool aBool = false;
 byte aByte = 0;
@@ -146,6 +151,11 @@ void setup()
   // must not be sent at all. Sent, a number would go out under the string encoding.
   Blaeck.addStateChannel(F("C_never"), BlaeckLong).diagnostic();
 
+  // Written once, a few seconds after boot, and never again. A restart leaves the device
+  // asserting nothing for it while the broker still serves the value from before - the one
+  // thing a 0x95 frame cannot correct, since it has no way to say "no value".
+  Blaeck.addStateChannel(F("C_once"), BlaeckLong).diagnostic();
+
   Blaeck.printRejections(&Serial);
 
   Serial.println(F("---- state channel test ----"));
@@ -226,6 +236,7 @@ void loop()
   Blaeck.tick();
   Stir();
   PushEverything();
+  WriteOnce();
 }
 
 // Moves what B is worked out from, so a host sees the getters change without anything pushing
@@ -284,4 +295,20 @@ void PushEverything()
   char line[48];
   snprintf(line, sizeof(line), "tick %lu, %u clients", Uptime, gClients);
   Blaeck.writeState(F("C_text"), line);
+}
+
+// C_once is written on a boot that arms it and never on one that does not, which is what
+// an event-driven channel really looks like - a fault that happened last run and not this
+// one. Flash with ARM_C_ONCE true, let it publish, then flash with it false: the device
+// now asserts nothing for the channel while the broker goes on serving the old value, and
+// no frame can say otherwise.
+void WriteOnce()
+{
+  static bool written = false;
+  // Late enough that a host connecting on DTR is attached before it fires. It happens once,
+  // and a host that misses it never learns the value at all.
+  if (!ARM_C_ONCE || written || Uptime < 10) return;
+  written = true;
+  Blaeck.writeState(F("C_once"), (long)ARM_C_ONCE_VALUE);
+  Serial.println(F("C_once written, and never again this boot"));
 }
