@@ -859,6 +859,27 @@ bool blaeck_detail::optionsAccepted(const __FlashStringHelper *optionsCsv, Strea
   return false;
 }
 
+bool blaeck_detail::stateTextAccepted(const void *stateValue, Stream *debug,
+                                      const char *name, bool nameInFlash)
+{
+  if (stateValue == nullptr)
+    return true;
+
+  if (debug != nullptr)
+  {
+    debug->print(F("withStateText ignored, channel was declared with a variable: "));
+    if (name != nullptr)
+    {
+      if (nameInFlash)
+        debug->print(reinterpret_cast<const __FlashStringHelper *>(name));
+      else
+        debug->print(name);
+    }
+    debug->println(F(". The getter would be read instead of the variable, so neither is trusted."));
+  }
+  return false;
+}
+
 void BlaeckSerial::update(int signalIndex, bool value)
 {
   if (signalIndex >= 0 && signalIndex < _signalIndex)
@@ -1004,6 +1025,19 @@ void BlaeckSerial::update(int signalIndex, double value)
   }
 }
 
+void BlaeckSerial::update(int signalIndex, const char *value)
+{
+  if (signalIndex >= 0 && signalIndex < _signalIndex)
+  {
+    if (Signals[signalIndex].DataType == Blaeck_string)
+    {
+      // Repointed, not copied, as write(signalIndex, const char*) does.
+      Signals[signalIndex].Address = const_cast<char *>(value);
+      Signals[signalIndex].Updated = true;
+    }
+  }
+}
+
 void BlaeckSerial::update(const char *signalName, bool value)
 {
   int index = findSignalIndex(signalName);
@@ -1094,6 +1128,15 @@ void BlaeckSerial::update(const char *signalName, double value)
   }
 }
 
+void BlaeckSerial::update(const char *signalName, const char *value)
+{
+  int index = findSignalIndex(signalName);
+  if (index >= 0)
+  {
+    update(index, value);
+  }
+}
+
 int BlaeckSerial::findSignalIndex(const char *signalName)
 {
   for (int i = 0; i < _signalIndex; i++)
@@ -1151,7 +1194,7 @@ void BlaeckSerial::read()
         _writeCommandAck(receivedChars, 0, BLAECK_ACK_OK);
         // The one place a data frame answers a request, so the one place the bit is set.
         _frameRequested = true;
-        this->writeAllData(msg_id);
+        this->writeAllData(msg_id, getTimeStamp());
         _frameRequested = false;
       }
       else if (equalsFlash(_parsedCommand, F(BLAECK_BUILTIN_GET_DEVICES)))
@@ -1381,14 +1424,8 @@ void BlaeckSerial::clearAllCommandHandlers()
 
 void BlaeckSerial::writeCommandState(const char *command)
 {
-  this->writeCommandState(command, 0);
-}
-
-void BlaeckSerial::writeCommandState(const char *command, unsigned long messageID)
-{
 #if !BLAECK_ENABLE_COMMAND_META || !BLAECK_ENABLE_STATE_CHANNELS
   (void)command;
-  (void)messageID;
 #else
   if (command == nullptr)
     return;
@@ -1420,7 +1457,7 @@ void BlaeckSerial::writeCommandState(const char *command, unsigned long messageI
       // as an empty string - and an empty retained payload deletes the topic it lands on, so a
       // select reported its wave by removing the topic that said which one it was.
       char optionBuf[BLAECK_STATE_MAX_OPTION_CHARS];
-      _writeStateFrame(c, _channelText(_stateChannels[c], optionBuf, sizeof(optionBuf)), messageID);
+      _writeStateFrame(c, _channelText(_stateChannels[c], optionBuf, sizeof(optionBuf)));
       return;
     }
     return;
@@ -2227,13 +2264,6 @@ void BlaeckSerial::_writeCommandAck(const char *rawCommand, byte status, byte re
 }
 
 #if BLAECK_ENABLE_STATE_CHANNELS
-void BlaeckSerial::writeState(const char *channelName, const char *text)
-{
-  // A push answers no request, so it carries no id. It numbered itself once - which told a
-  // host the order the device sent things in, and nothing it could pair with.
-  this->writeState(channelName, text, 0);
-}
-
 int BlaeckSerial::_registerStateChannel(const char *channelName, const __FlashStringHelper *flashName,
                                          dataType valueType, const void *value)
 {
@@ -2470,7 +2500,7 @@ int BlaeckSerial::_findStateChannel(const char *channelName) const
   return -1;
 }
 
-void BlaeckSerial::writeState(const char *channelName, const char *text, unsigned long messageID)
+void BlaeckSerial::writeState(const char *channelName, const char *text)
 {
   // 0x95 "State" frame: the current value of a declared channel, device -> host.
   //   msConfig(1) slaveID(1) channelIndex(2, LE uint16)  valueType(1)  value
@@ -2528,20 +2558,26 @@ void BlaeckSerial::writeState(const char *channelName, const char *text, unsigne
     return;
   }
 
-  _writeStateFrame(channelIndex, text, messageID);
+  // The channel reads its own value, and the next 0x90 catalog resolves it again - so a pushed
+  // line would show until that poll and then be replaced without a word.
+  if (_stateChannels[channelIndex].getStateText != nullptr ||
+      _stateChannels[channelIndex].stateValue != nullptr)
+  {
+    if (_debugStream != nullptr)
+    {
+      _debugStream->print(F("State dropped, channel reports its own value; use writeState(channelName) for: "));
+      _debugStream->println(channelName);
+    }
+    return;
+  }
+
+  _writeStateFrame(channelIndex, text);
 }
 
 // Reports whatever the channel currently holds: the variable a typed channel points at, or
 // the text a getter builds. The one form that needs no value from the caller, and the only
 // way to push a numeric channel.
 void BlaeckSerial::writeState(const char *channelName)
-{
-  // 0UL, not 0: a bare 0 is also a null pointer constant, so it matches the text overload
-  // just as well and the call is ambiguous.
-  this->writeState(channelName, 0UL);
-}
-
-void BlaeckSerial::writeState(const char *channelName, unsigned long messageID)
 {
   if (StreamRef == nullptr)
     return;
@@ -2570,13 +2606,13 @@ void BlaeckSerial::writeState(const char *channelName, unsigned long messageID)
   const StateChannelEntry &e = _stateChannels[channelIndex];
   char optionBuf[BLAECK_STATE_MAX_OPTION_CHARS];
   const char *text = _channelText(e, optionBuf, sizeof(optionBuf));
-  _writeStateFrame(channelIndex, text, messageID);
+  _writeStateFrame(channelIndex, text);
 }
 
 // The 0x95 frame itself. Split out because writeCommandState() has to reach it for a channel
 // writeState() deliberately refuses - the guard is about who may choose the text, not about
 // how it is sent.
-void BlaeckSerial::_writeStateFrame(int channelIndex, const char *text, unsigned long messageID)
+void BlaeckSerial::_writeStateFrame(int channelIndex, const char *text)
 {
   if (StreamRef == nullptr)
     return;
@@ -2610,7 +2646,7 @@ void BlaeckSerial::_writeStateFrame(int channelIndex, const char *text, unsigned
   if (_bufReady())
   {
     _bufReset();
-    _bufHeader(0x95, messageID);
+    _bufHeader(0x95, 0);
     // Device identity, the channel index, the datatype, then the value: fixed width for a
     // number, a 1-byte length followed by that many UTF-8 bytes for a string - the same rule
     // a data frame follows.
@@ -2638,7 +2674,7 @@ void BlaeckSerial::_writeStateFrame(int channelIndex, const char *text, unsigned
     byte msg_key = 0x95;
     StreamRef->write(msg_key);
     StreamRef->write(":");
-    ulngCvt.val = messageID;
+    ulngCvt.val = 0;
     StreamRef->write(ulngCvt.bval, 4);
     StreamRef->write(":");
 
@@ -3055,8 +3091,6 @@ void BlaeckSerial::writeStateChannels() { this->writeStateChannels(0); }
 void BlaeckSerial::writeStateChannels(unsigned long msg_id) { this->_writeEmptyFrame(0x90, msg_id); }
 void BlaeckSerial::writeState(const char *, const char *) {}
 void BlaeckSerial::writeState(const char *) {}
-void BlaeckSerial::writeState(const char *, unsigned long) {}
-void BlaeckSerial::writeState(const char *, const char *, unsigned long) {}
 #endif
 
 #if BLAECK_ENABLE_EVENTS
@@ -3566,11 +3600,6 @@ void BlaeckSerial::writeEventChannelsFrame(unsigned long msg_id)
 
 void BlaeckSerial::writeEvent(const char *channelName, const __FlashStringHelper *eventType)
 {
-  this->writeEvent(channelName, eventType, 0);
-}
-
-void BlaeckSerial::writeEvent(const char *channelName, const __FlashStringHelper *eventType, unsigned long messageID)
-{
   // 0x85 "Event" frame: one occurrence on a declared channel, device -> host.
   //   msConfig(1) slaveID(1) channelIndex(2, LE uint16)  eventIndex(2, LE uint16)
   // The two leading bytes are the channel's device identity, written zero here and
@@ -3614,7 +3643,7 @@ void BlaeckSerial::writeEvent(const char *channelName, const __FlashStringHelper
   if (_bufReady())
   {
     _bufReset();
-    _bufHeader(0x85, messageID);
+    _bufHeader(0x85, 0);
     _bufByte((byte)0);
     _bufByte((byte)0);
     _bufByte((byte)(channelIndex & 0xFF));
@@ -3630,7 +3659,7 @@ void BlaeckSerial::writeEvent(const char *channelName, const __FlashStringHelper
     byte msg_key = 0x85;
     StreamRef->write(msg_key);
     StreamRef->write(":");
-    ulngCvt.val = messageID;
+    ulngCvt.val = 0;
     StreamRef->write(ulngCvt.bval, 4);
     StreamRef->write(":");
 
@@ -3659,7 +3688,6 @@ int BlaeckSerial::_registerEventChannel(const char *, const __FlashStringHelper 
 void BlaeckSerial::writeEventChannels() { this->writeEventChannels(0); }
 void BlaeckSerial::writeEventChannels(unsigned long msg_id) { this->_writeEmptyFrame(0x80, msg_id); }
 void BlaeckSerial::writeEvent(const char *, const __FlashStringHelper *) {}
-void BlaeckSerial::writeEvent(const char *, const __FlashStringHelper *, unsigned long) {}
 #endif
 
 #if BLAECK_ENABLE_COMMAND_META
@@ -3982,303 +4010,223 @@ void BlaeckSerial::_writeEmptyFrame(byte msgKey, unsigned long msg_id)
 
 void BlaeckSerial::write(const char *signalName, bool value)
 {
-  this->write(signalName, value, 1);
+  this->write(signalName, value, getTimeStamp());
 }
 void BlaeckSerial::write(const char *signalName, byte value)
 {
-  this->write(signalName, value, 1);
+  this->write(signalName, value, getTimeStamp());
 }
 void BlaeckSerial::write(const char *signalName, short value)
 {
-  this->write(signalName, value, 1);
+  this->write(signalName, value, getTimeStamp());
 }
 void BlaeckSerial::write(const char *signalName, unsigned short value)
 {
-  this->write(signalName, value, 1);
+  this->write(signalName, value, getTimeStamp());
 }
 void BlaeckSerial::write(const char *signalName, int value)
 {
-  this->write(signalName, value, 1);
+  this->write(signalName, value, getTimeStamp());
 }
 void BlaeckSerial::write(const char *signalName, unsigned int value)
 {
-  this->write(signalName, value, 1);
+  this->write(signalName, value, getTimeStamp());
 }
 void BlaeckSerial::write(const char *signalName, long value)
 {
-  this->write(signalName, value, 1);
+  this->write(signalName, value, getTimeStamp());
 }
 void BlaeckSerial::write(const char *signalName, unsigned long value)
 {
-  this->write(signalName, value, 1);
+  this->write(signalName, value, getTimeStamp());
 }
 void BlaeckSerial::write(const char *signalName, float value)
 {
-  this->write(signalName, value, 1);
+  this->write(signalName, value, getTimeStamp());
 }
 void BlaeckSerial::write(const char *signalName, double value)
 {
-  this->write(signalName, value, 1);
+  this->write(signalName, value, getTimeStamp());
 }
 
-void BlaeckSerial::write(const char *signalName, bool value, unsigned long messageID)
-{
-  this->write(signalName, value, messageID, getTimeStamp());
-}
-void BlaeckSerial::write(const char *signalName, byte value, unsigned long messageID)
-{
-  this->write(signalName, value, messageID, getTimeStamp());
-}
-void BlaeckSerial::write(const char *signalName, short value, unsigned long messageID)
-{
-  this->write(signalName, value, messageID, getTimeStamp());
-}
-void BlaeckSerial::write(const char *signalName, unsigned short value, unsigned long messageID)
-{
-  this->write(signalName, value, messageID, getTimeStamp());
-}
-void BlaeckSerial::write(const char *signalName, int value, unsigned long messageID)
-{
-  this->write(signalName, value, messageID, getTimeStamp());
-}
-void BlaeckSerial::write(const char *signalName, unsigned int value, unsigned long messageID)
-{
-  this->write(signalName, value, messageID, getTimeStamp());
-}
-void BlaeckSerial::write(const char *signalName, long value, unsigned long messageID)
-{
-  this->write(signalName, value, messageID, getTimeStamp());
-}
-void BlaeckSerial::write(const char *signalName, unsigned long value, unsigned long messageID)
-{
-  this->write(signalName, value, messageID, getTimeStamp());
-}
-void BlaeckSerial::write(const char *signalName, float value, unsigned long messageID)
-{
-  this->write(signalName, value, messageID, getTimeStamp());
-}
-void BlaeckSerial::write(const char *signalName, double value, unsigned long messageID)
-{
-  this->write(signalName, value, messageID, getTimeStamp());
-}
 
-void BlaeckSerial::write(const char *signalName, bool value, unsigned long messageID, unsigned long long timestamp)
+void BlaeckSerial::write(const char *signalName, bool value, unsigned long long timestamp)
 {
   int index = findSignalIndex(signalName);
   if (index >= 0)
   {
-    this->write(index, value, messageID, timestamp);
+    this->write(index, value, timestamp);
   }
 }
-void BlaeckSerial::write(const char *signalName, byte value, unsigned long messageID, unsigned long long timestamp)
+void BlaeckSerial::write(const char *signalName, byte value, unsigned long long timestamp)
 {
   int index = findSignalIndex(signalName);
   if (index >= 0)
   {
-    this->write(index, value, messageID, timestamp);
+    this->write(index, value, timestamp);
   }
 }
-void BlaeckSerial::write(const char *signalName, short value, unsigned long messageID, unsigned long long timestamp)
+void BlaeckSerial::write(const char *signalName, short value, unsigned long long timestamp)
 {
   int index = findSignalIndex(signalName);
   if (index >= 0)
   {
-    this->write(index, value, messageID, timestamp);
+    this->write(index, value, timestamp);
   }
 }
-void BlaeckSerial::write(const char *signalName, unsigned short value, unsigned long messageID, unsigned long long timestamp)
+void BlaeckSerial::write(const char *signalName, unsigned short value, unsigned long long timestamp)
 {
   int index = findSignalIndex(signalName);
   if (index >= 0)
   {
-    this->write(index, value, messageID, timestamp);
+    this->write(index, value, timestamp);
   }
 }
-void BlaeckSerial::write(const char *signalName, int value, unsigned long messageID, unsigned long long timestamp)
+void BlaeckSerial::write(const char *signalName, int value, unsigned long long timestamp)
 {
   int index = findSignalIndex(signalName);
   if (index >= 0)
   {
-    this->write(index, value, messageID, timestamp);
+    this->write(index, value, timestamp);
   }
 }
-void BlaeckSerial::write(const char *signalName, unsigned int value, unsigned long messageID, unsigned long long timestamp)
+void BlaeckSerial::write(const char *signalName, unsigned int value, unsigned long long timestamp)
 {
   int index = findSignalIndex(signalName);
   if (index >= 0)
   {
-    this->write(index, value, messageID, timestamp);
+    this->write(index, value, timestamp);
   }
 }
-void BlaeckSerial::write(const char *signalName, long value, unsigned long messageID, unsigned long long timestamp)
+void BlaeckSerial::write(const char *signalName, long value, unsigned long long timestamp)
 {
   int index = findSignalIndex(signalName);
   if (index >= 0)
   {
-    this->write(index, value, messageID, timestamp);
+    this->write(index, value, timestamp);
   }
 }
-void BlaeckSerial::write(const char *signalName, unsigned long value, unsigned long messageID, unsigned long long timestamp)
+void BlaeckSerial::write(const char *signalName, unsigned long value, unsigned long long timestamp)
 {
   int index = findSignalIndex(signalName);
   if (index >= 0)
   {
-    this->write(index, value, messageID, timestamp);
+    this->write(index, value, timestamp);
   }
 }
-void BlaeckSerial::write(const char *signalName, float value, unsigned long messageID, unsigned long long timestamp)
+void BlaeckSerial::write(const char *signalName, float value, unsigned long long timestamp)
 {
   int index = findSignalIndex(signalName);
   if (index >= 0)
   {
-    this->write(index, value, messageID, timestamp);
+    this->write(index, value, timestamp);
   }
 }
-void BlaeckSerial::write(const char *signalName, double value, unsigned long messageID, unsigned long long timestamp)
+void BlaeckSerial::write(const char *signalName, double value, unsigned long long timestamp)
 {
   int index = findSignalIndex(signalName);
   if (index >= 0)
   {
-    this->write(index, value, messageID, timestamp);
+    this->write(index, value, timestamp);
   }
 }
 
 void BlaeckSerial::write(int signalIndex, bool value)
 {
-  this->write(signalIndex, value, 1);
+  this->write(signalIndex, value, getTimeStamp());
 }
 void BlaeckSerial::write(int signalIndex, byte value)
 {
-  this->write(signalIndex, value, 1);
+  this->write(signalIndex, value, getTimeStamp());
 }
 void BlaeckSerial::write(int signalIndex, short value)
 {
-  this->write(signalIndex, value, 1);
+  this->write(signalIndex, value, getTimeStamp());
 }
 void BlaeckSerial::write(int signalIndex, unsigned short value)
 {
-  this->write(signalIndex, value, 1);
+  this->write(signalIndex, value, getTimeStamp());
 }
 void BlaeckSerial::write(int signalIndex, int value)
 {
-  this->write(signalIndex, value, 1);
+  this->write(signalIndex, value, getTimeStamp());
 }
 void BlaeckSerial::write(int signalIndex, unsigned int value)
 {
-  this->write(signalIndex, value, 1);
+  this->write(signalIndex, value, getTimeStamp());
 }
 void BlaeckSerial::write(int signalIndex, long value)
 {
-  this->write(signalIndex, value, 1);
+  this->write(signalIndex, value, getTimeStamp());
 }
 void BlaeckSerial::write(int signalIndex, unsigned long value)
 {
-  this->write(signalIndex, value, 1);
+  this->write(signalIndex, value, getTimeStamp());
 }
 void BlaeckSerial::write(int signalIndex, float value)
 {
-  this->write(signalIndex, value, 1);
+  this->write(signalIndex, value, getTimeStamp());
 }
 void BlaeckSerial::write(int signalIndex, double value)
 {
-  this->write(signalIndex, value, 1);
+  this->write(signalIndex, value, getTimeStamp());
 }
 
-void BlaeckSerial::write(int signalIndex, bool value, unsigned long messageID)
-{
-  this->write(signalIndex, value, messageID, getTimeStamp());
-}
 
-void BlaeckSerial::write(int signalIndex, byte value, unsigned long messageID)
-{
-  this->write(signalIndex, value, messageID, getTimeStamp());
-}
 
-void BlaeckSerial::write(int signalIndex, short value, unsigned long messageID)
-{
-  this->write(signalIndex, value, messageID, getTimeStamp());
-}
 
-void BlaeckSerial::write(int signalIndex, unsigned short value, unsigned long messageID)
-{
-  this->write(signalIndex, value, messageID, getTimeStamp());
-}
 
-void BlaeckSerial::write(int signalIndex, int value, unsigned long messageID)
-{
-  this->write(signalIndex, value, messageID, getTimeStamp());
-}
 
-void BlaeckSerial::write(int signalIndex, unsigned int value, unsigned long messageID)
-{
-  this->write(signalIndex, value, messageID, getTimeStamp());
-}
 
-void BlaeckSerial::write(int signalIndex, long value, unsigned long messageID)
-{
-  this->write(signalIndex, value, messageID, getTimeStamp());
-}
 
-void BlaeckSerial::write(int signalIndex, unsigned long value, unsigned long messageID)
-{
-  this->write(signalIndex, value, messageID, getTimeStamp());
-}
 
-void BlaeckSerial::write(int signalIndex, float value, unsigned long messageID)
-{
-  this->write(signalIndex, value, messageID, getTimeStamp());
-}
 
-void BlaeckSerial::write(int signalIndex, double value, unsigned long messageID)
-{
-  this->write(signalIndex, value, messageID, getTimeStamp());
-}
 
-void BlaeckSerial::write(int signalIndex, bool value, unsigned long messageID, unsigned long long timestamp)
+void BlaeckSerial::write(int signalIndex, bool value, unsigned long long timestamp)
 {
   if (signalIndex >= 0 && signalIndex < _signalIndex)
   {
     if (Signals[signalIndex].DataType == Blaeck_bool)
     {
       *((bool *)Signals[signalIndex].Address) = value;
-      this->writeDataFrame(messageID, signalIndex, signalIndex, false, timestamp);
+      this->writeDataFrame(0, signalIndex, signalIndex, false, timestamp);
     }
   }
 }
-void BlaeckSerial::write(int signalIndex, byte value, unsigned long messageID, unsigned long long timestamp)
+void BlaeckSerial::write(int signalIndex, byte value, unsigned long long timestamp)
 {
   if (signalIndex >= 0 && signalIndex < _signalIndex)
   {
     if (Signals[signalIndex].DataType == Blaeck_byte)
     {
       *((byte *)Signals[signalIndex].Address) = value;
-      this->writeDataFrame(messageID, signalIndex, signalIndex, false, timestamp);
+      this->writeDataFrame(0, signalIndex, signalIndex, false, timestamp);
     }
   }
 }
-void BlaeckSerial::write(int signalIndex, short value, unsigned long messageID, unsigned long long timestamp)
+void BlaeckSerial::write(int signalIndex, short value, unsigned long long timestamp)
 {
   if (signalIndex >= 0 && signalIndex < _signalIndex)
   {
     if (Signals[signalIndex].DataType == Blaeck_short)
     {
       *((short *)Signals[signalIndex].Address) = value;
-      this->writeDataFrame(messageID, signalIndex, signalIndex, false, timestamp);
+      this->writeDataFrame(0, signalIndex, signalIndex, false, timestamp);
     }
   }
 }
-void BlaeckSerial::write(int signalIndex, unsigned short value, unsigned long messageID, unsigned long long timestamp)
+void BlaeckSerial::write(int signalIndex, unsigned short value, unsigned long long timestamp)
 {
   if (signalIndex >= 0 && signalIndex < _signalIndex)
   {
     if (Signals[signalIndex].DataType == Blaeck_ushort)
     {
       *((unsigned short *)Signals[signalIndex].Address) = value;
-      this->writeDataFrame(messageID, signalIndex, signalIndex, false, timestamp);
+      this->writeDataFrame(0, signalIndex, signalIndex, false, timestamp);
     }
   }
 }
-void BlaeckSerial::write(int signalIndex, int value, unsigned long messageID, unsigned long long timestamp)
+void BlaeckSerial::write(int signalIndex, int value, unsigned long long timestamp)
 {
   if (signalIndex >= 0 && signalIndex < _signalIndex)
   {
@@ -4287,19 +4235,19 @@ void BlaeckSerial::write(int signalIndex, int value, unsigned long messageID, un
     if (Signals[signalIndex].DataType == Blaeck_int)
     {
       *((int *)Signals[signalIndex].Address) = value;
-      this->writeDataFrame(messageID, signalIndex, signalIndex, false, timestamp);
+      this->writeDataFrame(0, signalIndex, signalIndex, false, timestamp);
     }
 #else
     // On 32-bit platforms, int is mapped to Blaeck_long (4 bytes)
     if (Signals[signalIndex].DataType == Blaeck_long)
     {
       *((int *)Signals[signalIndex].Address) = value;
-      this->writeDataFrame(messageID, signalIndex, signalIndex, false, timestamp);
+      this->writeDataFrame(0, signalIndex, signalIndex, false, timestamp);
     }
 #endif
   }
 }
-void BlaeckSerial::write(int signalIndex, unsigned int value, unsigned long messageID, unsigned long long timestamp)
+void BlaeckSerial::write(int signalIndex, unsigned int value, unsigned long long timestamp)
 {
   if (signalIndex >= 0 && signalIndex < _signalIndex)
   {
@@ -4308,52 +4256,52 @@ void BlaeckSerial::write(int signalIndex, unsigned int value, unsigned long mess
     if (Signals[signalIndex].DataType == Blaeck_uint)
     {
       *((unsigned int *)Signals[signalIndex].Address) = value;
-      this->writeDataFrame(messageID, signalIndex, signalIndex, false, timestamp);
+      this->writeDataFrame(0, signalIndex, signalIndex, false, timestamp);
     }
 #else
     // On 32-bit platforms, unsigned int is mapped to Blaeck_ulong (4 bytes)
     if (Signals[signalIndex].DataType == Blaeck_ulong)
     {
       *((unsigned int *)Signals[signalIndex].Address) = value;
-      this->writeDataFrame(messageID, signalIndex, signalIndex, false, timestamp);
+      this->writeDataFrame(0, signalIndex, signalIndex, false, timestamp);
     }
 #endif
   }
 }
-void BlaeckSerial::write(int signalIndex, long value, unsigned long messageID, unsigned long long timestamp)
+void BlaeckSerial::write(int signalIndex, long value, unsigned long long timestamp)
 {
   if (signalIndex >= 0 && signalIndex < _signalIndex)
   {
     if (Signals[signalIndex].DataType == Blaeck_long)
     {
       *((long *)Signals[signalIndex].Address) = value;
-      this->writeDataFrame(messageID, signalIndex, signalIndex, false, timestamp);
+      this->writeDataFrame(0, signalIndex, signalIndex, false, timestamp);
     }
   }
 }
-void BlaeckSerial::write(int signalIndex, unsigned long value, unsigned long messageID, unsigned long long timestamp)
+void BlaeckSerial::write(int signalIndex, unsigned long value, unsigned long long timestamp)
 {
   if (signalIndex >= 0 && signalIndex < _signalIndex)
   {
     if (Signals[signalIndex].DataType == Blaeck_ulong)
     {
       *((unsigned long *)Signals[signalIndex].Address) = value;
-      this->writeDataFrame(messageID, signalIndex, signalIndex, false, timestamp);
+      this->writeDataFrame(0, signalIndex, signalIndex, false, timestamp);
     }
   }
 }
-void BlaeckSerial::write(int signalIndex, float value, unsigned long messageID, unsigned long long timestamp)
+void BlaeckSerial::write(int signalIndex, float value, unsigned long long timestamp)
 {
   if (signalIndex >= 0 && signalIndex < _signalIndex)
   {
     if (Signals[signalIndex].DataType == Blaeck_float)
     {
       *((float *)Signals[signalIndex].Address) = value;
-      this->writeDataFrame(messageID, signalIndex, signalIndex, false, timestamp);
+      this->writeDataFrame(0, signalIndex, signalIndex, false, timestamp);
     }
   }
 }
-void BlaeckSerial::write(int signalIndex, double value, unsigned long messageID, unsigned long long timestamp)
+void BlaeckSerial::write(int signalIndex, double value, unsigned long long timestamp)
 {
   if (signalIndex >= 0 && signalIndex < _signalIndex)
   {
@@ -4362,13 +4310,13 @@ void BlaeckSerial::write(int signalIndex, double value, unsigned long messageID,
     if (Signals[signalIndex].DataType == Blaeck_float)
     {
       *((float *)Signals[signalIndex].Address) = (float)value;
-      this->writeDataFrame(messageID, signalIndex, signalIndex, false, timestamp);
+      this->writeDataFrame(0, signalIndex, signalIndex, false, timestamp);
     }
 #else
     if (Signals[signalIndex].DataType == Blaeck_double)
     {
       *((double *)Signals[signalIndex].Address) = value;
-      this->writeDataFrame(messageID, signalIndex, signalIndex, false, timestamp);
+      this->writeDataFrame(0, signalIndex, signalIndex, false, timestamp);
     }
 #endif
   }
@@ -4376,29 +4324,21 @@ void BlaeckSerial::write(int signalIndex, double value, unsigned long messageID,
 
 void BlaeckSerial::write(const char *signalName, const char *value)
 {
-  this->write(signalName, value, 1);
+  this->write(signalName, value, getTimeStamp());
 }
-void BlaeckSerial::write(const char *signalName, const char *value, unsigned long messageID)
-{
-  this->write(signalName, value, messageID, getTimeStamp());
-}
-void BlaeckSerial::write(const char *signalName, const char *value, unsigned long messageID, unsigned long long timestamp)
+void BlaeckSerial::write(const char *signalName, const char *value, unsigned long long timestamp)
 {
   int index = findSignalIndex(signalName);
   if (index >= 0)
   {
-    this->write(index, value, messageID, timestamp);
+    this->write(index, value, timestamp);
   }
 }
 void BlaeckSerial::write(int signalIndex, const char *value)
 {
-  this->write(signalIndex, value, 1);
+  this->write(signalIndex, value, getTimeStamp());
 }
-void BlaeckSerial::write(int signalIndex, const char *value, unsigned long messageID)
-{
-  this->write(signalIndex, value, messageID, getTimeStamp());
-}
-void BlaeckSerial::write(int signalIndex, const char *value, unsigned long messageID, unsigned long long timestamp)
+void BlaeckSerial::write(int signalIndex, const char *value, unsigned long long timestamp)
 {
   if (signalIndex >= 0 && signalIndex < _signalIndex)
   {
@@ -4406,40 +4346,34 @@ void BlaeckSerial::write(int signalIndex, const char *value, unsigned long messa
     {
       // A string value lives in a user-owned buffer; repoint Address like addSignal(const char*).
       Signals[signalIndex].Address = const_cast<char *>(value);
-      this->writeDataFrame(messageID, signalIndex, signalIndex, false, timestamp);
+      this->writeDataFrame(0, signalIndex, signalIndex, false, timestamp);
     }
   }
 }
 
 void BlaeckSerial::writeAllData()
 {
-  this->writeAllData(0);
+  this->writeAllData(getTimeStamp());
 }
 
-void BlaeckSerial::writeAllData(unsigned long msg_id)
+void BlaeckSerial::writeAllData(unsigned long long timestamp)
 {
-  this->writeAllData(msg_id, getTimeStamp());
+  this->writeAllData(0, timestamp);
 }
 
 void BlaeckSerial::writeAllData(unsigned long msg_id, unsigned long long timestamp)
 {
-
   this->writeData(msg_id, 0, _signalIndex - 1, false, timestamp);
 }
 
 void BlaeckSerial::writeUpdatedData()
 {
-  this->writeUpdatedData(0);
+  this->writeUpdatedData(getTimeStamp());
 }
 
-void BlaeckSerial::writeUpdatedData(unsigned long msg_id)
+void BlaeckSerial::writeUpdatedData(unsigned long long timestamp)
 {
-  this->writeUpdatedData(msg_id, getTimeStamp());
-}
-
-void BlaeckSerial::writeUpdatedData(unsigned long messageID, unsigned long long timestamp)
-{
-  this->writeData(messageID, 0, _signalIndex - 1, true, timestamp);
+  this->writeData(0, 0, _signalIndex - 1, true, timestamp);
 }
 
 void BlaeckSerial::writeData(unsigned long msg_id, int signalIndex_start, int signalIndex_end, bool onlyUpdated, unsigned long long timestamp)
@@ -4454,34 +4388,24 @@ void BlaeckSerial::writeData(unsigned long msg_id, int signalIndex_start, int si
 
 void BlaeckSerial::timedWriteAllData()
 {
-  // A timed frame answers no request, so it carries no id. What it is - timed rather than
-  // asked for - is in the frame's flags byte instead.
-  this->timedWriteAllData(0);
+  this->timedWriteAllData(getTimeStamp());
 }
 
-void BlaeckSerial::timedWriteAllData(unsigned long msg_id)
+// A timed frame answers no request, so it carries no id. What it is - timed rather than
+// asked for - is in the frame's flags byte instead.
+void BlaeckSerial::timedWriteAllData(unsigned long long timestamp)
 {
-  this->timedWriteAllData(msg_id, getTimeStamp());
-}
-
-void BlaeckSerial::timedWriteAllData(unsigned long msg_id, unsigned long long timestamp)
-{
-  this->timedWriteData(msg_id, 0, _signalIndex - 1, false, timestamp);
+  this->timedWriteData(0, 0, _signalIndex - 1, false, timestamp);
 }
 
 void BlaeckSerial::timedWriteUpdatedData()
 {
-  this->timedWriteUpdatedData(0);
+  this->timedWriteUpdatedData(getTimeStamp());
 }
 
-void BlaeckSerial::timedWriteUpdatedData(unsigned long msg_id)
+void BlaeckSerial::timedWriteUpdatedData(unsigned long long timestamp)
 {
-  this->timedWriteUpdatedData(msg_id, getTimeStamp());
-}
-
-void BlaeckSerial::timedWriteUpdatedData(unsigned long msg_id, unsigned long long timestamp)
-{
-  this->timedWriteData(msg_id, 0, _signalIndex - 1, true, timestamp);
+  this->timedWriteData(0, 0, _signalIndex - 1, true, timestamp);
 }
 
 void BlaeckSerial::timedWriteData(unsigned long msg_id, int signalIndex_start, int signalIndex_end, bool onlyUpdated, unsigned long long timestamp)
@@ -5522,22 +5446,12 @@ void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
 
 void BlaeckSerial::tickUpdated()
 {
-  this->tickUpdated(0);
-}
-
-void BlaeckSerial::tickUpdated(unsigned long msg_id)
-{
-  this->tick(msg_id, true);
+  this->tick(0, true);
 }
 
 void BlaeckSerial::tick()
 {
-  this->tick(0);
-}
-
-void BlaeckSerial::tick(unsigned long msg_id)
-{
-  this->tick(msg_id, false);
+  this->tick(0, false);
 }
 
 void BlaeckSerial::tick(unsigned long msg_id, bool onlyUpdated)
@@ -5763,25 +5677,11 @@ void BlaeckSerial::writeState(const __FlashStringHelper *channelName, const char
   writeState(n, text);
 }
 
-void BlaeckSerial::writeState(const __FlashStringHelper *channelName, const char *text, unsigned long messageID)
-{
-  char n[MAX_STATE_NAME_COUNT];
-  copyFlashName(channelName, n, sizeof(n));
-  writeState(n, text, messageID);
-}
-
 void BlaeckSerial::writeState(const __FlashStringHelper *channelName)
 {
   char n[MAX_STATE_NAME_COUNT];
   copyFlashName(channelName, n, sizeof(n));
   writeState(n);
-}
-
-void BlaeckSerial::writeState(const __FlashStringHelper *channelName, unsigned long messageID)
-{
-  char n[MAX_STATE_NAME_COUNT];
-  copyFlashName(channelName, n, sizeof(n));
-  writeState(n, messageID);
 }
 
 BlaeckEventChannelRef BlaeckSerial::addEventChannel(const __FlashStringHelper *channelName, const __FlashStringHelper *eventTypes)
@@ -5799,18 +5699,7 @@ bool BlaeckSerial::addEventType(const __FlashStringHelper *channelName, const __
 
 void BlaeckSerial::writeEvent(const __FlashStringHelper *channelName, const __FlashStringHelper *eventType)
 {
-#if BLAECK_ENABLE_EVENTS
-  writeEvent(channelName, eventType, 0);
-#else
-  // The call still happens with events compiled out, so the overload behaves exactly like the
-  // one a sketch would have called instead: nothing.
-  writeEvent(channelName, eventType, 0);
-#endif
-}
-
-void BlaeckSerial::writeEvent(const __FlashStringHelper *channelName, const __FlashStringHelper *eventType, unsigned long messageID)
-{
   char n[MAX_EVENT_NAME_COUNT];
   copyFlashName(channelName, n, sizeof(n));
-  writeEvent(n, eventType, messageID);
+  writeEvent(n, eventType);
 }

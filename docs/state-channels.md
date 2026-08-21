@@ -1,11 +1,12 @@
 # State channels
 
-A state channel reports a value that is shown but never logged: a status line, an uptime, what
-a control is set to.
+A state channel holds a value you send on demand, rather than one sampled on a schedule. Use
+it for status displays, diagnostics, and control feedback: an uptime counter, what mode the
+device is in, or what position a slider was last set to. They appear in Home Assistant as
+sensors.
 
-That is the difference from a signal. A signal is sampled on every interval and kept, so a
-month of it fills a table you can look back at. A state channel has one value, the one it holds
-now. Nothing is kept, and nothing is written to the database.
+Unlike a signal, which can be sent at regular intervals, a state channel sits there until you
+call `writeState()` to send it.
 
 ## A sketch with two channels
 
@@ -34,25 +35,30 @@ void loop()
   {
     uptime = millis() / 1000UL;
     Blaeck.writeState(F("Uptime"));
+
+    if (uptime == 5)
+    {
+      strcpy(status, "running");
+      Blaeck.writeState(F("Status"));
+    }
   }
 }
 ```
 
-- `addStateChannel()` takes a name and the address of the variable to read. The variable has to
+- `addStateChannel()` takes a name and the address of a variable to read. The variable has to
   be a global, as a signal's does.
 - `writeState()` sends the value. There is nothing to pass, because the channel already knows
   where to look.
-- The `if` is the point of the whole thing. A state channel is sent when it changes, not on a
-  schedule, so nothing goes out on the passes where the second has not ticked over.
-
-Home Assistant shows two sensors. Neither ends up in the database.
+- You decide when to call `writeState()`. Uptime sends every second when it changes. Status
+  sends once when the uptime reaches 5 seconds.
 
 ## What a channel can carry
 
-The types are a signal's: the nine numeric ones, `bool`, and a `char` buffer. A `bool` channel
-becomes a binary sensor.
+A state channel accepts the same types as a signal: the nine numeric types, `bool` (shown as a
+binary sensor), and a `char` buffer for text.
 
-Pass no variable and the channel carries only what you hand it:
+A text channel can also be declared with no variable at all, carrying only what you hand
+`writeState()` each time:
 
 ```cpp
 void setup()
@@ -68,8 +74,13 @@ void reportStatus()
 }
 ```
 
-Text longer than 255 bytes is cut short. This second form is for text channels only - passing
-text to a numeric channel is dropped, and the debug stream says so.
+Text longer than 255 bytes is cut short. This form only exists for text channels - a numeric
+or `bool` channel always needs a variable, and passing text to one is dropped, with the debug
+stream saying so.
+
+Text is dropped on a text channel that already has a variable too. That channel reads its own
+value, so a pushed line would show until the next catalog poll and then be replaced without a
+word. Send it with `writeState(F("Status"))` and no text, which reports what the channel holds.
 
 Channel names are copied, unlike signal names, so a name built in a buffer needs nothing kept
 alive afterwards.
@@ -100,6 +111,9 @@ interrupts.
 
 Only text takes a function. A numeric channel points at a variable, and anything a function
 would have worked out can be put in one first.
+
+A channel has one source, not two. `withStateText()` on a channel declared with a variable is
+ignored and says so on the debug stream, rather than quietly taking over from the variable.
 
 ## Describing a channel
 

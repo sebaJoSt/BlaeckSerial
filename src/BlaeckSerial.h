@@ -661,6 +661,12 @@ inline bool flashStrEmpty(const __FlashStringHelper *value)
 bool optionsAccepted(const __FlashStringHelper *optionsCsv, Stream *debug,
                      const char *name, bool nameInFlash);
 
+// Whether a channel is still free to take a getter. A channel reports its value one way, and
+// _channelText() asks a getter before it reads a variable - so a getter added to a channel
+// declared with one would silence it rather than join it.
+bool stateTextAccepted(const void *stateValue, Stream *debug,
+                       const char *name, bool nameInFlash);
+
 // What a switch's own-state getter said, reduced to the "1" or "0" a switch speaks everywhere
 // else - the two values its handler accepts, and the two payloads a host is told to match
 // against. A sketch may return whatever reads best in its own code; the spellings below are
@@ -2545,6 +2551,9 @@ public:
   {
     if (auto *e = _entry())
     {
+      // Refused rather than stored, the way withOptions() refuses a list it cannot use.
+      if (!blaeck_detail::stateTextAccepted(e->stateValue, _debugStream(), e->name, e->nameInFlash))
+        return *this;
       if (e->getStateText != getStateText)
       {
         e->getStateText = getStateText;
@@ -2959,9 +2968,6 @@ public:
   */
   void writeRestarted();
 
-  // As writeRestarted(), with messageID stamped into the frame header.
-  void writeRestarted(unsigned long messageID);
-
   // ----- Devices -----
 
   /*!
@@ -2975,9 +2981,6 @@ public:
     @endcode
   */
   void writeDevices();
-
-  // As writeDevices(), with messageID stamped into the frame header.
-  void writeDevices(unsigned long messageID);
 
   // ----- Symbols -----
 
@@ -2998,9 +3001,6 @@ public:
     @endcode
   */
   void writeSymbols();
-
-  // As writeSymbols(), with messageID stamped into the frame header.
-  void writeSymbols(unsigned long messageID);
 
   // ----- Signal Config -----
 
@@ -3024,7 +3024,6 @@ public:
     @endcode
   */
   void writeSignalConfig();
-  void writeSignalConfig(unsigned long messageID);
 
   // ----- Commands -----
 
@@ -3043,7 +3042,6 @@ public:
     @endcode
   */
   void writeCommands();
-  void writeCommands(unsigned long messageID);
 
   // ----- State channels -----
   // With BLAECK_ENABLE_STATE_CHANNELS=0 these still compile but do nothing, so a
@@ -3140,7 +3138,6 @@ public:
     @endcode
   */
   void writeStateChannels();
-  void writeStateChannels(unsigned long messageID);
 
   /*!
     @brief   Reports a value on a declared channel.
@@ -3167,20 +3164,18 @@ public:
       Blaeck.writeState(F("Status"), text);
     @endcode
   */
+  // No message id, unlike the catalog writers: a push answers no request, so there is nothing
+  // to pair it with. The frame still carries the field, always zero.
   void writeState(const char *channelName, const char *text);
-  void writeState(const char *channelName, const char *text, unsigned long messageID);
 
   // Report whatever the channel currently holds - the variable a typed channel points at, or
   // the text its getter builds. The only way to push a numeric channel, since there is nothing
   // for the caller to pass: the value already lives where the channel was told to look.
   void writeState(const char *channelName);
-  void writeState(const char *channelName, unsigned long messageID);
 
-  // The same four, named with F().
+  // The same two, named with F().
   void writeState(const __FlashStringHelper *channelName, const char *text);
-  void writeState(const __FlashStringHelper *channelName, const char *text, unsigned long messageID);
   void writeState(const __FlashStringHelper *channelName);
-  void writeState(const __FlashStringHelper *channelName, unsigned long messageID);
 
   /*!
     @brief   Publishes a command's own state now.
@@ -3203,7 +3198,6 @@ public:
     @endcode
   */
   void writeCommandState(const char *command);
-  void writeCommandState(const char *command, unsigned long messageID);
 
   // ----- Events -----
   // With BLAECK_ENABLE_EVENTS=0 these still compile but do nothing.
@@ -3293,7 +3287,6 @@ public:
     @endcode
   */
   void writeEventChannels();
-  void writeEventChannels(unsigned long messageID);
 
   /*!
     @brief   Reports that something happened on a declared channel.
@@ -3312,11 +3305,9 @@ public:
     @endcode
   */
   void writeEvent(const char *channelName, const __FlashStringHelper *eventType);
-  void writeEvent(const char *channelName, const __FlashStringHelper *eventType, unsigned long messageID);
 
-  // The same two, named with F().
+  // The same one, named with F().
   void writeEvent(const __FlashStringHelper *channelName, const __FlashStringHelper *eventType);
-  void writeEvent(const __FlashStringHelper *channelName, const __FlashStringHelper *eventType, unsigned long messageID);
 
   // ----- Data Write -----
 
@@ -3360,29 +3351,18 @@ public:
   void write(const char *signalName, double value);
   void write(const char *signalName, const char *value);
 
-  void write(const char *signalName, bool value, unsigned long messageID);
-  void write(const char *signalName, byte value, unsigned long messageID);
-  void write(const char *signalName, short value, unsigned long messageID);
-  void write(const char *signalName, unsigned short value, unsigned long messageID);
-  void write(const char *signalName, int value, unsigned long messageID);
-  void write(const char *signalName, unsigned int value, unsigned long messageID);
-  void write(const char *signalName, long value, unsigned long messageID);
-  void write(const char *signalName, unsigned long value, unsigned long messageID);
-  void write(const char *signalName, float value, unsigned long messageID);
-  void write(const char *signalName, double value, unsigned long messageID);
-  void write(const char *signalName, const char *value, unsigned long messageID);
 
-  void write(const char *signalName, bool value, unsigned long messageID, unsigned long long timestamp);
-  void write(const char *signalName, byte value, unsigned long messageID, unsigned long long timestamp);
-  void write(const char *signalName, short value, unsigned long messageID, unsigned long long timestamp);
-  void write(const char *signalName, unsigned short value, unsigned long messageID, unsigned long long timestamp);
-  void write(const char *signalName, int value, unsigned long messageID, unsigned long long timestamp);
-  void write(const char *signalName, unsigned int value, unsigned long messageID, unsigned long long timestamp);
-  void write(const char *signalName, long value, unsigned long messageID, unsigned long long timestamp);
-  void write(const char *signalName, unsigned long value, unsigned long messageID, unsigned long long timestamp);
-  void write(const char *signalName, float value, unsigned long messageID, unsigned long long timestamp);
-  void write(const char *signalName, double value, unsigned long messageID, unsigned long long timestamp);
-  void write(const char *signalName, const char *value, unsigned long messageID, unsigned long long timestamp);
+  void write(const char *signalName, bool value, unsigned long long timestamp);
+  void write(const char *signalName, byte value, unsigned long long timestamp);
+  void write(const char *signalName, short value, unsigned long long timestamp);
+  void write(const char *signalName, unsigned short value, unsigned long long timestamp);
+  void write(const char *signalName, int value, unsigned long long timestamp);
+  void write(const char *signalName, unsigned int value, unsigned long long timestamp);
+  void write(const char *signalName, long value, unsigned long long timestamp);
+  void write(const char *signalName, unsigned long value, unsigned long long timestamp);
+  void write(const char *signalName, float value, unsigned long long timestamp);
+  void write(const char *signalName, double value, unsigned long long timestamp);
+  void write(const char *signalName, const char *value, unsigned long long timestamp);
 
   /*!
     @brief   Finds a registered signal's index by name.
@@ -3414,29 +3394,18 @@ public:
   void write(int signalIndex, double value);
   void write(int signalIndex, const char *value);
 
-  void write(int signalIndex, bool value, unsigned long messageID);
-  void write(int signalIndex, byte value, unsigned long messageID);
-  void write(int signalIndex, short value, unsigned long messageID);
-  void write(int signalIndex, unsigned short value, unsigned long messageID);
-  void write(int signalIndex, int value, unsigned long messageID);
-  void write(int signalIndex, unsigned int value, unsigned long messageID);
-  void write(int signalIndex, long value, unsigned long messageID);
-  void write(int signalIndex, unsigned long value, unsigned long messageID);
-  void write(int signalIndex, float value, unsigned long messageID);
-  void write(int signalIndex, double value, unsigned long messageID);
-  void write(int signalIndex, const char *value, unsigned long messageID);
 
-  void write(int signalIndex, bool value, unsigned long messageID, unsigned long long timestamp);
-  void write(int signalIndex, byte value, unsigned long messageID, unsigned long long timestamp);
-  void write(int signalIndex, short value, unsigned long messageID, unsigned long long timestamp);
-  void write(int signalIndex, unsigned short value, unsigned long messageID, unsigned long long timestamp);
-  void write(int signalIndex, int value, unsigned long messageID, unsigned long long timestamp);
-  void write(int signalIndex, unsigned int value, unsigned long messageID, unsigned long long timestamp);
-  void write(int signalIndex, long value, unsigned long messageID, unsigned long long timestamp);
-  void write(int signalIndex, unsigned long value, unsigned long messageID, unsigned long long timestamp);
-  void write(int signalIndex, float value, unsigned long messageID, unsigned long long timestamp);
-  void write(int signalIndex, double value, unsigned long messageID, unsigned long long timestamp);
-  void write(int signalIndex, const char *value, unsigned long messageID, unsigned long long timestamp);
+  void write(int signalIndex, bool value, unsigned long long timestamp);
+  void write(int signalIndex, byte value, unsigned long long timestamp);
+  void write(int signalIndex, short value, unsigned long long timestamp);
+  void write(int signalIndex, unsigned short value, unsigned long long timestamp);
+  void write(int signalIndex, int value, unsigned long long timestamp);
+  void write(int signalIndex, unsigned int value, unsigned long long timestamp);
+  void write(int signalIndex, long value, unsigned long long timestamp);
+  void write(int signalIndex, unsigned long value, unsigned long long timestamp);
+  void write(int signalIndex, float value, unsigned long long timestamp);
+  void write(int signalIndex, double value, unsigned long long timestamp);
+  void write(int signalIndex, const char *value, unsigned long long timestamp);
 
   // ----- Data Update -----
 
@@ -3464,6 +3433,10 @@ public:
   void update(const char *signalName, unsigned long value);
   void update(const char *signalName, float value);
   void update(const char *signalName, double value);
+  // Text, matching the write() form. The buffer is not copied: the signal is repointed at it,
+  // so it has to stay alive until the next tickUpdated() sends it - longer than write() needs,
+  // which sends before it returns.
+  void update(const char *signalName, const char *value);
 
   // Update value and mark Signal as updated - by index
   void update(int signalIndex, bool value);
@@ -3476,6 +3449,7 @@ public:
   void update(int signalIndex, unsigned long value);
   void update(int signalIndex, float value);
   void update(int signalIndex, double value);
+  void update(int signalIndex, const char *value);
 
   // ----- Mark Signals as Updated -----
 
@@ -3547,30 +3521,18 @@ public:
   void writeAllData();
 
   /*!
-    @brief   Sends every signal, tagged so a host can match it to a request.
-
-    @param   messageID  Number the host sent with its request, echoed back.
-
-    @code
-      Blaeck.writeAllData(42);
-    @endcode
-  */
-  void writeAllData(unsigned long messageID);
-
-  /*!
     @brief   Sends every signal, timestamped by the caller.
 
     For a sketch holding a better clock than the timestamp callback reaches, or one
     writing values it recorded earlier.
 
-    @param   messageID  Number the host sent with its request, echoed back.
     @param   timestamp  Microseconds, in whatever epoch setTimestampMode() implies.
 
     @code
-      Blaeck.writeAllData(42, 1723600000000000ULL);
+      Blaeck.writeAllData(1723600000000000ULL);
     @endcode
   */
-  void writeAllData(unsigned long messageID, unsigned long long timestamp);
+  void writeAllData(unsigned long long timestamp);
 
   /*!
     @brief   Sends every signal, but only once the interval has elapsed.
@@ -3593,25 +3555,14 @@ public:
   void timedWriteAllData();
 
   /*!
-    @brief   Sends every signal when due, tagged so a host can match it to a request.
-    @param   msg_id  Number the host sent with its request, echoed back.
-
-    @code
-      Blaeck.timedWriteAllData(42);
-    @endcode
-  */
-  void timedWriteAllData(unsigned long msg_id);
-
-  /*!
     @brief   Sends every signal when due, timestamped by the caller.
-    @param   messageID  Number the host sent with its request, echoed back.
     @param   timestamp  Microseconds, in whatever epoch setTimestampMode() implies.
 
     @code
-      Blaeck.timedWriteAllData(42, 1723600000000000ULL);
+      Blaeck.timedWriteAllData(1723600000000000ULL);
     @endcode
   */
-  void timedWriteAllData(unsigned long messageID, unsigned long long timestamp);
+  void timedWriteAllData(unsigned long long timestamp);
 
   // ----- Data Write Updated -----
 
@@ -3630,25 +3581,14 @@ public:
   void writeUpdatedData();
 
   /*!
-    @brief   Sends the changed signals, tagged so a host can match it to a request.
-    @param   messageID  Number the host sent with its request, echoed back.
-
-    @code
-      Blaeck.writeUpdatedData(42);
-    @endcode
-  */
-  void writeUpdatedData(unsigned long messageID);
-
-  /*!
     @brief   Sends the changed signals, timestamped by the caller.
-    @param   messageID  Number the host sent with its request, echoed back.
     @param   timestamp  Microseconds, in whatever epoch setTimestampMode() implies.
 
     @code
-      Blaeck.writeUpdatedData(42, 1723600000000000ULL);
+      Blaeck.writeUpdatedData(1723600000000000ULL);
     @endcode
   */
-  void writeUpdatedData(unsigned long messageID, unsigned long long timestamp);
+  void writeUpdatedData(unsigned long long timestamp);
 
   /*!
     @brief   Sends the changed signals, but only once the interval has elapsed.
@@ -3665,25 +3605,14 @@ public:
   void timedWriteUpdatedData();
 
   /*!
-    @brief   Sends the changed signals when due, tagged for a host's request.
-    @param   msg_id  Number the host sent with its request, echoed back.
-
-    @code
-      Blaeck.timedWriteUpdatedData(42);
-    @endcode
-  */
-  void timedWriteUpdatedData(unsigned long msg_id);
-
-  /*!
     @brief   Sends the changed signals when due, timestamped by the caller.
-    @param   messageID  Number the host sent with its request, echoed back.
     @param   timestamp  Microseconds, in whatever epoch setTimestampMode() implies.
 
     @code
-      Blaeck.timedWriteUpdatedData(42, 1723600000000000ULL);
+      Blaeck.timedWriteUpdatedData(1723600000000000ULL);
     @endcode
   */
-  void timedWriteUpdatedData(unsigned long messageID, unsigned long long timestamp);
+  void timedWriteUpdatedData(unsigned long long timestamp);
 
   // ----- Tick -----
 
@@ -3705,20 +3634,6 @@ public:
   void tick();
 
   /*!
-    @brief   Reads and sends as tick(), tagged so a host can match the response.
-
-    Left to tick(), the library supplies a number saying whether the interval was
-    fixed by the sketch or set by the host.
-
-    @param   messageID  Number the host sent with its request, echoed back.
-
-    @code
-      Blaeck.tick(42);
-    @endcode
-  */
-  void tick(unsigned long messageID);
-
-  /*!
     @brief   Reads whatever arrived, then sends only the signals that changed.
 
     As tick(), but an unchanged signal costs nothing - where tick() sends every
@@ -3733,16 +3648,6 @@ public:
     @endcode
   */
   void tickUpdated();
-
-  /*!
-    @brief   Reads and sends changed signals, tagged for a host's request.
-    @param   messageID  Number the host sent with its request, echoed back.
-
-    @code
-      Blaeck.tickUpdated(42);
-    @endcode
-  */
-  void tickUpdated(unsigned long messageID);
 
   // ----- Timed Data -----
 
@@ -4398,8 +4303,20 @@ private:
   void timedWriteData(unsigned long messageID, int signalIndex_start, int signalIndex_end, bool onlyUpdated, unsigned long long timestamp);
   void tick(unsigned long messageID, bool onlyUpdated);
 
+  void writeAllData(unsigned long messageID, unsigned long long timestamp);
+
   void writeData(unsigned long messageID, int signalIndex_start, int signalIndex_end, bool onlyUpdated, unsigned long long timestamp);
   void writeDataFrame(unsigned long MessageID, int signalIndex_start, int signalIndex_end, bool onlyUpdated, unsigned long long timestamp);
+
+  // Stamp the id off the request that asked for them. Private: only the dispatcher has one,
+  // and a sketch sending a catalog unasked calls the public no-argument form.
+  void writeRestarted(unsigned long messageID);
+  void writeDevices(unsigned long messageID);
+  void writeSymbols(unsigned long messageID);
+  void writeSignalConfig(unsigned long messageID);
+  void writeCommands(unsigned long messageID);
+  void writeStateChannels(unsigned long messageID);
+  void writeEventChannels(unsigned long messageID);
 
   void writeSymbolsFrame(unsigned long MessageID);
 #if BLAECK_ENABLE_SIGNAL_META
@@ -4840,7 +4757,7 @@ private:
   static bool _flashStringEqualsName(const __FlashStringHelper *flashName, const char *name);
   // The 0x95 frame itself, by channel index. Reached by writeState() after its guards and by
   // writeCommandState() for a channel those guards deliberately refuse.
-  void _writeStateFrame(int channelIndex, const char *text, unsigned long messageID);
+  void _writeStateFrame(int channelIndex, const char *text);
 #endif
 #if BLAECK_ENABLE_EVENTS
   typedef blaeck_detail::EventChannelEntry EventChannelEntry;
