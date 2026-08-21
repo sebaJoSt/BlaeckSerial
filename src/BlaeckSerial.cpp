@@ -487,14 +487,26 @@ BlaeckNumericSignalRef BlaeckSerial::addSignal(const char *signalName, unsigned 
   return BlaeckNumericSignalRef(this, (int16_t)_registerSignal(signalName, Blaeck_ushort, value));
 }
 
+// int and unsigned int are two bytes on AVR and four on a 32-bit board, so each is registered
+// as the type matching its real width - the catalog then declares what is actually sent, and the
+// non-AVR branches in write() and update() have a type to match. The same #ifdef repeats on every
+// int and unsigned int registration below, signals and state channels alike.
 BlaeckNumericSignalRef BlaeckSerial::addSignal(const char *signalName, int *value)
 {
+#ifdef __AVR__
   return BlaeckNumericSignalRef(this, (int16_t)_registerSignal(signalName, Blaeck_int, value));
+#else
+  return BlaeckNumericSignalRef(this, (int16_t)_registerSignal(signalName, Blaeck_long, value));
+#endif
 }
 
 BlaeckNumericSignalRef BlaeckSerial::addSignal(const char *signalName, unsigned int *value)
 {
+#ifdef __AVR__
   return BlaeckNumericSignalRef(this, (int16_t)_registerSignal(signalName, Blaeck_uint, value));
+#else
+  return BlaeckNumericSignalRef(this, (int16_t)_registerSignal(signalName, Blaeck_ulong, value));
+#endif
 }
 
 BlaeckNumericSignalRef BlaeckSerial::addSignal(const char *signalName, long *value)
@@ -551,12 +563,20 @@ BlaeckNumericSignalRef BlaeckSerial::addSignal(const __FlashStringHelper *signal
 
 BlaeckNumericSignalRef BlaeckSerial::addSignal(const __FlashStringHelper *signalName, int *value)
 {
+#ifdef __AVR__
   return BlaeckNumericSignalRef(this, (int16_t)_registerSignal(signalName, Blaeck_int, value));
+#else
+  return BlaeckNumericSignalRef(this, (int16_t)_registerSignal(signalName, Blaeck_long, value));
+#endif
 }
 
 BlaeckNumericSignalRef BlaeckSerial::addSignal(const __FlashStringHelper *signalName, unsigned int *value)
 {
+#ifdef __AVR__
   return BlaeckNumericSignalRef(this, (int16_t)_registerSignal(signalName, Blaeck_uint, value));
+#else
+  return BlaeckNumericSignalRef(this, (int16_t)_registerSignal(signalName, Blaeck_ulong, value));
+#endif
 }
 
 BlaeckNumericSignalRef BlaeckSerial::addSignal(const __FlashStringHelper *signalName, long *value)
@@ -2404,12 +2424,20 @@ BlaeckNumericStateRef BlaeckSerial::addStateChannel(const char *channelName, uns
 
 BlaeckNumericStateRef BlaeckSerial::addStateChannel(const char *channelName, int *value)
 {
+#ifdef __AVR__
   return BlaeckNumericStateRef(this, (int16_t)_registerStateChannel(channelName, nullptr, Blaeck_int, value));
+#else
+  return BlaeckNumericStateRef(this, (int16_t)_registerStateChannel(channelName, nullptr, Blaeck_long, value));
+#endif
 }
 
 BlaeckNumericStateRef BlaeckSerial::addStateChannel(const char *channelName, unsigned int *value)
 {
+#ifdef __AVR__
   return BlaeckNumericStateRef(this, (int16_t)_registerStateChannel(channelName, nullptr, Blaeck_uint, value));
+#else
+  return BlaeckNumericStateRef(this, (int16_t)_registerStateChannel(channelName, nullptr, Blaeck_ulong, value));
+#endif
 }
 
 BlaeckNumericStateRef BlaeckSerial::addStateChannel(const char *channelName, long *value)
@@ -5650,12 +5678,20 @@ BlaeckNumericStateRef BlaeckSerial::addStateChannel(const __FlashStringHelper *c
 
 BlaeckNumericStateRef BlaeckSerial::addStateChannel(const __FlashStringHelper *channelName, int *value)
 {
+#ifdef __AVR__
   return BlaeckNumericStateRef(this, (int16_t)_registerStateChannel(nullptr, channelName, Blaeck_int, value));
+#else
+  return BlaeckNumericStateRef(this, (int16_t)_registerStateChannel(nullptr, channelName, Blaeck_long, value));
+#endif
 }
 
 BlaeckNumericStateRef BlaeckSerial::addStateChannel(const __FlashStringHelper *channelName, unsigned int *value)
 {
+#ifdef __AVR__
   return BlaeckNumericStateRef(this, (int16_t)_registerStateChannel(nullptr, channelName, Blaeck_uint, value));
+#else
+  return BlaeckNumericStateRef(this, (int16_t)_registerStateChannel(nullptr, channelName, Blaeck_ulong, value));
+#endif
 }
 
 BlaeckNumericStateRef BlaeckSerial::addStateChannel(const __FlashStringHelper *channelName, long *value)

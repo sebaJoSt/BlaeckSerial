@@ -1442,7 +1442,11 @@ public:
   // sketch never formats one. One overload per numeric type, as addSignal() has.
   BlaeckNumberCommandRef &withOwnState(const __FlashStringHelper *channelName, int *value)
   {
+#ifdef __AVR__
     _setOwnState(channelName, Blaeck_int, value);
+#else
+    _setOwnState(channelName, Blaeck_long, value);
+#endif
     return *this;
   }
 
@@ -1451,7 +1455,11 @@ public:
   // the sketch never formats one. One overload per numeric type, as addSignal() has.
   BlaeckNumberCommandRef &withOwnState(const __FlashStringHelper *channelName, unsigned int *value)
   {
+#ifdef __AVR__
     _setOwnState(channelName, Blaeck_uint, value);
+#else
+    _setOwnState(channelName, Blaeck_ulong, value);
+#endif
     return *this;
   }
 
