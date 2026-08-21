@@ -100,7 +100,7 @@ void setup()
   Blaeck.onButtonCommand("Ping", onPing);
 
   // Where <Ping> answers. Declared here so the sensor exists from the start.
-  Blaeck.addStateChannel(F("Status")).withIcon(F("mdi:message-text"));
+  Blaeck.addStateChannel(F("Status"), BlaeckText).withIcon(F("mdi:message-text"));
 }
 
 void loop()

@@ -57,13 +57,13 @@ void loop()
 A state channel accepts the same types as a signal: the nine numeric types, `bool` (shown as a
 binary sensor), and a `char` buffer for text.
 
-A text channel can also be declared with no variable at all, carrying only what you hand
-`writeState()` each time:
+A channel can also be declared with no variable at all, naming its type with a tag instead of a
+pointer, and carrying only what you hand `writeState()` each time:
 
 ```cpp
 void setup()
 {
-  Blaeck.addStateChannel(F("Status"));
+  Blaeck.addStateChannel(F("Status"), BlaeckText);
 }
 
 void reportStatus()
@@ -74,9 +74,13 @@ void reportStatus()
 }
 ```
 
-Text longer than 255 bytes is cut short. This form only exists for text channels - a numeric
-or `bool` channel always needs a variable, and passing text to one is dropped, with the debug
-stream saying so.
+Text longer than 255 bytes is cut short.
+
+The tag is what the second argument would have said as a pointer. `BlaeckText`, `BlaeckBool`,
+and one per numeric type - `BlaeckByte`, `BlaeckShort`, `BlaeckUShort`, `BlaeckInt`,
+`BlaeckUInt`, `BlaeckLong`, `BlaeckULong`, `BlaeckFloat`, `BlaeckDouble`. On AVR a `double` is
+four bytes, so `BlaeckDouble` names the same channel `BlaeckFloat` does, exactly as `double *`
+and `float *` already do.
 
 Text is dropped on a text channel that already has a variable too. That channel reads its own
 value, so a pushed line would show until the next catalog poll and then be replaced without a
@@ -98,7 +102,7 @@ const char *statusText()
   return text;
 }
 
-Blaeck.addStateChannel(F("Status")).withStateText(statusText);
+Blaeck.addStateChannel(F("Status"), BlaeckText).withStateText(statusText);
 ```
 
 Nothing has to push this one to keep it current: it is worked out when it is read, so it cannot

@@ -237,6 +237,43 @@ typedef enum DataType : uint8_t
 // the one mapping, and the schema hash, the symbol list and the state frames all go through
 // it. Reorder this list or insert a type and nothing on the wire moves.
 
+// What a state channel carries, when there is no variable whose type could say it. The second
+// argument to addStateChannel() always names the type - as a pointer when the channel reads a
+// variable, as one of these when it carries only what writeState() hands it.
+//
+// Three types rather than one enum because the tag chooses the handle that comes back, and a
+// handle only offers the modifiers its kind can use: withUnit() on a text channel makes a host
+// refuse the text, so it should not compile. An enum value cannot select a return type.
+struct BlaeckTextTag
+{
+};
+struct BlaeckBoolTag
+{
+};
+struct BlaeckNumericTag
+{
+  /*!
+    @brief   Which numeric type the tag names.
+
+    @code
+      Blaeck.addStateChannel(F("Temperature"), BlaeckFloat);
+    @endcode
+  */
+  dataType t;
+};
+
+constexpr BlaeckTextTag BlaeckText{};
+constexpr BlaeckBoolTag BlaeckBool{};
+constexpr BlaeckNumericTag BlaeckByte{Blaeck_byte};
+constexpr BlaeckNumericTag BlaeckShort{Blaeck_short};
+constexpr BlaeckNumericTag BlaeckUShort{Blaeck_ushort};
+constexpr BlaeckNumericTag BlaeckInt{Blaeck_int};
+constexpr BlaeckNumericTag BlaeckUInt{Blaeck_uint};
+constexpr BlaeckNumericTag BlaeckLong{Blaeck_long};
+constexpr BlaeckNumericTag BlaeckULong{Blaeck_ulong};
+constexpr BlaeckNumericTag BlaeckFloat{Blaeck_float};
+constexpr BlaeckNumericTag BlaeckDouble{Blaeck_double};
+
 // How a signal's value accumulates over time, which is what lets a host keep
 // statistics on it (0xF0 SignalMetaFlags bits 3-5). MEASUREMENT is a value that goes up and down
 // and is meaningful at any instant; TOTAL and TOTAL_INCREASING are running sums,
@@ -2319,7 +2356,7 @@ public:
     @return  The same handle, for chaining.
 
     @code
-      Blaeck.addStateChannel(F("Status")).withIcon(F("mdi:pulse"));
+      Blaeck.addStateChannel(F("Status"), BlaeckText).withIcon(F("mdi:pulse"));
     @endcode
   */
   TYPE &withIcon(const __FlashStringHelper *icon)
@@ -2347,7 +2384,7 @@ public:
     @return  The same handle, for chaining.
 
     @code
-      Blaeck.addStateChannel(F("Status")).withIcon(F("mdi:pulse")).diagnostic();
+      Blaeck.addStateChannel(F("Status"), BlaeckText).withIcon(F("mdi:pulse")).diagnostic();
     @endcode
   */
   TYPE &diagnostic(bool on = true)
@@ -2375,7 +2412,7 @@ public:
              all, rather than appearing unstyled.
 
     @code
-      Blaeck.addStateChannel(F("LastSeen")).withDeviceClass(F("timestamp"));
+      Blaeck.addStateChannel(F("LastSeen"), BlaeckText).withDeviceClass(F("timestamp"));
     @endcode
   */
   TYPE &withDeviceClass(const __FlashStringHelper *deviceClass)
@@ -2400,7 +2437,7 @@ public:
     @return  The same handle, for chaining.
 
     @code
-      Blaeck.addStateChannel(F("BuildInfo")).disabledByDefault();
+      Blaeck.addStateChannel(F("BuildInfo"), BlaeckText).disabledByDefault();
     @endcode
   */
   TYPE &disabledByDefault(bool on = true)
@@ -2427,7 +2464,7 @@ public:
     @return  The same handle, for chaining.
 
     @code
-      Blaeck.addStateChannel(F("Heartbeat")).forceUpdate();
+      Blaeck.addStateChannel(F("Heartbeat"), BlaeckText).forceUpdate();
     @endcode
   */
   TYPE &forceUpdate(bool on = true)
@@ -2559,7 +2596,7 @@ public:
              variable and format it - nothing else.
 
     @code
-      Blaeck.addStateChannel(F("Offset")).withStateText(offsetText);
+      Blaeck.addStateChannel(F("Offset"), BlaeckText).withStateText(offsetText);
     @endcode
   */
   BlaeckTextStateRef &withStateText(BlaeckStateTextGetter getStateText)
@@ -2597,7 +2634,7 @@ public:
              and reported on the debug stream, for the reason given on the signal form.
 
     @code
-      Blaeck.addStateChannel(F("Mode"))
+      Blaeck.addStateChannel(F("Mode"), BlaeckText)
           .withDeviceClass(F("enum"))
           .withOptions(F("idle,running,fault"));
     @endcode
@@ -3083,11 +3120,13 @@ public:
     @return  Handle describing how a host should present the channel.
 
     @code
-      Blaeck.addStateChannel(F("Status")).withIcon(F("mdi:pulse")).diagnostic();
+      Blaeck.addStateChannel(F("Status"), BlaeckText).withIcon(F("mdi:pulse")).diagnostic();
       Blaeck.addStateChannel(F("Amplitude"), &Amplitude).withUnit(F("V"));
     @endcode
   */
-  BlaeckTextStateRef addStateChannel(const char *channelName);
+  BlaeckTextStateRef addStateChannel(const char *channelName, BlaeckTextTag);
+  BlaeckBoolStateRef addStateChannel(const char *channelName, BlaeckBoolTag);
+  BlaeckNumericStateRef addStateChannel(const char *channelName, BlaeckNumericTag type);
   BlaeckTextStateRef addStateChannel(const char *channelName, const char *value);
   BlaeckBoolStateRef addStateChannel(const char *channelName, bool *value);
   BlaeckNumericStateRef addStateChannel(const char *channelName, byte *value);
@@ -3104,7 +3143,9 @@ public:
   // name is - a channel always holds its own copy - so F() keeps the literal out of SRAM
   // rather than changing how the channel stores it. Truncated at MAX_STATE_NAME_COUNT, the
   // same limit the const char* form applies.
-  BlaeckTextStateRef addStateChannel(const __FlashStringHelper *channelName);
+  BlaeckTextStateRef addStateChannel(const __FlashStringHelper *channelName, BlaeckTextTag);
+  BlaeckBoolStateRef addStateChannel(const __FlashStringHelper *channelName, BlaeckBoolTag);
+  BlaeckNumericStateRef addStateChannel(const __FlashStringHelper *channelName, BlaeckNumericTag type);
   BlaeckTextStateRef addStateChannel(const __FlashStringHelper *channelName, const char *value);
   BlaeckBoolStateRef addStateChannel(const __FlashStringHelper *channelName, bool *value);
   BlaeckNumericStateRef addStateChannel(const __FlashStringHelper *channelName, byte *value);
@@ -3134,7 +3175,7 @@ public:
 
     @code
       Blaeck.clearAllStateChannels();
-      Blaeck.addStateChannel(F("Status"));
+      Blaeck.addStateChannel(F("Status"), BlaeckText);
     @endcode
   */
   void clearAllStateChannels();

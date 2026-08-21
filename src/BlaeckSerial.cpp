@@ -55,6 +55,17 @@ byte BlaeckSerial::_dtypeCode(dataType t)
   }
 }
 
+// The type a numeric tag names, carrying the same AVR mapping the pointer overloads apply - so
+// BlaeckDouble and BlaeckFloat name the same channel there, as double * and float * already do.
+static dataType _tagType(BlaeckNumericTag tag)
+{
+#ifdef __AVR__
+  return tag.t == Blaeck_double ? Blaeck_float : tag.t;
+#else
+  return tag.t;
+#endif
+}
+
 void BlaeckSerial::_flushCatalogs()
 {
   if (StreamRef == nullptr)
@@ -2356,9 +2367,19 @@ int BlaeckSerial::_registerStateChannel(const char *channelName, const __FlashSt
   return -1;
 }
 
-BlaeckTextStateRef BlaeckSerial::addStateChannel(const char *channelName)
+BlaeckTextStateRef BlaeckSerial::addStateChannel(const char *channelName, BlaeckTextTag)
 {
   return BlaeckTextStateRef(this, (int16_t)_registerStateChannel(channelName, nullptr));
+}
+
+BlaeckBoolStateRef BlaeckSerial::addStateChannel(const char *channelName, BlaeckBoolTag)
+{
+  return BlaeckBoolStateRef(this, (int16_t)_registerStateChannel(channelName, nullptr, Blaeck_bool, nullptr));
+}
+
+BlaeckNumericStateRef BlaeckSerial::addStateChannel(const char *channelName, BlaeckNumericTag type)
+{
+  return BlaeckNumericStateRef(this, (int16_t)_registerStateChannel(channelName, nullptr, _tagType(type), nullptr));
 }
 
 BlaeckTextStateRef BlaeckSerial::addStateChannel(const char *channelName, const char *value)
@@ -3070,7 +3091,9 @@ void BlaeckSerial::writeStateChannelsFrame(unsigned long msg_id)
 // is stored. The catalog still answers, with an empty list (see _writeEmptyFrame).
 // The handle's modifiers compile and store nothing, so a sketch declaring channels needs no
 // #ifdef. Nothing is counted as rejected: the feature is off, not failing.
-BlaeckTextStateRef BlaeckSerial::addStateChannel(const char *) { return BlaeckTextStateRef(this, -1); }
+BlaeckTextStateRef BlaeckSerial::addStateChannel(const char *, BlaeckTextTag) { return BlaeckTextStateRef(this, -1); }
+BlaeckBoolStateRef BlaeckSerial::addStateChannel(const char *, BlaeckBoolTag) { return BlaeckBoolStateRef(this, -1); }
+BlaeckNumericStateRef BlaeckSerial::addStateChannel(const char *, BlaeckNumericTag) { return BlaeckNumericStateRef(this, -1); }
 BlaeckTextStateRef BlaeckSerial::addStateChannel(const char *, const char *) { return BlaeckTextStateRef(this, -1); }
 BlaeckBoolStateRef BlaeckSerial::addStateChannel(const char *, bool *) { return BlaeckBoolStateRef(this, -1); }
 BlaeckNumericStateRef BlaeckSerial::addStateChannel(const char *, byte *) { return BlaeckNumericStateRef(this, -1); }
@@ -5521,9 +5544,19 @@ void BlaeckSerial::validatePlatformSizes()
 // definition that feature left behind - the real one, or the do-nothing stub. One definition
 // each, either way.
 
-BlaeckTextStateRef BlaeckSerial::addStateChannel(const __FlashStringHelper *channelName)
+BlaeckTextStateRef BlaeckSerial::addStateChannel(const __FlashStringHelper *channelName, BlaeckTextTag)
 {
   return BlaeckTextStateRef(this, (int16_t)_registerStateChannel(nullptr, channelName, Blaeck_string, nullptr));
+}
+
+BlaeckBoolStateRef BlaeckSerial::addStateChannel(const __FlashStringHelper *channelName, BlaeckBoolTag)
+{
+  return BlaeckBoolStateRef(this, (int16_t)_registerStateChannel(nullptr, channelName, Blaeck_bool, nullptr));
+}
+
+BlaeckNumericStateRef BlaeckSerial::addStateChannel(const __FlashStringHelper *channelName, BlaeckNumericTag type)
+{
+  return BlaeckNumericStateRef(this, (int16_t)_registerStateChannel(nullptr, channelName, _tagType(type), nullptr));
 }
 
 BlaeckTextStateRef BlaeckSerial::addStateChannel(const __FlashStringHelper *channelName, const char *value)

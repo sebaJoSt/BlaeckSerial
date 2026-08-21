@@ -177,8 +177,8 @@ void setup()
       .withStateClass(BLAECK_STATE_CLASS_MEASUREMENT)
       .diagnostic();
 
-  Blaeck.addStateChannel(F("Status")).withIcon(F("mdi:pulse")).diagnostic();
-  Blaeck.addStateChannel(F("StatusOnDemand")).withIcon(F("mdi:message-text")).diagnostic();
+  Blaeck.addStateChannel(F("Status"), BlaeckText).withIcon(F("mdi:pulse")).diagnostic();
+  Blaeck.addStateChannel(F("StatusOnDemand"), BlaeckText).withIcon(F("mdi:message-text")).diagnostic();
 
   // addEventType() does the same one name at a time, for a list built conditionally.
   Blaeck.addEventChannel(F("Activity"), F("idle_warning,resumed"))
