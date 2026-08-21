@@ -39,7 +39,6 @@ jobs:
             sketch-paths: |
               - examples/Basic
               - examples/Commands
-              - examples/DatatypeTest
               - examples/EventChannels
               - examples/SHT31TempHumiditySensor
               - examples/SignalMetadata
@@ -60,7 +59,6 @@ jobs:
             sketch-paths: |
               - examples/Basic
               - examples/Commands
-              - examples/DatatypeTest
               - examples/EventChannels
               - examples/SHT31TempHumiditySensor
               - examples/SignalMetadata
@@ -80,7 +78,6 @@ jobs:
             sketch-paths: |
               - examples/Basic
               - examples/Commands
-              - examples/DatatypeTest
               - examples/EventChannels
               - examples/SHT31TempHumiditySensor
               - examples/SignalMetadata
@@ -100,7 +97,6 @@ jobs:
             sketch-paths: |
               - examples/Basic
               - examples/Commands
-              - examples/DatatypeTest
               - examples/EventChannels
               - examples/SHT31TempHumiditySensor
               - examples/SignalMetadata
@@ -123,7 +119,6 @@ jobs:
             sketch-paths: |
               - examples/Basic
               - examples/Commands
-              - examples/DatatypeTest
               - examples/EventChannels
               - examples/SHT31TempHumiditySensor
               - examples/SignalMetadata

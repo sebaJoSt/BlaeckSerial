@@ -6,8 +6,11 @@ Arduino library sending binary sensor data over Serial using the Blaeck protocol
 
 - `src/` — the library. The only folder compiled into a sketch
 - `examples/` — sketches listed under *File → Examples*
-- `extras/` — the style guide and the doc tooling. Not compiled, but installed
-  alongside the library, so keep it small
+- `extras/` — the style guide, the doc tooling, and the test harness under
+  `extras/tests/harness/`. Installed alongside the library, so keep it small
+- A harness sketch is not an example: it exercises every type and every form to
+  find bugs, is flashed by hand, and is deliberately out of CI. Grouped in its own
+  folder so that decision can be reversed with one path
 
 ## Conventions
 

@@ -116,7 +116,7 @@ jobs:
       # a sketch split across several files is built whole.
       - name: Build examples
         run: |
-          for ex in Basic Commands DatatypeTest EventChannels SignalMetadata \
+          for ex in Basic Commands EventChannels SignalMetadata \
                     SineGeneratorAdvanced SineGeneratorBasic WriteModes \
                     WaveformGenerator; do
             echo "::group::$ex"
