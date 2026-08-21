@@ -178,8 +178,11 @@ void UpdateTheVariables()
 
   // What A reports. Each is pushed where the sketch already knows it changed - that push is
   // what reaches a host, since nothing else asks a channel for its value on a timer.
-  Temperature += DoorOpen ? -0.4f : 0.3f;
   DoorOpen = !DoorOpen;
+  // Cools toward the outside with the door open, warms toward the room with it shut. An
+  // approach rather than a step, so it always moves and never leaves the range: a sketch left
+  // running overnight still reads something plausible.
+  Temperature += ((DoorOpen ? 18.0f : 22.0f) - Temperature) * 0.25f;
   Blaeck.writeState(F("Temperature"));
   Blaeck.writeState(F("DoorOpen"));
 
