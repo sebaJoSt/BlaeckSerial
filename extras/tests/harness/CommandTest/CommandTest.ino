@@ -187,18 +187,17 @@ void setup()
 {
   Serial.begin(115200);
 
-  // No withDebugStream(&Serial) here, deliberately. The catalog writer warns about a number
-  // with no range while the 0xA0 frame is open, so pointing the debug stream at the stream the
-  // frames go out on writes the warning into the middle of one. Loggbok then loses every
-  // control after that point: with it on, N_badrange, both switches and the L_wave select
-  // never reach the broker at all, and L_range arrives named "_range".
+  // Pointed at the stream the frames go out on, deliberately: N_badrange makes the catalog
+  // writer warn, and that warning used to land inside the open 0xA0 frame - costing four
+  // controls and mangling a fifth. Keeping the two streams the same is what would catch it
+  // coming back.
   Blaeck.begin(&Serial)
       .withSignals(3)
       .withCommands(13)
       // Every withOwnState() below claims a channel of its own, on top of the two declared
       // outright - a command's state is a state channel like any other.
       .withStateChannels(8)
-      ;
+      .withDebugStream(&Serial);
 
   Blaeck.DeviceName = "Command Test";
   Blaeck.DeviceHWVersion = "Arduino Mega 2560 Rev3";

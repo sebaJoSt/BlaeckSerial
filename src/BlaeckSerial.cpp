@@ -5268,6 +5268,25 @@ void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
   // (kind=BLAECK_CMD_PLAIN, flags=0, no trailing metadata). Plain entries carry
   // no Home Assistant entity, but are listed so a host can build a full command
   // palette / autocomplete of every command the device accepts.
+  // Before a single frame byte goes out. The catalog is still where the omission becomes
+  // knowable - a builder chain that never reached withRange() has nothing to report at
+  // registration - but the unbuffered writer below hands each byte straight to the stream, so
+  // warning from inside its loop writes the text into the open frame when the debug stream is
+  // that same stream. Everything after it is then read as catalog data.
+  if (_debugStream != nullptr)
+  {
+    for (uint16_t i = 0; i < _commandSlots(); i++)
+    {
+      const CommandHandlerEntry &e = _commandHandlers[i];
+      if (!e.inUse)
+        continue;
+      if (e.kind == BLAECK_CMD_NUMBER && !_rangeDeclared(e))
+        _warnCommandWithoutRange(_debugStream, e);
+      else if (e.kind == BLAECK_CMD_SELECT && !_optionsDeclared(e))
+        _warnCommandWithoutOptions(_debugStream, e);
+    }
+  }
+
   if (_bufReady())
   {
     _bufReset();
@@ -5283,22 +5302,12 @@ void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
       // Only when there is one to send. A number command with no withRange() leaves the
       // bytes out entirely rather than announcing 0 to 0, which a host would build a
       // control from - and that control would accept nothing but zero.
-      if (e.kind == BLAECK_CMD_NUMBER)
-      {
-        if (_rangeDeclared(e))
-          flags |= 0x0001;
-        else
-          _warnCommandWithoutRange(_debugStream, e);
-      }
+      if (e.kind == BLAECK_CMD_NUMBER && _rangeDeclared(e))
+        flags |= 0x0001;
       if (e.unit != nullptr)
         flags |= 0x0002;
-      if (e.kind == BLAECK_CMD_SELECT)
-      {
-        if (_optionsDeclared(e))
-          flags |= 0x0004;
-        else
-          _warnCommandWithoutOptions(_debugStream, e);
-      }
+      if (e.kind == BLAECK_CMD_SELECT && _optionsDeclared(e))
+        flags |= 0x0004;
       if (e.stateSignal != nullptr)
         flags |= 0x0008;
       if (e.kind == BLAECK_CMD_TEXT)
@@ -5405,22 +5414,12 @@ void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
       // Only when there is one to send. A number command with no withRange() leaves the
       // bytes out entirely rather than announcing 0 to 0, which a host would build a
       // control from - and that control would accept nothing but zero.
-      if (e.kind == BLAECK_CMD_NUMBER)
-      {
-        if (_rangeDeclared(e))
-          flags |= 0x0001;
-        else
-          _warnCommandWithoutRange(_debugStream, e);
-      }
+      if (e.kind == BLAECK_CMD_NUMBER && _rangeDeclared(e))
+        flags |= 0x0001;
       if (e.unit != nullptr)
         flags |= 0x0002;
-      if (e.kind == BLAECK_CMD_SELECT)
-      {
-        if (_optionsDeclared(e))
-          flags |= 0x0004;
-        else
-          _warnCommandWithoutOptions(_debugStream, e);
-      }
+      if (e.kind == BLAECK_CMD_SELECT && _optionsDeclared(e))
+        flags |= 0x0004;
       if (e.stateSignal != nullptr)
         flags |= 0x0008;
       if (e.kind == BLAECK_CMD_TEXT)
