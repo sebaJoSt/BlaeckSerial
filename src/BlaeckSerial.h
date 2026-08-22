@@ -2086,8 +2086,8 @@ public:
   /*!
     @brief   Registers the signal but leaves it switched off until someone enables it.
 
-    For something worth having available without adding to what a host shows by
-    default.
+    Home Assistant's enabled_by_default: the entity is created but hidden until someone
+    turns it on. The device sends it either way.
 
     @param   on  Pass false to undo it, or a variable to decide at runtime.
     @return  The same handle, for chaining.
@@ -2457,6 +2457,8 @@ public:
   /*!
     @brief   Registers the channel but leaves it switched off until someone enables it.
 
+    Home Assistant's enabled_by_default: the entity is created but hidden until someone
+    turns it on. The device sends it either way.
     @param   on  Pass false to undo it, or a variable to decide at runtime.
     @return  The same handle, for chaining.
 
@@ -2982,9 +2984,10 @@ public:
   /*!
     @brief   Registers the channel but leaves it switched off until someone enables it.
 
-    Presentation only: writeEvent() still sends, and a host that enables the channel later
-    sees events from that point on. It says the channel is not worth showing by default,
-    not that the device stops reporting it.
+    Home Assistant's enabled_by_default: the entity is created but hidden until someone
+    turns it on. The device sends it either way.
+    An event is not retained, so turning the channel on shows what happens next, not what
+    was missed.
 
     @param   on  Pass false to undo it, or a variable to decide at runtime.
     @return  The same handle, for chaining.
