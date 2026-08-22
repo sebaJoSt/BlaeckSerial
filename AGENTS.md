@@ -64,10 +64,13 @@ Two ways to run one, answering different questions:
 
 - **Over the serial port**, as above. What the firmware does. Debug text and frames
   share the port, so a decoder has to strip `<BLAECK:…/BLAECK>` before reading either
-- **Through a host** — `lgbk log --port COM24 --mqtt --json`, subscribing to the broker
-  alongside. What a host *builds* from what the firmware said. Not the same question:
-  a catalog frame can decode cleanly and still be parsed wrong, and only this way
-  shows it
+- **Through a host** — `lgbk log --port COM24 --mqtt --json`, with `paho-mqtt` subscribed
+  to `#` alongside. What a host *builds* from what the firmware said. Not the same
+  question: a catalog frame can decode cleanly and still be parsed wrong, and only this
+  way shows it. Subscribe before the host starts or retain flags and arrival order mean
+  nothing, and take each control's `command_topic` from the discovery payload rather
+  than building the topic yourself. `lgbk` reads `stop` on stdin, so a script can end
+  the run when it has seen what it was waiting for
 
 Point the debug stream at the frame stream (`withDebugStream(&Serial)`) rather than
 away from it. It is what a one-port board has to do, and anything the library prints
