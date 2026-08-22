@@ -140,6 +140,12 @@ void onSetWave(const char *command, const char *const *params, byte paramCount)
   Accept(command, lName);
 }
 
+void onSetCase(const char *command, const char *const *params, byte paramCount)
+{
+  (void)paramCount;
+  Accept(command, params[0]);
+}
+
 void onSetRange(const char *command, const char *const *params, byte paramCount)
 {
   (void)paramCount;
@@ -193,7 +199,7 @@ void setup()
   // coming back.
   Blaeck.begin(&Serial)
       .withSignals(3)
-      .withCommands(13)
+      .withCommands(14)
       // Every withOwnState() below claims a channel of its own, on top of the two declared
       // outright - a command's state is a state channel like any other.
       .withStateChannels(8)
@@ -245,6 +251,10 @@ void setup()
   Blaeck.onSelectCommand("L_wave", onSetWave)
       .withOptions(F("Sine,Square,Triangle,Sawtooth"))
       .withOwnState(F("L_wave_state"), lName);
+
+  // Two options differing only in case. A host lists both, so both must be reachable.
+  Blaeck.onSelectCommand("L_case", onSetCase)
+      .withOptions(F("Auto,AUTO"));
 
   Blaeck.onSelectCommand("L_range", onSetRange)
       .withOptions(F("1V,10V,100V"))

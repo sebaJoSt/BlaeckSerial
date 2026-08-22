@@ -1787,12 +1787,10 @@ long BlaeckSerial::_flashCsvIndexOf(const __FlashStringHelper *csv, const char *
     {
       if (matching)
       {
-        char a = (char)c;
-        char b = *v;
-        // Case-insensitive compare
-        if (a >= 'A' && a <= 'Z') a = (char)(a - 'A' + 'a');
-        if (b >= 'A' && b <= 'Z') b = (char)(b - 'A' + 'a');
-        if (b == '\0' || a != b)
+        // Exact. A host lists every option it was given, so two differing only in case
+        // are two entries a person can pick between - folding them made the second
+        // unreachable by name, and a name is all a host sends.
+        if (*v == ' ' || (char)c != *v)
           matching = false;
         else
           v++;
@@ -4006,7 +4004,7 @@ byte BlaeckSerial::_validateTypedCommand(uint16_t handlerIndex)
   {
     uint16_t count = _flashCsvOptionCount(e.options);
 
-    // Accept either an option name (case-insensitive) or a numeric index.
+    // Accept either an option name (exact) or a numeric index.
     long idx = _flashCsvIndexOf(e.options, v);
     if (idx < 0)
     {

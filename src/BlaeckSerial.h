@@ -4455,8 +4455,9 @@ public:
   /*!
     @brief   Finds the position of a named option in a select command's list.
 
-    The other direction to getSelectOptionNameAt(). Matching is case-insensitive, the
-    same rule an incoming command value is matched by.
+    The other direction to getSelectOptionNameAt(). Matching is exact, the same rule an
+    incoming command value is matched by: two options differing only in case are two
+    entries a host lists separately, so both have to be reachable.
 
     @param   command     Name the select command was registered with.
     @param   optionName  Option to look for.
