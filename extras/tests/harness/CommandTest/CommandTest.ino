@@ -265,7 +265,8 @@ void setup()
 
   Blaeck.onButtonCommand("B_reboot", onReboot)
       .withDeviceClass(F("restart"))
-      .diagnostic();
+      .diagnostic()
+      .disabledByDefault();
 
   // ---- T: text ---------------------------------------------------------------------------
   Blaeck.onTextCommand("T_label", onSetLabel)

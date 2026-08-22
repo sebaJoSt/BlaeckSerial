@@ -800,6 +800,7 @@ struct CommandHandlerEntry
   const __FlashStringHelper *pressPayload = nullptr;
   uint8_t stateSource = BLAECK_STATE_SIGNAL;
   uint8_t category = BLAECK_CAT_NONE;
+  bool disabledByDefault = false;
   // Bits 9-10 of the 0xA0 flags, read against the kind: a render hint on a number, an input
   // hint on a text command. One byte serves both because an entry has one kind.
   uint8_t mode = 0;
@@ -1161,6 +1162,22 @@ protected:
 #endif
   }
 
+  void _setDisabledByDefault(bool on)
+  {
+#if BLAECK_ENABLE_COMMAND_META
+    if (auto *e = _entry())
+    {
+      if (e->disabledByDefault != on)
+      {
+        e->disabledByDefault = on;
+        _markDirty();
+      }
+    }
+#else
+    (void)on;
+#endif
+  }
+
   // Set by withMode(), which only a number and a text command offer - so nothing has to check
   // the kind here, and the value is read back against it. Zero is the default of both, which is
   // what makes an undeclared mode cost nothing: the bits stay clear and the host applies its own
@@ -1278,6 +1295,26 @@ public:
   TYPE &diagnostic()
   {
     _setCategory((uint8_t)BLAECK_CAT_DIAGNOSTIC);
+    return _self();
+  }
+
+  /*!
+    @brief   Registers the control but leaves it switched off until someone enables it.
+
+    Home Assistant's enabled_by_default: the entity is created but hidden until someone
+    turns it on. The device still accepts the command either way - this is what a host
+    shows, not what the firmware answers.
+
+    @param   on  Pass false to undo it, or a variable to decide at runtime.
+    @return  The same handle, for chaining.
+
+    @code
+      Blaeck.onButtonCommand("CALIBRATE", onCalibrate).disabledByDefault();
+    @endcode
+  */
+  TYPE &disabledByDefault(bool on = true)
+  {
+    _setDisabledByDefault(on);
     return _self();
   }
 

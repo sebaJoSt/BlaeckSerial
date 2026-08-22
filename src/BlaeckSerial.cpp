@@ -5245,8 +5245,8 @@ void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
   //             5-6=entity category 7=hasStep 8=hasDisplayName 9-10=input mode, read against
   //             the kind: on a number 0 auto, 1 box, 2 slider; on a text command 0 plain,
   //             1 password; 3 reserved on both, and every other kind sends 0.
-  //             11=hasDeviceClass 12=hasIcon 13=hasPressPayload.
-  //             Bits 14-31 reserved - four bytes rather than two, because one pass over the
+  //             11=hasDeviceClass 12=hasIcon 13=hasPressPayload 14=disabledByDefault.
+  //             Bits 15-31 reserved - four bytes rather than two, because one pass over the
   //             typed kinds spent bits 7 through 12 and a flags word that fills up is a wire
   //             break rather than an addition. The two extra bytes ride in a catalog frame a
   //             host asks for, not in the data frames, and cost nothing per entry in RAM.
@@ -5314,6 +5314,8 @@ void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
         flags |= 0x0010;
       // Entity category in bits 5-6, so it needs no trailing payload.
       flags |= (uint32_t)((e.category & 0x03) << 5);
+      if (e.disabledByDefault)
+        flags |= 0x4000;
       // Resolution rides on its own bit rather than with the range: a range with no step is
       // ordinary, and the bit is what tells that apart from a step of 0.
       if (e.kind == BLAECK_CMD_NUMBER && _stepDeclared(e))
@@ -5426,6 +5428,8 @@ void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
         flags |= 0x0010;
       // Entity category in bits 5-6, so it needs no trailing payload.
       flags |= (uint32_t)((e.category & 0x03) << 5);
+      if (e.disabledByDefault)
+        flags |= 0x4000;
       // Resolution rides on its own bit rather than with the range: a range with no step is
       // ordinary, and the bit is what tells that apart from a step of 0.
       if (e.kind == BLAECK_CMD_NUMBER && _stepDeclared(e))
