@@ -60,7 +60,7 @@ A harness needs a driver. What the library refuses never reaches the sketch, so 
 `.ino` can only assert on what it does do — the driver sends the values that must be
 taken and the ones that must be refused, and checks which came back.
 
-Two ways to run one, answering different questions:
+Three ways to run one, answering different questions:
 
 - **Over the serial port**, as above. What the firmware does. Debug text and frames
   share the port, so a decoder has to strip `<BLAECK:…/BLAECK>` before reading either
@@ -71,6 +71,10 @@ Two ways to run one, answering different questions:
   nothing, and take each control's `command_topic` from the discovery payload rather
   than building the topic yourself. `lgbk` reads `stop` on stdin, so a script can end
   the run when it has seen what it was waiting for
+- **Through the dashboard** — Home Assistant's MCP server, where one is configured.
+  `list_entities` shows what a person would be offered and `call_action` works a
+  control. Only reaches the board while a host is running, and shows no reason for a
+  refusal: an acknowledgement stops at the host and is never published
 
 Point the debug stream at the frame stream (`withDebugStream(&Serial)`) rather than
 away from it. It is what a one-port board has to do, and anything the library prints
