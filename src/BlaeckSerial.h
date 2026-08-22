@@ -32,8 +32,10 @@
 #include <limits.h>
 
 // "Host" is the software on the other end of the serial port. It reads what this device
-// sends and may publish it over MQTT, where a dashboard such as Home Assistant picks it
-// up; commands travel the same way back.
+// sends and may publish it over MQTT, where a dashboard such as Home Assistant picks it up.
+// It carries commands the other way too: the dashboard publishes to a command topic, the
+// host writes what arrives there to the serial port, and the device answers with an
+// acknowledgement that travels back the same route.
 
 // Compile-time settings. Override the defaults below, e.g.:
 //   #define BLAECK_COMMAND_MAX_CHARS_DEFAULT 128
