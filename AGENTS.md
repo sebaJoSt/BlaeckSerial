@@ -60,7 +60,7 @@ A harness needs a driver. What the library refuses never reaches the sketch, so 
 `.ino` can only assert on what it does do — the driver sends the values that must be
 taken and the ones that must be refused, and checks which came back.
 
-Three ways to run one, answering different questions:
+Four ways to run one, answering different questions:
 
 - **Over the serial port**, as above. What the firmware does. Debug text and frames
   share the port, so a decoder has to strip `<BLAECK:…/BLAECK>` before reading either
@@ -75,6 +75,15 @@ Three ways to run one, answering different questions:
   `list_entities` shows what a person would be offered and `call_action` works a
   control. Only reaches the board while a host is running, and shows no reason for a
   refusal: an acknowledgement stops at the host and is never published
+- **Through the entity registry** — `extras/tests/harness/ha_registry.py`, over HA's
+  WebSocket API rather than MCP. Covers what MCP structurally cannot: `entity_category`,
+  `suggested_display_precision`, `disabled_by` and the like are registry properties, not
+  state or state attributes, and the Assist-API-based MCP server never sees them. Needs
+  `HA_URL` plus either `HA_TOKEN` or `HA_USERNAME`/`HA_PASSWORD` in the environment —
+  no credentials are stored in the repo — and looks entries up by `unique_id`, since
+  `entity_id` is assigned once at first discovery and can drift from a signal's current
+  name. Registry entries persist whether or not a host is running, unlike the dashboard
+  method above. `SignalMetadataTest`'s driver uses it for a live worked example
 
 Point the debug stream at the frame stream (`withDebugStream(&Serial)`) rather than
 away from it. It is what a one-port board has to do, and anything the library prints
