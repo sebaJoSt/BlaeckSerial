@@ -2982,6 +2982,10 @@ public:
   /*!
     @brief   Registers the channel but leaves it switched off until someone enables it.
 
+    Presentation only: writeEvent() still sends, and a host that enables the channel later
+    sees events from that point on. It says the channel is not worth showing by default,
+    not that the device stops reporting it.
+
     @param   on  Pass false to undo it, or a variable to decide at runtime.
     @return  The same handle, for chaining.
 
@@ -3647,7 +3651,8 @@ public:
     @param   eventType    One of the types that channel declared.
 
     @warning An event on a channel or type that was never declared is dropped,
-             silently. The list has to reach the host first, too, since an event
+             silently. The type is matched exactly, so a difference in case is a type
+             that was never declared. The list has to reach the host first, too, since an event
              names both by position rather than by name.
 
     @code
