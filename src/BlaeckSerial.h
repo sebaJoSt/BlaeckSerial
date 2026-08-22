@@ -1302,8 +1302,8 @@ public:
     @brief   Registers the control but leaves it switched off until someone enables it.
 
     Home Assistant's enabled_by_default: the entity is created but hidden until someone
-    turns it on. The device still accepts the command either way - this is what a host
-    shows, not what the firmware answers.
+    turns it on. It changes what a host shows, not the command: send it anyway and the
+    device still runs it.
 
     @param   on  Pass false to undo it, or a variable to decide at runtime.
     @return  The same handle, for chaining.
