@@ -1790,7 +1790,7 @@ long BlaeckSerial::_flashCsvIndexOf(const __FlashStringHelper *csv, const char *
         // Exact. A host lists every option it was given, so two differing only in case
         // are two entries a person can pick between - folding them made the second
         // unreachable by name, and a name is all a host sends.
-        if (*v == ' ' || (char)c != *v)
+        if (*v == '\0' || (char)c != *v)
           matching = false;
         else
           v++;
