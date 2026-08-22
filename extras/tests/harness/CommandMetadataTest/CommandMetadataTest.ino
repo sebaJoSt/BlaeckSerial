@@ -21,6 +21,9 @@
 
 #include "Arduino.h"
 #include "BlaeckSerial.h"
+#if defined(__AVR__)
+#include <avr/wdt.h>
+#endif
 
 BlaeckSerial Blaeck;
 
@@ -114,13 +117,38 @@ void onText(const char *command, const char *const *params, byte paramCount)
   Serial.println(command);
 }
 
+// The DTR-line reset every driver here relies on doesn't reach the Giga - it needs the port
+// open, not a real toggle. A command lets a driver ask for a restart the same way regardless
+// of board or transport (serial today, but the ask is the same over the MQTT bridge), and
+// proves the round trip a physical reset never could: the device answering, then going away,
+// then coming back and re-publishing its own discovery - unattended.
+void onReboot(const char *command, const char *const *params, byte paramCount)
+{
+  (void)params;
+  (void)paramCount;
+  Serial.print(F("CMD "));
+  Serial.println(command);
+  Serial.flush();
+  delay(50); // let the ack leave the wire before the board does
+#if defined(ARDUINO_ARCH_MBED) || defined(ARDUINO_GIGA)
+  NVIC_SystemReset();
+#elif defined(ARDUINO_ARCH_ESP32)
+  ESP.restart();
+#elif defined(__AVR__)
+  wdt_enable(WDTO_15MS);
+  while (true) {}
+#else
+  Serial.println(F("Reboot: no reset path known for this board"));
+#endif
+}
+
 void setup()
 {
   Serial.begin(115200);
 
   Blaeck.begin(&Serial)
       .withSignals(2)
-      .withCommands(28)
+      .withCommands(29)
       .withStateChannels(3)
       .withDebugStream(&Serial);
 
@@ -241,8 +269,12 @@ void setup()
   Blaeck.onSwitchCommand("Hidden", onSwitch)
       .disabledByDefault();
 
+  Blaeck.onButtonCommand("Reboot", onReboot)
+      .withDeviceClass(F("restart"))
+      .diagnostic();
+
   PrintWidths();
-  Serial.println(F("---- CommandMetadataTest: 27 commands declared ----"));
+  Serial.println(F("---- CommandMetadataTest: 28 commands declared ----"));
 }
 
 void loop()
