@@ -84,6 +84,7 @@ void onSetInt(const char *command, const char *const *params, byte paramCount)
 {
   (void)paramCount;
   nInt = atoi(params[0]);
+  Blaeck.writeCommandState(command);
   Accept(command, params[0]);
 }
 
@@ -91,6 +92,7 @@ void onSetFloat(const char *command, const char *const *params, byte paramCount)
 {
   (void)paramCount;
   nFloat = atof(params[0]);
+  Blaeck.writeCommandState(command);
   Accept(command, params[0]);
 }
 
@@ -112,6 +114,7 @@ void onSetEnabled(const char *command, const char *const *params, byte paramCoun
 {
   (void)paramCount;
   sEnabled = atoi(params[0]) == 1;
+  Blaeck.writeCommandState(command);
   Accept(command, params[0]);
 }
 
@@ -133,6 +136,7 @@ void onSetWave(const char *command, const char *const *params, byte paramCount)
     Serial.println(F("CMD L_wave readback-failed"));
     return;
   }
+  Blaeck.writeCommandState(command);
   Accept(command, lName);
 }
 
@@ -140,6 +144,7 @@ void onSetRange(const char *command, const char *const *params, byte paramCount)
 {
   (void)paramCount;
   lIndex = (byte)atoi(params[0]);
+  Blaeck.writeCommandState(command);
   Accept(command, params[0]);
 }
 
@@ -165,6 +170,7 @@ void onSetLabel(const char *command, const char *const *params, byte paramCount)
   (void)paramCount;
   strncpy(tLabel, params[0], sizeof(tLabel) - 1);
   tLabel[sizeof(tLabel) - 1] = '\0';
+  Blaeck.writeCommandState(command);
   Accept(command, params[0]);
 }
 
