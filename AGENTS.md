@@ -49,6 +49,30 @@ CI compiles every example for AVR, ESP32 and SAMD, so a local build is only need
 to answer a specific question. `examples/TimeStampModes` needs `RTC.h` and does not
 build without it.
 
+## Running a harness
+
+```
+arduino-cli compile --fqbn arduino:avr:mega --upload -p COM24 extras/tests/harness/CommandTest
+python extras/tests/harness/CommandTest/drive_commands.py COM24
+```
+
+A harness needs a driver. What the library refuses never reaches the sketch, so the
+`.ino` can only assert on what it does do — the driver sends the values that must be
+taken and the ones that must be refused, and checks which came back.
+
+Two ways to run one, answering different questions:
+
+- **Over the serial port**, as above. What the firmware does. Debug text and frames
+  share the port, so a decoder has to strip `<BLAECK:…/BLAECK>` before reading either
+- **Through a host** — `lgbk log --port COM24 --mqtt --json`, subscribing to the broker
+  alongside. What a host *builds* from what the firmware said. Not the same question:
+  a catalog frame can decode cleanly and still be parsed wrong, and only this way
+  shows it
+
+Point the debug stream at the frame stream (`withDebugStream(&Serial)`) rather than
+away from it. It is what a one-port board has to do, and anything the library prints
+while a frame is open lands inside it.
+
 ## Releasing
 
 The two registries are triggered by different things, so a version number is not
