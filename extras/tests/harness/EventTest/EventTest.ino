@@ -34,6 +34,44 @@ void Check(const __FlashStringHelper *what, bool ok)
   Serial.println(what);
 }
 
+// The board this was built for, so a recording says which one produced it. A harness runs
+// on every core the library supports, and the widths below are what differ.
+#if defined(ARDUINO_GIGA)
+#define HARNESS_BOARD "Arduino Giga R1"
+#elif defined(ARDUINO_AVR_MEGA2560)
+#define HARNESS_BOARD "Arduino Mega 2560 Rev3"
+#elif defined(ARDUINO_ARCH_ESP32)
+#define HARNESS_BOARD "ESP32"
+#else
+#define HARNESS_BOARD "unknown board"
+#endif
+
+// int is two bytes on AVR and four on a 32-bit core, double four and eight. A driver reads
+// the width off the frame, but a run is easier to read when the board has said it too.
+void PrintWidths()
+{
+  Serial.print(F("board "));
+  Serial.print(F(HARNESS_BOARD));
+  Serial.print(F(", int "));
+  Serial.print((unsigned)sizeof(int));
+  Serial.print(F(" bytes, long "));
+  Serial.print((unsigned)sizeof(long));
+  Serial.print(F(", float "));
+  Serial.print((unsigned)sizeof(float));
+  Serial.print(F(", double "));
+  Serial.println((unsigned)sizeof(double));
+}
+
+// Asked for rather than only printed at boot: a Giga does not reset when DTR is
+// raised, so a driver that opens the port has missed the startup lines already.
+void onWidths(const char *command, const char *const *params, byte paramCount)
+{
+  (void)command;
+  (void)params;
+  (void)paramCount;
+  PrintWidths();
+}
+
 void setup()
 {
   Serial.begin(115200);
@@ -44,11 +82,11 @@ void setup()
       .withSignals(1)
       .withEventChannels(4)
       .withEventTypes(10)
-      .withCommands(6)
+      .withCommands(7)
       .withDebugStream(&Serial);
 
   Blaeck.DeviceName = "Event Test";
-  Blaeck.DeviceHWVersion = "Arduino Mega 2560 Rev3";
+  Blaeck.DeviceHWVersion = HARNESS_BOARD;
   Blaeck.DeviceFWVersion = "1.0";
 
   Blaeck.addSignal(F("Uptime"), &Uptime).withUnit(F("s"));
@@ -76,6 +114,9 @@ void setup()
   Blaeck.onCommand("E_disabled", onFireDisabled);
   Blaeck.onCommand("E_case", onFireCase);
 
+  Blaeck.onCommand("WIDTHS", onWidths);
+
+  PrintWidths();
   RunLocalChecks();
 }
 

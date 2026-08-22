@@ -43,11 +43,21 @@ def text_of(raw):
 
 
 with serial.Serial(PORT, 115200, timeout=0.2) as s:
+    # A Mega resets when DTR is raised and prints its startup checks; a Giga does not, so
+    # the banner may already be long gone. Ask what the board is either way.
     s.setDTR(False); time.sleep(0.2); s.setDTR(True)
-    boot = read_for(s, 4.0)
+    lines = text_of(read_for(s, 4.0))
     print("---- startup ----")
-    for line in text_of(boot):
-        print(" ", line)
+    if any(l.startswith(("PASS", "FAIL")) for l in lines):
+        for line in lines:
+            print(" ", line)
+    else:
+        print("  (no reset on this board, so no startup checks)")
+    s.reset_input_buffer()
+    s.write(b"<WIDTHS>"); s.flush()
+    for line in text_of(read_for(s, 1.0)):
+        if line.startswith("board "):
+            print(" ", line)
 
     print("\n---- events ----")
     bad = 0
