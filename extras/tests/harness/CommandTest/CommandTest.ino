@@ -181,15 +181,18 @@ void setup()
 {
   Serial.begin(115200);
 
-  // The debug stream is where the library says it ignored something - the min > max range
-  // below is only visible there.
+  // No withDebugStream(&Serial) here, deliberately. The catalog writer warns about a number
+  // with no range while the 0xA0 frame is open, so pointing the debug stream at the stream the
+  // frames go out on writes the warning into the middle of one. Loggbok then loses every
+  // control after that point: with it on, N_badrange, both switches and the L_wave select
+  // never reach the broker at all, and L_range arrives named "_range".
   Blaeck.begin(&Serial)
       .withSignals(3)
       .withCommands(13)
       // Every withOwnState() below claims a channel of its own, on top of the two declared
       // outright - a command's state is a state channel like any other.
       .withStateChannels(8)
-      .withDebugStream(&Serial);
+      ;
 
   Blaeck.DeviceName = "Command Test";
   Blaeck.DeviceHWVersion = "Arduino Mega 2560 Rev3";
