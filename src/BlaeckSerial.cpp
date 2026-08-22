@@ -3898,9 +3898,11 @@ static inline bool _optionsDeclared(const blaeck_detail::CommandHandlerEntry &e)
 // Reported here rather than at registration because the requirement is met on the handle the
 // typed helper returns, so at registration there is nothing yet to complain about. The catalog
 // going out is the moment the omission becomes visible to anyone else, and it is the point the
-// value stops being the sketch's business: a host with no limits to build from falls back on its
-// own, and Home Assistant's are 1 to 100, which silently puts zero and every negative value out
-// of reach. Only reachable when the handle was dropped without chaining - BLAECK_NODISCARD asks
+// value stops being the sketch's business: a host with no limits to build from either falls back
+// on its own - Home Assistant's are 1 to 100, which silently puts zero and every negative value
+// out of reach - or refuses to offer the control at all, which is what Loggbok does. Either way
+// the sketch does not get what it meant. Only reachable when the handle was dropped without
+// chaining - BLAECK_NODISCARD asks
 // the compiler to mention that - so this is the last net rather than the first.
 static void _warnCommandWithoutRange(Stream *dbg, const blaeck_detail::CommandHandlerEntry &e)
 {
@@ -3908,7 +3910,7 @@ static void _warnCommandWithoutRange(Stream *dbg, const blaeck_detail::CommandHa
     return;
   dbg->print(F("No withRange() on number command: "));
   dbg->print(e.command);
-  dbg->println(F(". Any value is accepted and the host builds the control from its own defaults."));
+  dbg->println(F(". Any value is accepted, and a host has no limits to build a control from."));
 }
 
 // The same omission on a select, which fares worse than a number: every value is checked against
