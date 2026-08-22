@@ -51,6 +51,9 @@ bool problem = false;
 char mode[16] = "Idle";
 char label[24] = "bench";
 char note[24] = "plain text";
+char enumClass[16] = "Idle";
+char classWins[16] = "Idle";
+char emptyOpts[16] = "Idle";
 
 void PrintWidths()
 {
@@ -79,7 +82,7 @@ void setup()
   Serial.begin(115200);
 
   Blaeck.begin(&Serial)
-      .withSignals(24)
+      .withSignals(27)
       .withCommands(1)
       .withDebugStream(&Serial);
 
@@ -161,8 +164,29 @@ void setup()
       .withDisplayName(F("Bench Label"))
       .withIcon(F("mdi:tag"));
 
+  // ---- what a host does when two rules collide ----------------------------------------------
+  // Home Assistant's own schema requires device_class "enum" wherever options is present, and
+  // rejects the entity if it sees any other class beside it. Two things follow from that, and
+  // a host has to get both right - the second one shipped broken the first time around,
+  // because it is easy to write "drop options when a class is declared" instead of "drop
+  // options when a class *other than enum* is declared".
+  Blaeck.addSignal(F("Enum_and_options"), enumClass)
+      .withDeviceClass(F("enum"))
+      .withOptions(F("Idle,Running,Fault"));
+
+  Blaeck.addSignal(F("Class_wins_over_options"), classWins)
+      .withDeviceClass(F("temperature"))
+      .withOptions(F("Idle,Running,Fault"));
+
+  // A closed set that turns out to hold nothing usable: every member is blank. Declared on
+  // purpose, since the library refuses to store it (see withOptions()'s @warning) - the
+  // question here is whether the modifier disappears cleanly rather than leaving a broken
+  // options key or a device_class the sketch never really earned.
+  Blaeck.addSignal(F("Empty_options"), emptyOpts)
+      .withOptions(F(","));
+
   PrintWidths();
-  Serial.println(F("---- SignalMetadataTest: 24 signals declared ----"));
+  Serial.println(F("---- SignalMetadataTest: 27 signals declared ----"));
 }
 
 void loop()

@@ -1,23 +1,39 @@
-"""Check that what SignalMetadataTest declares survives into the discovery payload.
+"""Check that what SignalMetadataTest declares survives into the discovery payload,
+and - for the three modifiers a state attribute can never carry - into the registry.
 
-Three layers matter and only two are visible from here:
+Three layers matter:
 
     declared    the sketch
-    published   the discovery payload on the broker  <- this script
-    shown       what Home Assistant made of it       <- ask over MCP
+    published   the discovery payload on the broker  <- checked here, always
+    shown       what Home Assistant made of it        <- checked here too, in two parts:
+                  state attributes, over MCP (out of this script's reach - ask a client)
+                  registry facts, over ha_registry.py (checked here if HA_URL is set)
 
 A host that cannot use a key drops it in silence, so the gap between declared and
 published is the only thing that says so. Run a bridge against the board, point this at
 the same broker, and it reports every key that did not arrive.
 
+entity_category, suggested_display_precision and disabled_by never appear on an
+entity's state or its attributes - Home Assistant keeps them on the registry entry
+instead, which only ha_registry.py's WebSocket call can read. Set HA_URL (and either
+HA_TOKEN or HA_USERNAME + HA_PASSWORD) to also check REGISTRY_EXPECT below; without
+it, this only reports that it could not check them, rather than pretending they passed.
+
   python drive_signal_metadata.py [seconds]        watch the broker for a live bundle
   python drive_signal_metadata.py capture.json     read one out of a recording
 """
 import json
+import os
 import sys
 import time
 
 import paho.mqtt.client as mqtt
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+try:
+    import ha_registry
+except ImportError:
+    ha_registry = None
 
 HOST = "mosquitto-ws-dut-monitoring-rptdiom.eu-de-9.icp.infineon.com"
 ARG = sys.argv[1] if len(sys.argv) > 1 else None
@@ -54,6 +70,22 @@ EXPECT = {
     "Text_plain":           ("sensor", {"options": None}),
     "Text_options":         ("sensor", {"options": ["Idle", "Running", "Fault"]}),
     "Text_named":           ("sensor", {"name": "Bench Label", "icon": "mdi:tag"}),
+    "Enum_and_options":     ("sensor", {"device_class": "enum", "options": ["Idle", "Running", "Fault"]}),
+    "Class_wins_over_options": ("sensor", {"device_class": "temperature", "options": None}),
+    "Empty_options":        ("sensor", {"device_class": None, "options": None}),
+}
+
+# signal name -> registry-only facts (entity_category, suggested_display_precision,
+# disabled_by): properties Home Assistant keeps on the entity's registry entry rather than in
+# its state attributes, so no MCP tool here can see them - only ha_registry.py, one directory
+# up, can. Checked separately below, and only if HA_URL is set in the environment: unlike the
+# broker check above, a registry entry survives whether or not a bridge is currently running,
+# so this can be run long after a harness session ended.
+REGISTRY_EXPECT = {
+    "Prec_0": {"suggested_display_precision": 0},
+    "Prec_3": {"suggested_display_precision": 3},
+    "Diag_uptime": {"entity_category": "diagnostic"},
+    "Hidden_rawadc": {"disabled_by": "integration"},
 }
 
 bundle = {"value": None}
@@ -133,3 +165,47 @@ if published:
 
 print(f"\n{len(EXPECT) - problems} of {len(EXPECT)} signals arrived as declared"
       if problems else f"\nall {len(EXPECT)} signals arrived as declared")
+
+# ---- registry layer: entity_category, suggested_display_precision, disabled_by ----------------
+# None of these three ever reach a state attribute, so nothing above could have checked them -
+# only Home Assistant's own registry holds them, and only ha_registry.py's WebSocket call can
+# read it. Skipped, rather than silently passed, when the environment holds no HA_URL: a
+# harness that reported "0 problems" here without ever checking would be worse than one that
+# says plainly it did not look.
+registry_problems = 0
+if ha_registry is None:
+    print("\nregistry layer skipped: the 'websocket-client' package is not installed")
+elif not os.environ.get("HA_URL"):
+    print("\nregistry layer skipped: set HA_URL (and HA_TOKEN, or HA_USERNAME + HA_PASSWORD) "
+          "to also check entity_category, suggested_display_precision and disabled_by")
+else:
+    base_url = os.environ["HA_URL"]
+    token = ha_registry._resolve_token(base_url)
+    registry = ha_registry.fetch_entity_registry(base_url, token)
+    registry_by_uid = ha_registry.by_unique_id(registry)
+
+    print(f"\nregistry: {len(registry_by_uid)} entries fetched from {base_url}")
+    for signal, wanted in REGISTRY_EXPECT.items():
+        keys = EXPECT[signal][1]
+        comp_name = keys.get("name", signal)
+        comp = by_name.get(comp_name)
+        if comp is None:
+            # Already reported as MISSING above; nothing new to say.
+            continue
+        entry = registry_by_uid.get(comp.get("unique_id"))
+        if entry is None:
+            print(f"  MISSING   {signal}: no registry entry for unique_id {comp.get('unique_id')!r}")
+            registry_problems += 1
+            continue
+        got = ha_registry.registry_facts(entry)
+        for key, want in wanted.items():
+            if got.get(key) != want:
+                print(f"  WRONG     {signal}.{key} = {got.get(key)!r} (registry), declared {want!r}")
+                registry_problems += 1
+
+    print(f"{len(REGISTRY_EXPECT) - registry_problems} of {len(REGISTRY_EXPECT)} "
+          f"registry-only facts matched"
+          if registry_problems else f"all {len(REGISTRY_EXPECT)} registry-only facts matched")
+
+if problems or registry_problems:
+    raise SystemExit(1)
