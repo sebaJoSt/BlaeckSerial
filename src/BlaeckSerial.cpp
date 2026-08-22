@@ -4812,8 +4812,12 @@ void BlaeckSerial::writeDataFrame(unsigned long msg_id, int signalIndex_start, i
     _bufByte(':');
 
     _bufByte((byte)_timestampMode);
-    if (_timestampMode != BLAECK_NO_TIMESTAMP && hasValidTimestampCallback())
+    if (_timestampMode != BLAECK_NO_TIMESTAMP)
     {
+      // Field is mandatory on the wire whenever TimestampMode > 0 (per protocol spec), regardless
+      // of whether a valid callback is set - getTimeStamp() already yields 0 in that case. Gating
+      // this on hasValidTimestampCallback() would silently drop the 8 bytes the host still expects,
+      // desyncing every following byte offset (and the CRC) for the rest of the session.
       ullCvt.val = timestamp;
       _bufBytes(ullCvt.bval, 8);
     }
@@ -4924,8 +4928,10 @@ void BlaeckSerial::writeDataFrame(unsigned long msg_id, int signalIndex_start, i
     StreamRef->write(timestamp_mode);
     _crc.add(timestamp_mode);
 
-    if (_timestampMode != BLAECK_NO_TIMESTAMP && hasValidTimestampCallback())
+    if (_timestampMode != BLAECK_NO_TIMESTAMP)
     {
+      // See buffered branch above: field is mandatory whenever TimestampMode > 0, not conditional
+      // on callback validity.
       ullCvt.val = timestamp;
       StreamRef->write(ullCvt.bval, 8);
       _crc.add(ullCvt.bval, 8);
