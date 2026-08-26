@@ -1817,7 +1817,16 @@ bool BlaeckSerial::recvWithStartEndMarkers()
     rc = StreamRef->read();
     if (recvInProgress == true)
     {
-      if (rc != endMarker)
+      if (rc == startMarker)
+      {
+        // A command that never arrived at its end marker - a write cut short by a timeout or a
+        // link going down halfway - would otherwise sit in the buffer and swallow the next one,
+        // which would be dropped as garbage without anything saying so. A start marker cannot
+        // appear inside a command, so the one being collected is abandoned for the new one.
+        ndx = 0;
+        _receiveOverflowed = false;
+      }
+      else if (rc != endMarker)
       {
         receivedChars[ndx] = rc;
         ndx++;
