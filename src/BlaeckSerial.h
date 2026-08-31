@@ -92,6 +92,28 @@
   #endif
 #endif
 
+// Paused writes
+// -------------
+// BLAECK.PAUSE_WRITES,<ms> stops every frame leaving the device for that long, so a host
+// can close the port on a board that is not transmitting. Closing on one that is kills the
+// USB endpoint on a native-USB board (Giga R1 and the rest of the mbed family) until it is
+// reset: the port still enumerates and still opens, and the board never answers again. The
+// interval writers are stopped by BLAECK.DEACTIVATE, but a sketch calling write() on its own
+// schedule is not, and above a few hundred frames a second there is no gap for the close to
+// land in. This is what closes that window.
+//
+// It expires by itself, so nothing has to be sent to undo it and nothing outlives the
+// connection that asked for it. BLAECK.RESUME_WRITES only ends it early. A missing or zero
+// duration means the default, and the maximum is a ceiling on how long any host can silence
+// a board - a host that pauses and then vanishes costs one lost second, not a mute device.
+#ifndef BLAECK_PAUSE_WRITES_DEFAULT_MS
+  #define BLAECK_PAUSE_WRITES_DEFAULT_MS 1000UL
+#endif
+
+#ifndef BLAECK_PAUSE_WRITES_MAX_MS
+  #define BLAECK_PAUSE_WRITES_MAX_MS 10000UL
+#endif
+
 #ifndef BLAECK_COMMAND_MAX_CHARS_DEFAULT
   // 128 is the smallest buffer that puts a 32-byte text command within reach of any input: a
   // byte costs up to three characters once percent-encoded, so 3*32 plus a command name and its
@@ -201,6 +223,8 @@
 #define BLAECK_BUILTIN_WRITE_EVENT_CHANNELS "BLAECK.WRITE_EVENT_CHANNELS"
 #define BLAECK_BUILTIN_ACTIVATE "BLAECK.ACTIVATE"
 #define BLAECK_BUILTIN_DEACTIVATE "BLAECK.DEACTIVATE"
+#define BLAECK_BUILTIN_PAUSE_WRITES "BLAECK.PAUSE_WRITES"
+#define BLAECK_BUILTIN_RESUME_WRITES "BLAECK.RESUME_WRITES"
 
 #define BLAECK_BUILTIN_COMMAND_LIST(X)  \
   X(BLAECK_BUILTIN_WRITE_SYMBOLS)       \
@@ -211,7 +235,9 @@
   X(BLAECK_BUILTIN_WRITE_STATE_CHANNELS)\
   X(BLAECK_BUILTIN_WRITE_EVENT_CHANNELS)\
   X(BLAECK_BUILTIN_ACTIVATE)            \
-  X(BLAECK_BUILTIN_DEACTIVATE)
+  X(BLAECK_BUILTIN_DEACTIVATE)          \
+  X(BLAECK_BUILTIN_PAUSE_WRITES)        \
+  X(BLAECK_BUILTIN_RESUME_WRITES)
 
 // Eleven values, so the underlying type is pinned to a byte rather than left as the int
 // a compiler picks by default: this type is a field in every signal entry and every state
@@ -5000,6 +5026,40 @@ private:
       _bufAllocate();
     return _frameBuf != nullptr;
   }
+  bool _writesPaused = false;
+  unsigned long _writesPausedUntil = 0;
+
+  // Asked once per frame, by every writer, in both write modes - never per byte. An
+  // unbuffered frame leaves as it is produced, so a pause taken mid-frame would hand the
+  // host a truncated one, which is worse than the frame it was avoiding.
+  bool _mayWriteFrame()
+  {
+    if (StreamRef == nullptr)
+      return false;
+
+    if (_writesPaused)
+    {
+      // Signed difference, so the comparison survives the millis() rollover.
+      if ((long)(millis() - _writesPausedUntil) < 0)
+        return false;
+
+      _writesPaused = false;
+    }
+
+    return true;
+  }
+
+  void _setWritesPaused(unsigned long ms)
+  {
+    if (ms == 0)
+      ms = BLAECK_PAUSE_WRITES_DEFAULT_MS;
+    if (ms > BLAECK_PAUSE_WRITES_MAX_MS)
+      ms = BLAECK_PAUSE_WRITES_MAX_MS;
+
+    _writesPaused = true;
+    _writesPausedUntil = millis() + ms;
+  }
+
   bool _bufEnsure(size_t addLen);
   void _bufFree();
   void _bufReset()

@@ -68,7 +68,7 @@ static dataType _tagType(BlaeckNumericTag tag)
 
 void BlaeckSerial::_flushCatalogs()
 {
-  if (StreamRef == nullptr)
+  if (!_mayWriteFrame())
     return;
 
   // Each writer clears its own flag, so a host that asks for a catalog settles the same
@@ -1233,6 +1233,21 @@ void BlaeckSerial::read()
         _writeCommandAck(receivedChars, 0, BLAECK_ACK_OK);
         this->_setTimedDataState(false, _timedInterval_ms);
       }
+      else if (equalsFlash(_parsedCommand, F(BLAECK_BUILTIN_PAUSE_WRITES)))
+      {
+        unsigned long pause_ms = 0;
+        if (_parsedParamCount > 0 && _parsedParamPtrs[0] != nullptr)
+          pause_ms = strtoul(_parsedParamPtrs[0], nullptr, 10);
+        // Acknowledged before the pause starts, so the one frame the host is waiting on is
+        // not the first casualty of what it just asked for.
+        _writeCommandAck(receivedChars, 0, BLAECK_ACK_OK);
+        this->_setWritesPaused(pause_ms);
+      }
+      else if (equalsFlash(_parsedCommand, F(BLAECK_BUILTIN_RESUME_WRITES)))
+      {
+        _writesPaused = false;
+        _writeCommandAck(receivedChars, 0, BLAECK_ACK_OK);
+      }
       else
       {
         builtinMatched = false;
@@ -2209,7 +2224,7 @@ uint32_t BlaeckSerial::_fnv1a32(const char *s)
 
 void BlaeckSerial::_writeCommandAck(const char *rawCommand, byte status, byte reasonCode)
 {
-  if (StreamRef == nullptr)
+  if (!_mayWriteFrame())
     return;
 
   // The name hash covers _parsedCommand, which precedes the first comma and so survives a frame
@@ -2560,7 +2575,7 @@ void BlaeckSerial::writeState(const char *channelName, const char *text)
 // way to push a numeric channel.
 void BlaeckSerial::writeState(const char *channelName)
 {
-  if (StreamRef == nullptr)
+  if (!_mayWriteFrame())
     return;
 
   int channelIndex = _findStateChannel(channelName);
@@ -2724,7 +2739,7 @@ void BlaeckSerial::writeState(const char *channelName, double value)
 
 void BlaeckSerial::_writeStateFrame(int channelIndex, const char *text, const byte *pushed, byte pushedLen)
 {
-  if (StreamRef == nullptr)
+  if (!_mayWriteFrame())
     return;
 
   // Before the push, not after: a catalog can be emptied and re-declared whole, and then
@@ -3099,7 +3114,7 @@ void BlaeckSerial::writeStateChannelsFrame(unsigned long msg_id)
   // padding - without them a catalog could name only one device.
   // Declared up-front so the host can announce one text entity per channel
   // before any 0x95 push arrives, the same way 0xA0 announces commands.
-  if (StreamRef == nullptr)
+  if (!_mayWriteFrame())
     return;
 
   if (_bufReady())
@@ -3648,7 +3663,7 @@ void BlaeckSerial::writeEventChannelsFrame(unsigned long msg_id)
   // Declared up-front so the host can announce one event entity per channel,
   // including its list of types, before any 0x85 event arrives. The count is
   // what lets a host reject an out-of-range index without parsing the run.
-  if (StreamRef == nullptr)
+  if (!_mayWriteFrame())
     return;
 
   if (_bufReady())
@@ -3793,7 +3808,7 @@ void BlaeckSerial::writeEvent(const char *channelName, const __FlashStringHelper
   // index and the catalog position cannot drift apart.
   // No CRC (like the 0x95/0xA0/0xA5 frames). The event carries no text and no
   // timestamp: the host supplies its own receipt time.
-  if (StreamRef == nullptr)
+  if (!_mayWriteFrame())
     return;
 
   // An occurrence is in no catalog, so one filed against a stale list is not recoverable
@@ -4169,7 +4184,7 @@ void BlaeckSerial::writeCommands(unsigned long msg_id) { _commandCatalogDirty = 
 // needs no special handling: it simply announces no entities.
 void BlaeckSerial::_writeEmptyFrame(byte msgKey, unsigned long msg_id)
 {
-  if (StreamRef == nullptr)
+  if (!_mayWriteFrame())
     return;
 
   if (_bufReady())
@@ -4655,7 +4670,7 @@ void BlaeckSerial::writeRestarted(unsigned long msg_id)
   // Guarded like every other writer. Deliberately before the flag is set, so a sketch
   // that reaches read() before begin() still announces its restart once it has a stream
   // rather than having spent the one notice on nothing.
-  if (StreamRef == nullptr)
+  if (!_mayWriteFrame())
     return;
 
   if (!_writeRestartedAlreadyDone)
@@ -4790,6 +4805,9 @@ void BlaeckSerial::writeDevicesFrame(unsigned long msg_id)
 
 void BlaeckSerial::writeDataFrame(unsigned long msg_id, int signalIndex_start, int signalIndex_end, bool onlyUpdated, unsigned long long timestamp)
 {
+  if (!_mayWriteFrame())
+    return;
+
   if (onlyUpdated && !hasUpdatedSignals())
     return; // No updated signals
 
