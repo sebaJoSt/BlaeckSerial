@@ -52,9 +52,9 @@ without being configured for that board in advance.
   `onSelectCommand`, `onTextCommand` and `onButtonCommand` say what a command accepts —
   range, step, unit, options, text length — so the device describes its own controls.
   `onCommand` and `onAnyCommand` stay.
-- **Message ids on commands.** Prefix a command with `#42:` — `<#42:SET_AMP,0.9>` — and the
-  device sends that number back in the ack, so a host can tell which command it answers.
-  The prefix is optional.
+- **Message ids.** Prefix a command or a built-in with `#42:` — `<#42:SET_AMP,0.9>` — and the
+  device sends that number back, so a host can tell which one it answers. The prefix is
+  optional, and is how built-ins carry an id now, in place of the `MsgID[0..3]` parameters.
 - **`BLAECK.PAUSE_WRITES,<ms>` and `BLAECK.RESUME_WRITES`.** The pause holds back every
   frame for that long, so a host can close the connection while the device is quiet. It
   ends on its own; `RESUME_WRITES` only ends it early.
@@ -66,77 +66,22 @@ without being configured for that board in advance.
   happened; use a state channel to carry a value.
 - **String signals.** A signal can carry text as well as numbers — up to 255 bytes, read
   from your own buffer each time it is sent.
-- New `WaveformGenerator` example: one fully controllable waveform, exercising
-  typed commands, state channels, event channels and string signals together.
+- **Signal metadata.** A signal can say how it should be shown — unit, device class, icon,
+  display name, decimals — so a host can present it without being told anything about the
+  board.
 - **`getIntervalMs()` and `isTimedDataActive()`** report the interval a host asked for and
   whether timed data is being sent — the two things a sketch could not previously read.
   `getIntervalMs()` returned the lock mode before, not the rate.
 
 ### Changed
-- **Buffered writes are back on for ArduinoCore-mbed, reversing 6.0.1.** That release
-  turned them off on the Giga R1 and its siblings, saying a bulk `Serial.write(buf, len)`
-  could stick permanently and freeze the sketch's main loop until reset. Retested on the
-  same Giga R1 with a heartbeat blinking straight from `loop()`: it kept blinking on a
-  board that had stopped answering. The loop was never frozen. What a mid-write close
-  actually kills is the USB endpoint, and it kills it whichever way the frame was written,
-  so the setting bought nothing — see `BLAECK.PAUSE_WRITES` under Added for what does deal
-  with it. The cost was steep: `WaveformGenerator` at `BLAECK.ACTIVATE,0` managed 508
-  frames per second unbuffered and 7282 buffered, so a Giga could not honour an interval
-  below 2 ms. Only AVR still defaults to unbuffered, for its SRAM. Override at compile time
-  via `BLAECK_BUFFERED_WRITES_DEFAULT` or at runtime via `setBufferedWrites()`.
-- **How a host talks to the device changed.** Built-ins take their message id in the `#id:`
-  prefix instead of `MsgID[0..3]` parameters, `BLAECK.ACTIVATE` takes a plain decimal
-  interval, every command is acknowledged including built-ins, and a data frame marks itself
-  as requested rather than carrying a magic message id. Nothing a sketch writes is affected;
-  a host or script that speaks the protocol directly needs updating. See the
-  [protocol documentation](https://sebajost.github.io/blaeck-protocol/protocol/commands).
-- **`F("")` now means "not declared".** `withUnit`, `withIcon` and `withDeviceClass` stored an
-  empty literal and announced it as a blank; it is now read the same as leaving the call out,
-  so a value built conditionally can say "nothing" without the sketch branching around the
-  call. It also keeps a blank device class off a host that validates the field against a
-  fixed list and would reject the entity outright.
-- **A blank options list is refused on a signal too.** `withOptions(F(""))` — or a list with a
-  blank field in it — was stored and announced, leaving a host a closed set it cannot offer or
-  report. It is now refused where it is declared and said so on the debug stream, which is what
-  a select command already did; the check is written once and shared by both.
-- **A signal no longer keeps its name in a `String`.** The entry holds a pointer the
-  library owns (or the flash address, for an `F()` name), which takes a signal entry from
-  22 bytes to 19 on AVR and removes a heap allocation per signal per `0xB0` frame — the
-  catalog writer used to copy the whole entry, `String` and all, once per signal. A name
-  is still copied unless it came from `F()`.
-- **A signal only pays for metadata once it has some.** `unit`, `device class`, `icon`,
-  `options`, the flags word and the display precision used to sit in every signal entry
-  whether or not the sketch set them; they now live in a record allocated by the first
-  `with*()` call that describes the signal. A signal entry goes from 19 bytes to 10 on
-  AVR, so a sketch that describes nothing — the common case — saves 9 bytes per signal,
-  while a fully described signal costs about 6 bytes more than before. The 0xF0 Signal
-  Metadata frame and the public API are unchanged. If the heap cannot hold a record the
-  description is dropped and the signal itself keeps working; `printRejections()` says
-  how many.
-- **A signal entry is 9 bytes on AVR, down from 19.** Metadata moved out (above), the
-  datatype enum is pinned to a byte instead of the `int` a compiler picks by default, the
-  two flags a signal carries share a byte with the name-suffix bit, and the suffix itself
-  takes the ninth. The datatype change shrinks a state channel entry too. Nothing about it
-  is visible from a sketch: the enumerators, the wire format and the schema hash are
-  unchanged.
-- **An incoming frame is parsed once instead of twice.** `read()` ran two parsers over the
-  same bytes: the 6.x one filling `COMMAND`, `PARAMETER[]` and `STRING_01`, and the 7.0 one
-  filling the token pointers the registered handlers use. The built-in `BLAECK.*` commands
-  now read the same parse as everything else, and the 6.x parser is gone with its buffers —
-  160 bytes of SRAM on a Mega, 80 on an Uno, about 1 KB of flash, 128 bytes less stack while
-  parsing, and half the work per command. All four buffers were private, so nothing about
-  this is visible from a sketch.
-- **A `BLAECK.*` command is no longer truncated before it is matched.** The parse buffer was
-  sized for a registered command name (24 characters on AVR), which is shorter than
-  `BLAECK.WRITE_STATE_CHANNELS`. It now holds whichever of the two is longer — 4 bytes on
-  AVR — and a static assertion fails the build if a longer built-in is ever added. As a
-  side effect an over-long unknown command can no longer be truncated onto a shorter
-  registered one and run it.
-- `deleteSignals()` now gives back the names and metadata the signal table held instead
-  of only rewinding the index.
-- `BlaeckSerial.h` includes the `CRC.h` umbrella header instead of `<CRC32.h>` and
-  `<CRC16.h>` individually, preventing a collision with core headers seen on
-  ArduinoCore-mbed. No functional change; flash is byte-identical.
+- **Buffered writes are back on for the mbed boards, reversing 6.0.1.** That release turned
+  them off believing a bulk write could freeze the main loop; retesting on the same Giga R1
+  showed the loop still running. Only AVR still defaults to unbuffered.
+- **How a host talks to the device changed.** `BLAECK.ACTIVATE` takes a plain decimal
+  interval, every command is acknowledged, and a data frame carries a flag saying whether it
+  was asked for or sent on the interval, in place of the magic message id that used to mark
+  a requested one. A sketch is unaffected; a host that speaks the protocol directly needs
+  updating.
 - **`BLAECK_COMMAND_MAX_CHARS_DEFAULT` is 128** on large AVRs and non-AVR boards (was 48 and
   96), still 48 on Uno/Nano. Below 128 a percent-encoded 32-byte text value cannot fit its own
   frame. Costs ~240 bytes of SRAM.
@@ -144,38 +89,13 @@ without being configured for that board in advance.
   `write()` / `update()` calls on anything that runs often — the by-name ones compare against
   every signal in the table. Returns `-1` when no signal has that name.
 
-### Fixed
-- **`setSignalName()` left the schema hash stale.** Renaming a signal changed what the
-  `0xB0` catalog says without changing the hash a host uses to notice, so the host went on
-  using the catalog it already had — under the old names. The hash is now recomputed.
-- **`BLAECK_ENABLE_STATE_CHANNELS=0` compiles again.** The state channel handle names
-  `StateChannelEntry` in a return type and its fields in the `withIcon()`/`diagnostic()`
-  chain, but the type was itself compiled away with the feature, so a sketch that turned
-  state channels off could not build at all. The type is now always declared — only the
-  table is conditional — which is what the feature flags promise everywhere else: the
-  calls still compile and store nothing, so a sketch needs no `#ifdef`.
-- **Compile-time configuration now has a documented, working route.** A
-  `BlaeckSerialConfig.h` in the sketch folder — the method described since 6.0.0 —
-  is never found under the Arduino IDE or arduino-cli, because the sketch folder is
-  not on the compiler's include path. Anyone who set overrides that way on 6.x was
-  silently running the built-in defaults. PlatformIO `build_flags` always worked.
-  README.md now documents three routes that do work, and warns that an override must
-  reach every translation unit — one seen by the sketch but not by `BlaeckSerial.cpp`
-  gives `class BlaeckSerial` two layouts (an ODR violation), which shows up as
-  corrupted state rather than a compiler error.
-
 ### Removed
 - **The interval lock (breaking).** `setIntervalMs()`, `BLAECK_INTERVAL_OFF` and
-  `BLAECK_INTERVAL_CLIENT` are gone, so a 6.x sketch calling the setter no longer
-  compiles. The host owns the rate: `BLAECK.ACTIVATE` sets it and nothing on the device
-  overrides it. A sketch wanting its own cadence drives `writeAllData()` from its own
-  timing and is never activated.
-- **`setCommandCallback(...)` (breaking).** Deprecated since 6.0.0 and warned about
-  at runtime ever since. Sketches still using it now fail to compile: replace
-  `setCommandCallback(cb)` with `onAnyCommand(cb)` and change the handler signature
-  from `(char *command, int *parameter, char *string01)` to
-  `(const char *command, const char *const *params, byte paramCount)`. Frees roughly
-  167 bytes of flash per sketch on AVR.
+  `BLAECK_INTERVAL_CLIENT` are gone. The host owns the rate now. A sketch that wants its
+  own cadence calls `writeAllData()` on its own timing and is never activated.
+- **`setCommandCallback(...)` (breaking).** Deprecated since 6.0.0. Replace it with
+  `onAnyCommand(cb)` and change the handler signature to
+  `(const char *command, const char *const *params, byte paramCount)`.
 
 
 ## [6.0.1] - 2026-04-27
@@ -207,10 +127,7 @@ without being configured for that board in advance.
   - Enabled by default on non-AVR boards, disabled on AVR to save SRAM.
   - Runtime control: `setBufferedWrites(bool)` / `isBufferedWrites()`.
 - Compile-time configuration via `BlaeckSerialConfig.h` in the sketch folder
-  (uses `__has_include`) — *see 7.0.0: a config file in the sketch folder is not
-  found by the Arduino IDE or arduino-cli, so following this literally had no
-  effect there. PlatformIO `build_flags` always worked.*
-  All command parser defaults and buffered writes can
+  (uses `__has_include`). All command parser defaults and buffered writes can
   now be overridden without modifying library source. PlatformIO users can
   also use `-D` compiler flags.
 - Preprocessor version macros: `BLAECKSERIAL_VERSION`, `BLAECKSERIAL_VERSION_MAJOR`,
