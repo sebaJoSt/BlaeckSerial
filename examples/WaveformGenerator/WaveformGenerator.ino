@@ -118,6 +118,7 @@ void setup()
   OutputSignal = Blaeck.addSignal(F("Output [V]"), &Output)
                      .withDisplayName(F("Output"))
                      .withUnit(F("V"))
+                     .withDeviceClass(F("voltage"))
                      .withStateClass(BLAECK_STATE_CLASS_MEASUREMENT)
                      .withDisplayPrecision(3)
                      .withIcon(F("mdi:sine-wave"));

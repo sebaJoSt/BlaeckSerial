@@ -41,7 +41,6 @@ jobs:
               - examples/Commands
               - examples/EventChannels
               - examples/SHT31TempHumiditySensor
-              - examples/SignalMetadata
               - examples/SineGeneratorAdvanced
               - examples/SineGeneratorBasic
               - examples/StateChannels
@@ -61,7 +60,6 @@ jobs:
               - examples/Commands
               - examples/EventChannels
               - examples/SHT31TempHumiditySensor
-              - examples/SignalMetadata
               - examples/SineGeneratorBasic
               - examples/StateChannels
               - examples/WaveformGenerator
@@ -80,7 +78,6 @@ jobs:
               - examples/Commands
               - examples/EventChannels
               - examples/SHT31TempHumiditySensor
-              - examples/SignalMetadata
               - examples/SineGeneratorBasic
               - examples/StateChannels
               - examples/WaveformGenerator
@@ -99,7 +96,6 @@ jobs:
               - examples/Commands
               - examples/EventChannels
               - examples/SHT31TempHumiditySensor
-              - examples/SignalMetadata
               - examples/SineGeneratorBasic
               - examples/StateChannels
               - examples/TimeStampModes
@@ -121,7 +117,6 @@ jobs:
               - examples/Commands
               - examples/EventChannels
               - examples/SHT31TempHumiditySensor
-              - examples/SignalMetadata
               - examples/SineGeneratorBasic
               - examples/StateChannels
               - examples/WaveformGenerator
