@@ -96,6 +96,9 @@ without being configured for that board in advance.
 - **`setCommandCallback(...)` (breaking).** Deprecated since 6.0.0. Replace it with
   `onAnyCommand(cb)` and change the handler signature to
   `(const char *command, const char *const *params, byte paramCount)`.
+- **`hasSignalOverflow()` and `getSignalOverflowCount()` (breaking).** Replaced by
+  `hasRejectedSignals()` and `getRejectedSignalCount()`, which have counterparts for
+  commands, state channels and event channels.
 
 
 ## [6.0.1] - 2026-04-27
