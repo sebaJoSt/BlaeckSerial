@@ -18,48 +18,25 @@ without being configured for that board in advance.
   sketches and `begin(&Serial, 20)` still means twenty signals.
   The 6.x macros that sized these tables are gone: `BLAECK_COMMAND_MAX_HANDLERS_DEFAULT`,
   `BLAECK_COMMAND_MAX_NAME_CHARS_DEFAULT` and `BLAECK_COMMAND_MAX_PARAMS_DEFAULT`.
-  A number in the sketch cannot disagree with itself the way a build flag seen by
-  only one translation unit could. `BLAECK_COMMAND_MAX_CHARS_DEFAULT`,
-  `BLAECK_BUFFERED_WRITES_DEFAULT` and `BLAECK_ENABLE_*` stay — they size a buffer or
-  reclaim flash, which no runtime number can.
+  Every size now lives in the sketch.
 
-- **A table costs nothing until it is used.** Each table is allocated by the first
-  entry added to it rather than reserved up front, so a sketch that declares no
-  state channels, no event channels and no commands pays for none of them: 503
-  bytes of SRAM back on an Uno. Because of that, the linker's "global variables"
-  figure no longer counts these tables.
+- **A table costs nothing until it is used.** Each is allocated by its first entry rather
+  than reserved up front, so a sketch pays only for what it declares.
 
 - **`begin(Stream *, unsigned int, Stream *debug)` removed.** Name the debug stream
   on the chain instead: `begin(&Serial).withDebugStream(&Serial1)`.
 
-- **I2C master/slave support removed.** All I2C master/slave functionality
-  has been removed: `beginMaster(...)` / `beginSlave(...)`, the `MasterSlaveConfig`
-  modes, slave discovery/scanning, per-signal `prefixSlaveID`, the `@<slaveID>:`
-  command-routing prefix, master-side command-catalog aggregation, and the
-  `<Wire.h>` dependency. BlaeckSerial is now single-board only.
-  Nothing moved in the frame layout on their account: the per-record master/slave-config
-  and slave-ID bytes are still emitted, always `0`.
+- **I2C master/slave support removed.** BlaeckSerial is single-board only, and no longer
+  depends on `<Wire.h>`. Nothing moved in the frame layout: the per-record
+  master/slave-config and slave-ID bytes are still emitted, always `0`.
 
 - **Command parameters are no longer trimmed.** A leading space is part of the value, so
-  `<SET_LABEL, hi>` sets `" hi"` rather than `"hi"`. Write `<SET_LABEL,hi>` to send the
-  value alone. Most commands are unaffected in practice — a number or a select index
-  parses the same either way, and an untyped `onCommand` handler simply receives the space
-  — but a switch compares its value exactly, so `<SET_ENABLE, 1>` is rejected where
-  `<SET_ENABLE,1>` is accepted.
+  `<SET_LABEL, hi>` sets `" hi"` rather than `"hi"`. A switch compares exactly, so
+  `<SET_ENABLE, 1>` is now rejected.
 
 - **`String` is gone from the API; names are `const char *`.** Every overload that took a
-  signal name as a `String` — `addSignal`, `write`, `update`, `findSignalIndex`,
-  `markSignalUpdated`, `setSignalName` — now takes a `const char *`, as do the
-  `DeviceName`, `DeviceHWVersion` and `DeviceFWVersion` members. Each of them only ever
-  called `.c_str()` on its argument and copied the result, so the `String` bought nothing
-  and cost a heap allocation, a copy and a free on every single call.
-  Sketches that pass string literals — every example in this library, unmodified — need
-  no change. A sketch holding a `String` passes `name.c_str()`, which saves it the
-  allocation too. Worth 850–1050 bytes of flash for a typical sketch and about 3.1 KB for
-  one that writes many signals by name, plus 12 bytes of SRAM and roughly 22 bytes of heap.
-  A name is still copied, so a `char` buffer built with `snprintf` can be reused the
-  moment the call returns, exactly as before. The three device members are the exception:
-  they are not copied, so whatever they point at must outlive them — a string literal does.
+  signal name, and the `DeviceName`, `DeviceHWVersion` and `DeviceFWVersion` members.
+  Names in quotes work as before. If you kept a name in a `String`, add `.c_str()`.
 
 ### Added
 - **`withNameSuffix(n)` ends a signal's name in a number.**
@@ -99,6 +76,17 @@ without being configured for that board in advance.
   The ack's frame hash covers the command as written, after the prefix, so it still
   verifies the bytes while the id does the pairing. A name may not begin with `#`
   or `@`; such a name is refused at registration rather than left unreachable.
+- **`BLAECK.PAUSE_WRITES,<ms>` and `BLAECK.RESUME_WRITES`.** The pause withholds every
+  frame — data, states, events, catalogs, acknowledgements — for that long, so a host can
+  close the connection on a device that is not transmitting. Closing on one that is kills
+  the USB endpoint on a native-USB board until it is reset: the port still enumerates and
+  still opens, and the board never answers again. `BLAECK.DEACTIVATE` stops the interval
+  writers, but a sketch calling `write()` on its own schedule is not stopped by anything,
+  and above a few hundred frames a second there is no gap for the close to land in. The
+  pause expires by itself, so nothing has to be sent to undo it and nothing outlives the
+  connection that asked for it; `RESUME_WRITES` only ends it early, and a ceiling stops any
+  host silencing a board indefinitely. A missing or zero duration means the default.
+  Nothing in a sketch changes; a host is what sends these.
 - **State channels (`0x90` / `0x95`).** `addStateChannel(channelName[, value])` declares a
   channel that carries the current value of something — text, bool, or any numeric type,
   the overload settling the type and with it the handle (`withUnit()`/`withStateClass()`/
@@ -138,6 +126,17 @@ without being configured for that board in advance.
   `getIntervalMs()` returned the lock mode before, not the rate.
 
 ### Changed
+- **Buffered writes are back on for ArduinoCore-mbed, reversing 6.0.1.** That release
+  turned them off on the Giga R1 and its siblings, saying a bulk `Serial.write(buf, len)`
+  could stick permanently and freeze the sketch's main loop until reset. Retested on the
+  same Giga R1 with a heartbeat blinking straight from `loop()`: it kept blinking on a
+  board that had stopped answering. The loop was never frozen. What a mid-write close
+  actually kills is the USB endpoint, and it kills it whichever way the frame was written,
+  so the setting bought nothing — see `BLAECK.PAUSE_WRITES` under Added for what does deal
+  with it. The cost was steep: `WaveformGenerator` at `BLAECK.ACTIVATE,0` managed 508
+  frames per second unbuffered and 7282 buffered, so a Giga could not honour an interval
+  below 2 ms. Only AVR still defaults to unbuffered, for its SRAM. Override at compile time
+  via `BLAECK_BUFFERED_WRITES_DEFAULT` or at runtime via `setBufferedWrites()`.
 - **How a host talks to the device changed.** Built-ins take their message id in the `#id:`
   prefix instead of `MsgID[0..3]` parameters, `BLAECK.ACTIVATE` takes a plain decimal
   interval, every command is acknowledged including built-ins, and a data frame marks itself
