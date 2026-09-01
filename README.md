@@ -11,7 +11,7 @@ It is the first part of a chain:
 1. **Your Arduino sketch** uses BlaeckSerial to register each variable it sends as a *signal* -
    a temperature, a counter, a switch position. You can also register the commands the board
    accepts and the events it fires.
-2. **Loggbok**, a measurement logging tool, reads the signals over the serial port and stores
+2. **Loggbok**, a data logging tool, reads the signals over the serial port and stores
    them in a database. It is also an MQTT bridge: it publishes the signals and commands to a
    broker.
 3. **Home Assistant** subscribes to that broker and creates one entity for each: a sensor for
