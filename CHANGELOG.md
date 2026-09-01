@@ -41,84 +41,31 @@ without being configured for that board in advance.
 ### Added
 - **`withNameSuffix(n)` ends a signal's name in a number.**
   `addSignal(F("Sine_"), &v).withNameSuffix(i + 1)` names a signal `Sine_1` without
-  storing the name anywhere: the prefix stays in flash and the digits are produced when
-  the name is sent. A hundred such signals save about a kilobyte of heap against building
-  the names with `snprintf`, which copies each one. The suffix is 0–255, and `0` is a
-  number like any other rather than "no suffix". It works on a copied name too, though
-  there it saves only the digits. Available on every signal handle, so it composes with
-  the metadata calls in any order.
-- **`addSignal(F("Name"), &value)`.** Eleven new overloads that take the name as a flash
-  string. The name then stays in flash and the signal keeps a 2-byte pointer to it instead
-  of a copy, which is most of what a signal costs in SRAM on AVR: about 18 bytes per signal
-  for a 12-character name, against 3 for the same name passed as a plain literal. Existing
-  `addSignal(F("..."), ...)` calls — which worked before by building a `String` — pick the
-  new overload automatically and get the saving without an edit. A name built at runtime
-  still uses the existing overloads and is still copied, so a reused `char` buffer works
-  exactly as before.
-- **`printRejections(&Serial)`.** One summary of everything the tables had no room
-  for, naming the `begin()` call that would have kept it, and printing nothing when
-  all of it fitted — so it can end `setup()` unconditionally. For boards with a
-  single `Serial`, where `withDebugStream()` has nowhere to go. `hasRejections()`
-  asks the same question without printing.
-- **Typed commands (`0xA0` / `0xA5`).** `onNumberCommand`, `onSwitchCommand`,
-  `onSelectCommand`, `onTextCommand` and `onButtonCommand` register a command
-  together with what it accepts — range, step, unit, options, text length — so the
-  device describes its own controls. They join `onCommand` / `onAnyCommand` from
-  6.0.0, which stay for commands that carry no metadata. 
-  Requires `BLAECK_ENABLE_COMMAND_META`.
-- **Message ids on commands.** A sender may prefix a command with `#42:` —
-  `<#42:SET_AMP,0.9>` — and the device echoes that number in the ack's message-id
-  header, so a host can tell which command an ack answers when several of the same
-  name are outstanding. It is the same message id a `BLAECK.*` request carries in the
-  same prefix and gets back in the response header; a command frame simply has nowhere
-  else to put one, because every parameter belongs to the handler.
-  Hand-typed commands are unaffected: no prefix, no change.
-  The ack's frame hash covers the command as written, after the prefix, so it still
-  verifies the bytes while the id does the pairing. A name may not begin with `#`
-  or `@`; such a name is refused at registration rather than left unreachable.
-- **`BLAECK.PAUSE_WRITES,<ms>` and `BLAECK.RESUME_WRITES`.** The pause withholds every
-  frame — data, states, events, catalogs, acknowledgements — for that long, so a host can
-  close the connection on a device that is not transmitting. Closing on one that is kills
-  the USB endpoint on a native-USB board until it is reset: the port still enumerates and
-  still opens, and the board never answers again. `BLAECK.DEACTIVATE` stops the interval
-  writers, but a sketch calling `write()` on its own schedule is not stopped by anything,
-  and above a few hundred frames a second there is no gap for the close to land in. The
-  pause expires by itself, so nothing has to be sent to undo it and nothing outlives the
-  connection that asked for it; `RESUME_WRITES` only ends it early, and a ceiling stops any
-  host silencing a board indefinitely. A missing or zero duration means the default.
-  Nothing in a sketch changes; a host is what sends these.
-- **State channels (`0x90` / `0x95`).** `addStateChannel(channelName[, value])` declares a
-  channel that carries the current value of something — text, bool, or any numeric type,
-  the overload settling the type and with it the handle (`withUnit()`/`withStateClass()`/
-  `withDisplayPrecision()` on a numeric one, `withStateText()`/`withOptions()` on a text
-  one) — and `writeState(channelName[, text])` reports it. Pass a pointer and the library
-  reads that variable whenever the value is wanted, exactly as `addSignal()` does, so a
-  host polling the catalog gets the truth without anything having been pushed. Channels are
-  declared up-front; values on undeclared channels are dropped, and a state is never stored
-  as signal data. Size the table with `begin(&Serial).withStateChannels(n)`.
-  Requires `BLAECK_ENABLE_STATE_CHANNELS`.
-- **Event channels (`0x80` / `0x85`).** `addEventChannel(channelName, eventTypes)` declares a
-  channel and the closed set of events it may report — `F("idle_warning,resumed")`, position
-  defining each index. Use the returned handle's `.withIcon()` and `.diagnostic()` modifiers
-  for presentation, or `addEventType(channelName, F("..."))` to add types conditionally.
-  `writeEvent(channelName, F("..."))` reports one occurrence. An event carries no text,
-  so its wording is fixed at compile time — use a state channel for anything with a runtime value.
-  Events on undeclared channels or types are dropped. Size the tables with
-  `begin(&Serial).withEventChannels(n).withEventTypes(n)` (types share one pool across
-  channels, so no channel needs sizing for the worst case).
-  Requires `BLAECK_ENABLE_EVENTS`.
-- **String signals (`addSignal(name, char *value)`).** New `Blaeck_string` data type
-  for textual values (labels, states, small JSON). The value lives in a user-owned
-  buffer read live on each transmit: `write(name/index, char *value)` repoints the
-  buffer and transmits that one signal, or update the buffer in place and let the
-  periodic transmit pick it up. Up to 255 bytes.
-- **`withDisplayName(F("Output"))` on a signal.** A label a host shows in place of the name,
-  for when the name is doing a second job. A signal's name is what a host that logs calls its
-  stored column, so an author writes `F("Output [V]")` to keep the table self-describing — and
-  then reads the unit twice on screen. Presentation only: the name still identifies the signal
-  everywhere, so declaring a display name on one already deployed relabels it and moves nothing.
-  Optional in the `0xF0` frame (signal meta flags bit 11), so a host that does not read it is
-  unaffected. Typed commands take it too.
+  storing the name. The suffix is 0–255.
+- **`addSignal(F("Name"), &value)`.** The name stays in flash instead of being copied into
+  SRAM. Existing `F("...")` calls pick the new overload and get the saving without an edit;
+  a name built at runtime is copied as before.
+- **`printRejections(&Serial)`.** Prints what did not fit in the tables, and the `begin()`
+  call that would have made room. Prints nothing when everything fitted.
+  `hasRejections()` checks without printing.
+- **Typed commands.** `onNumberCommand`, `onSwitchCommand`,
+  `onSelectCommand`, `onTextCommand` and `onButtonCommand` say what a command accepts —
+  range, step, unit, options, text length — so the device describes its own controls.
+  `onCommand` and `onAnyCommand` stay.
+- **Message ids on commands.** Prefix a command with `#42:` — `<#42:SET_AMP,0.9>` — and the
+  device sends that number back in the ack, so a host can tell which command it answers.
+  The prefix is optional.
+- **`BLAECK.PAUSE_WRITES,<ms>` and `BLAECK.RESUME_WRITES`.** The pause holds back every
+  frame for that long, so a host can close the connection while the device is quiet. It
+  ends on its own; `RESUME_WRITES` only ends it early.
+- **State channels.** Separate from signals: the device pushes the current value of
+  something — text, bool or any number — when it chooses to, instead of on the interval
+  the signals use.
+- **Event channels.** A device can report that something happened — `idle_warning`,
+  `resumed` — from a set of events it declares up front. An event says only which one
+  happened; use a state channel to carry a value.
+- **String signals.** A signal can carry text as well as numbers — up to 255 bytes, read
+  from your own buffer each time it is sent.
 - New `WaveformGenerator` example: one fully controllable waveform, exercising
   typed commands, state channels, event channels and string signals together.
 - **`getIntervalMs()` and `isTimedDataActive()`** report the interval a host asked for and
