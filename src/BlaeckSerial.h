@@ -68,24 +68,16 @@
 //   - AVR (Uno, Mega, Nano, ...):                 OFF
 //       Saves scarce SRAM; the classic ATmega USB-to-serial bridges
 //       handle small writes fine.
-//   - ArduinoCore-mbed (Giga R1, Portenta, Nicla, Opta,
-//                       Nano 33 BLE, Nano RP2040 Connect):  OFF
-//       If the USB host closes the port while a bulk
-//       Serial.write(buf, len) is in progress, the Mbed USBSerial
-//       implementation can get stuck permanently: the call never
-//       returns, even after the host reopens the port, so the sketch's
-//       main loop stops processing commands until the board is reset.
-//       Per-byte writes do not exhibit this behavior.
-//   - Everything else (Uno R4 WiFi, ESP32, SAMD, RP2040 non-mbed, ...): ON
+//   - Everything else (Uno R4 WiFi, ESP32, SAMD, mbed, RP2040, ...): ON
 //       Required on Uno R4 WiFi where the RA4M1 -> ESP32-S3 USB bridge
 //       drops bytes if fed many small writes; bulk writes are reliable
-//       on the other targets too.
+//       on the other targets too, and carry far more data per call.
 //
 // Override at compile time by defining BLAECK_BUFFERED_WRITES_DEFAULT
 // (or via BlaeckSerialConfig.h / build_flags), or at runtime with
 // setBufferedWrites(true|false).
 #ifndef BLAECK_BUFFERED_WRITES_DEFAULT
-  #if defined(__AVR__) || defined(ARDUINO_ARCH_MBED)
+  #if defined(__AVR__)
     #define BLAECK_BUFFERED_WRITES_DEFAULT false
   #else
     #define BLAECK_BUFFERED_WRITES_DEFAULT true

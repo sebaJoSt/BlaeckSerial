@@ -190,8 +190,9 @@ Data is either assembled in RAM and sent in one call, or written out piece by pi
 produced. Buffering costs `60 + signals * 30` bytes of SRAM and suits a USB bridge that dislikes
 many small writes; writing directly costs no RAM at all.
 
-The default is per board: off on AVR and the mbed cores, on everywhere else. Those defaults are
-there because of real faults on real boards, so change this only with a reason:
+The default is per board: off on AVR, where the SRAM is scarce and the bridge chips take small
+writes happily, and on everywhere else. Those defaults are there because of real faults on real
+boards, so change this only with a reason:
 
 ```cpp
 Blaeck.setBufferedWrites(true);
