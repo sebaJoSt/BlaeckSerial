@@ -38,6 +38,18 @@ without being configured for that board in advance.
   signal name, and the `DeviceName`, `DeviceHWVersion` and `DeviceFWVersion` members.
   Names in quotes work as before. If you kept a name in a `String`, add `.c_str()`.
 
+- **The interval lock is gone.** `setIntervalMs()`, `BLAECK_INTERVAL_OFF` and
+  `BLAECK_INTERVAL_CLIENT` are removed. The host owns the rate now. A sketch that wants its
+  own cadence calls `writeAllData()` on its own timing and is never activated.
+
+- **`setCommandCallback(...)` removed.** Deprecated since 6.0.0. Replace it with
+  `onAnyCommand(cb)` and change the handler signature to
+  `(const char *command, const char *const *params, byte paramCount)`.
+
+- **`hasSignalOverflow()` and `getSignalOverflowCount()` removed.** Replaced by
+  `hasRejectedSignals()` and `getRejectedSignalCount()`, which have counterparts for
+  commands, state channels and event channels.
+
 ### Added
 - **`withNameSuffix(n)` ends a signal's name in a number.**
   `addSignal(F("Sine_"), &v).withNameSuffix(i + 1)` names a signal `Sine_1` without
@@ -88,17 +100,6 @@ without being configured for that board in advance.
 - **`findSignalIndex()` is public.** Resolve an index once in `setup()` and use the by-index
   `write()` / `update()` calls on anything that runs often — the by-name ones compare against
   every signal in the table. Returns `-1` when no signal has that name.
-
-### Removed
-- **The interval lock (breaking).** `setIntervalMs()`, `BLAECK_INTERVAL_OFF` and
-  `BLAECK_INTERVAL_CLIENT` are gone. The host owns the rate now. A sketch that wants its
-  own cadence calls `writeAllData()` on its own timing and is never activated.
-- **`setCommandCallback(...)` (breaking).** Deprecated since 6.0.0. Replace it with
-  `onAnyCommand(cb)` and change the handler signature to
-  `(const char *command, const char *const *params, byte paramCount)`.
-- **`hasSignalOverflow()` and `getSignalOverflowCount()` (breaking).** Replaced by
-  `hasRejectedSignals()` and `getRejectedSignalCount()`, which have counterparts for
-  commands, state channels and event channels.
 
 
 ## [6.0.1] - 2026-04-27
