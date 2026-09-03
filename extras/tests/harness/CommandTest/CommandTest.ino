@@ -63,7 +63,7 @@ void Accept(const char *command, const char *value)
   Serial.print(F("CMD "));
   Serial.print(command);
   Serial.print(' ');
-  Serial.println(value);
+  Serial.println(value);    
 }
 
 // ---- handlers -------------------------------------------------------------------------------

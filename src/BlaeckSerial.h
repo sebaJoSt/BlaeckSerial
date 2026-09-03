@@ -98,6 +98,11 @@
 // connection that asked for it. BLAECK.RESUME_WRITES only ends it early. A missing or zero
 // duration means the default, and the maximum is a ceiling on how long any host can silence
 // a board - a host that pauses and then vanishes costs one lost second, not a mute device.
+//
+// BLAECK.PAUSE_WRITES,FOREVER gives that ceiling up: it holds until RESUME_WRITES or a
+// reset, so a host that stops talking leaves a board that answers nothing. Spelled as a
+// word, and only in capitals, because no host arrives at it by calculating a duration -
+// asking for silence without end should take saying so.
 #ifndef BLAECK_PAUSE_WRITES_DEFAULT_MS
   #define BLAECK_PAUSE_WRITES_DEFAULT_MS 1000UL
 #endif
@@ -217,6 +222,9 @@
 #define BLAECK_BUILTIN_DEACTIVATE "BLAECK.DEACTIVATE"
 #define BLAECK_BUILTIN_PAUSE_WRITES "BLAECK.PAUSE_WRITES"
 #define BLAECK_BUILTIN_RESUME_WRITES "BLAECK.RESUME_WRITES"
+
+// The one duration that is not a number of milliseconds. Capitals only, on purpose.
+#define BLAECK_PAUSE_WRITES_FOREVER "FOREVER"
 
 #define BLAECK_BUILTIN_COMMAND_LIST(X)  \
   X(BLAECK_BUILTIN_WRITE_SYMBOLS)       \
@@ -5019,6 +5027,7 @@ private:
     return _frameBuf != nullptr;
   }
   bool _writesPaused = false;
+  bool _writesPausedForever = false;
   unsigned long _writesPausedUntil = 0;
 
   // Asked once per frame, by every writer, in both write modes - never per byte. An
@@ -5027,6 +5036,9 @@ private:
   bool _mayWriteFrame()
   {
     if (StreamRef == nullptr)
+      return false;
+
+    if (_writesPausedForever)
       return false;
 
     if (_writesPaused)
@@ -5050,6 +5062,18 @@ private:
 
     _writesPaused = true;
     _writesPausedUntil = millis() + ms;
+  }
+
+  void _setWritesPausedForever()
+  {
+    _writesPausedForever = true;
+    _writesPaused = false;
+  }
+
+  void _clearWritesPaused()
+  {
+    _writesPaused = false;
+    _writesPausedForever = false;
   }
 
   bool _bufEnsure(size_t addLen);

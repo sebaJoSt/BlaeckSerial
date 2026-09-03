@@ -80,7 +80,7 @@ void BlaeckSerial::_flushCatalogs()
 #endif
 
 #if BLAECK_ENABLE_EVENTS
-  if (_eventCatalogDirty)
+if (_eventCatalogDirty)
     this->writeEventChannels(0);
 #endif
 
@@ -1235,17 +1235,26 @@ void BlaeckSerial::read()
       }
       else if (equalsFlash(_parsedCommand, F(BLAECK_BUILTIN_PAUSE_WRITES)))
       {
+        // The word is looked for before the number, because base ten takes no letters: left
+        // to strtoul it would read as zero, which is the default duration.
+        bool forever = _parsedParamCount > 0 && _parsedParamPtrs[0] != nullptr &&
+                       equalsFlash(_parsedParamPtrs[0], F(BLAECK_PAUSE_WRITES_FOREVER));
+
         unsigned long pause_ms = 0;
-        if (_parsedParamCount > 0 && _parsedParamPtrs[0] != nullptr)
+        if (!forever && _parsedParamCount > 0 && _parsedParamPtrs[0] != nullptr)
           pause_ms = strtoul(_parsedParamPtrs[0], nullptr, 10);
         // Acknowledged before the pause starts, so the one frame the host is waiting on is
         // not the first casualty of what it just asked for.
         _writeCommandAck(receivedChars, 0, BLAECK_ACK_OK);
-        this->_setWritesPaused(pause_ms);
+
+        if (forever)
+          this->_setWritesPausedForever();
+        else
+          this->_setWritesPaused(pause_ms);
       }
       else if (equalsFlash(_parsedCommand, F(BLAECK_BUILTIN_RESUME_WRITES)))
       {
-        _writesPaused = false;
+        _clearWritesPaused();
         _writeCommandAck(receivedChars, 0, BLAECK_ACK_OK);
       }
       else
