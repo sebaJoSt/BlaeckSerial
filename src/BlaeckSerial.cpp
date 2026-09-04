@@ -4690,7 +4690,7 @@ void BlaeckSerial::writeRestarted(unsigned long msg_id)
     {
       _bufReset();
       _bufHeader(0xC0, msg_id);
-      _bufDevice(DeviceName, DeviceHWVersion, DeviceFWVersion);
+      _bufDevice(_deviceName(), DeviceHWVersion, DeviceFWVersion);
       _bufFooter();
       _bufSend();
     }
@@ -4706,7 +4706,7 @@ void BlaeckSerial::writeRestarted(unsigned long msg_id)
 
       StreamRef->write((byte)0);
       StreamRef->write((byte)0);
-      StreamRef->print(DeviceName);
+      StreamRef->print(_deviceName());
       StreamRef->print('\0');
       StreamRef->print(DeviceHWVersion);
       StreamRef->print('\0');
@@ -4778,7 +4778,7 @@ void BlaeckSerial::writeDevicesFrame(unsigned long msg_id)
   {
     _bufReset();
     _bufHeader(0xB3, msg_id);
-    _bufDevice(DeviceName, DeviceHWVersion, DeviceFWVersion);
+    _bufDevice(_deviceName(), DeviceHWVersion, DeviceFWVersion);
       _bufFooter();
       _bufSend();
 
@@ -4794,7 +4794,7 @@ void BlaeckSerial::writeDevicesFrame(unsigned long msg_id)
     StreamRef->write(":");
     StreamRef->write((byte)0);
     StreamRef->write((byte)0);
-    StreamRef->print(DeviceName);
+    StreamRef->print(_deviceName());
     StreamRef->print('\0');
     StreamRef->print(DeviceHWVersion);
     StreamRef->print('\0');

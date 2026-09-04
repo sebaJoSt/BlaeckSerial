@@ -86,8 +86,9 @@ Blaeck.DeviceHWVersion = "Arduino Mega 2560 Rev3";
 Blaeck.DeviceFWVersion = "1.0";
 ```
 
-They start as `"Unknown"`, `"n/a"` and `"n/a"`. They are kept as pointers rather than copied, so
-a quoted literal is always safe and a name built at runtime has to live in a global buffer.
+They start as `"Unnamed"`, `"n/a"` and `"n/a"`, and a name set to an empty string or to null goes
+out as `"Unnamed"` too. They are kept as pointers rather than copied, so a quoted literal is
+always safe and a name built at runtime has to live in a global buffer.
 
 ## Compile-time settings
 

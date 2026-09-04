@@ -226,6 +226,9 @@
 // The one duration that is not a number of milliseconds. Capitals only, on purpose.
 #define BLAECK_PAUSE_WRITES_FOREVER "FOREVER"
 
+// What goes on the wire for a device that has not said what it is called.
+#define BLAECK_DEVICE_NAME_UNNAMED "Unnamed"
+
 #define BLAECK_BUILTIN_COMMAND_LIST(X)  \
   X(BLAECK_BUILTIN_WRITE_SYMBOLS)       \
   X(BLAECK_BUILTIN_WRITE_SIGNAL_CONFIG) \
@@ -3143,9 +3146,11 @@ public:
   BlaeckBeginRef begin(Stream *Ref, unsigned int Size);
 
   /*!
-    @brief  The name the device calls itself. Defaults to "Unknown".
+    @brief  The name the device calls itself. Defaults to "Unnamed".
 
-    What a host lists it by, and groups its signals and controls under.
+    What a host lists it by, and groups its signals and controls under. Set to an empty
+    string, or to null, it goes on the wire as "Unnamed" as well - a device is always
+    listed under something.
 
     @note   Kept as a pointer, not copied. A quoted literal is always safe; a name
             built at runtime has to live in a global buffer, not one inside a function.
@@ -3154,7 +3159,7 @@ public:
       Blaeck.DeviceName = "Waveform Generator Demo";
     @endcode
   */
-  const char *DeviceName = "Unknown";
+  const char *DeviceName = BLAECK_DEVICE_NAME_UNNAMED;
 
   /*!
     @brief  The board this firmware runs on. Defaults to "n/a".
@@ -5068,6 +5073,15 @@ private:
   {
     _writesPausedForever = true;
     _writesPaused = false;
+  }
+
+  // A name the sketch never set, or set to nothing, is written as the default rather than
+  // as an empty field: every frame that carries a name carries one a host can list.
+  const char *_deviceName() const
+  {
+    return (DeviceName == nullptr || DeviceName[0] == '\0')
+               ? BLAECK_DEVICE_NAME_UNNAMED
+               : DeviceName;
   }
 
   void _clearWritesPaused()
