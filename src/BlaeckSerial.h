@@ -84,6 +84,17 @@
   #endif
 #endif
 
+// USB bulk packet size
+// --------------------
+// The size _bufSend() pads against, so a frame never ends on a full USB packet. See the
+// reasoning there. 64 on full speed and 512 on high speed, and since 512 divides by 64 the
+// one value covers both. Lower it to match if a core is built with a smaller endpoint - 16
+// is documented on some AVR builds - because a frame that is a whole number of *that* size
+// stalls just the same, and a test against 64 would not see it.
+#ifndef BLAECK_USB_PACKET_BYTES
+  #define BLAECK_USB_PACKET_BYTES 64
+#endif
+
 // Paused writes
 // -------------
 // BLAECK.PAUSE_WRITES,<ms> stops every frame leaving the device for that long, so a host
@@ -5160,7 +5171,49 @@ private:
       }
       return;
     }
+    // A frame that is a whole number of USB packets ends on a full one, and a full packet does
+    // not close a bulk transfer - only a short one does. The host is left holding the data
+    // until some later, differently sized frame ends short and releases the whole backlog at
+    // once. On an Arduino GIGA that is readings arriving in bursts seconds apart, and it
+    // appears the moment a sketch turns on timestamps, because the eight bytes those add are
+    // what push a data frame onto the boundary. Nothing is lost or malformed - it is late, in
+    // clumps, which reads on a host as a device that stops and then catches up.
+    //
+    // One byte of padding makes the last packet short. It goes in the buffer rather than in a
+    // second write so that one frame is one write is one transfer: sending it separately works
+    // only if the stack coalesces the two, which is its choice and not this library's. The
+    // footer already ends in \r\n and a host finds frames by their markers, so a third
+    // separator byte is ignored by every reader and this stays compatible with hosts that
+    // predate the fix.
+    //
+    // flush() is the obvious place to look for a remedy and is already called below; it does
+    // not help. The bytes have left the device - what is missing is the zero-length packet
+    // that would also close the transfer, and the Print/Stream interface has no way to ask for
+    // one. Padding is the only part of this the library controls.
+    //
+    // Measured on a GIGA: two consecutive 32-byte writes arrive immediately, so this stack
+    // gives each write its own transfer and padding per frame is enough. A stack that instead
+    // filled the endpoint buffer across writes would need the running total since the last
+    // short packet, not the length of one frame.
+    //
+    // Harmless on a real UART, where there are no packets and this only ever appends a byte to
+    // the rare frame whose length happens to divide by the packet size.
+    bool padded = false;
+    if (_framePos > 0 && (_framePos % BLAECK_USB_PACKET_BYTES) == 0 && _bufEnsure(1))
+    {
+      // Deliberately not _bufByte(), which flags an overflow the frame would then be dropped
+      // for. A byte of padding must never cost a reading.
+      _frameBuf[_framePos++] = '\n';
+      padded = true;
+    }
+
     StreamRef->write(_frameBuf, _framePos);
+
+    // The buffer could not grow, so the padding goes out on its own. Weaker than the line
+    // above for the reason given there, and better than leaving the frame to stall.
+    if (!padded && _framePos > 0 && (_framePos % BLAECK_USB_PACKET_BYTES) == 0)
+      StreamRef->write('\n');
+
     StreamRef->flush();
   }
   void _bufHeader(byte msgKey, unsigned long msgId);

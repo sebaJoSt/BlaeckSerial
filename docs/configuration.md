@@ -105,18 +105,21 @@ would have cost:
 Your sketch needs no `#ifdef` around any of it. The calls still compile and simply store
 nothing, so the same sketch builds either way.
 
-Three more change a limit:
+Four more change a default:
 
 | Define | Default |
 |---|---|
 | `BLAECK_COMMAND_MAX_CHARS_DEFAULT` | 128, or 48 on a small AVR. The command parser's buffer, and the library keeps three of them |
-| `BLAECK_BUFFERED_WRITES_DEFAULT` | `false` on AVR and the mbed cores, `true` elsewhere. Also settable while running with `setBufferedWrites()` |
+| `BLAECK_BUFFERED_WRITES_DEFAULT` | `false` on AVR, `true` everywhere else - the mbed cores included. Also settable while running with `setBufferedWrites()` |
+| `BLAECK_USB_PACKET_BYTES` | 64. The USB packet size a frame is padded away from, so it never ends on a full one and stalls in the host. Lower it to match a core built with a smaller endpoint |
 | `BLAECK_STATE_MAX_OPTION_CHARS` | 24. Room for one resolved select option while a frame is built |
 
 > [!IMPORTANT]
-> An override has to reach **both** your sketch and `BlaeckSerial.cpp`. These values size
+> An override has to reach **both** your sketch and `BlaeckSerial.cpp`. Three of them size
 > members of `class BlaeckSerial`. A setting seen by only one of the two gives the class two
 > different layouts, and that corrupts memory without a word about it.
+> `BLAECK_USB_PACKET_BYTES` sizes nothing, but the code that reads it sits in the header, so a
+> one-sided override leaves half the library padding to the other number.
 >
 > So do not `#define` them at the top of your `.ino`. That reaches your sketch and never the
 > library.
