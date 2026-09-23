@@ -13,8 +13,7 @@ BlaeckSerial::BlaeckSerial()
 
 BlaeckSerial::~BlaeckSerial()
 {
-  // Names and metadata first: the entries own them, and freeing the table would lose
-  // the pointers.
+  // Free what the entries own before the table, which holds the pointers.
   _freeSignalOwned();
   delete[] Signals;
   Signals = nullptr;
@@ -33,9 +32,7 @@ BlaeckSerial::~BlaeckSerial()
   _bufFree();
 }
 
-// Ahead of every BLAECK_ENABLE_* region, because every one of them needs it: a 0xB0 symbol
-// and the schema hash read a datatype code just as a state channel does, so a board built
-// without one feature must not lose the code the others still write.
+// Outside every BLAECK_ENABLE_* block: the symbol list and the schema hash need it too.
 byte BlaeckSerial::_dtypeCode(dataType t)
 {
   switch (t)
@@ -55,8 +52,7 @@ byte BlaeckSerial::_dtypeCode(dataType t)
   }
 }
 
-// The type a numeric tag names, carrying the same AVR mapping the pointer overloads apply - so
-// BlaeckDouble and BlaeckFloat name the same channel there, as double * and float * already do.
+// The type a numeric tag names. On AVR, BlaeckDouble maps to float, as double * does.
 static dataType _tagType(BlaeckNumericTag tag)
 {
 #ifdef __AVR__
@@ -71,9 +67,7 @@ void BlaeckSerial::_flushCatalogs()
   if (!_mayWriteFrame())
     return;
 
-  // Each writer clears its own flag, so a host that asks for a catalog settles the same
-  // debt an announce would - and the startup announce, which runs before this ever can,
-  // clears what setup() marked without anything being sent twice.
+  // Each writer clears its own dirty flag, so a catalog a host asked for isn't sent twice.
 #if BLAECK_ENABLE_STATE_CHANNELS
   if (_stateCatalogDirty)
     this->writeStateChannels(0);
@@ -96,8 +90,7 @@ if (_eventCatalogDirty)
 BlaeckBeginRef BlaeckSerial::begin(Stream *Ref)
 {
   StreamRef = (Stream *)Ref;
-  // Torn down before the capacity changes: _freeSignalOwned() walks the table by
-  // _signalCapacity, so that member has to still describe the table that exists.
+  // Free first: _freeSignalOwned() needs _signalCapacity to still match the table.
   if (Signals != nullptr)
   {
     _freeSignalOwned();
@@ -114,9 +107,8 @@ BlaeckBeginRef BlaeckSerial::begin(Stream *Ref)
   _rejectedSignalMetaCount = 0;
 #endif
 
-  // No table is built here. Each one is allocated by the first entry added to
-  // it, so a sketch pays for the tables it uses and the chain this returns can
-  // still change their sizes after begin() has returned.
+  // No table is allocated here; each is allocated by its first entry, so the begin() chain
+  // can still change the sizes.
   return BlaeckBeginRef(this);
 }
 
@@ -157,8 +149,7 @@ void BlaeckSerial::_printRejectionLine(Stream *out, const __FlashStringHelper *w
   out->print(F(" - begin(&Serial)."));
   out->print(chainCall);
   out->print(F("("));
-  // What was asked for in total. Enough to hold this run, which is the number the sketch
-  // wants; a bigger one only matters if what it declares can grow.
+  // The total asked for, which is the size that would have fitted everything.
   out->print(capacity + dropped);
   out->println(F(")"));
 }
@@ -188,13 +179,12 @@ bool BlaeckSerial::printRejections(Stream *out)
     _printRejectionLine(out, F("event type(s)"), F("withEventTypes"),
                         _rejectedEventTypeCount, _eventTypeCapacity);
 #endif
-  // A name too long or a duplicate is counted here too, and no capacity would cure those.
-  // The debug stream is where the individual reason was given.
+  // Also counts names that were too long or duplicated. The debug stream gave each reason.
   out->println(F("  (a name too long or already taken counts here too - "
                  "withDebugStream() names each one)"));
 #if BLAECK_ENABLE_SIGNAL_META
-  // Not a table that ran out but the heap, so no chain call is suggested: the signals
-  // are all there and sending fine, only what they say about themselves is missing.
+  // Out of heap, not out of table, so there is no setting to suggest. The signals themselves
+  // are fine.
   if (_rejectedSignalMetaCount > 0)
   {
     out->print(F("  "));
@@ -208,7 +198,7 @@ bool BlaeckSerial::printRejections(Stream *out)
 
 void BlaeckSerial::_setTableCapacity(TableId table, unsigned int count)
 {
-  // The table this capacity would size, and whether it is already built.
+  // The table this size is for, and whether it already exists.
   const void *existing = nullptr;
   const __FlashStringHelper *chainCall = nullptr;
   switch (table)
@@ -241,8 +231,7 @@ void BlaeckSerial::_setTableCapacity(TableId table, unsigned int count)
     return;
   }
 
-  // A table is sized once, when its first entry builds it. Asking afterwards
-  // would hand back a capacity the table does not have, so say so instead.
+  // A table's size is fixed once it exists.
   if (existing != nullptr)
   {
     if (_debugStream != nullptr)
@@ -255,14 +244,7 @@ void BlaeckSerial::_setTableCapacity(TableId table, unsigned int count)
     return;
   }
 
-  // One ceiling now, and it is this library's own. Channel indices went to two bytes on
-  // the wire, so a table is bounded by what an index can name and by RAM, whichever
-  // arrives first - and RAM arrives first on every board there is. 32767 rather than
-  // 65535 because _findStateChannel() and its neighbours answer with a signed int and
-  // -1 for "not found", and int is 16 bits on AVR.
-  //
-  // Clamped and said aloud rather than letting an entry alias onto the first one: a
-  // sketch asking for more than this has a design to revisit, not a typo.
+  // Capped at MAX_TABLE_ENTRIES, with a warning.
   if (count > MAX_TABLE_ENTRIES && _debugStream != nullptr)
   {
     _debugStream->print(F("BLAECK."));
@@ -277,9 +259,7 @@ void BlaeckSerial::_setTableCapacity(TableId table, unsigned int count)
   switch (table)
   {
   case TABLE_SIGNALS:
-    // Clamped like the rest, for a reason of its own: _signalIndex is a signed int,
-    // 16 bits on AVR, and a table it cannot index is worse than one that is smaller
-    // than asked for.
+    // Also capped for signals, because _signalIndex is an int, 16-bit on AVR.
     _signalCapacity = (count > MAX_TABLE_ENTRIES) ? MAX_TABLE_ENTRIES : (uint16_t)count;
     break;
 #if BLAECK_ENABLE_STATE_CHANNELS
@@ -336,11 +316,9 @@ void BlaeckSerial::_warnTableFull(const __FlashStringHelper *table, unsigned int
   _debugStream->println(F(") or higher."));
 }
 
-// Each table is built by its first entry and never grows: one block per table,
-// allocated during setup and never freed, so nothing can fragment the heap
-// later. A board too small to hold the table leaves the pointer null, which
-// every caller reads as "full" - the same path a full table takes, reported by
-// the same hasRejected*() flag.
+// Each table is allocated once, by its first entry, and never grows or is freed, so the
+// heap doesn't fragment. If there isn't enough RAM the pointer stays null, which callers
+// treat as a full table.
 bool BlaeckSerial::_ensureSignalTable()
 {
   if (Signals != nullptr)
@@ -450,21 +428,19 @@ int BlaeckSerial::_registerSignalCommon(const char *ram, const __FlashStringHelp
       _warnTableFull(F("withSignals"), _signalCapacity, ram);
     _signalRegistrationFailed = true;
     _rejectedSignalCount++;
-    // -1 gives a dead handle: the chain that follows compiles and runs and stores nothing.
+    // -1 makes a handle that ignores every call.
     return -1;
   }
   _setSignalName(_signalIndex, ram, flash);
   Signals[_signalIndex].DataType = type;
   Signals[_signalIndex].Address = address;
-  // No initializer on a bit-field, so this is where a fresh signal - or a slot being
-  // written a second time after deleteSignals() - is told it holds nothing new yet.
+  // Bit-fields can't have initializers, so set them here. The slot may be reused after
+  // deleteSignals().
   Signals[_signalIndex].Updated = 0;
   Signals[_signalIndex].HasSuffix = 0;
   Signals[_signalIndex].NameSuffix = 0;
 #if BLAECK_ENABLE_SIGNAL_META
-  // deleteSignals() only rewinds the index, so a slot can be written twice. Cleared on
-  // registration rather than on deletion, which covers both - and the record the slot
-  // may still hold from its last life is given back rather than leaked.
+  // A reused slot may still hold a metadata record from before; free it.
   if (Signals[_signalIndex].Meta != nullptr)
   {
     delete Signals[_signalIndex].Meta;
@@ -498,10 +474,8 @@ BlaeckNumericSignalRef BlaeckSerial::addSignal(const char *signalName, unsigned 
   return BlaeckNumericSignalRef(this, (int16_t)_registerSignal(signalName, Blaeck_ushort, value));
 }
 
-// int and unsigned int are two bytes on AVR and four on a 32-bit board, so each is registered
-// as the type matching its real width - the catalog then declares what is actually sent, and the
-// non-AVR branches in write() and update() have a type to match. The same #ifdef repeats on every
-// int and unsigned int registration below, signals and state channels alike.
+// int and unsigned int are registered by their real width: 2 bytes on AVR, 4 elsewhere.
+// The same #ifdef appears on every int registration below.
 BlaeckNumericSignalRef BlaeckSerial::addSignal(const char *signalName, int *value)
 {
 #ifdef __AVR__
@@ -548,7 +522,7 @@ BlaeckNumericSignalRef BlaeckSerial::addSignal(const char *signalName, double *v
 
 BlaeckTextSignalRef BlaeckSerial::addSignal(const char *signalName, const char *value)
 {
-  // Address is void* for every datatype; a string address is only ever read from.
+  // Address is void * for every type; a string is only read.
   return BlaeckTextSignalRef(this, (int16_t)_registerSignal(signalName, Blaeck_string, const_cast<char *>(value)));
 }
 
@@ -623,9 +597,7 @@ BlaeckTextSignalRef BlaeckSerial::addSignal(const __FlashStringHelper *signalNam
 
 void BlaeckSerial::deleteSignals()
 {
-  // The slots are given back as well as rewound: a name copy and a metadata record are
-  // heap the entries own, and holding them until the next sketch happens to reuse the
-  // slot would keep memory that nothing can reach.
+  // Free the name copies and metadata records too, not only rewind the index.
   _freeSignalOwned();
   _signalIndex = 0;
   SignalCount = _signalIndex;
@@ -639,10 +611,8 @@ void BlaeckSerial::deleteSignals()
 
 uint16_t BlaeckSerial::_computeSchemaHash()
 {
-  // CRC16-CCITT (init=0x0000, poly=0x1021) over signal names + datatype codes.
-  // Must match Python: binascii.crc_hqx(data, 0) & 0xFFFF
-  // Names are walked by _emitSignalName(), the same as the symbol list sends them, so a name
-  // in flash and a name in RAM cannot hash differently.
+  // CRC16-CCITT (init 0x0000, poly 0x1021) over the signal names and type codes, matching
+  // Python's binascii.crc_hqx(data, 0). Names go through _emitSignalName(), as in the symbol list.
   _schemaHashAccum = 0x0000;
   for (int j = 0; j < _signalIndex; j++)
   {
@@ -655,9 +625,7 @@ uint16_t BlaeckSerial::_computeSchemaHash()
 void BlaeckSerial::setSignalName(int signalIndex, const char *signalName)
 {
   _setSignalName(signalIndex, signalName, nullptr);
-  // A renamed signal is a changed schema. This used to leave the hash as registration
-  // computed it, so a host was told nothing had moved and went on using the catalog it
-  // already had - under the old names.
+  // A new name changes the schema, so the hash must change too.
   _schemaHash = _computeSchemaHash();
 }
 
@@ -667,11 +635,8 @@ void BlaeckSerial::_setSignalName(int signalIndex, const char *ram, const __Flas
     return;
 
   Signal &s = Signals[signalIndex];
-  // Whatever the slot held: a copy is freed, a flash name owns nothing. deleteSignals()
-  // only rewinds the index, so a slot is written twice whenever signals are re-declared.
-  // The pointer is tested first so a slot that has never been named short-circuits before
-  // NameInFlash is read: a bit-field takes no initializer, so on a fresh table that bit
-  // means nothing until a name has been set.
+  // Free the copy the slot held; a flash name owns nothing. Test the pointer before
+  // NameInFlash, which means nothing in a slot that has never been named.
   if (s.SignalName != nullptr && !s.NameInFlash)
     free((void *)s.SignalName);
   s.SignalName = nullptr;
@@ -686,8 +651,7 @@ void BlaeckSerial::_setSignalName(int signalIndex, const char *ram, const __Flas
   if (ram == nullptr)
     return;
 
-  // The name is copied, so the caller's buffer is free the moment this returns - build one
-  // with snprintf and reuse it for the next signal.
+  // Copied, so the caller can reuse its buffer.
   size_t needed = strlen(ram) + 1;
   char *copy = (char *)malloc(needed);
   if (copy != nullptr)
@@ -695,8 +659,7 @@ void BlaeckSerial::_setSignalName(int signalIndex, const char *ram, const __Flas
     memcpy(copy, ram, needed);
     s.SignalName = copy;
   }
-  // Out of RAM leaves the name empty rather than the signal missing: the slot, its
-  // datatype and its address are all still good, and _signalName* reads null as "".
+    // Out of RAM: the signal stays, with an empty name.
 }
 
 void BlaeckSerial::_freeSignalOwned()
@@ -705,9 +668,7 @@ void BlaeckSerial::_freeSignalOwned()
     return;
   for (unsigned int i = 0; i < _signalCapacity; i++)
   {
-    // Pointer first, so an unnamed slot short-circuits before the bit is read - see
-    // _setSignalName. This walks the whole capacity, most of which may never have held
-    // a signal at all.
+    // Pointer first, as in _setSignalName().
     if (Signals[i].SignalName != nullptr && !Signals[i].NameInFlash)
       free((void *)Signals[i].SignalName);
     Signals[i].SignalName = nullptr;
@@ -722,15 +683,13 @@ void BlaeckSerial::_freeSignalOwned()
 #if BLAECK_ENABLE_SIGNAL_META
 SignalMeta *BlaeckSerial::_ensureSignalMeta(int16_t index)
 {
-  // A dead handle - the table was full when the signal was added - has nowhere to store
-  // anything, which is what lets a chain be written without checking it first.
+  // A rejected signal's handle has nowhere to store anything.
   if (index < 0 || Signals == nullptr || static_cast<unsigned int>(index) >= _signalCapacity)
     return nullptr;
   Signal &s = Signals[index];
   if (s.Meta == nullptr)
   {
-    // Whichever new the core provides: a throwing one gives a record or does not
-    // return, a nothrow one gives null, and null is handled either way.
+    // Works with either a throwing or a nothrow new: a failure gives null or doesn't return.
     s.Meta = new (std::nothrow) SignalMeta();
     if (s.Meta == nullptr)
       _rejectedSignalMetaCount++;
@@ -748,9 +707,7 @@ bool BlaeckSerial::_signalNameEquals(const Signal &s, const char *name) const
   {
     if (s.NameInFlash)
     {
-      // Compared byte by byte through pgm_read_byte rather than strcmp_P, which not every
-      // core provides; on a core where flash is directly addressable pgm_read_byte is a
-      // plain read, so this costs nothing there.
+      // pgm_read_byte rather than strcmp_P, which some cores lack.
       PGM_P p = reinterpret_cast<PGM_P>(s.SignalName);
       byte c;
       while ((c = pgm_read_byte(p++)) != 0)
@@ -769,8 +726,7 @@ bool BlaeckSerial::_signalNameEquals(const Signal &s, const char *name) const
       }
     }
   }
-  // The digits the name ends in are never stored, so they are matched as they would be
-  // written rather than compared against anything.
+  // The suffix isn't stored, so compare against its digits.
   if (s.HasSuffix)
   {
     char digits[4];
@@ -784,9 +740,7 @@ bool BlaeckSerial::_signalNameEquals(const Signal &s, const char *name) const
   return *q == '\0';
 }
 
-// The suffix as decimal text, without a terminator. Returns how many digits were written;
-// out must hold three. One place produces them, so a name cannot be matched one way and
-// hashed or sent another.
+// The suffix as decimal digits, without a terminator. Returns the count; out must hold three.
 byte BlaeckSerial::_signalSuffixDigits(const Signal &s, char *out)
 {
   uint8_t v = s.NameSuffix;
@@ -799,10 +753,8 @@ byte BlaeckSerial::_signalSuffixDigits(const Signal &s, char *out)
   return n;
 }
 
-// One walk over a name, feeding each byte wherever it is wanted. The prefix lives in
-// flash or in RAM and may be followed by digits that are not stored at all, and every
-// writer needs all of those cases - so the walking happens once here rather than three
-// times, and a name cannot be sent one way and hashed another.
+// Walks a name (flash or RAM, plus any suffix) and sends each byte to the frame or the hash,
+// so both always see the same bytes.
 void BlaeckSerial::_emitSignalName(const Signal &s, NameSink sink)
 {
   if (s.SignalName != nullptr)
@@ -851,8 +803,7 @@ void BlaeckSerial::_signalNameFeedHash(const Signal &s)
 void BlaeckSerial::_emitSignalName0(const Signal &s)
 {
   _emitSignalName(s, NAME_SINK_FRAME);
-  // The terminator comes last, after whatever the prefix and the digits contributed - a
-  // name with a suffix is one string on the wire, not two.
+  // One terminator after the prefix and suffix together.
   _emitByte(0);
 }
 
@@ -906,15 +857,9 @@ bool blaeck_detail::stateGetterAccepted(const void *stateValue, dataType want, d
   return false;
 }
 
-// Store a value into whatever the signal was declared as, converting on the way in, and say
-// whether there was somewhere to put it. The declared type governs: an int literal handed to a
-// long signal, or sin()'s double handed to a float one, lands as the signal's own type instead
-// of being dropped for not matching the overload it arrived through.
-//
-// Three of them because no single C++ type carries the other ten without loss - a double is four
-// bytes on AVR and cannot hold a long, so the integer families need their own.
-//
-// A string signal has nowhere to put a number and reports false; write() then sends nothing.
+// Store a value in a signal, converted to the signal's declared type. There are three
+// because no one C++ type holds all the others: a double on AVR is 4 bytes and can't hold a
+// long. False if there is no such signal, or it holds text.
 #define BLAECK_STORE_CASES(v)                                                                  \
   switch (Signals[signalIndex].DataType)                                                       \
   {                                                                                            \
@@ -1021,7 +966,7 @@ void BlaeckSerial::update(int signalIndex, const char *value)
   {
     if (Signals[signalIndex].DataType == Blaeck_string)
     {
-      // Repointed, not copied, as write(signalIndex, const char*) does.
+      // Point at the caller's buffer; it isn't copied.
       Signals[signalIndex].Address = const_cast<char *>(value);
       Signals[signalIndex].Updated = true;
     }
@@ -1145,8 +1090,7 @@ void BlaeckSerial::read()
 
   if (recvWithStartEndMarkers() == true)
   {
-    // Parsed once, here: the built-in commands below and the registered handlers that
-    // follow all read the same parse, rather than each running its own over the same bytes.
+    // Parsed once, for both the built-ins and the registered handlers.
     _parseCommandTokens(_receiver.chars);
     if (_debugStream != nullptr)
     {
@@ -1155,17 +1099,15 @@ void BlaeckSerial::read()
       _debugStream->println(">");
     }
 
-    // Frame level, and before anything acts on it: what was parsed is not what was sent, so
-    // a built-in whose name survived the cut must not run on the remains either.
+    // A command that didn't arrive whole must not run, built-in or not.
     if (_parsedTruncated)
     {
       _writeCommandAck(_receiver.chars, 1, BLAECK_ACK_TRUNCATED);
     }
     else
     {
-      // Acknowledged before the answer goes out, so a host waiting on a catalog can tell a
-      // request that arrived from one that did not. The handler dispatch below is told not to
-      // acknowledge a second time, since every command produces exactly one ack.
+      // Acknowledge before replying, so a host can tell the request arrived. The handler dispatch
+      // below then doesn't acknowledge again.
       bool builtinMatched = true;
       const unsigned long msg_id = _parsedPrefixMsgId;
 
@@ -1182,7 +1124,7 @@ void BlaeckSerial::read()
       else if (equalsFlash(_parsedCommand, F(BLAECK_BUILTIN_WRITE_DATA)))
       {
         _writeCommandAck(_receiver.chars, 0, BLAECK_ACK_OK);
-        // The one place a data frame answers a request, so the one place the bit is set.
+        // Marks the data frame as a reply to a request.
         _frameRequested = true;
         this->writeAllData(msg_id, getTimeStamp());
         _frameRequested = false;
@@ -1209,8 +1151,7 @@ void BlaeckSerial::read()
       }
       else if (equalsFlash(_parsedCommand, F(BLAECK_BUILTIN_ACTIVATE)))
       {
-        // strtoul rather than atoi: an interval is a millisecond count, and atoi on AVR is
-        // 16-bit, so anything above 32767 ms would come through as a different number.
+        // strtoul, because atoi is 16-bit on AVR.
         unsigned long timedInterval_ms = 0;
         if (_parsedParamCount > 0 && _parsedParamPtrs[0] != nullptr)
           timedInterval_ms = strtoul(_parsedParamPtrs[0], nullptr, 10);
@@ -1224,16 +1165,14 @@ void BlaeckSerial::read()
       }
       else if (equalsFlash(_parsedCommand, F(BLAECK_BUILTIN_PAUSE_WRITES)))
       {
-        // The word is looked for before the number, because base ten takes no letters: left
-        // to strtoul it would read as zero, which is the default duration.
+        // Check for the word first; strtoul would read it as 0, the default duration.
         bool forever = _parsedParamCount > 0 && _parsedParamPtrs[0] != nullptr &&
                        equalsFlash(_parsedParamPtrs[0], F(BLAECK_PAUSE_WRITES_FOREVER));
 
         unsigned long pause_ms = 0;
         if (!forever && _parsedParamCount > 0 && _parsedParamPtrs[0] != nullptr)
           pause_ms = strtoul(_parsedParamPtrs[0], nullptr, 10);
-        // Acknowledged before the pause starts, so the one frame the host is waiting on is
-        // not the first casualty of what it just asked for.
+        // Acknowledge before pausing, or the ack itself would be held back.
         _writeCommandAck(_receiver.chars, 0, BLAECK_ACK_OK);
 
         if (forever)
@@ -1255,9 +1194,7 @@ void BlaeckSerial::read()
     }
   }
 
-  // A handler dispatched above may have declared, re-styled or cleared something. This is
-  // the ordinary way that reaches a host; the guard on the push writers is only for a
-  // handler that reports on what it has just declared.
+  // Send any catalog a handler changed.
   _flushCatalogs();
 }
 
@@ -1283,10 +1220,8 @@ int BlaeckSerial::_registerCommand(const char *command, BlaeckCommandHandler han
     _rejectedCommandCount++;
     return -1;
   }
-  // A leading sigil opens the prefix section of a received frame, so a name starting with one
-  // could never be reached: the parser would take it for a prefix item and hand the handler
-  // table whatever followed. Refused at declaration rather than registered unreachable, which
-  // would look like a working command that is never called.
+  // '#' and '@' start a received command's prefix, so a name starting with one could never be
+  // matched.
   if (command[0] == '#' || command[0] == '@')
   {
     if (_debugStream != nullptr)
@@ -1297,10 +1232,7 @@ int BlaeckSerial::_registerCommand(const char *command, BlaeckCommandHandler han
     _rejectedCommandCount++;
     return -1;
   }
-  // BLAECK. is the library's own namespace, matched in read() before the handler table is
-  // consulted. A name in it is either shadowed - the built-in answers and this handler runs
-  // after it, on one frame - or it is a command a host is offered in the catalog that no rule
-  // says the library will keep out of its own way. Refused for the same reason as a sigil.
+  // Names starting with BLAECK. are reserved for the built-ins.
   if (strncmp(command, "BLAECK.", 7) == 0)
   {
     if (_debugStream != nullptr)
@@ -1325,8 +1257,7 @@ int BlaeckSerial::_registerCommand(const char *command, BlaeckCommandHandler han
     {
       _commandHandlers[i].handler = handler;
       _resetCommandMeta(i, kind);
-      // The kind and every piece of metadata were just reset, so the entry the host holds
-      // for this name no longer describes it.
+      // The entry was reset, so the host's copy of the catalog is out of date.
       _commandCatalogDirty = true;
       return (int)i;
     }
@@ -1351,16 +1282,14 @@ int BlaeckSerial::_registerCommand(const char *command, BlaeckCommandHandler han
   return -1;
 }
 
-// Registering the same name twice replaces the command outright, so the metadata starts empty
-// rather than inheriting whatever the previous declaration said.
+// Registering a name again replaces the command, so its metadata starts empty.
 void BlaeckSerial::_resetCommandMeta(uint16_t handlerIndex, uint8_t kind)
 {
 #if BLAECK_ENABLE_COMMAND_META
   CommandHandlerEntry &e = _commandHandlers[handlerIndex];
   e.kind = kind;
   e.meta_min = 0.0f;
-  // A text command that never states a limit advertises 255; every other kind reads this as a
-  // range maximum and states its own.
+  // A text command's default maximum length. Other kinds set their own range.
   e.meta_max = (kind == BLAECK_CMD_TEXT) ? (float)BLAECK_TEXT_MAX_LENGTH : 0.0f;
   e.meta_step = 0.0f;
   e.unit = nullptr;
@@ -1368,8 +1297,7 @@ void BlaeckSerial::_resetCommandMeta(uint16_t handlerIndex, uint8_t kind)
   e.stateSignal = nullptr;
   e.stateSource = BLAECK_STATE_SIGNAL;
   e.category = BLAECK_CAT_NONE;
-  // Cleared with the rest, so a name registered twice describes what the second call declared
-  // rather than the two calls put together. The slot is reused; the metadata is not.
+  // Reset with the rest, so nothing carries over from an earlier registration.
   e.displayName = nullptr;
   e.deviceClass = nullptr;
   e.icon = nullptr;
@@ -1394,18 +1322,14 @@ void BlaeckSerial::onAnyCommand(BlaeckAnyCommandHandler handler)
 void BlaeckSerial::clearAllCommandHandlers()
 {
 #if BLAECK_ENABLE_STATE_CHANNELS
-  // The channels these commands owned go with them. Nothing could reach one afterwards -
-  // writeCommandState() finds a channel through the command that named it, and that command
-  // is about to be gone - and clearAllStateChannels() leaves them alone by design, so this is
-  // the only place they are released. Clearing both tables therefore empties both, whichever
-  // order they are cleared in.
+  // Free the channels these commands owned through withOwnState(). clearAllStateChannels()
+  // leaves them alone, so this is the only place they are released.
   for (uint16_t i = 0; i < _stateChannelSlots(); i++)
   {
     if (!_stateChannels[i].ownedByCommand)
       continue;
 
-    // Both catalogs move, each only if it held something: the channels here, the
-    // commands below.
+    // Each catalog is marked changed only if it held something.
     if (_stateChannels[i].inUse)
       _stateCatalogDirty = true;
 
@@ -1452,9 +1376,7 @@ void BlaeckSerial::writeCommandState(const char *command)
     if (strcmp(e.command, command) != 0)
       continue;
 
-    // The channel was declared from this same name at registration, so it exists unless the
-    // table was full - in which case there is nothing to publish to and the warning was
-    // already given there.
+    // The channel exists unless the table was full, which was reported at registration.
     for (uint16_t c = 0; c < _stateChannelSlots(); c++)
     {
       if (!_stateChannels[c].inUse || !_stateChannels[c].ownedByCommand)
@@ -1462,14 +1384,8 @@ void BlaeckSerial::writeCommandState(const char *command)
       if (!_channelNameEqualsFlash(_stateChannels[c].name, _stateChannels[c].nameInFlash, e.stateSignal))
         continue;
 
-      // The same resolution writeState(channelName) does, and for the same reason: a channel
-      // carries its text three ways and only one of them is a getter. A select's own state is
-      // an index into the option list the command handed it, and _channelText() is what turns
-      // that back into the name; a plain string channel is read where it sits.
-      //
-      // Asking only the getter meant those two answered nullptr, which _writeStateFrame sends
-      // as an empty string - and an empty retained payload deletes the topic it lands on, so a
-      // select reported its wave by removing the topic that said which one it was.
+      // Resolve the text as writeState(channelName) does: from a getter, a buffer, or a select's
+      // index. An empty result would delete a retained value on the host.
       char optionBuf[BLAECK_STATE_MAX_OPTION_CHARS];
       _writeStateFrame(c, _channelText(_stateChannels[c], optionBuf, sizeof(optionBuf)));
       return;
@@ -1480,9 +1396,7 @@ void BlaeckSerial::writeCommandState(const char *command)
 }
 
 #if BLAECK_ENABLE_COMMAND_META
-// Copies a flash name into `out` and declares the channel as owned by a command. Kept apart
-// from addStateChannel() so that one can refuse an owned name outright, with no exception
-// for "unless the caller is me".
+// Adds a command's own channel. addStateChannel() refuses such names.
 bool BlaeckSerial::_addOwnedStateChannel(const __FlashStringHelper *channelName, BlaeckStateTextGetter getStateText,
                                         dataType valueType, const void *value)
 {
@@ -1496,16 +1410,15 @@ bool BlaeckSerial::_addOwnedStateChannel(const __FlashStringHelper *channelName,
   if (channelName == nullptr)
     return false;
 
-  // The name stays where it is: withOwnState() is flash-only, and a channel now holds a
-  // pointer, so there is nothing to copy and no length to truncate to.
+  // withOwnState() names are always F() literals, so the pointer is stored.
   if (pgm_read_byte(reinterpret_cast<PGM_P>(channelName)) == 0)
     return false;
 
   int existing = _findStateChannel(channelName);
   if (existing >= 0 && !_stateChannels[existing].ownedByCommand)
   {
-    // The sketch declared this name itself. The command takes it, because its state has to
-    // come from one place - but say so, since the addStateChannel() line is now dead.
+    // The sketch already added this name. The command takes it over; say so, because the
+    // addStateChannel() call no longer has any effect.
     if (_debugStream != nullptr)
     {
       _debugStream->print(F("Channel taken over by a command's own state; drop the addStateChannel() for: "));
@@ -1537,8 +1450,7 @@ bool BlaeckSerial::_addOwnedStateChannel(const __FlashStringHelper *channelName,
       continue;
     _setChannelName(_stateChannels[i].name, _stateChannels[i].nameInFlash, nullptr, channelName);
     _stateChannels[i].icon = nullptr;
-    // Diagnostic on principle: a host that announces a sensor for it anyway should file it
-    // away, since the control already shows this value.
+    // Diagnostic, since the command's control already shows the value.
     _stateChannels[i].diagnostic = true;
     _stateChannels[i].getStateText = getStateText;
     _stateChannels[i].valueType = valueType;
@@ -1566,53 +1478,37 @@ bool BlaeckSerial::_declareOwnState(uint16_t handlerIndex, const __FlashStringHe
                                    BlaeckStateTextGetter getStateText, dataType valueType,
                                    const void *value, bool selectIndex)
 {
-  // One or the other has to supply the value: a getter that builds text, or a variable the
-  // library reads. Neither means the control would sit at unknown forever, so refuse it here
-  // rather than announce a topic nothing publishes to.
+  // The value needs a source, a getter or a variable. Without one it would never be reported.
   if (channelName == nullptr || (getStateText == nullptr && value == nullptr))
     return false;
 
   if (!_addOwnedStateChannel(channelName, getStateText, valueType, value))
     return false;
 
-  // A select hands its option list to the channel: it is what a host needs to show the control
-  // as a list rather than free text, and what lets the channel report an index as the option
-  // it names. Both come from the command, so neither is asked of the sketch.
+  // A select's options go to its channel, so a host shows a list and an index can be turned
+  // into a name.
 #if BLAECK_ENABLE_STATE_CHANNELS
   const CommandHandlerEntry &cmd = _commandHandlers[handlerIndex];
   int ch = _findStateChannel(channelName);
   if (ch >= 0)
   {
     _stateChannels[ch].stateIsSelectIndex = selectIndex;
-    // A switch reports on and off, and a host matches that text against the two payloads it
-    // was given - which are the switch's own vocabulary, "1" and "0". A getter returning
-    // "ON" matches neither, and Home Assistant's switch has no branch for a payload it does
-    // not recognise: the entity keeps the value it had, which at startup is none, so the
-    // control sits at unknown for good and nothing anywhere says why. Normalised on the way
-    // out instead, so a sketch may spell it however reads best in its own code.
+    // A host matches a switch's state against "1" and "0", so a getter's "ON" or "true" is
+    // converted before it is sent.
     if (cmd.kind == BLAECK_CMD_SWITCH && getStateText != nullptr)
       _stateChannels[ch].stateIsSwitchBool = true;
-    // A select reports an option name unless it reports an index this library resolves. Both
-    // the getter form and the buffer form hand over text the sketch chose, and only the list
-    // says whether that text is an option at all.
+    // A name from a getter or buffer is checked against the options.
     if (cmd.kind == BLAECK_CMD_SELECT && !selectIndex)
       _stateChannels[ch].stateIsSelectName = true;
     if (cmd.kind == BLAECK_CMD_SELECT && cmd.options != nullptr)
       _stateChannels[ch].options = cmd.options;
   }
 #else
-  // No channel was declared - _addOwnedStateChannel() refused above - so there is nothing
-  // here to hand the option list to.
+  // No channel was added, so there is nothing to give the options to.
   (void)handlerIndex;
   (void)selectIndex;
 #endif
 
-  // No announce here. There was one, to correct a host that stayed connected across a reset,
-  // and it never ran: writeCommandState() looks for a command whose stateSignal and
-  // stateSource are set, and the handle sets those only after this returns - it cannot set
-  // them earlier, because a channel that failed to declare must not be claimed. The restart
-  // notice carries the whole catalog now, values included, which corrects that host in one
-  // frame instead of one per command and does it for channels no command owns as well.
   return true;
 }
 #endif
@@ -1659,9 +1555,7 @@ uint16_t BlaeckSerial::_flashCsvOptionCount(const __FlashStringHelper *csv)
   return any ? count : 0;
 }
 
-// A field counts as blank when it holds nothing but spacing. Whitespace-only is caught as well as
-// empty because a member that shows as nothing is not one a host could offer or a person could
-// pick, and the space would be trimmed away downstream regardless.
+// True for a field that is empty or only spaces, which a host couldn't show or offer.
 bool BlaeckSerial::_flashCsvHasBlankField(const __FlashStringHelper *csv)
 {
   if (csv == nullptr)
@@ -1682,7 +1576,7 @@ bool BlaeckSerial::_flashCsvHasBlankField(const __FlashStringHelper *csv)
       fieldHasContent = true;
     }
   }
-  // Closes the last field, and answers for an empty string too - both are "no usable member here".
+  // The last field, and an empty string.
   return !fieldHasContent;
 }
 
@@ -1692,7 +1586,7 @@ long BlaeckSerial::getSelectOptionIndexOf(const char *command, const char *optio
     return -1;
 
 #if !BLAECK_ENABLE_COMMAND_META
-  // No metadata is stored, so there is no option list to match against.
+  // No metadata, so no options to match.
   return -1;
 #else
   for (uint16_t i = 0; i < _commandSlots(); i++)
@@ -1703,8 +1597,7 @@ long BlaeckSerial::getSelectOptionIndexOf(const char *command, const char *optio
     if (strcmp(e.command, command) != 0)
       continue;
 
-    // The same match an incoming command value gets, so a name that would be accepted on the
-    // wire resolves to the same option here.
+    // The same match as an incoming command value.
     return _flashCsvIndexOf(e.options, optionName);
   }
   return -1;
@@ -1720,8 +1613,7 @@ bool BlaeckSerial::getSelectOptionNameAt(const char *command, byte index, char *
     return false;
 
 #if !BLAECK_ENABLE_COMMAND_META
-  // No metadata is stored, so there is no option list to read back. Reported as a
-  // failure with an empty result, the same as an unknown command.
+  // No metadata, so no options to read.
   (void)index;
   return false;
 #else
@@ -1733,8 +1625,7 @@ bool BlaeckSerial::getSelectOptionNameAt(const char *command, byte index, char *
     if (strcmp(e.command, command) != 0)
       continue;
 
-    // Walk past `index` commas, then copy up to the next one. Same field-walk the 0x80
-    // catalog does over an event type list, on the options CSV instead.
+    // Skip `index` commas, then copy up to the next one.
     PGM_P p = reinterpret_cast<PGM_P>(e.options);
     byte seen = 0;
     unsigned int at = 0;
@@ -1752,8 +1643,7 @@ bool BlaeckSerial::getSelectOptionNameAt(const char *command, byte index, char *
     byte c;
     while ((c = pgm_read_byte(p + at + len)) != 0 && c != ',')
     {
-      // Truncating would produce a name no host can match against the declared
-      // options, so report failure rather than hand back half of one.
+      // A shortened name would match no option, so fail instead.
       if ((unsigned int)len + 1 >= outSize)
       {
         out[0] = '\0';
@@ -1800,9 +1690,7 @@ long BlaeckSerial::_flashCsvIndexOf(const __FlashStringHelper *csv, const char *
     {
       if (matching)
       {
-        // Exact. A host lists every option it was given, so two differing only in case
-        // are two entries a person can pick between - folding them made the second
-        // unreachable by name, and a name is all a host sends.
+        // Case-sensitive, so options differing only in case stay distinct.
         if (*v == '\0' || (char)c != *v)
           matching = false;
         else
@@ -1836,10 +1724,8 @@ bool BlaeckSerial::_receiveByte(Receiver &r, char rc)
   {
     if (rc == startMarker)
     {
-      // A command that never arrived at its end marker - a write cut short by a timeout or a
-      // link going down halfway - would otherwise sit in the buffer and swallow the next one,
-      // which would be dropped as garbage without anything saying so. A start marker cannot
-      // appear inside a command, so the one being collected is abandoned for the new one.
+      // A second '<' abandons the unfinished command. Otherwise a command cut off mid-way would
+      // swallow the next one.
       r.ndx = 0;
       r.overflowed = false;
     }
@@ -1849,9 +1735,8 @@ bool BlaeckSerial::_receiveByte(Receiver &r, char rc)
       r.ndx++;
       if (r.ndx >= MAXIMUM_CHAR_COUNT)
       {
-        // Full: this character and every one after it overwrites the last slot and is lost.
-        // Recorded here because it is the only point at which the loss is visible - by the
-        // time the frame is parsed it looks like a complete, shorter command.
+        // Buffer full: the rest of the command is dropped. Flag it now, because after parsing it
+        // would look like a valid shorter command.
         r.ndx = MAXIMUM_CHAR_COUNT - 1;
         r.overflowed = true;
       }
@@ -1874,8 +1759,7 @@ bool BlaeckSerial::_receiveByte(Receiver &r, char rc)
 
 bool BlaeckSerial::_setChannelName(const char *&slot, bool &inFlash, const char *ram, const __FlashStringHelper *flash)
 {
-  // Whatever the slot held: a copy is freed, a flash name owns nothing. A slot is written
-  // twice whenever a channel is re-declared or taken over by a command.
+  // Free the copy the slot held; a flash name owns nothing.
   if (slot != nullptr && !inFlash)
     free((void *)slot);
   slot = nullptr;
@@ -1918,7 +1802,7 @@ bool BlaeckSerial::_channelNameEqualsFlash(const char *stored, bool inFlash, con
   if (!inFlash)
     return equalsFlash(stored, candidate);
 
-  // Both in flash: neither may be read as RAM, so both go through pgm_read_byte.
+  // Both in flash, so both are read with pgm_read_byte.
   PGM_P a = reinterpret_cast<PGM_P>(stored);
   PGM_P b = reinterpret_cast<PGM_P>(candidate);
   byte ca, cb;
@@ -1948,8 +1832,7 @@ byte BlaeckSerial::copyFlashName(const __FlashStringHelper *flash, char *out, by
       len++;
     }
   }
-  // Always terminated, so a null or over-long name still hands the caller a valid string -
-  // an empty one is refused by the const char* form exactly as it would have been.
+  // Always terminated, even for a null or overlong name.
   out[len] = '\0';
   return len;
 }
@@ -1988,8 +1871,7 @@ char *BlaeckSerial::toText(float value, byte decimals, char *out, byte outSize)
     value = -value;
   }
 
-  // Rounded before the split, so a carry lands in the integer part: 9.999 at two decimals is
-  // 10.00, not 9.100.
+  // Round before splitting, so 9.999 at two decimals becomes 10.00, not 9.100.
   float rounding = 0.5f;
   for (byte i = 0; i < decimals; i++)
     rounding /= 10.0f;
@@ -1998,7 +1880,7 @@ char *BlaeckSerial::toText(float value, byte decimals, char *out, byte outSize)
   unsigned long whole = (unsigned long)value;
   float frac = value - (float)whole;
 
-  // Digits come out least-significant first, so they are staged and written back to front.
+  // Digits come out lowest first, so they are written back to front.
   char digits[11];
   byte n = 0;
   do
@@ -2044,9 +1926,8 @@ void BlaeckSerial::_parseCommandTokens(const char *raw)
   _parsedParamCount = 0;
   _parsedPrefixMsgId = 0;
   _parsedPrefixLen = 0;
-  // Characters were dropped while the frame was being received, so whatever follows is a
-  // fragment however complete it looks. Reset here with the rest of the parse state rather
-  // than after the empty-frame check, or an empty frame would inherit the previous verdict.
+  // Characters were lost while receiving, so this is a fragment. Reset here, before the
+  // empty-command check, so an empty command doesn't keep the previous verdict.
   _parsedTruncated = _receiver.overflowed;
   for (byte i = 0; i < MAX_COMMAND_PARAM_COUNT; i++)
   {
@@ -2061,19 +1942,12 @@ void BlaeckSerial::_parseCommandTokens(const char *raw)
   strncpy(_parsedTokenBuffer, raw, sizeof(_parsedTokenBuffer) - 1);
   _parsedTokenBuffer[sizeof(_parsedTokenBuffer) - 1] = '\0';
 
-  // Manual comma-scanner that preserves empty fields between consecutive commas.
+  // Split on commas by hand, so empty fields between commas are kept.
   char *p = _parsedTokenBuffer;
 
-  // The prefix section: zero or more sigil-tagged items, each closed by ':', before the
-  // command name. Each item names itself, so order carries no meaning and a reader stops at
-  // the first character that is not a sigil it knows. This library knows only '#'; a routing
-  // '@' belongs to something that can forward, and a board that cannot route should answer
-  // UNKNOWN_COMMAND rather than quietly run a command addressed elsewhere - which is what
-  // leaving it unparsed does, since the name then keeps the prefix and matches nothing.
-  //
-  // A malformed item is not consumed either. Everything from the sigil onward stays part of
-  // the name, so it fails to match and is reported, rather than being silently dropped and
-  // leaving a command that ran without the id its sender is waiting for.
+  // The prefix: zero or more items before the command name, each starting with a sigil and
+  // ending with ':'. Only '#' (message id) is understood. Anything else, including a malformed
+  // item, stays part of the name, so the command doesn't match and is answered as unknown.
   while (*p == '#')
   {
     const char *scan = p + 1;
@@ -2085,20 +1959,16 @@ void BlaeckSerial::_parseCommandTokens(const char *raw)
       scan++;
       digits++;
     }
-    // Zero means "no id" and is not a value a sender may use, so it is refused with the rest
-    // of the malformed forms rather than accepted as a number that says nothing.
+    // 0 means no id, so "#0:" is malformed.
     if (digits == 0 || *scan != ':' || id == 0 || id > 65535UL)
       break;
     _parsedPrefixMsgId = (uint16_t)id;
     p = (char *)scan + 1;
   }
-  // Where the payload starts, so the ack can hash the command as its sender wrote it. The
-  // prefix is addressing, not content: a relay strips a routing item before a board ever sees
-  // it, so a hash taken over the received bytes would cover different characters depending on
-  // how the frame arrived, and would never match what the sender hashed.
+  // The ack hashes the command after the prefix, as its sender wrote it.
   _parsedPrefixLen = (byte)(p - _parsedTokenBuffer);
 
-  // Extract command (first token before the first comma)
+  // The command name is everything before the first comma.
   char *tokenStart = p;
   while (*p != ',' && *p != '\0')
     p++;
@@ -2118,7 +1988,7 @@ void BlaeckSerial::_parseCommandTokens(const char *raw)
   if (!hasComma)
     return;
 
-  // Extract parameters — empty fields (,,) produce a pointer to '\0'
+  // Parameters. An empty field (,,) gives a pointer to an empty string.
   bool moreParams = true;
   while (moreParams && _parsedParamCount < MAX_COMMAND_PARAM_COUNT)
   {
@@ -2138,7 +2008,7 @@ void BlaeckSerial::_parseCommandTokens(const char *raw)
     _parsedParamCount++;
   }
 
-  // Out of parameter slots with commas still to come: the argument list was cut short.
+  // Out of parameter slots but more commas follow: the list was cut short.
   if (moreParams)
     _parsedTruncated = true;
 }
@@ -2150,8 +2020,7 @@ void BlaeckSerial::_dispatchRegisteredHandlers(bool sendAck)
     return;
   }
 
-  // Truncation is caught in read(), before a built-in can act on the remains, so nothing
-  // reaches here with a frame that was cut.
+  // read() rejects a truncated command before this is reached.
 
   byte ackStatus = 1;                  // 0 = accepted, 1 = rejected
   byte ackReason = BLAECK_ACK_UNKNOWN; // reason reported when rejected
@@ -2190,17 +2059,15 @@ void BlaeckSerial::_dispatchRegisteredHandlers(bool sendAck)
 
     if (!matched)
     {
-      // Delivered to the catch-all handler: acknowledge as accepted.
+      // Handled by onAnyCommand(), so accepted.
       matched = true;
       ackStatus = 0;
       ackReason = BLAECK_ACK_OK;
     }
   }
 
-  // Every command is acknowledged, built-ins included. A built-in that matched was already
-  // acknowledged in read(), ahead of its answer, and passes sendAck false so it is not
-  // acknowledged twice. A BLAECK.* name that matched nothing arrives here with sendAck true
-  // and is answered UNKNOWN, like any other name the device does not have.
+  // Every command gets one ack. A matched built-in was acknowledged in read() and passes
+  // sendAck false; an unknown BLAECK.* name arrives with sendAck true and is answered UNKNOWN.
   if (sendAck)
   {
     _writeCommandAck(_receiver.chars, ackStatus, ackReason);
@@ -2226,29 +2093,23 @@ void BlaeckSerial::_writeCommandAck(const char *rawCommand, byte status, byte re
   if (!_mayWriteFrame())
     return;
 
-  // The name hash covers _parsedCommand, which precedes the first comma and so survives a frame
-  // the device could not take in whole. It is what still identifies the command when the byte
-  // hash cannot, because the bytes are not the ones the sender wrote.
+  // The name hash still identifies a command that didn't arrive whole, since the name comes
+  // before the first comma.
   uint32_t nameHash = (_parsedCommand[0] == '\0') ? 0UL : _fnv1a32(_parsedCommand);
 
-  // Past the prefix section, so the hash covers the command as its sender wrote it rather than
-  // as it happened to arrive. See _parseCommandTokens(). Guarded against a raw string shorter
-  // than the prefix, which cannot happen from the parse above but would read past the end here.
+  // Hash what follows the prefix. The length check can't fail after the parse above, but guards
+  // against reading past the end.
   const char *payload = rawCommand;
   if (payload != nullptr && _parsedPrefixLen > 0 && strlen(payload) >= _parsedPrefixLen)
     payload += _parsedPrefixLen;
 
-  // The header carries back the message id the sender put in the prefix, and 0 when it sent
-  // none. That is what pairs an ack with its command: two commands of the same name can be
-  // outstanding at once, and a hash that identifies bytes cannot say which of them is being
-  // answered. It is the same field a BLAECK.* response echoes, and means the same thing; the
-  // counter this replaced numbered acks in the order the device sent them, which told a host
-  // nothing it could use.
+  // The ack carries the message id from the command's prefix (0 if none), so a host can tell
+  // which of two same-named commands it answers.
   uint32_t ackMsgId = (uint32_t)_parsedPrefixMsgId;
 
   if (!_frameOpen(0xA5, ackMsgId))
     return;
-  // Payload: command hash (4 bytes, little-endian) + name hash (4) + status (1) + reason (1).
+  // Command hash (4 bytes, little-endian), name hash (4), status (1), reason (1).
   ulngCvt.val = _fnv1a32(payload);
   _emitBytes(ulngCvt.bval, 4);
   ulngCvt.val = nameHash;
@@ -2262,8 +2123,7 @@ void BlaeckSerial::_writeCommandAck(const char *rawCommand, byte status, byte re
 int BlaeckSerial::_registerStateChannel(const char *channelName, const __FlashStringHelper *flashName,
                                          dataType valueType, const void *value)
 {
-  // A flash name is measured where it lives; only a RAM name is copied, so only it can
-  // be too long for the copy.
+  // Only a RAM name is copied, so only it can be too long.
   char probe[2];
   bool emptyFlash = flashName != nullptr && copyFlashName(flashName, probe, sizeof(probe)) == 0;
   if ((channelName == nullptr && flashName == nullptr) || emptyFlash ||
@@ -2273,8 +2133,7 @@ int BlaeckSerial::_registerStateChannel(const char *channelName, const __FlashSt
     return -1;
   }
 
-  // A channel a command owns is that command's alone: its value comes from the getter it was
-  // registered with, and nowhere else.
+  // A command's own channel takes its value only from the command.
   int owned = flashName != nullptr ? _findStateChannel(flashName) : _findStateChannel(channelName);
   if (owned >= 0 && _stateChannels[owned].ownedByCommand)
   {
@@ -2298,8 +2157,7 @@ int BlaeckSerial::_registerStateChannel(const char *channelName, const __FlashSt
     return -1;
   }
 
-  // Re-declaring a channel updates it rather than consuming a slot, so the metadata starts
-  // empty: what the previous declaration said must not survive a chain that says less.
+  // Declaring an existing name reuses its slot with the metadata cleared.
   int existing = flashName != nullptr ? _findStateChannel(flashName) : _findStateChannel(channelName);
   if (existing >= 0)
   {
@@ -2475,18 +2333,11 @@ void BlaeckSerial::clearAllStateChannels()
 {
   for (uint16_t i = 0; i < _stateChannelSlots(); i++)
   {
-    // A channel a command claimed with withOwnState() belongs to that command, and a sketch
-    // clearing the channels it declared has not cleared the command. It is left because it
-    // could not be got back: withOwnState() runs on the handle onNumberCommand() and its
-    // siblings return, so a channel taken here could only be re-declared by registering the
-    // command again - which a sketch re-declaring its own channels has no reason to do.
-    // clearAllCommandHandlers() releases them, together with the commands that own them.
+    // Channels a command owns stay; clearAllCommandHandlers() removes them with their commands.
     if (_stateChannels[i].ownedByCommand)
       continue;
 
-    // Only a slot that held something changes the catalog. Clearing a table that was
-    // already empty announces nothing, the same way a modifier that writes the value
-    // already there announces nothing.
+    // Only a slot that held something changes the catalog.
     if (_stateChannels[i].inUse)
       _stateCatalogDirty = true;
 
@@ -2527,8 +2378,8 @@ void BlaeckSerial::writeState(const char *channelName, const char *text)
   if (channelIndex < 0)
     return;
 
-  // A text channel's variable is the caller's buffer, and repointing it at whatever was just
-  // handed in would leave the channel reading a buffer that may not outlive the call.
+  // A text channel points at the sketch's own buffer. Don't repoint it at the caller's text,
+  // which may not outlive the call.
   if (_stateChannels[channelIndex].stateValue != nullptr)
   {
     if (_debugStream != nullptr)
@@ -2542,9 +2393,8 @@ void BlaeckSerial::writeState(const char *channelName, const char *text)
   _writeStateFrame(channelIndex, text);
 }
 
-// Reports whatever the channel currently holds: the variable a typed channel points at, or
-// the text a getter builds. The one form that needs no value from the caller, and the only
-// way to push a numeric channel.
+// Sends the channel's current value, read from its variable or getter. The only way to push
+// a channel that has a variable.
 void BlaeckSerial::writeState(const char *channelName)
 {
   if (!_mayWriteFrame())
@@ -2577,17 +2427,9 @@ void BlaeckSerial::writeState(const char *channelName)
   _writeStateFrame(channelIndex, text);
 }
 
-// The 0x95 frame itself. Split out because writeCommandState() has to reach it for a channel
-// writeState() deliberately refuses - the guard is about who may choose the text, not about
-// how it is sent.
-// The channel a push may go to, or -1 with a debug line saying why not. Shared so the text and
-// numeric forms cannot drift apart: they refuse for the same reasons, and each mirrors the
-// other's type message.
-//
-// A channel whose value comes from a getter is refused - there is nothing to push into, and the
-// pushed value would be replaced the next time the getter is asked. A channel holding a variable
-// is not refused: the caller stores into it, as write() does for a signal, so what was pushed is
-// what the channel goes on reporting.
+// Finds the channel for a writeState() push, or returns -1 with a note on the debug stream.
+// Shared by the text and number forms. A channel with a getter is refused, since the getter
+// would replace the pushed value; a channel with a variable takes the value into it.
 int BlaeckSerial::_stateChannelForPush(const char *channelName, bool wantText)
 {
   if (StreamRef == nullptr)
@@ -2651,8 +2493,7 @@ void BlaeckSerial::_writeStateNumber(const char *channelName, long s, unsigned l
   byte pushed[8];
   byte len = _valueBytes(e.valueType, s, u, d, pushed);
 
-  // Stored where the channel reads, so the value survives the next catalog poll instead of
-  // being replaced by it. These are the declared type's own bytes, so a copy is the assignment.
+  // Store into the channel's variable, so the value stays when the catalog is next read.
   if (e.stateValue != nullptr && len > 0)
     memcpy(const_cast<void *>(e.stateValue), pushed, len);
 
@@ -2714,14 +2555,11 @@ void BlaeckSerial::_writeStateFrame(int channelIndex, const char *text, const by
   if (!_mayWriteFrame())
     return;
 
-  // Before the push, not after: a catalog can be emptied and re-declared whole, and then
-  // this index names a different channel than the one the host holds at that position.
+  // Send changed catalogs first, so the index refers to the list the host has.
   _flushCatalogs();
 
-  // A typed channel reports its variable; text is what a string channel was handed, or what
-  // its getter returned. One or the other, never both - which is what valueType records.
-  // pushed is the third case: a channel declared by tag holds nothing to read, so writeState()
-  // converts what it was handed and passes the bytes in.
+  // The value comes from the channel's variable or getter, or, for a channel added with a tag,
+  // from the bytes writeState() passed in.
   StateChannelEntry &e = _stateChannels[channelIndex];
   byte valueBytes[8];
   byte valueLen = pushedLen;
@@ -2730,22 +2568,16 @@ void BlaeckSerial::_writeStateFrame(int channelIndex, const char *text, const by
   else
     valueLen = _channelValueBytes(e, valueBytes);
 
-  // Nothing to report, so nothing is sent. A getter may answer nullptr, and a channel declared
-  // by tag holds no value until something writes one - and the frame has no way to say so: a
-  // number is fixed width, and a string is a length that may legitimately be zero. Sent anyway,
-  // a number would go out under the string encoding and leave the host reading its footer as
-  // data, while text would arrive as an empty payload - which on a retained topic deletes it.
-  //
-  // An empty string is a different thing and still goes: that is a deliberate clear.
+  // No value, so send nothing: the frame can't express "none", and an empty text would delete
+  // a retained value on the host. An empty string is still sent, since that is a deliberate
+  // clear.
   if (valueLen == 0 && text == nullptr)
     return;
 
   if (text == nullptr)
     text = "";
 
-  // Capped at 255, the same as a string signal and as Home Assistant's own limit on a state.
-  // The cap also bounds how long one push holds the link: a frame goes out whole, so an
-  // unbounded value would delay every data frame queued behind it.
+  // Capped at 255 bytes, like a string signal.
   size_t rawLen = strlen(text);
   byte len = (rawLen > 255) ? (byte)255 : (byte)rawLen;
   if (rawLen > 255 && !e.truncationWarned)
@@ -2758,9 +2590,7 @@ void BlaeckSerial::_writeStateFrame(int channelIndex, const char *text, const by
 
   if (!_frameOpen(0x95, 0))
     return;
-  // Device identity, the channel index, the datatype, then the value: fixed width for a
-  // number, a 1-byte length followed by that many UTF-8 bytes for a string - the same rule
-  // a data frame follows.
+  // Layout: State (0x95) in the protocol spec.
   _emitByte((byte)0);
   _emitByte((byte)0);
   _emitByte((byte)(channelIndex & 0xFF));
@@ -2803,8 +2633,7 @@ void BlaeckSerial::_debugChannel(const __FlashStringHelper *prefix, const StateC
 
 const char *BlaeckSerial::_checkedSelectName(const StateChannelEntry &e, const char *text) const
 {
-  // No answer yet is not a mistake: a getter may have none, and a buffer may be empty until
-  // the first selection. Passed on for the caller to send as no value.
+  // No value yet is fine; pass it on as none.
   if (text == nullptr || text[0] == '\0')
     return text;
 
@@ -2812,13 +2641,11 @@ const char *BlaeckSerial::_checkedSelectName(const StateChannelEntry &e, const c
   if (e.options == nullptr)
     return text;
 
-  // The matcher the command topic is read with, so a name is reported exactly when the same
-  // name would be accepted back.
+  // The same match used for incoming command values.
   if (_flashCsvIndexOf(e.options, text) >= 0)
     return text;
 
-  // Home Assistant logs a name that is not on the list and keeps the option it had, so the
-  // control goes on showing a stale selection - which reads as a device that did not change.
+  // A host ignores a name that isn't an option and keeps showing the old one, so warn.
   if (!e.stateWarned)
   {
     e.stateWarned = true;
@@ -2840,9 +2667,8 @@ const char *BlaeckSerial::_checkedSelectName(const StateChannelEntry &e, const c
 
 const char *BlaeckSerial::_channelText(const StateChannelEntry &e, char *buf, byte bufSize) const
 {
-  // valueType first, always. getStateText shares its storage with getNumber, so on a numeric
-  // channel the slot is non-null but holds a getter of another signature entirely - calling it
-  // here would run it as if it returned text and take strlen() of whatever came back.
+  // Check valueType first: getStateText shares storage with getNumber, so on a numeric channel
+  // it holds a getter of a different type.
   if (e.valueType == Blaeck_string && e.getStateText != nullptr)
   {
     const char *t = e.getStateText();
@@ -2852,9 +2678,7 @@ const char *BlaeckSerial::_channelText(const StateChannelEntry &e, char *buf, by
       return t;
 
     const char *canonical = blaeck_detail::switchStateText(t);
-    // Neither on nor off in any spelling this library knows. Reporting nothing is honest - "0"
-    // would assert the switch is off - but nothing is also what a sketch sees when it has just
-    // spelled the value another way, so say which it is. Once: the getter runs on every push.
+    // Not a recognised on/off spelling. Report nothing, and warn once.
     if (canonical == nullptr && t != nullptr && t[0] != '\0' && !e.stateWarned)
     {
       e.stateWarned = true;
@@ -2870,8 +2694,7 @@ const char *BlaeckSerial::_channelText(const StateChannelEntry &e, char *buf, by
     return canonical;
   }
 
-  // Only a string channel keeps text here; _channelValueBytes() reads every other type and
-  // never touches this pointer.
+  // Only text channels keep text here.
   if (e.valueType != Blaeck_string || e.stateValue == nullptr)
     return nullptr;
 
@@ -2883,7 +2706,7 @@ const char *BlaeckSerial::_channelText(const StateChannelEntry &e, char *buf, by
   if (e.options == nullptr || buf == nullptr || bufSize == 0)
     return nullptr;
 
-  // Same field-walk getSelectOptionNameAt() does, on the list the command handed the channel.
+  // Find the index'th option, as getSelectOptionNameAt() does.
   byte index = *((const byte *)e.stateValue);
   PGM_P p = reinterpret_cast<PGM_P>(e.options);
   byte seen = 0;
@@ -2901,10 +2724,7 @@ const char *BlaeckSerial::_channelText(const StateChannelEntry &e, char *buf, by
   byte c;
   while ((c = pgm_read_byte(p + at + len)) != 0 && c != ',')
   {
-    // Stopped by the buffer, not by the end of the name. getSelectOptionNameAt() refuses this
-    // for the same reason: half a name matches nothing on the list a host was given. Only this
-    // leg is bounded - the catalog carries full names and the command topic accepts them - so
-    // truncating here would break reporting alone, and quietly.
+    // Too long for the buffer. A shortened name would match no option, so report nothing.
     if ((unsigned int)len + 1 >= bufSize)
     {
       if (!e.stateWarned)
@@ -2930,10 +2750,8 @@ const char *BlaeckSerial::_channelText(const StateChannelEntry &e, char *buf, by
 #endif
 
 #if BLAECK_ENABLE_STATE_CHANNELS
-// A pushed number, as the bytes of whatever the channel was declared as. The caller hands the
-// same value three times, already cast: the switch then picks the carrier its target needs, and
-// the result is what a direct cast to that type would have given. One switch rather than one per
-// family, which is the difference between a few hundred bytes of flash and a thousand.
+// A pushed number converted to the channel's type, as bytes. The caller passes the value cast
+// three ways and the switch picks the one that fits; one switch keeps the flash cost down.
 byte BlaeckSerial::_valueBytes(dataType declared, long s, unsigned long u, double d, byte *out)
 {
   switch (declared)
@@ -2954,8 +2772,7 @@ byte BlaeckSerial::_valueBytes(dataType declared, long s, unsigned long u, doubl
 
 byte BlaeckSerial::_channelValueBytes(const StateChannelEntry &e, byte *out)
 {
-  // Asked before a variable is read, and cast back to the signature it was stored as -
-  // withStateValue() refuses a getter whose type is not the channel's, so valueType names it.
+  // A getter takes priority over a variable. withStateValue() ensured its type matches.
   if (e.getNumber != nullptr && e.valueType != Blaeck_string)
   {
     switch (e.valueType)
@@ -3013,49 +2830,22 @@ uint16_t BlaeckSerial::_stateChannelFlags(const StateChannelEntry &e, bool hasSt
     flags |= BLAECK_SCH_HAS_OPTIONS;
   if (e.unit != nullptr)
     flags |= BLAECK_SCH_HAS_UNIT;
-  // State class and display precision live in the entry's own word already, because neither
-  // can be inferred from a member: state class 0 and precision 0 are both real values.
+  // State class and display precision are kept in metaFlags already.
   flags |= (uint16_t)(e.metaFlags & (BLAECK_SCH_STATE_CLASS_MASK | BLAECK_SCH_HAS_DISPLAY_PRECISION));
   return flags;
 }
 
 void BlaeckSerial::writeStateChannelsFrame(unsigned long msg_id)
 {
-  // Whatever prompted this - a host asking, the startup announce, or _flushCatalogs() -
-  // the host is about to hold the current list, which is the whole of what the flag means.
+  // The host is about to have the current list.
   _stateCatalogDirty = false;
 
-  // 0x90 "State Channel List" frame. Per declared channel entry:
-  //   msConfig(1) slaveID(1) name\0 flags(2, LE uint16) valueType(1)
-  //   [icon\0]                 if flags.hasIcon
-  //   [stateValue]             if flags.hasStateValue
-  //   [deviceClass\0]          if flags.hasDeviceClass
-  //   [options\0]              if flags.hasOptions
-  //   [unit\0]                 if flags.hasUnit
-  //   [displayPrecision(1)]    if flags.hasDisplayPrecision
-  // flags bits: 0=hasIcon 1=isDiagnostic 2=hasStateValue 3=hasDeviceClass 4=disabledByDefault
-  //             5=forceUpdate 6=hasOptions 7=hasUnit 8-10=stateClass 11=hasDisplayPrecision.
-  //             Bits 12-15 reserved - two bytes rather than one, so the catalog has room to
-  //             grow without taking a new message key.
-  // Optional fields follow in bit order, as they do in 0xF0.
-  // valueType is unconditional: a channel has a type whether or not it has a value to report
-  // yet, so tying the type to the presence of a value would leave a host guessing. stateValue
-  // is a NUL-terminated string for type 0x0A and the fixed width its type implies otherwise.
-  // Unit, state class and display precision are what make a host treat the channel as a number
-  // rather than as text, so a text channel leaves all three unset.
-  // stateText is fetched from the channel's getter as the frame is built, so the catalog
-  // reports each channel's value as of that moment and there is no stored copy to go
-  // stale. A channel that registered no getter, or whose getter returns nullptr, carries
-  // no value.
-  // The two leading bytes are the entry's device identity, msConfig and slaveID: zero from
-  // a single-device library, rewritten by an aggregator relaying several boards. Not
-  // padding - without them a catalog could name only one device.
-  // Declared up-front so the host can announce one text entity per channel
-  // before any 0x95 push arrives, the same way 0xA0 announces commands.
+  // Layout: State Channel List (0x90) in the protocol spec. Values come from each channel's
+  // variable or getter as the frame is built.
   //
-  // _channelText() warns about a value it will not report, and with buffered writes off a
-  // warning from inside the loop below lands in the open frame when the debug stream is the
-  // frame stream. Each warning fires once, so asking first spends them before the frame opens.
+  // _channelText() can warn, and with buffered writes off a warning printed during the frame
+  // would land inside it if the debug stream is the same port. Each warning prints only once,
+  // so calling it first gets them out before the frame starts.
   if (_debugStream != nullptr && !_bufferedWrites)
   {
     for (uint16_t i = 0; i < _stateChannelSlots(); i++)
@@ -3076,8 +2866,7 @@ void BlaeckSerial::writeStateChannelsFrame(unsigned long msg_id)
     if (!e.inUse)
       continue;
 
-    // Fetched once, before the flag is decided: the getter may return nullptr, and
-    // calling it twice could hand the two uses different text.
+    // Asked once: calling the getter twice could give two different answers.
     char optionBuf[BLAECK_STATE_MAX_OPTION_CHARS];
     const char *stateText = _channelText(e, optionBuf, sizeof(optionBuf));
     byte valueBytes[8];
@@ -3097,8 +2886,7 @@ void BlaeckSerial::writeStateChannelsFrame(unsigned long msg_id)
 
     if (flags & BLAECK_SCH_HAS_ICON)
       _emitFlashStr0(e.icon);
-    // A string is NUL-terminated here like every other string in this frame; a number is the
-    // fixed width its type implies, which is why it needs no terminator of its own.
+    // Text ends with a terminator; a number has its type's fixed width.
     if (flags & BLAECK_SCH_HAS_STATE_VALUE)
     {
       if (valueLen > 0)
@@ -3119,10 +2907,8 @@ void BlaeckSerial::writeStateChannelsFrame(unsigned long msg_id)
   _frameClose();
 }
 #else
-// BLAECK_ENABLE_STATE_CHANNELS=0: the API stays so sketches still build, but nothing
-// is stored. The catalog still answers, with an empty list (see _writeEmptyFrame).
-// The handle's modifiers compile and store nothing, so a sketch declaring channels needs no
-// #ifdef. Nothing is counted as rejected: the feature is off, not failing.
+// BLAECK_ENABLE_STATE_CHANNELS=0: the API compiles but stores nothing, and the catalog
+// answers empty.
 BlaeckTextStateRef BlaeckSerial::addStateChannel(const char *, BlaeckTextTag) { return BlaeckTextStateRef(this, -1); }
 BlaeckBoolStateRef BlaeckSerial::addStateChannel(const char *, BlaeckBoolTag) { return BlaeckBoolStateRef(this, -1); }
 BlaeckNumericStateRef BlaeckSerial::addStateChannel(const char *, BlaeckNumericTag) { return BlaeckNumericStateRef(this, -1); }
@@ -3138,9 +2924,7 @@ BlaeckNumericStateRef BlaeckSerial::addStateChannel(const char *, unsigned long 
 BlaeckNumericStateRef BlaeckSerial::addStateChannel(const char *, float *) { return BlaeckNumericStateRef(this, -1); }
 BlaeckNumericStateRef BlaeckSerial::addStateChannel(const char *, double *) { return BlaeckNumericStateRef(this, -1); }
 void BlaeckSerial::clearAllStateChannels() {}
-// Called by the addStateChannel() overloads that take a flash name, which are compiled
-// whether or not the feature is on. -1 is the index a refused registration returns, so the
-// handle it produces is the same inert one every stub above hands back.
+// Used by the F() addStateChannel() overloads, which exist either way.
 int BlaeckSerial::_registerStateChannel(const char *, const __FlashStringHelper *, dataType, const void *) { return -1; }
 void BlaeckSerial::writeStateChannels() { this->writeStateChannels(0); }
 void BlaeckSerial::writeStateChannels(unsigned long msg_id) { this->_writeEmptyFrame(0x90, msg_id); }
@@ -3170,9 +2954,7 @@ int BlaeckSerial::_registerEventChannel(const char *channelName, const __FlashSt
     return -1;
   }
 
-  // A channel with no types can neither emit - writeEvent() resolves against this list - nor be
-  // announced, since a host has nothing to declare the entity with. Refused rather than stored.
-  // A blank type is refused on the same ground: it occupies an index that nothing can ever report.
+  // A channel needs at least one event type, and none may be blank.
   if (eventTypes == nullptr || _flashCsvOptionCount(eventTypes) == 0)
   {
     if (_debugStream != nullptr)
@@ -3206,9 +2988,8 @@ int BlaeckSerial::_registerEventChannel(const char *channelName, const __FlashSt
     return -1;
   }
 
-  // Re-declaring a channel updates it rather than consuming a slot, so the metadata starts
-  // empty. Its already-declared event types keep their indices: those are wire positions other
-  // frames refer to, and clearing them would renumber events a host has already been told about.
+  // Declaring an existing name reuses its slot with the metadata cleared. Its event types are
+  // kept, so their indices don't change.
   int existing = flashName != nullptr ? _findEventChannel(flashName) : _findEventChannel(channelName);
   if (existing >= 0)
   {
@@ -3267,9 +3048,7 @@ BlaeckEventChannelRef BlaeckSerial::addEventChannel(const char *channelName, con
 
 void BlaeckSerial::_addEventTypesCsv(uint16_t channelIndex, const __FlashStringHelper *eventTypes)
 {
-  // One pool entry per field, all pointing at the same flash string. Appended in
-  // order, so a field's position is its wire index - the same rule call order gives
-  // addEventType().
+  // One entry per field, all pointing at the same string, in order.
   uint16_t fieldCount = _flashCsvOptionCount(eventTypes);
   for (uint16_t f = 0; f < fieldCount; f++)
   {
@@ -3281,7 +3060,7 @@ void BlaeckSerial::_addEventTypesCsv(uint16_t channelIndex, const __FlashStringH
       else
         _warnTableFull(F("withEventTypes"), _eventTypeCapacity,
                        _eventChannels[channelIndex].name);
-      // Every remaining field is lost too, and each is a type a host will never hear about.
+      // The remaining fields are dropped too.
       _rejectedEventTypeCount += (uint16_t)(fieldCount - f);
       break;
     }
@@ -3307,7 +3086,7 @@ void BlaeckSerial::_eventTypeExtent(const EventTypeEntry &e, unsigned int &start
     return;
   }
 
-  // Walk past `field` commas, then measure to the next comma or the terminator.
+  // Skip `field` commas, then measure to the next comma or the end.
   byte seen = 0;
   unsigned int i = 0;
   while (seen < e.field)
@@ -3351,7 +3130,7 @@ bool BlaeckSerial::_eventTypeEquals(const EventTypeEntry &e, const __FlashString
     if (bc == 0 || pgm_read_byte(a + i) != bc)
       return false;
   }
-  // Equal only if eventType ends exactly where the extent does.
+  // Equal only if eventType ends where the field does.
   return pgm_read_byte(b + len) == 0;
 }
 
@@ -3360,8 +3139,7 @@ bool BlaeckSerial::addEventType(const char *channelName, const __FlashStringHelp
   if (eventType == nullptr)
     return false;
 
-  // Same rule addEventChannel() applies to the list it is given: a type that shows as nothing
-  // takes an index no event could ever be reported under.
+  // A blank type is refused, as in addEventChannel().
   if (_flashCsvHasBlankField(eventType))
   {
     if (_debugStream != nullptr)
@@ -3385,8 +3163,7 @@ bool BlaeckSerial::addEventType(const char *channelName, const __FlashStringHelp
     return false;
   }
 
-  // A duplicate would be unreachable: writeEvent() resolves by text and would
-  // always match the first one.
+  // A duplicate could never be reported: writeEvent() would always find the first.
   if (_findEventType((byte)channelIndex, eventType) >= 0)
   {
     if (_debugStream != nullptr)
@@ -3408,7 +3185,7 @@ bool BlaeckSerial::addEventType(const char *channelName, const __FlashStringHelp
   _eventTypes[_eventTypeCount].text = eventType;
   _eventTypes[_eventTypeCount].field = WHOLE_STRING;
   _eventTypeCount++;
-  // The catalog carries each channel's list of types, so a new one changes it.
+  // A new type changes the catalog.
   _eventCatalogDirty = true;
   return true;
 }
@@ -3425,7 +3202,7 @@ void BlaeckSerial::clearAllEventChannels()
     _eventChannels[i].diagnostic = false;
     _setChannelName(_eventChannels[i].name, _eventChannels[i].nameInFlash, nullptr, nullptr);
   }
-  // The count gates every read of the pool, so the entries need no cleanup.
+  // Resetting the count is enough; entries beyond it are never read.
   _eventTypeCount = 0;
 }
 
@@ -3458,12 +3235,8 @@ int BlaeckSerial::_findEventType(uint16_t channelIndex, const __FlashStringHelpe
   if (eventType == nullptr)
     return -1;
 
-  // Walks the pool in insertion order, counting only this channel's entries, so
-  // the result is both the wire index and the position the 0x80 catalog emits.
-  // Compares by text, not pointer: the compiler is free to keep two identical
-  // F() literals at different addresses. Both operands live in flash, so
-  // neither strcmp() nor strcmp_P() applies (the latter reads its first
-  // argument from RAM) — read both sides with pgm_read_byte().
+  // The index is the position among this channel's entries. Compare the text, not the pointer:
+  // identical F() literals may sit at different addresses.
   uint16_t index = 0;
   for (uint16_t i = 0; i < _eventTypeCount; i++)
   {
@@ -3478,10 +3251,7 @@ int BlaeckSerial::_findEventType(uint16_t channelIndex, const __FlashStringHelpe
   return -1;
 }
 
-// Compares two PROGMEM strings. On AVR a flash pointer cannot be dereferenced
-// directly, and avr-libc offers no plain flash-to-flash strcmp, so both sides
-// are read a byte at a time. On flat-address cores (ESP32, SAMD) pgm_read_byte
-// is an ordinary dereference, so this stays correct there too.
+// Compares two flash strings a byte at a time. avr-libc has no flash-to-flash strcmp.
 bool BlaeckSerial::_flashStringEquals(const __FlashStringHelper *a, const __FlashStringHelper *b)
 {
   if (a == b)
@@ -3516,20 +3286,7 @@ void BlaeckSerial::writeEventChannelsFrame(unsigned long msg_id)
 {
   _eventCatalogDirty = false;
 
-  // 0x80 "Event Channel List" frame. Per declared channel entry:
-  //   msConfig(1) slaveID(1) name\0 flags(2, LE uint16)
-  //   [icon\0]                 if flags.hasIcon
-  //   [deviceClass\0]          if flags.hasDeviceClass
-  //   count(2, LE uint16) type\0 x count
-  // flags bits: 0=hasIcon 1=isDiagnostic 2=hasDeviceClass 3=disabledByDefault.
-  //             Bits 4-15 reserved - two bytes, matching 0x90, so the catalog has room to
-  //             grow without taking a new message key.
-  // The two leading bytes are the entry's device identity, msConfig and slaveID: zero from
-  // a single-device library, rewritten by an aggregator relaying several boards. Not
-  // padding - without them a catalog could name only one device.
-  // Declared up-front so the host can announce one event entity per channel,
-  // including its list of types, before any 0x85 event arrives. The count is
-  // what lets a host reject an out-of-range index without parsing the run.
+  // Layout: Event Channel List (0x80) in the protocol spec.
   if (!_frameOpen(0x80, msg_id))
     return;
 
@@ -3584,22 +3341,11 @@ void BlaeckSerial::writeEventChannelsFrame(unsigned long msg_id)
 
 void BlaeckSerial::writeEvent(const char *channelName, const __FlashStringHelper *eventType)
 {
-  // 0x85 "Event" frame: one occurrence on a declared channel, device -> host.
-  //   msConfig(1) slaveID(1) channelIndex(2, LE uint16)  eventIndex(2, LE uint16)
-  // The two leading bytes are the channel's device identity, written zero here and
-  // rewritten by an aggregator relaying several boards - the same slot every catalog
-  // frame carries, and the same one 0x95 carries.
-  // Both indices refer to that device's 0x80 catalog, so that frame must be received
-  // first. Channels are never removed, only cleared as a whole, so the slot
-  // index and the catalog position cannot drift apart.
-  // No CRC (like the 0x95/0xA0/0xA5 frames). The event carries no text and no
-  // timestamp: the host supplies its own receipt time.
+  // Layout: Event (0x85) in the protocol spec. The indices refer to the event channel list.
   if (!_mayWriteFrame())
     return;
 
-  // An occurrence is in no catalog, so one filed against a stale list is not recoverable
-  // the way a state value is - the announce that followed would carry the value, but
-  // never the event.
+  // Send changed catalogs first. An event sent against an old list can't be corrected later.
   _flushCatalogs();
 
   int channelIndex = _findEventChannel(channelName);
@@ -3635,14 +3381,11 @@ void BlaeckSerial::writeEvent(const char *channelName, const __FlashStringHelper
   _frameClose();
 }
 #else
-// BLAECK_ENABLE_EVENTS=0: the API stays so sketches still build, but nothing
-// is stored. The catalog still answers, with an empty list (see _writeEmptyFrame).
+// BLAECK_ENABLE_EVENTS=0: the API compiles but stores nothing, and the catalog answers empty.
 BlaeckEventChannelRef BlaeckSerial::addEventChannel(const char *, const __FlashStringHelper *) { return BlaeckEventChannelRef(this, -1); }
 bool BlaeckSerial::addEventType(const char *, const __FlashStringHelper *) { return false; }
 void BlaeckSerial::clearAllEventChannels() {}
-// Called by the addEventChannel() overload that takes a flash name, which is compiled
-// whether or not the feature is on. -1 is the index a refused registration returns, so the
-// handle it produces is the same inert one the stub above hands back.
+// Used by the F() addEventChannel() overload, which exists either way.
 int BlaeckSerial::_registerEventChannel(const char *, const __FlashStringHelper *, const __FlashStringHelper *) { return -1; }
 void BlaeckSerial::writeEventChannels() { this->writeEventChannels(0); }
 void BlaeckSerial::writeEventChannels(unsigned long msg_id) { this->_writeEmptyFrame(0x80, msg_id); }
@@ -3650,43 +3393,28 @@ void BlaeckSerial::writeEvent(const char *, const __FlashStringHelper *) {}
 #endif
 
 #if BLAECK_ENABLE_COMMAND_META
-// Whether withRange() was ever called on this entry. An entry that never got one keeps
-// meta_min == meta_max == 0, and 0 to 0 is not a window any value but zero fits through.
-// A text command already reads its own 0 as "no limit" (BLAECK_CMD_TEXT below), so this
-// is the same rule rather than a new one.
+// Whether withRange() was called. Without it, min and max are both 0.
 static inline bool _rangeDeclared(const blaeck_detail::CommandHandlerEntry &e)
 {
   return e.meta_max > e.meta_min;
 }
 
-// Whether a step was declared, which a step says by being above zero. Nothing else has to be
-// stored: 0 is what a caller passes to withRange() to say "no resolution", and a negative step -
-// or a NaN, which fails every comparison - is not a resolution any control could use.
-// Separate from _rangeDeclared() because the two are independently optional on the wire: the
-// bit is what tells a command that stated no resolution apart from one that stated 0.
+// Whether a step was declared: a positive step. 0 means none on purpose, and a negative or
+// NaN step can't be used.
 static inline bool _stepDeclared(const blaeck_detail::CommandHandlerEntry &e)
 {
   return e.meta_step > 0.0f;
 }
 
-// Whether a usable option list was declared. withOptions() refuses a list with no entries, so a
-// pointer that survived to here is one a host can build a control from. Checked at the setter
-// rather than again here because that is where it can still be reported against the line that
-// wrote it, while this runs long afterwards on every catalog.
+// Whether an options list was set. withOptions() already refused empty ones.
 static inline bool _optionsDeclared(const blaeck_detail::CommandHandlerEntry &e)
 {
   return e.options != nullptr;
 }
 
-// Reported here rather than at registration because the requirement is met on the handle the
-// typed helper returns, so at registration there is nothing yet to complain about. The catalog
-// going out is the moment the omission becomes visible to anyone else, and it is the point the
-// value stops being the sketch's business: a host with no limits to build from either falls back
-// on its own - Home Assistant's are 1 to 100, which silently puts zero and every negative value
-// out of reach - or refuses to offer the control at all, which is what Loggbok does. Either way
-// the sketch does not get what it meant. Only reachable when the handle was dropped without
-// chaining - BLAECK_NODISCARD asks
-// the compiler to mention that - so this is the last net rather than the first.
+// Warns about a number command without withRange(), when the catalog goes out. A host would
+// otherwise use its own range or drop the control. BLAECK_NODISCARD makes this rare: it
+// needs the handle to be dropped.
 static void _warnCommandWithoutRange(Stream *dbg, const blaeck_detail::CommandHandlerEntry &e)
 {
   if (dbg == nullptr)
@@ -3696,9 +3424,7 @@ static void _warnCommandWithoutRange(Stream *dbg, const blaeck_detail::CommandHa
   dbg->println(F(". Any value is accepted, and a host has no limits to build a control from."));
 }
 
-// The same omission on a select, which fares worse than a number: every value is checked against
-// the list, so with no list nothing can be accepted, and the entity a host builds has nothing to
-// choose from. The command is dead at both ends rather than merely loosely described.
+// The same for a select without options, which accepts nothing at all.
 static void _warnCommandWithoutOptions(Stream *dbg, const blaeck_detail::CommandHandlerEntry &e)
 {
   if (dbg == nullptr)
@@ -3712,32 +3438,24 @@ byte BlaeckSerial::_validateTypedCommand(uint16_t handlerIndex)
 {
   const CommandHandlerEntry &e = _commandHandlers[handlerIndex];
 
-  // Plain and button commands carry no value to validate.
+  // Plain commands and buttons have no value to check.
   if (e.kind == BLAECK_CMD_PLAIN || e.kind == BLAECK_CMD_BUTTON)
     return BLAECK_ACK_OK;
 
-  // Every typed command declared that it takes a value, so an absent one is a rejection rather
-  // than something to pass on. Answering OK to a command the handler then ignores is the one
-  // outcome a host cannot recover from.
+  // A typed command without its value is rejected rather than passed to the handler.
   if (_parsedParamCount < 1 || _parsedParamPtrs[0] == nullptr)
     return BLAECK_ACK_MISSING_VALUE;
 
   const char *v = _parsedParamPtrs[0];
 
-  // An empty parameter is a value only for text, where it clears the field. Elsewhere it would
-  // read as 0 or as no option at all, so report it as the missing value it is.
+  // An empty value is valid only for text, where it clears the field.
   if (v[0] == '\0' && e.kind != BLAECK_CMD_TEXT)
     return BLAECK_ACK_MISSING_VALUE;
 
   if (e.kind == BLAECK_CMD_NUMBER)
   {
-    // A number command takes a number, declared bounds or not. atof() read "abc" as 0,
-    // which passes any range spanning zero and reaches the handler as text its own
-    // atof() also reads as 0 - a wrong setting applied without a word. Parsed the way a
-    // select index already is at the branch below: all of the string, or none of it.
-    // NaN is refused here rather than by the comparison, which it defeats: every
-    // comparison against NaN is false, so it would pass any range. Infinity needs no
-    // guard of its own - it compares, so a finite max refuses it below.
+    // The whole string must be a number: atof() would read "abc" as 0. NaN is refused here
+    // because every comparison with it is false; infinity is caught by the range check.
     char *endp = nullptr;
     float f = (float)strtod(v, &endp);
     if (endp == v || *endp != '\0' || isnan(f))
@@ -3752,8 +3470,7 @@ byte BlaeckSerial::_validateTypedCommand(uint16_t handlerIndex)
       return BLAECK_ACK_OUT_OF_RANGE;
     }
 
-    // Bounds only where the sketch stated them: no range declared, no limit. Checking
-    // against the 0 defaults would refuse every value but zero.
+    // Check the range only if one was declared.
     if (_rangeDeclared(e) && (f < e.meta_min || f > e.meta_max))
     {
       if (_debugStream != nullptr)
@@ -3789,7 +3506,7 @@ byte BlaeckSerial::_validateTypedCommand(uint16_t handlerIndex)
   {
     uint16_t count = _flashCsvOptionCount(e.options);
 
-    // Accept either an option name (exact) or a numeric index.
+    // An option name (exact) or an index.
     long idx = _flashCsvIndexOf(e.options, v);
     if (idx < 0)
     {
@@ -3814,16 +3531,14 @@ byte BlaeckSerial::_validateTypedCommand(uint16_t handlerIndex)
       return BLAECK_ACK_BAD_SELECT;
     }
 
-    // Normalize to the index string so index-based handlers work whether the
-    // caller sent a name (e.g. HA select) or a raw index.
+    // Always hand the handler the index, whichever form was sent.
     snprintf(_selectIndexScratch, sizeof(_selectIndexScratch), "%ld", idx);
     _parsedParamPtrs[0] = _selectIndexScratch;
   }
   else if (e.kind == BLAECK_CMD_TEXT)
   {
-    // Percent-decode in place (SELECT-style param normalization) so the handler
-    // receives raw UTF-8. The 0xA5 ack still hashes the command as received,
-    // so it keeps matching the host's hash of what it sent.
+    // Decode in place so the handler gets plain UTF-8. The ack hashes the command as received,
+    // so it still matches what the host sent.
     char *decoded = (char *)_parsedParamPtrs[0];
     _percentDecodeInPlace(decoded);
 
@@ -3912,9 +3627,7 @@ void BlaeckSerial::writeSignalConfig(unsigned long msg_id)
   this->writeSignalConfigFrame(msg_id);
 }
 #else
-// BLAECK_ENABLE_SIGNAL_META=0: signals still stream, they just carry no
-// presentation metadata. The catalog answers with an empty list so a polling
-// host learns that immediately (see _writeEmptyFrame).
+// BLAECK_ENABLE_SIGNAL_META=0: the catalog answers empty.
 void BlaeckSerial::writeSignalConfig() { this->writeSignalConfig(0); }
 void BlaeckSerial::writeSignalConfig(unsigned long msg_id) { this->_writeEmptyFrame(0xF0, msg_id); }
 #endif
@@ -3930,19 +3643,13 @@ void BlaeckSerial::writeCommands(unsigned long msg_id)
   this->writeCommandsFrame(msg_id);
 }
 #else
-// BLAECK_ENABLE_COMMAND_META=0: commands still run, they just carry no
-// discovery metadata. The catalog answers with an empty list so a polling
-// host learns that immediately (see _writeEmptyFrame).
+// BLAECK_ENABLE_COMMAND_META=0: commands work, and the catalog answers empty.
 void BlaeckSerial::writeCommands() { this->writeCommands(0); }
-// Clears the flag like the full writer does. Registration sets it whether or not metadata
-// is compiled in, and an empty catalog is still the answer to it - without this the flush
-// would send that frame again on every read().
+// Clear the dirty flag, or _flushCatalogs() would resend the empty catalog on every read().
 void BlaeckSerial::writeCommands(unsigned long msg_id) { _commandCatalogDirty = false; this->_writeEmptyFrame(0xA0, msg_id); }
 #endif
 
-// Header + footer with no payload. Every catalog frame shares this envelope,
-// and an empty body is already the legal "nothing declared" case, so a host
-// needs no special handling: it simply announces no entities.
+// A catalog with no entries.
 void BlaeckSerial::_writeEmptyFrame(byte msgKey, unsigned long msg_id)
 {
   if (!_frameOpen(msgKey, msg_id))
@@ -4197,7 +3904,7 @@ void BlaeckSerial::write(int signalIndex, const char *value, unsigned long long 
   {
     if (Signals[signalIndex].DataType == Blaeck_string)
     {
-      // A string value lives in a user-owned buffer; repoint Address like addSignal(const char*).
+      // Point at the caller's buffer, as addSignal(const char *) does.
       Signals[signalIndex].Address = const_cast<char *>(value);
       this->writeDataFrame(0, signalIndex, signalIndex, false, timestamp);
     }
@@ -4244,8 +3951,7 @@ void BlaeckSerial::timedWriteAllData()
   this->timedWriteAllData(getTimeStamp());
 }
 
-// A timed frame answers no request, so it carries no id. What it is - timed rather than
-// asked for - is in the frame's flags byte instead.
+// Timed frames answer no request, so their message id is 0.
 void BlaeckSerial::timedWriteAllData(unsigned long long timestamp)
 {
   this->timedWriteData(0, 0, _signalIndex - 1, false, timestamp);
@@ -4283,19 +3989,15 @@ void BlaeckSerial::timedWriteData(unsigned long msg_id, int signalIndex_start, i
   }
 }
 
-// ── Buffered writes ────────────────────────────────────────────────
+// ----- Buffered writes -----
 
 void BlaeckSerial::_bufAllocate()
 {
   _bufFree();
-  // Max frame size: D2 is largest.
-  // Header(22) + per-signal(10) + timestamp(9) + tail(9) + footer(10) + margin
-  // Sized from the signals actually added, not from the capacity the table was
-  // given: the buffer is built at the first write, by which time every add has
-  // run, and _bufEnsure() grows it if a frame still turns out larger.
+  // Sized for the signals added so far; _bufEnsure() grows it if a frame needs more.
   int signalsHeld = _signalIndex > 0 ? _signalIndex : 1;
   _frameBufSize = 60 + signalsHeld * 10;
-  // B0/B3 can also be large with long names; ensure minimum
+  // The symbol list can be larger with long names.
   int b0b3_est = 60 + signalsHeld * 30;
   if (b0b3_est > _frameBufSize)
     _frameBufSize = b0b3_est;
@@ -4372,8 +4074,7 @@ void BlaeckSerial::_bufFree()
 void BlaeckSerial::setBufferedWrites(bool enabled)
 {
   _bufferedWrites = enabled;
-  // Turning it on allocates nothing: the first buffered frame builds the buffer,
-  // and by then it can be sized from the signals the sketch actually added.
+  // Turning it on allocates nothing; the buffer is built by the first buffered frame.
   if (!enabled)
     _bufFree();
 }
@@ -4391,7 +4092,7 @@ bool BlaeckSerial::_frameOpen(byte msgKey, unsigned long msgId, bool withCrc)
   _emitStr("<BLAECK:");
   if (withCrc)
   {
-    // From the key to the status payload; the start marker is not covered.
+    // The CRC covers the key through the status payload, not the start marker.
     _crc.setPolynome(0x04C11DB7);
     _crc.setInitial(0xFFFFFFFF);
     _crc.setXorOut(0xFFFFFFFF);
@@ -4420,7 +4121,7 @@ bool BlaeckSerial::_frameClose()
 
 void BlaeckSerial::_emitDevice(const char *name, const char *hw, const char *fw)
 {
-  // Leading 2 bytes preserved for wire-format compatibility (always 0).
+  // Two bytes, always 0.
   _emitByte((byte)0);
   _emitByte((byte)0);
   _emitStr0(name);
@@ -4430,7 +4131,7 @@ void BlaeckSerial::_emitDevice(const char *name, const char *hw, const char *fw)
   _emitStr0(BLAECKSERIAL_NAME);
 }
 
-// ── Frame write functions ─────────────────────────────────────────
+// ----- Frame writers -----
 
 void BlaeckSerial::writeRestarted()
 {
@@ -4439,9 +4140,7 @@ void BlaeckSerial::writeRestarted()
 
 void BlaeckSerial::writeRestarted(unsigned long msg_id)
 {
-  // Guarded like every other writer. Deliberately before the flag is set, so a sketch
-  // that reaches read() before begin() still announces its restart once it has a stream
-  // rather than having spent the one notice on nothing.
+  // Checked before the flag is set, so a read() before begin() doesn't use up the notice.
   if (!_mayWriteFrame())
     return;
 
@@ -4454,21 +4153,9 @@ void BlaeckSerial::writeRestarted(unsigned long msg_id)
     _emitDevice(_deviceName(), DeviceHWVersion, DeviceFWVersion);
     _frameClose();
 
-    // Everything this board declares goes out behind the notice, unasked. A host that was
-    // already connected is holding what the previous run declared, and has no reason to ask
-    // again - it does not know anything changed. One rule rather than three: a device says
-    // what it has, every time it starts.
-    //
-    // The state catalog is the one that is wrong after an ordinary restart, because it carries
-    // each channel's current value and those are back at their startup defaults - a host that
-    // keeps what it had shows a reading the device stopped reporting, indefinitely where the
-    // value is retained. The other two are insurance against a sketch that declares
-    // conditionally, on a sensor that answered at boot or a setting read from EEPROM, and so
-    // comes back offering something else.
-    //
-    // Sent from read() rather than from begin(), so they go out once the sketch has finished
-    // declaring: a catalog written mid-setup() would announce what was declared up to that line
-    // and nothing after it.
+    // Send every catalog after the notice, so a host that stayed connected sees what this run
+    // declares. The state catalog matters most, since its values are back at their defaults.
+    // This runs from read(), so setup() has finished declaring by then.
 #if BLAECK_ENABLE_STATE_CHANNELS
     this->writeStateChannels(msg_id);
 #endif
@@ -4477,19 +4164,8 @@ void BlaeckSerial::writeRestarted(unsigned long msg_id)
     this->writeEventChannels(msg_id);
 #endif
 
-    // Nothing here is addressed by position - a command is matched by the hash of its name, so a
-    // stale one answers UNKNOWN_COMMAND rather than being taken for another. The least urgent
-    // of these, and still not worth the exception it would take to leave out.
     this->writeCommands(msg_id);
 
-    // What the signals say about themselves, which the symbol list does not carry. Only the
-    // ones that declare something appear, so a device where none do sends an empty frame, and
-    // one built with BLAECK_ENABLE_SIGNAL_META=0 always does.
-    //
-    // Read against whichever symbol list the host holds, since this names its signals by
-    // position in it. That is the right reading only while the list is unchanged - which is the
-    // case this is for, a unit or an icon that moved while the signals did not. A list that did
-    // change is the schema hash's business, and its answer is to stop rather than resynchronise.
     this->writeSignalConfig(msg_id);
   }
 }
@@ -4520,7 +4196,7 @@ void BlaeckSerial::writeDataFrame(unsigned long msg_id, int signalIndex_start, i
   if (onlyUpdated && !hasUpdatedSignals())
     return; // No updated signals
 
-  // Bounds checking
+  // Clamp the range.
   if (signalIndex_start < 0)
     signalIndex_start = 0;
   if (signalIndex_end >= _signalIndex)
@@ -4542,10 +4218,8 @@ void BlaeckSerial::writeDataFrame(unsigned long msg_id, int signalIndex_start, i
   _emitByte((byte)_timestampMode);
   if (_timestampMode != BLAECK_NO_TIMESTAMP)
   {
-    // Field is mandatory on the wire whenever TimestampMode > 0 (per protocol spec), regardless
-    // of whether a valid callback is set - getTimeStamp() already yields 0 in that case. Gating
-    // this on hasValidTimestampCallback() would silently drop the 8 bytes the host still expects,
-    // desyncing every following byte offset (and the CRC) for the rest of the session.
+    // Always sent when a timestamp mode is set, even without a clock (it is then 0). Leaving
+    // it out would shift every later byte.
     ullCvt.val = timestamp;
     _emitBytes(ullCvt.bval, 8);
   }
@@ -4610,8 +4284,7 @@ void BlaeckSerial::writeSymbolsFrame(unsigned long msg_id)
     _emitByte((byte)0);
     _emitByte((byte)0);
 
-    // A reference, not a copy: the entry is nine bytes, and there is no reason to move
-    // them once per signal per frame.
+    // A reference, to avoid copying the entry.
     const Signal &signal = Signals[i];
 
     _emitSignalName0(signal);
@@ -4623,33 +4296,15 @@ void BlaeckSerial::writeSymbolsFrame(unsigned long msg_id)
 #if BLAECK_ENABLE_SIGNAL_META
 void BlaeckSerial::writeSignalConfigFrame(unsigned long msg_id)
 {
-  // 0xF0 "Signal Config" frame. Per signal that declares something:
-  //   symbolId(2) flags(2)                          (LE uint16)
-  //   [unit\0]                 if flags bit 0
-  //   [deviceClass\0]          if flags bit 1
-  //   [icon\0]                 if flags bit 2
-  //   [displayPrecision(1)]    if flags bit 9
-  //   [options\0]              if flags bit 10
-  //   [displayName\0]          if flags bit 11
-  // flags bits: 0=hasUnit 1=hasDeviceClass 2=hasIcon 3-5=stateClass
-  //             6=isDiagnostic 7=disabledByDefault 8=forceUpdate
-  //             9=hasDisplayPrecision 10=hasOptions 11=hasDisplayName.
-  //             Bits 12-15 reserved.
-  // stateClass takes three bits because Home Assistant defines five values counting
-  // none: measurement, total, total_increasing and measurement_angle.
-  // Optional fields follow in bit order, which is why precision precedes options.
-  // Signals that declare nothing are skipped entirely, so a frame with no
-  // entries is the ordinary case and not an error. The signal is named by its
-  // index in the 0xB0 Symbol List, which already says which device it belongs
-  // to - so unlike the other catalogs this frame carries no device fields.
+  // Layout: Signal Config (0xF0) in the protocol spec. Only signals that declare something are
+  // included.
   if (!_frameOpen(0xF0, msg_id))
     return;
 
   for (int i = 0; i < _signalIndex; i++)
   {
     const SignalMeta *m = Signals[i].Meta;
-    // No record, or one that ended up saying nothing - diagnostic(false) alone builds
-    // one - is the ordinary case, and the frame carries no entry for it.
+    // No record, or one that declares nothing.
     if (m == nullptr || m->MetaFlags == 0)
       continue;
 
@@ -4680,50 +4335,10 @@ void BlaeckSerial::writeSignalConfigFrame(unsigned long msg_id)
 #if BLAECK_ENABLE_COMMAND_META
 void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
 {
-  // 0xA0 "Command List" frame. Per discovered command entry:
-  //   msConfig(1) slaveID(1) payloadMax(2, LE uint16) name\0 kind(1) flags(4, LE uint32)
-  //   [min(4) max(4)]          if flags.hasRange   (LE float)
-  //   [unit\0]                 if flags.hasUnit
-  //   [selectOptions\0]        if flags.hasOptions
-  //   [stateSignal\0 src(1)]   if flags.hasStateSignal
-  //   [maxLen(2)]              if flags.isText     (LE uint16)
-  //   [step(4)]                if flags.hasStep    (LE float)
-  //   [displayName\0]          if flags.hasDisplayName
-  //   [deviceClass\0]          if flags.hasDeviceClass
-  //   [icon\0]                 if flags.hasIcon
-  //   [pressPayload\0]         if flags.hasPressPayload  (button only)
-  // flags bits: 0=hasRange 1=hasUnit 2=hasOptions 3=hasStateSignal 4=isText
-  //             5-6=entity category 7=hasStep 8=hasDisplayName 9-10=input mode, read against
-  //             the kind: on a number 0 auto, 1 box, 2 slider; on a text command 0 plain,
-  //             1 password; 3 reserved on both, and every other kind sends 0.
-  //             11=hasDeviceClass 12=hasIcon 13=hasPressPayload 14=disabledByDefault.
-  //             Bits 15-31 reserved - four bytes rather than two, because one pass over the
-  //             typed kinds spent bits 7 through 12 and a flags word that fills up is a wire
-  //             break rather than an addition. The two extra bytes ride in a catalog frame a
-  //             host asks for, not in the data frames, and cost nothing per entry in RAM.
-  // Optional fields follow in bit order, as they do in 0x90 and 0xF0, which is why the step
-  // trails the text length rather than sitting with the min and max it was once sent beside.
-  // hasStep is separate from hasRange because the two are independently optional: a range is
-  // what bounds the value and a step only says how finely a control moves through it, so most
-  // commands declare a range and no step. The bit is what tells that apart from a step of 0,
-  // which a host would otherwise have to know to read as "none". A step with no range is not
-  // reachable from this library - withRange() is where a step is given - but the format allows
-  // it, so a reader should not assume bit 0 whenever bit 7 is set.
-  // src says what stateSignal names: 0 an addSignal() signal, 1 an
-  // addStateChannel() channel (BlaeckStateSource). It rides with the name rather
-  // than taking a flags bit of its own.
-  // The two leading bytes are the entry's device identity, msConfig and slaveID: zero from
-  // a single-device library, rewritten by an aggregator relaying several boards. Not
-  // padding - without them a catalog could name only one device.
-  // All in-use entries are emitted, including plain onCommand() entries
-  // (kind=BLAECK_CMD_PLAIN, flags=0, no trailing metadata). Plain entries carry
-  // no Home Assistant entity, but are listed so a host can build a full command
-  // palette / autocomplete of every command the device accepts.
-  // Before a single frame byte goes out. The catalog is still where the omission becomes
-  // knowable - a builder chain that never reached withRange() has nothing to report at
-  // registration - but with buffered writes off each byte goes straight to the stream, so
-  // warning from inside the loop writes the text into the open frame when the debug stream is
-  // that same stream. Everything after it is then read as catalog data.
+  // Layout: Command List (0xA0) in the protocol spec. Every command is listed, plain ones too.
+  //
+  // Warn about missing ranges and options before the frame opens: with buffered writes off, a
+  // warning printed during the frame would land inside it if the debug stream is the same port.
   if (_debugStream != nullptr)
   {
     for (uint16_t i = 0; i < _commandSlots(); i++)
@@ -4748,9 +4363,7 @@ void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
       continue;
 
     uint32_t flags = 0;
-    // Only when there is one to send. A number command with no withRange() leaves the
-    // bytes out entirely rather than announcing 0 to 0, which a host would build a
-    // control from - and that control would accept nothing but zero.
+    // Send a range only if one was declared; 0 to 0 would allow only zero.
     if (e.kind == BLAECK_CMD_NUMBER && _rangeDeclared(e))
       flags |= 0x0001;
     if (e.unit != nullptr)
@@ -4761,37 +4374,28 @@ void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
       flags |= 0x0008;
     if (e.kind == BLAECK_CMD_TEXT)
       flags |= 0x0010;
-    // Entity category in bits 5-6, so it needs no trailing payload.
+    // Entity category in bits 5-6.
     flags |= (uint32_t)((e.category & 0x03) << 5);
     if (e.disabledByDefault)
       flags |= 0x4000;
-    // Resolution rides on its own bit rather than with the range: a range with no step is
-    // ordinary, and the bit is what tells that apart from a step of 0.
+    // The step has its own bit, so "no step" differs from a step of 0.
     if (e.kind == BLAECK_CMD_NUMBER && _stepDeclared(e))
       flags |= 0x0080;
     if (e.displayName != nullptr)
       flags |= 0x0100;
-    // Input hint in bits 9-10, needing no payload either: a number's box or slider, a text
-    // command's masked field. Read against the kind, which is what lets one pair of bits serve
-    // both - no entry is ever both kinds. Zero is the default of each, so a command that never
-    // asked for one leaves the bits clear and the host keeps its own default rather than being
-    // handed one that says nothing.
+    // Input mode in bits 9-10: box or slider on a number, password on text. 0 is the default.
     if (e.kind == BLAECK_CMD_NUMBER || e.kind == BLAECK_CMD_TEXT)
       flags |= (uint32_t)((e.mode & 0x03) << 9);
     if (e.deviceClass != nullptr)
       flags |= 0x0800;
     if (e.icon != nullptr)
       flags |= 0x1000;
-    // Buttons only. Every other kind carries its value in the payload a host sends, so a
-    // fixed one there would overwrite what the control is for.
+    // Buttons only.
     if (e.kind == BLAECK_CMD_BUTTON && e.pressPayload != nullptr)
       flags |= 0x2000;
 
-    // How long a command this device can receive: characters between the delimiters, terminator
-    // excluded. The same on every entry - one buffer serves them all - but carried here so each
-    // entry keeps the shape every catalog frame uses. A host subtracts the name and its comma
-    // for the room left for parameters; anything longer is dropped on arrival, which the sender
-    // cannot otherwise know.
+    // The longest command the device can receive, so a host knows how much room is left for
+    // parameters.
     uint16_t payloadMax = (uint16_t)(MAXIMUM_CHAR_COUNT - 1);
     _emitByte((byte)0);
     _emitByte((byte)0);
@@ -4913,18 +4517,18 @@ void BlaeckSerial::setTimestampMode(BlaeckTimestampMode mode)
 {
   _timestampMode = mode;
 
-  // Reset overflow tracking
+  // Restart micros() rollover tracking.
   _prevMicros = 0;
   _overflowCount = 0;
 
-  // Set default callbacks for built-in modes
+  // Install the clock for built-in modes.
   switch (mode)
   {
   case BLAECK_MICROS:
     _timestampCallback = _microsWrapper;
     break;
   case BLAECK_UNIX:
-    // User must provide Unix time callback - don't override if already set
+    // BLAECK_UNIX needs the sketch's clock; keep one that is already set.
     if (_timestampCallback == _microsWrapper)
     {
       _timestampCallback = nullptr;
@@ -4955,7 +4559,7 @@ unsigned long long BlaeckSerial::getTimeStamp()
   {
     if (_timestampMode == BLAECK_MICROS)
     {
-      // Track micros() overflow: uint32 wraps every ~71 minutes
+      // Extend micros() past its rollover, which comes about every 71 minutes.
       unsigned long raw = (unsigned long)_timestampCallback();
       if (raw < _prevMicros)
       {
@@ -4966,7 +4570,7 @@ unsigned long long BlaeckSerial::getTimeStamp()
     }
     else if (_timestampMode == BLAECK_UNIX)
     {
-      // Callback returns microseconds since Unix epoch directly
+      // The callback returns microseconds since the Unix epoch.
       timestamp = _timestampCallback();
     }
   }
@@ -4977,13 +4581,13 @@ unsigned long long BlaeckSerial::getTimeStamp()
 void BlaeckSerial::validatePlatformSizes()
 {
 #ifdef __AVR__
-  // AVR (8-bit) platform checks
+  // AVR (8-bit)
   static_assert(sizeof(int) == 2, "BlaeckSerial: Expected 2-byte int on AVR");
   static_assert(sizeof(unsigned int) == 2, "BlaeckSerial: Expected 2-byte unsigned int on AVR");
   static_assert(sizeof(double) == 4, "BlaeckSerial: Expected 4-byte double on AVR");
   static_assert(sizeof(double) == sizeof(float), "BlaeckSerial: double should equal float on AVR");
 #else
-  // 32-bit platform checks
+  // 32-bit boards
   static_assert(sizeof(int) == 4, "BlaeckSerial: Expected 4-byte int on 32-bit platforms");
   static_assert(sizeof(unsigned int) == 4, "BlaeckSerial: Expected 4-byte unsigned int on 32-bit platforms");
   static_assert(sizeof(double) == 8, "BlaeckSerial: Expected 8-byte double on 32-bit platforms");
@@ -4992,7 +4596,7 @@ void BlaeckSerial::validatePlatformSizes()
   static_assert(sizeof(unsigned int) == sizeof(unsigned long), "BlaeckSerial: uint/ulong size mismatch breaks type remapping");
 #endif
 
-  // Universal checks (should be same on ALL Arduino platforms)
+  // The same on every board
   static_assert(sizeof(bool) == 1, "BlaeckSerial: Expected 1-byte bool");
   static_assert(sizeof(byte) == 1, "BlaeckSerial: Expected 1-byte byte");
   static_assert(sizeof(short) == 2, "BlaeckSerial: Expected 2-byte short");
@@ -5002,14 +4606,10 @@ void BlaeckSerial::validatePlatformSizes()
   static_assert(sizeof(float) == 4, "BlaeckSerial: Expected 4-byte float");
 }
 
-// ── Names given with F() ───────────────────────────────────────────
-// Each copies the name into a buffer and hands it to the const char* overload, which is the
-// only place the behaviour lives. A channel keeps its own copy of its name either way, so
-// F() keeps the literal out of SRAM rather than changing how the name is stored.
-//
-// Outside the BLAECK_ENABLE_* blocks on purpose: each delegates, so it binds to whichever
-// definition that feature left behind - the real one, or the do-nothing stub. One definition
-// each, either way.
+// ----- F() overloads -----
+// Most copy the name into a buffer and call the const char * overload. addStateChannel() and
+// addEventChannel() keep the flash pointer instead. These sit outside the BLAECK_ENABLE_*
+// blocks, so they call the real function or its stub, whichever was compiled.
 
 BlaeckTextStateRef BlaeckSerial::addStateChannel(const __FlashStringHelper *channelName, BlaeckTextTag)
 {
@@ -5087,7 +4687,7 @@ BlaeckNumericStateRef BlaeckSerial::addStateChannel(const __FlashStringHelper *c
 BlaeckNumericStateRef BlaeckSerial::addStateChannel(const __FlashStringHelper *channelName, double *value)
 {
 #ifdef __AVR__
-  // Mapped down for the reason given on the const char* overload.
+  // A double is 4 bytes on AVR, so it is declared as float.
   return BlaeckNumericStateRef(this, (int16_t)_registerStateChannel(nullptr, channelName, Blaeck_float, value));
 #else
   return BlaeckNumericStateRef(this, (int16_t)_registerStateChannel(nullptr, channelName, Blaeck_double, value));
@@ -5185,7 +4785,7 @@ BlaeckEventChannelRef BlaeckSerial::addEventChannel(const __FlashStringHelper *c
 
 bool BlaeckSerial::addEventType(const __FlashStringHelper *channelName, const __FlashStringHelper *eventType)
 {
-  // Looked up, not stored: the buffer lives for the call. Declaration-time only.
+  // The buffer only needs to last for the lookup.
   char n[MAX_EVENT_NAME_COUNT];
   copyFlashName(channelName, n, sizeof(n));
   return addEventType(n, eventType);
