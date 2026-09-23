@@ -1,5 +1,30 @@
-<a href="url"><img src="https://user-images.githubusercontent.com/388152/185908831-4eccf7a6-5f43-405d-b7fe-5225eeba302d.png" height="75"></a>
+<img width="590" height="257" alt="blaeckSerial-light" src="https://github.com/user-attachments/assets/bef5e2e5-f0c0-4b70-b08f-f4b4d061268c" /><a href="url"><img src="https://user-images.githubusercontent.com/388152/185908831-4eccf7a6-5f43-405d-b7fe-5225eeba302d.png" height="75"></a>
 <a href="url"><img src="https://user-images.githubusercontent.com/388152/186109775-c7f1bb61-4cc0-4dc1-9969-49c2f2e1303f.png"  alt="BlaeckSerial Logo SeeSaw Font" height="70"></a>
+
+![Uploading<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 40 590 257" width="590" height="257">
+  <title>blaeckSerial</title>
+  <defs>
+    <clipPath id="k-clip-light"><rect x="0" y="100" width="700" height="100"/></clipPath>
+    <clipPath id="e-clip-light"><path clip-rule="evenodd" d="M200 40H700V260H200Z M336.44 163H440V256.25Z"/></clipPath>
+  </defs>
+  <g id="wordmark">
+    <g id="b">
+      <path fill="#121318" d="M0 40H26V106.14A50 50 0 1 1 26 193.86V200H0Z"/>
+      <path id="b-droplet" fill="#3355C4" d="M40.00 118.00L66.77 137.09A22 22 0 1 1 32.57 150.03Z"/>
+      <path id="b-shine" fill="none" stroke="#F2EEE6" stroke-width="4" stroke-linecap="round" d="M56.26 142.20A13 13 0 0 1 66.22 150.55"/>
+    </g>
+    <g fill="none" stroke="#121318" stroke-width="26">
+      <path id="l" d="M129 40V200"/>
+      <g id="a"><path d="M206 113A37 37 0 1 0 206 187A37 37 0 1 0 206 113"/><path d="M243 100V200"/></g>
+      <g id="e"><path clip-path="url(#e-clip-light)" d="M322 113A37 37 0 1 0 322 187A37 37 0 1 0 322 113"/><path id="e-bar" stroke-width="26" d="M285 150H359"/></g>
+      <path id="c" d="M456.16 123.84A37 37 0 1 0 456.16 176.16"/>
+      <g id="k"><path d="M484 40V200"/><g clip-path="url(#k-clip-light)"><path d="M484 172L584 67"/><path d="M513 142L573 217"/></g></g>
+    </g>
+  </g>
+  <text id="product" x="433.5" y="276.8" text-anchor="middle" fill="#5E6169" font-family="'IBM Plex Mono', ui-monospace, Menlo, monospace" font-weight="500" font-size="66.5">Serial</text>
+</svg>
+ blaeckSerial-light.svg…]()
+
 ===
 
 BlaeckSerial is an Arduino library. It sends any value your sketch holds - sensor readings,
