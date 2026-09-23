@@ -67,7 +67,7 @@
 #endif
 
 // Table sizes (signals, commands, channels) are set in the sketch, on the begin() chain:
-// Blaeck.begin(&Serial).withCommands(16).
+// Blaeck.begin(...).withCommands(16).
 
 // The four switches below each remove one feature to save SRAM and flash on small boards.
 // The API stays, so a sketch compiles either way, and the matching catalog request is
@@ -398,7 +398,7 @@ class BlaeckCore;
 
 // Returned by begin() to set table sizes, e.g.
 //
-//   Blaeck.begin(&Serial).withSignals(50).withStateChannels(12);
+//   Blaeck.begin(...).withSignals(50).withStateChannels(12);
 //
 // Each table starts from a default that suits the board, and is allocated when its first
 // entry is added, so an unused table costs nothing. Changing a size after that table exists
