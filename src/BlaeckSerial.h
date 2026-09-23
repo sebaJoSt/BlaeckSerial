@@ -990,8 +990,8 @@ public:
   /*!
     @brief   Sets the label a host shows instead of the command name.
 
-    The command is still sent and matched by its name, so adding a label later
-    breaks nothing.
+    Only the label changes. When the control is used, the host still sends the
+    command name, such as SET_FREQ, so adding a label later breaks nothing.
 
     @param   displayName  The label, as an F() literal.
     @return  The same handle, for chaining.
