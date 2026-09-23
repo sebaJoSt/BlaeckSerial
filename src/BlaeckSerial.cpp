@@ -837,11 +837,8 @@ void BlaeckSerial::_emitNameByte(byte c, NameSink sink)
 {
   switch (sink)
   {
-  case NAME_SINK_BUFFER:
-    _bufByte(c);
-    break;
-  case NAME_SINK_STREAM:
-    StreamRef->write(c);
+  case NAME_SINK_FRAME:
+    _emitByte(c);
     break;
   default:
     _schemaHashFeedByte(c);
@@ -854,17 +851,12 @@ void BlaeckSerial::_signalNameFeedHash(const Signal &s)
   _emitSignalName(s, NAME_SINK_HASH);
 }
 
-void BlaeckSerial::_bufSignalName0(const Signal &s)
+void BlaeckSerial::_emitSignalName0(const Signal &s)
 {
-  _emitSignalName(s, NAME_SINK_BUFFER);
+  _emitSignalName(s, NAME_SINK_FRAME);
   // The terminator comes last, after whatever the prefix and the digits contributed - a
   // name with a suffix is one string on the wire, not two.
-  _bufByte(0);
-}
-
-void BlaeckSerial::_printSignalName(const Signal &s)
-{
-  _emitSignalName(s, NAME_SINK_STREAM);
+  _emitByte(0);
 }
 
 bool blaeck_detail::optionsAccepted(const __FlashStringHelper *optionsCsv, Stream *debug,
@@ -2256,43 +2248,15 @@ void BlaeckSerial::_writeCommandAck(const char *rawCommand, byte status, byte re
   // nothing it could use.
   uint32_t ackMsgId = (uint32_t)_parsedPrefixMsgId;
 
-  if (_bufReady())
-  {
-    _bufReset();
-    _bufHeader(0xA5, ackMsgId);
-    // Payload: command hash (4 bytes, little-endian) + name hash (4) + status (1) + reason (1).
-    ulngCvt.val = _fnv1a32(payload);
-    _bufBytes(ulngCvt.bval, 4);
-    ulngCvt.val = nameHash;
-    _bufBytes(ulngCvt.bval, 4);
-    _bufByte(status);
-    _bufByte(reasonCode);
-    _bufFooter();
-    _bufSend();
-  }
-  else
-  {
-    StreamRef->write("<BLAECK:");
-    byte msg_key = 0xA5;
-    StreamRef->write(msg_key);
-    StreamRef->write(":");
-    ulngCvt.val = ackMsgId;
-    StreamRef->write(ulngCvt.bval, 4);
-    StreamRef->write(":");
-
-    // Payload: command hash (4 bytes, little-endian) + name hash (4) + status (1) + reason (1).
-    ulngCvt.val = _fnv1a32(payload);
-    StreamRef->write(ulngCvt.bval, 4);
-    ulngCvt.val = nameHash;
-    StreamRef->write(ulngCvt.bval, 4);
-    StreamRef->write(status);
-    StreamRef->write(reasonCode);
-
-    // No CRC32 tail: acks mirror the descriptive 0xA0 frame format.
-    StreamRef->write("/BLAECK>");
-    StreamRef->write("\r\n");
-    StreamRef->flush();
-  }
+  _frameOpen(0xA5, ackMsgId);
+  // Payload: command hash (4 bytes, little-endian) + name hash (4) + status (1) + reason (1).
+  ulngCvt.val = _fnv1a32(payload);
+  _emitBytes(ulngCvt.bval, 4);
+  ulngCvt.val = nameHash;
+  _emitBytes(ulngCvt.bval, 4);
+  _emitByte(status);
+  _emitByte(reasonCode);
+  _frameClose();
 }
 
 #if BLAECK_ENABLE_STATE_CHANNELS
@@ -2793,61 +2757,26 @@ void BlaeckSerial::_writeStateFrame(int channelIndex, const char *text, const by
       _debugStream->println();
   }
 
-  if (_bufReady())
+  _frameOpen(0x95, 0);
+  // Device identity, the channel index, the datatype, then the value: fixed width for a
+  // number, a 1-byte length followed by that many UTF-8 bytes for a string - the same rule
+  // a data frame follows.
+  _emitByte((byte)0);
+  _emitByte((byte)0);
+  _emitByte((byte)(channelIndex & 0xFF));
+  _emitByte((byte)((channelIndex >> 8) & 0xFF));
+  _emitByte(_dtypeCode(e.valueType));
+  if (valueLen > 0)
   {
-    _bufReset();
-    _bufHeader(0x95, 0);
-    // Device identity, the channel index, the datatype, then the value: fixed width for a
-    // number, a 1-byte length followed by that many UTF-8 bytes for a string - the same rule
-    // a data frame follows.
-    _bufByte((byte)0);
-    _bufByte((byte)0);
-    _bufByte((byte)(channelIndex & 0xFF));
-    _bufByte((byte)((channelIndex >> 8) & 0xFF));
-    _bufByte(_dtypeCode(e.valueType));
-    if (valueLen > 0)
-    {
-      _bufBytes(valueBytes, valueLen);
-    }
-    else
-    {
-      _bufByte(len);
-      if (len > 0)
-        _bufBytes((const byte *)text, len);
-    }
-    _bufFooter();
-    _bufSend();
+    _emitBytes(valueBytes, valueLen);
   }
   else
   {
-    StreamRef->write("<BLAECK:");
-    byte msg_key = 0x95;
-    StreamRef->write(msg_key);
-    StreamRef->write(":");
-    ulngCvt.val = 0;
-    StreamRef->write(ulngCvt.bval, 4);
-    StreamRef->write(":");
-
-    StreamRef->write((byte)0);
-    StreamRef->write((byte)0);
-    StreamRef->write((byte)(channelIndex & 0xFF));
-    StreamRef->write((byte)((channelIndex >> 8) & 0xFF));
-    StreamRef->write(_dtypeCode(e.valueType));
-    if (valueLen > 0)
-    {
-      StreamRef->write(valueBytes, valueLen);
-    }
-    else
-    {
-      StreamRef->write(len);
-      if (len > 0)
-        StreamRef->write((const uint8_t *)text, len);
-    }
-
-    StreamRef->write("/BLAECK>");
-    StreamRef->write("\r\n");
-    StreamRef->flush();
+    _emitByte(len);
+    if (len > 0)
+      _emitBytes((const byte *)text, len);
   }
+  _frameClose();
 }
 
 void BlaeckSerial::writeStateChannels()
@@ -3126,139 +3055,55 @@ void BlaeckSerial::writeStateChannelsFrame(unsigned long msg_id)
   if (!_mayWriteFrame())
     return;
 
-  if (_bufReady())
+  _frameOpen(0x90, msg_id);
+
+  for (uint16_t i = 0; i < _stateChannelSlots(); i++)
   {
-    _bufReset();
-    _bufHeader(0x90, msg_id);
+    StateChannelEntry &e = _stateChannels[i];
+    if (!e.inUse)
+      continue;
 
-    for (uint16_t i = 0; i < _stateChannelSlots(); i++)
+    // Fetched once, before the flag is decided: the getter may return nullptr, and
+    // calling it twice could hand the two uses different text.
+    char optionBuf[BLAECK_STATE_MAX_OPTION_CHARS];
+    const char *stateText = _channelText(e, optionBuf, sizeof(optionBuf));
+    byte valueBytes[8];
+    byte valueLen = _channelValueBytes(e, valueBytes);
+
+    uint16_t flags = _stateChannelFlags(e, stateText != nullptr || valueLen > 0);
+
+    _emitByte((byte)0);
+    _emitByte((byte)0);
+    if (e.nameInFlash)
+      _emitFlashStr0(reinterpret_cast<const __FlashStringHelper *>(e.name));
+    else
+      _emitStr0(e.name);
+    _emitByte((byte)(flags & 0xFF));
+    _emitByte((byte)((flags >> 8) & 0xFF));
+    _emitByte(_dtypeCode(e.valueType));
+
+    if (flags & BLAECK_SCH_HAS_ICON)
+      _emitFlashStr0(e.icon);
+    // A string is NUL-terminated here like every other string in this frame; a number is the
+    // fixed width its type implies, which is why it needs no terminator of its own.
+    if (flags & BLAECK_SCH_HAS_STATE_VALUE)
     {
-      StateChannelEntry &e = _stateChannels[i];
-      if (!e.inUse)
-        continue;
-
-      // Fetched once, before the flag is decided: the getter may return nullptr, and
-      // calling it twice could hand the two uses different text.
-      char optionBuf[BLAECK_STATE_MAX_OPTION_CHARS];
-      const char *stateText = _channelText(e, optionBuf, sizeof(optionBuf));
-      byte valueBytes[8];
-      byte valueLen = _channelValueBytes(e, valueBytes);
-
-      uint16_t flags = _stateChannelFlags(e, stateText != nullptr || valueLen > 0);
-
-      _bufByte((byte)0);
-      _bufByte((byte)0);
-      if (e.nameInFlash)
-        _bufFlashStr0(reinterpret_cast<const __FlashStringHelper *>(e.name));
+      if (valueLen > 0)
+        _emitBytes(valueBytes, valueLen);
       else
-        _bufStr0(e.name);
-      _bufByte((byte)(flags & 0xFF));
-      _bufByte((byte)((flags >> 8) & 0xFF));
-      _bufByte(_dtypeCode(e.valueType));
-
-      if (flags & BLAECK_SCH_HAS_ICON)
-        _bufFlashStr0(e.icon);
-      // A string is NUL-terminated here like every other string in this frame; a number is the
-      // fixed width its type implies, which is why it needs no terminator of its own.
-      if (flags & BLAECK_SCH_HAS_STATE_VALUE)
-      {
-        if (valueLen > 0)
-          _bufBytes(valueBytes, valueLen);
-        else
-          _bufStr0(stateText);
-      }
-      if (flags & BLAECK_SCH_HAS_DEVICE_CLASS)
-        _bufFlashStr0(e.deviceClass);
-      if (flags & BLAECK_SCH_HAS_OPTIONS)
-        _bufFlashStr0(e.options);
-      if (flags & BLAECK_SCH_HAS_UNIT)
-        _bufFlashStr0(e.unit);
-      if (flags & BLAECK_SCH_HAS_DISPLAY_PRECISION)
-        _bufByte(e.displayPrecision);
+        _emitStr0(stateText);
     }
-
-    _bufFooter();
-    _bufSend();
+    if (flags & BLAECK_SCH_HAS_DEVICE_CLASS)
+      _emitFlashStr0(e.deviceClass);
+    if (flags & BLAECK_SCH_HAS_OPTIONS)
+      _emitFlashStr0(e.options);
+    if (flags & BLAECK_SCH_HAS_UNIT)
+      _emitFlashStr0(e.unit);
+    if (flags & BLAECK_SCH_HAS_DISPLAY_PRECISION)
+      _emitByte(e.displayPrecision);
   }
-  else
-  {
-    StreamRef->write("<BLAECK:");
-    byte msg_key = 0x90;
-    StreamRef->write(msg_key);
-    StreamRef->write(":");
-    ulngCvt.val = msg_id;
-    StreamRef->write(ulngCvt.bval, 4);
-    StreamRef->write(":");
 
-    for (uint16_t i = 0; i < _stateChannelSlots(); i++)
-    {
-      StateChannelEntry &e = _stateChannels[i];
-      if (!e.inUse)
-        continue;
-
-      // Fetched before any of this entry's bytes go out: in this unbuffered path the frame
-      // is streamed as it is built, so the getter runs mid-transmission and a slow one
-      // stalls a half-sent frame.
-      char optionBuf[BLAECK_STATE_MAX_OPTION_CHARS];
-      const char *stateText = _channelText(e, optionBuf, sizeof(optionBuf));
-      byte valueBytes[8];
-      byte valueLen = _channelValueBytes(e, valueBytes);
-
-      uint16_t flags = _stateChannelFlags(e, stateText != nullptr || valueLen > 0);
-
-      StreamRef->write((byte)0);
-      StreamRef->write((byte)0);
-      if (e.nameInFlash)
-        StreamRef->print(reinterpret_cast<const __FlashStringHelper *>(e.name));
-      else
-        StreamRef->print(e.name);
-      StreamRef->write((byte)0);
-      StreamRef->write((byte)(flags & 0xFF));
-      StreamRef->write((byte)((flags >> 8) & 0xFF));
-      StreamRef->write(_dtypeCode(e.valueType));
-
-      if (flags & BLAECK_SCH_HAS_ICON)
-      {
-        StreamRef->print(e.icon);
-        StreamRef->write((byte)0);
-      }
-      // A string is NUL-terminated here like every other string in this frame; a number is the
-      // fixed width its type implies, which is why it needs no terminator of its own.
-      if (flags & BLAECK_SCH_HAS_STATE_VALUE)
-      {
-        if (valueLen > 0)
-        {
-          StreamRef->write(valueBytes, valueLen);
-        }
-        else
-        {
-          StreamRef->print(stateText);
-          StreamRef->write((byte)0);
-        }
-      }
-      if (flags & BLAECK_SCH_HAS_DEVICE_CLASS)
-      {
-        StreamRef->print(e.deviceClass);
-        StreamRef->write((byte)0);
-      }
-      if (flags & BLAECK_SCH_HAS_OPTIONS)
-      {
-        StreamRef->print(e.options);
-        StreamRef->write((byte)0);
-      }
-      if (flags & BLAECK_SCH_HAS_UNIT)
-      {
-        StreamRef->print(e.unit);
-        StreamRef->write((byte)0);
-      }
-      if (flags & BLAECK_SCH_HAS_DISPLAY_PRECISION)
-        StreamRef->write(e.displayPrecision);
-    }
-
-    StreamRef->write("/BLAECK>");
-    StreamRef->write("\r\n");
-    StreamRef->flush();
-  }
+  _frameClose();
 }
 #else
 // BLAECK_ENABLE_STATE_CHANNELS=0: the API stays so sketches still build, but nothing
@@ -3467,14 +3312,14 @@ void BlaeckSerial::_eventTypeExtent(const EventTypeEntry &e, unsigned int &start
     len++;
 }
 
-void BlaeckSerial::_bufEventType0(const EventTypeEntry &e)
+void BlaeckSerial::_emitEventType0(const EventTypeEntry &e)
 {
   unsigned int start, len;
   _eventTypeExtent(e, start, len);
   PGM_P p = reinterpret_cast<PGM_P>(e.text) + start;
   for (unsigned int i = 0; i < len; i++)
-    _bufByte(pgm_read_byte(p++));
-  _bufByte(0);
+    _emitByte(pgm_read_byte(p++));
+  _emitByte(0);
 }
 
 bool BlaeckSerial::_eventTypeEquals(const EventTypeEntry &e, const __FlashStringHelper *eventType)
@@ -3675,134 +3520,55 @@ void BlaeckSerial::writeEventChannelsFrame(unsigned long msg_id)
   if (!_mayWriteFrame())
     return;
 
-  if (_bufReady())
+  _frameOpen(0x80, msg_id);
+
+  for (uint16_t i = 0; i < _eventChannelSlots(); i++)
   {
-    _bufReset();
-    _bufHeader(0x80, msg_id);
+    EventChannelEntry &e = _eventChannels[i];
+    if (!e.inUse)
+      continue;
 
-    for (uint16_t i = 0; i < _eventChannelSlots(); i++)
+    uint16_t flags = 0;
+    if (e.icon != nullptr)
+      flags |= 0x0001;
+    if (e.diagnostic)
+      flags |= 0x0002;
+    if (e.deviceClass != nullptr)
+      flags |= 0x0004;
+    if (e.disabledByDefault)
+      flags |= 0x0008;
+
+    _emitByte((byte)0);
+    _emitByte((byte)0);
+    if (e.nameInFlash)
+      _emitFlashStr0(reinterpret_cast<const __FlashStringHelper *>(e.name));
+    else
+      _emitStr0(e.name);
+    _emitByte((byte)(flags & 0xFF));
+    _emitByte((byte)((flags >> 8) & 0xFF));
+
+    if (flags & 0x0001)
+      _emitFlashStr0(e.icon);
+    if (flags & 0x0004)
+      _emitFlashStr0(e.deviceClass);
+
+    uint16_t typeCount = 0;
+    for (uint16_t t = 0; t < _eventTypeCount; t++)
     {
-      EventChannelEntry &e = _eventChannels[i];
-      if (!e.inUse)
-        continue;
-
-      uint16_t flags = 0;
-      if (e.icon != nullptr)
-        flags |= 0x0001;
-      if (e.diagnostic)
-        flags |= 0x0002;
-      if (e.deviceClass != nullptr)
-        flags |= 0x0004;
-      if (e.disabledByDefault)
-        flags |= 0x0008;
-
-      _bufByte((byte)0);
-      _bufByte((byte)0);
-      if (e.nameInFlash)
-        _bufFlashStr0(reinterpret_cast<const __FlashStringHelper *>(e.name));
-      else
-        _bufStr0(e.name);
-      _bufByte((byte)(flags & 0xFF));
-      _bufByte((byte)((flags >> 8) & 0xFF));
-
-      if (flags & 0x0001)
-        _bufFlashStr0(e.icon);
-      if (flags & 0x0004)
-        _bufFlashStr0(e.deviceClass);
-
-      uint16_t typeCount = 0;
-      for (uint16_t t = 0; t < _eventTypeCount; t++)
-      {
-        if (_eventTypes[t].channelIndex == i)
-          typeCount++;
-      }
-      _bufByte((byte)(typeCount & 0xFF));
-      _bufByte((byte)((typeCount >> 8) & 0xFF));
-
-      for (uint16_t t = 0; t < _eventTypeCount; t++)
-      {
-        if (_eventTypes[t].channelIndex == i)
-          _bufEventType0(_eventTypes[t]);
-      }
+      if (_eventTypes[t].channelIndex == i)
+        typeCount++;
     }
+    _emitByte((byte)(typeCount & 0xFF));
+    _emitByte((byte)((typeCount >> 8) & 0xFF));
 
-    _bufFooter();
-    _bufSend();
-  }
-  else
-  {
-    StreamRef->write("<BLAECK:");
-    byte msg_key = 0x80;
-    StreamRef->write(msg_key);
-    StreamRef->write(":");
-    ulngCvt.val = msg_id;
-    StreamRef->write(ulngCvt.bval, 4);
-    StreamRef->write(":");
-
-    for (uint16_t i = 0; i < _eventChannelSlots(); i++)
+    for (uint16_t t = 0; t < _eventTypeCount; t++)
     {
-      EventChannelEntry &e = _eventChannels[i];
-      if (!e.inUse)
-        continue;
-
-      uint16_t flags = 0;
-      if (e.icon != nullptr)
-        flags |= 0x0001;
-      if (e.diagnostic)
-        flags |= 0x0002;
-      if (e.deviceClass != nullptr)
-        flags |= 0x0004;
-      if (e.disabledByDefault)
-        flags |= 0x0008;
-
-      StreamRef->write((byte)0);
-      StreamRef->write((byte)0);
-      if (e.nameInFlash)
-        StreamRef->print(reinterpret_cast<const __FlashStringHelper *>(e.name));
-      else
-        StreamRef->print(e.name);
-      StreamRef->write((byte)0);
-      StreamRef->write((byte)(flags & 0xFF));
-      StreamRef->write((byte)((flags >> 8) & 0xFF));
-
-      if (flags & 0x0001)
-      {
-        StreamRef->print(e.icon);
-        StreamRef->write((byte)0);
-      }
-      if (flags & 0x0004)
-      {
-        StreamRef->print(e.deviceClass);
-        StreamRef->write((byte)0);
-      }
-
-      uint16_t typeCount = 0;
-      for (uint16_t t = 0; t < _eventTypeCount; t++)
-      {
-        if (_eventTypes[t].channelIndex == i)
-          typeCount++;
-      }
-      StreamRef->write((byte)(typeCount & 0xFF));
-      StreamRef->write((byte)((typeCount >> 8) & 0xFF));
-
-      for (uint16_t t = 0; t < _eventTypeCount; t++)
-      {
-        if (_eventTypes[t].channelIndex == i)
-        {
-          unsigned int start, len;
-          _eventTypeExtent(_eventTypes[t], start, len);
-          PGM_P p = reinterpret_cast<PGM_P>(_eventTypes[t].text) + start;
-          for (unsigned int c = 0; c < len; c++)
-            StreamRef->write(pgm_read_byte(p++));
-          StreamRef->write((byte)0);
-        }
-      }
+      if (_eventTypes[t].channelIndex == i)
+        _emitEventType0(_eventTypes[t]);
     }
-
-    StreamRef->write("/BLAECK>");
-    StreamRef->write("\r\n");
-    StreamRef->flush();
   }
+
+  _frameClose();
 }
 
 void BlaeckSerial::writeEvent(const char *channelName, const __FlashStringHelper *eventType)
@@ -3847,40 +3613,14 @@ void BlaeckSerial::writeEvent(const char *channelName, const __FlashStringHelper
     return;
   }
 
-  if (_bufReady())
-  {
-    _bufReset();
-    _bufHeader(0x85, 0);
-    _bufByte((byte)0);
-    _bufByte((byte)0);
-    _bufByte((byte)(channelIndex & 0xFF));
-    _bufByte((byte)((channelIndex >> 8) & 0xFF));
-    _bufByte((byte)(eventIndex & 0xFF));
-    _bufByte((byte)((eventIndex >> 8) & 0xFF));
-    _bufFooter();
-    _bufSend();
-  }
-  else
-  {
-    StreamRef->write("<BLAECK:");
-    byte msg_key = 0x85;
-    StreamRef->write(msg_key);
-    StreamRef->write(":");
-    ulngCvt.val = 0;
-    StreamRef->write(ulngCvt.bval, 4);
-    StreamRef->write(":");
-
-    StreamRef->write((byte)0);
-    StreamRef->write((byte)0);
-    StreamRef->write((byte)(channelIndex & 0xFF));
-    StreamRef->write((byte)((channelIndex >> 8) & 0xFF));
-    StreamRef->write((byte)(eventIndex & 0xFF));
-    StreamRef->write((byte)((eventIndex >> 8) & 0xFF));
-
-    StreamRef->write("/BLAECK>");
-    StreamRef->write("\r\n");
-    StreamRef->flush();
-  }
+  _frameOpen(0x85, 0);
+  _emitByte((byte)0);
+  _emitByte((byte)0);
+  _emitByte((byte)(channelIndex & 0xFF));
+  _emitByte((byte)((channelIndex >> 8) & 0xFF));
+  _emitByte((byte)(eventIndex & 0xFF));
+  _emitByte((byte)((eventIndex >> 8) & 0xFF));
+  _frameClose();
 }
 #else
 // BLAECK_ENABLE_EVENTS=0: the API stays so sketches still build, but nothing
@@ -4196,25 +3936,8 @@ void BlaeckSerial::_writeEmptyFrame(byte msgKey, unsigned long msg_id)
   if (!_mayWriteFrame())
     return;
 
-  if (_bufReady())
-  {
-    _bufReset();
-    _bufHeader(msgKey, msg_id);
-    _bufFooter();
-    _bufSend();
-  }
-  else
-  {
-    StreamRef->write("<BLAECK:");
-    StreamRef->write(msgKey);
-    StreamRef->write(":");
-    ulngCvt.val = msg_id;
-    StreamRef->write(ulngCvt.bval, 4);
-    StreamRef->write(":");
-    StreamRef->write("/BLAECK>");
-    StreamRef->write("\r\n");
-    StreamRef->flush();
-  }
+  _frameOpen(msgKey, msg_id);
+  _frameClose();
 }
 
 void BlaeckSerial::write(const char *signalName, bool value)
@@ -4645,26 +4368,52 @@ void BlaeckSerial::setBufferedWrites(bool enabled)
     _bufFree();
 }
 
-void BlaeckSerial::_bufHeader(byte msgKey, unsigned long msgId)
+void BlaeckSerial::_frameOpen(byte msgKey, unsigned long msgId, bool withCrc)
 {
-  _bufStr("<BLAECK:");
-  _bufByte(msgKey);
-  _bufByte(':');
+  _frameDirect = !_bufReady();
+  if (!_frameDirect)
+    _bufReset();
+  _frameCrcOn = false;
+
+  _emitStr("<BLAECK:");
+  if (withCrc)
+  {
+    // From the key to the status payload; the start marker is not covered.
+    _crc.setPolynome(0x04C11DB7);
+    _crc.setInitial(0xFFFFFFFF);
+    _crc.setXorOut(0xFFFFFFFF);
+    _crc.setReverseIn(true);
+    _crc.setReverseOut(true);
+    _crc.restart();
+    _frameCrcOn = true;
+  }
+  _emitByte(msgKey);
+  _emitByte(':');
   ulngCvt.val = msgId;
-  _bufBytes(ulngCvt.bval, 4);
-  _bufByte(':');
+  _emitBytes(ulngCvt.bval, 4);
+  _emitByte(':');
 }
 
-void BlaeckSerial::_bufDevice(const char *name, const char *hw, const char *fw)
+bool BlaeckSerial::_frameClose()
+{
+  _frameCrcOn = false;
+  _emitStr("/BLAECK>\r\n");
+  if (!_frameDirect)
+    return _bufSend();
+  StreamRef->flush();
+  return true;
+}
+
+void BlaeckSerial::_emitDevice(const char *name, const char *hw, const char *fw)
 {
   // Leading 2 bytes preserved for wire-format compatibility (always 0).
-  _bufByte((byte)0);
-  _bufByte((byte)0);
-  _bufStr0(name);
-  _bufStr0(hw);
-  _bufStr0(fw);
-  _bufStr0(BLAECKSERIAL_VERSION);
-  _bufStr0(BLAECKSERIAL_NAME);
+  _emitByte((byte)0);
+  _emitByte((byte)0);
+  _emitStr0(name);
+  _emitStr0(hw);
+  _emitStr0(fw);
+  _emitStr0(BLAECKSERIAL_VERSION);
+  _emitStr0(BLAECKSERIAL_NAME);
 }
 
 // ── Frame write functions ─────────────────────────────────────────
@@ -4686,41 +4435,9 @@ void BlaeckSerial::writeRestarted(unsigned long msg_id)
   {
     _writeRestartedAlreadyDone = true;
 
-    if (_bufReady())
-    {
-      _bufReset();
-      _bufHeader(0xC0, msg_id);
-      _bufDevice(_deviceName(), DeviceHWVersion, DeviceFWVersion);
-      _bufFooter();
-      _bufSend();
-    }
-    else
-    {
-      StreamRef->write("<BLAECK:");
-      byte msg_key = 0xC0;
-      StreamRef->write(msg_key);
-      StreamRef->write(":");
-      ulngCvt.val = msg_id;
-      StreamRef->write(ulngCvt.bval, 4);
-      StreamRef->write(":");
-
-      StreamRef->write((byte)0);
-      StreamRef->write((byte)0);
-      StreamRef->print(_deviceName());
-      StreamRef->print('\0');
-      StreamRef->print(DeviceHWVersion);
-      StreamRef->print('\0');
-      StreamRef->print(DeviceFWVersion);
-      StreamRef->print('\0');
-      StreamRef->print(BLAECKSERIAL_VERSION);
-      StreamRef->print('\0');
-      StreamRef->print(BLAECKSERIAL_NAME);
-      StreamRef->print('\0');
-
-      StreamRef->write("/BLAECK>");
-      StreamRef->write("\r\n");
-      StreamRef->flush();
-    }
+    _frameOpen(0xC0, msg_id);
+    _emitDevice(_deviceName(), DeviceHWVersion, DeviceFWVersion);
+    _frameClose();
 
     // Everything this board declares goes out behind the notice, unasked. A host that was
     // already connected is holding what the previous run declared, and has no reason to ask
@@ -4774,42 +4491,9 @@ void BlaeckSerial::writeDevices(unsigned long msg_id)
 
 void BlaeckSerial::writeDevicesFrame(unsigned long msg_id)
 {
-  if (_bufReady())
-  {
-    _bufReset();
-    _bufHeader(0xB3, msg_id);
-    _bufDevice(_deviceName(), DeviceHWVersion, DeviceFWVersion);
-      _bufFooter();
-      _bufSend();
-
-  }
-  else
-  {
-    StreamRef->write("<BLAECK:");
-    byte msg_key = 0xB3;
-    StreamRef->write(msg_key);
-    StreamRef->write(":");
-    ulngCvt.val = msg_id;
-    StreamRef->write(ulngCvt.bval, 4);
-    StreamRef->write(":");
-    StreamRef->write((byte)0);
-    StreamRef->write((byte)0);
-    StreamRef->print(_deviceName());
-    StreamRef->print('\0');
-    StreamRef->print(DeviceHWVersion);
-    StreamRef->print('\0');
-    StreamRef->print(DeviceFWVersion);
-    StreamRef->print('\0');
-    StreamRef->print(BLAECKSERIAL_VERSION);
-    StreamRef->print('\0');
-    StreamRef->print(BLAECKSERIAL_NAME);
-    StreamRef->print('\0');
-
-      StreamRef->write("/BLAECK>");
-      StreamRef->write("\r\n");
-      StreamRef->flush();
-
-  }
+  _frameOpen(0xB3, msg_id);
+  _emitDevice(_deviceName(), DeviceHWVersion, DeviceFWVersion);
+  _frameClose();
 }
 
 void BlaeckSerial::writeDataFrame(unsigned long msg_id, int signalIndex_start, int signalIndex_end, bool onlyUpdated, unsigned long long timestamp)
@@ -4828,328 +4512,98 @@ void BlaeckSerial::writeDataFrame(unsigned long msg_id, int signalIndex_start, i
   if (signalIndex_start > signalIndex_end)
     return; // No valid range
 
-  if (_bufReady())
+  _frameOpen(0xD2, msg_id, true);
+
+  bool restartFlagSnapshot = _sendRestartFlag;
+  _emitByte(_frameFlags(restartFlagSnapshot));
+  _emitByte(':');
+
+  _emitByte((byte)(_schemaHash & 0xFF));
+  _emitByte((byte)((_schemaHash >> 8) & 0xFF));
+  _emitByte(':');
+
+  _emitByte((byte)_timestampMode);
+  if (_timestampMode != BLAECK_NO_TIMESTAMP)
   {
-    _bufReset();
-    _bufStr("<BLAECK:");
-    int crcStart = _framePos;
-
-    _bufByte(0xD2); _bufByte(':');
-
-    ulngCvt.val = msg_id;
-    _bufBytes(ulngCvt.bval, 4); _bufByte(':');
-
-    bool restartFlagSnapshot = _sendRestartFlag;
-    _bufByte(_frameFlags(restartFlagSnapshot));
-    _bufByte(':');
-
-    _bufByte((byte)(_schemaHash & 0xFF));
-    _bufByte((byte)((_schemaHash >> 8) & 0xFF));
-    _bufByte(':');
-
-    _bufByte((byte)_timestampMode);
-    if (_timestampMode != BLAECK_NO_TIMESTAMP)
-    {
-      // Field is mandatory on the wire whenever TimestampMode > 0 (per protocol spec), regardless
-      // of whether a valid callback is set - getTimeStamp() already yields 0 in that case. Gating
-      // this on hasValidTimestampCallback() would silently drop the 8 bytes the host still expects,
-      // desyncing every following byte offset (and the CRC) for the rest of the session.
-      ullCvt.val = timestamp;
-      _bufBytes(ullCvt.bval, 8);
-    }
-    _bufByte(':');
-
-    for (int i = signalIndex_start; i <= signalIndex_end; i++)
-    {
-      if (onlyUpdated && !Signals[i].Updated)
-        continue;
-
-      intCvt.val = i;
-      _bufBytes(intCvt.bval, 2);
-
-      Signal signal = Signals[i];
-      switch (signal.DataType)
-      {
-      case (Blaeck_bool):   boolCvt.val  = *((bool *)signal.Address);           _bufBytes(boolCvt.bval, 1);  break;
-      case (Blaeck_byte):   _bufByte(*((byte *)signal.Address));                                              break;
-      case (Blaeck_short):  shortCvt.val = *((short *)signal.Address);          _bufBytes(shortCvt.bval, 2); break;
-      case (Blaeck_ushort): ushortCvt.val = *((unsigned short *)signal.Address); _bufBytes(ushortCvt.bval, 2); break;
-      case (Blaeck_int):    intCvt.val   = *((int *)signal.Address);            _bufBytes(intCvt.bval, 2);   break;
-      case (Blaeck_uint):   uintCvt.val  = *((unsigned int *)signal.Address);   _bufBytes(uintCvt.bval, 2);  break;
-      case (Blaeck_long):   lngCvt.val   = *((long *)signal.Address);           _bufBytes(lngCvt.bval, 4);   break;
-      case (Blaeck_ulong):  ulngCvt.val  = *((unsigned long *)signal.Address);  _bufBytes(ulngCvt.bval, 4);  break;
-      case (Blaeck_float):  fltCvt.val   = *((float *)signal.Address);          _bufBytes(fltCvt.bval, 4);   break;
-      case (Blaeck_double): dblCvt.val   = *((double *)signal.Address);         _bufBytes(dblCvt.bval, 8);   break;
-      case (Blaeck_string):
-      {
-        const char *str = (const char *)signal.Address;
-        size_t rawLen = (str != nullptr) ? strlen(str) : 0;
-        byte len = (rawLen > 255) ? 255 : (byte)rawLen;
-        _bufByte(len);
-        if (len > 0)
-          _bufBytes((byte *)str, len);
-      }
-      break;
-      }
-
-      if (onlyUpdated)
-        Signals[i].Updated = false;
-    }
-
-    byte statusByte = 0;
-    byte statusPayload[4] = {0, 0, 0, 0};
-    _bufByte(statusByte);
-    _bufBytes(statusPayload, 4);
-
-    // CRC32 over content (crcStart..framePos-1)
-    _crc.setPolynome(0x04C11DB7);
-    _crc.setInitial(0xFFFFFFFF);
-    _crc.setXorOut(0xFFFFFFFF);
-    _crc.setReverseIn(true);
-    _crc.setReverseOut(true);
-    _crc.restart();
-    _crc.add(_frameBuf + crcStart, _framePos - crcStart);
-    uint32_t crc_value = _crc.calc();
-    _bufBytes((byte *)&crc_value, 4);
-
-    _bufFooter();
-    _bufSend();
-    if (!_bufOverflow)
-      _sendRestartFlag = false;
+    // Field is mandatory on the wire whenever TimestampMode > 0 (per protocol spec), regardless
+    // of whether a valid callback is set - getTimeStamp() already yields 0 in that case. Gating
+    // this on hasValidTimestampCallback() would silently drop the 8 bytes the host still expects,
+    // desyncing every following byte offset (and the CRC) for the rest of the session.
+    ullCvt.val = timestamp;
+    _emitBytes(ullCvt.bval, 8);
   }
-  else
+  _emitByte(':');
+
+  for (int i = signalIndex_start; i <= signalIndex_end; i++)
   {
-    _crc.setPolynome(0x04C11DB7);
-    _crc.setInitial(0xFFFFFFFF);
-    _crc.setXorOut(0xFFFFFFFF);
-    _crc.setReverseIn(true);
-    _crc.setReverseOut(true);
-    _crc.restart();
+    if (onlyUpdated && !Signals[i].Updated)
+      continue;
 
-    StreamRef->write("<BLAECK:");
+    intCvt.val = i;
+    _emitBytes(intCvt.bval, 2);
 
-    byte msg_key = 0xD2;
-    StreamRef->write(msg_key);
-    _crc.add(msg_key);
+    Signal signal = Signals[i];
+    switch (signal.DataType)
+    {
+    case (Blaeck_bool):   boolCvt.val  = *((bool *)signal.Address);           _emitBytes(boolCvt.bval, 1);  break;
+    case (Blaeck_byte):   _emitByte(*((byte *)signal.Address));                                              break;
+    case (Blaeck_short):  shortCvt.val = *((short *)signal.Address);          _emitBytes(shortCvt.bval, 2); break;
+    case (Blaeck_ushort): ushortCvt.val = *((unsigned short *)signal.Address); _emitBytes(ushortCvt.bval, 2); break;
+    case (Blaeck_int):    intCvt.val   = *((int *)signal.Address);            _emitBytes(intCvt.bval, 2);   break;
+    case (Blaeck_uint):   uintCvt.val  = *((unsigned int *)signal.Address);   _emitBytes(uintCvt.bval, 2);  break;
+    case (Blaeck_long):   lngCvt.val   = *((long *)signal.Address);           _emitBytes(lngCvt.bval, 4);   break;
+    case (Blaeck_ulong):  ulngCvt.val  = *((unsigned long *)signal.Address);  _emitBytes(ulngCvt.bval, 4);  break;
+    case (Blaeck_float):  fltCvt.val   = *((float *)signal.Address);          _emitBytes(fltCvt.bval, 4);   break;
+    case (Blaeck_double): dblCvt.val   = *((double *)signal.Address);         _emitBytes(dblCvt.bval, 8);   break;
+    case (Blaeck_string):
+    {
+      const char *str = (const char *)signal.Address;
+      size_t rawLen = (str != nullptr) ? strlen(str) : 0;
+      byte len = (rawLen > 255) ? 255 : (byte)rawLen;
+      _emitByte(len);
+      if (len > 0)
+        _emitBytes((byte *)str, len);
+    }
+    break;
+    }
 
-    StreamRef->write(":");
-    _crc.add(':');
+    if (onlyUpdated)
+      Signals[i].Updated = false;
+  }
 
-    ulngCvt.val = msg_id;
-    StreamRef->write(ulngCvt.bval, 4);
-    _crc.add(ulngCvt.bval, 4);
+  byte statusByte = 0;
+  byte statusPayload[4] = {0, 0, 0, 0};
+  _emitByte(statusByte);
+  _emitBytes(statusPayload, 4);
 
-    StreamRef->write(":");
-    _crc.add(':');
+  uint32_t crc_value = _frameCrcEnd();
+  _emitBytes((byte *)&crc_value, 4);
 
-    byte frame_flags = _frameFlags(_sendRestartFlag);
-    StreamRef->write(frame_flags);
-    _crc.add(frame_flags);
+  if (_frameClose())
     _sendRestartFlag = false;
-
-    StreamRef->write(":");
-    _crc.add(':');
-
-    byte hash_lo = (byte)(_schemaHash & 0xFF);
-    byte hash_hi = (byte)((_schemaHash >> 8) & 0xFF);
-    StreamRef->write(hash_lo);
-    StreamRef->write(hash_hi);
-    _crc.add(hash_lo);
-    _crc.add(hash_hi);
-
-    StreamRef->write(":");
-    _crc.add(':');
-
-    byte timestamp_mode = (byte)_timestampMode;
-    StreamRef->write(timestamp_mode);
-    _crc.add(timestamp_mode);
-
-    if (_timestampMode != BLAECK_NO_TIMESTAMP)
-    {
-      // See buffered branch above: field is mandatory whenever TimestampMode > 0, not conditional
-      // on callback validity.
-      ullCvt.val = timestamp;
-      StreamRef->write(ullCvt.bval, 8);
-      _crc.add(ullCvt.bval, 8);
-    }
-
-    StreamRef->write(":");
-    _crc.add(':');
-
-    for (int i = signalIndex_start; i <= signalIndex_end; i++)
-    {
-      if (onlyUpdated && !Signals[i].Updated)
-        continue;
-
-      intCvt.val = i;
-      StreamRef->write(intCvt.bval, 2);
-      _crc.add(intCvt.bval, 2);
-
-      Signal signal = Signals[i];
-      switch (signal.DataType)
-      {
-      case (Blaeck_bool):
-      {
-        boolCvt.val = *((bool *)signal.Address);
-        StreamRef->write(boolCvt.bval, 1);
-        _crc.add(boolCvt.bval, 1);
-      }
-      break;
-      case (Blaeck_byte):
-      {
-        StreamRef->write(*((byte *)signal.Address));
-        _crc.add(*((byte *)signal.Address));
-      }
-      break;
-      case (Blaeck_short):
-      {
-        shortCvt.val = *((short *)signal.Address);
-        StreamRef->write(shortCvt.bval, 2);
-        _crc.add(shortCvt.bval, 2);
-      }
-      break;
-      case (Blaeck_ushort):
-      {
-        ushortCvt.val = *((unsigned short *)signal.Address);
-        StreamRef->write(ushortCvt.bval, 2);
-        _crc.add(ushortCvt.bval, 2);
-      }
-      break;
-      case (Blaeck_int):
-      {
-        intCvt.val = *((int *)signal.Address);
-        StreamRef->write(intCvt.bval, 2);
-        _crc.add(intCvt.bval, 2);
-      }
-      break;
-      case (Blaeck_uint):
-      {
-        uintCvt.val = *((unsigned int *)signal.Address);
-        StreamRef->write(uintCvt.bval, 2);
-        _crc.add(uintCvt.bval, 2);
-      }
-      break;
-      case (Blaeck_long):
-      {
-        lngCvt.val = *((long *)signal.Address);
-        StreamRef->write(lngCvt.bval, 4);
-        _crc.add(lngCvt.bval, 4);
-      }
-      break;
-      case (Blaeck_ulong):
-      {
-        ulngCvt.val = *((unsigned long *)signal.Address);
-        StreamRef->write(ulngCvt.bval, 4);
-        _crc.add(ulngCvt.bval, 4);
-      }
-      break;
-      case (Blaeck_float):
-      {
-        fltCvt.val = *((float *)signal.Address);
-        StreamRef->write(fltCvt.bval, 4);
-        _crc.add(fltCvt.bval, 4);
-      }
-      break;
-      case (Blaeck_double):
-      {
-        dblCvt.val = *((double *)signal.Address);
-        StreamRef->write(dblCvt.bval, 8);
-        _crc.add(dblCvt.bval, 8);
-      }
-      break;
-      case (Blaeck_string):
-      {
-        const char *str = (const char *)signal.Address;
-        size_t rawLen = (str != nullptr) ? strlen(str) : 0;
-        byte len = (rawLen > 255) ? 255 : (byte)rawLen;
-        StreamRef->write(len);
-        _crc.add(len);
-        if (len > 0)
-        {
-          StreamRef->write((const uint8_t *)str, len);
-          _crc.add((uint8_t *)str, len);
-        }
-      }
-      break;
-      }
-
-      if (onlyUpdated)
-        Signals[i].Updated = false;
-    }
-
-    byte statusByte = 0;
-    byte statusPayload[4] = {0, 0, 0, 0};
-    StreamRef->write(statusByte);
-    StreamRef->write(statusPayload, 4);
-    _crc.add(statusByte);
-    _crc.add(statusPayload, 4);
-
-    uint32_t crc_value = _crc.calc();
-    StreamRef->write((byte *)&crc_value, 4);
-
-    StreamRef->write("/BLAECK>");
-    StreamRef->write("\r\n");
-    StreamRef->flush();
-  }
 }
 
 void BlaeckSerial::writeSymbolsFrame(unsigned long msg_id)
 {
-  if (_bufReady())
+  _frameOpen(0xB0, msg_id);
+
+  for (int i = 0; i < _signalIndex; i++)
   {
-    _bufReset();
-    _bufHeader(0xB0, msg_id);
+    _emitByte((byte)0);
+    _emitByte((byte)0);
 
-    for (int i = 0; i < _signalIndex; i++)
-    {
-      _bufByte((byte)0);
-      _bufByte((byte)0);
+    // A reference, not a copy: the entry is nine bytes, and there is no reason to move
+    // them once per signal per frame.
+    const Signal &signal = Signals[i];
 
-      // A reference, not a copy: the entry is nine bytes, and there is no reason to move
-      // them once per signal per frame.
-      const Signal &signal = Signals[i];
+    _signalNameFeedHash(signal);
+    _emitSignalName0(signal);
 
-      _signalNameFeedHash(signal);
-      _bufSignalName0(signal);
-
-      byte dtCode = _dtypeCode(signal.DataType);
-      _bufByte(dtCode);
-      _schemaHashFeedByte(dtCode);
-    }
-      _bufFooter();
-      _bufSend();
-
+    byte dtCode = _dtypeCode(signal.DataType);
+    _emitByte(dtCode);
+    _schemaHashFeedByte(dtCode);
   }
-  else
-  {
-    StreamRef->write("<BLAECK:");
-    byte msg_key = 0xB0;
-    StreamRef->write(msg_key);
-    StreamRef->write(":");
-    ulngCvt.val = msg_id;
-    StreamRef->write(ulngCvt.bval, 4);
-    StreamRef->write(":");
-
-    for (int i = 0; i < _signalIndex; i++)
-    {
-      StreamRef->write((byte)0);
-      StreamRef->write((byte)0);
-
-      const Signal &signal = Signals[i];
-
-      _signalNameFeedHash(signal);
-      _printSignalName(signal);
-      StreamRef->print('\0');
-
-      byte dtCode = _dtypeCode(signal.DataType);
-      StreamRef->write(dtCode);
-      _schemaHashFeedByte(dtCode);
-    }
-      StreamRef->write("/BLAECK>");
-      StreamRef->write("\r\n");
-      StreamRef->flush();
-
-  }
+  _frameClose();
 }
 
 #if BLAECK_ENABLE_SIGNAL_META
@@ -5174,97 +4628,37 @@ void BlaeckSerial::writeSignalConfigFrame(unsigned long msg_id)
   // entries is the ordinary case and not an error. The signal is named by its
   // index in the 0xB0 Symbol List, which already says which device it belongs
   // to - so unlike the other catalogs this frame carries no device fields.
-  if (_bufReady())
+  _frameOpen(0xF0, msg_id);
+
+  for (int i = 0; i < _signalIndex; i++)
   {
-    _bufReset();
-    _bufHeader(0xF0, msg_id);
+    const SignalMeta *m = Signals[i].Meta;
+    // No record, or one that ended up saying nothing - diagnostic(false) alone builds
+    // one - is the ordinary case, and the frame carries no entry for it.
+    if (m == nullptr || m->MetaFlags == 0)
+      continue;
 
-    for (int i = 0; i < _signalIndex; i++)
-    {
-      const SignalMeta *m = Signals[i].Meta;
-      // No record, or one that ended up saying nothing - diagnostic(false) alone builds
-      // one - is the ordinary case, and the frame carries no entry for it.
-      if (m == nullptr || m->MetaFlags == 0)
-        continue;
+    uint16_t symbolId = (uint16_t)i;
+    _emitByte((byte)(symbolId & 0xFF));
+    _emitByte((byte)((symbolId >> 8) & 0xFF));
+    _emitByte((byte)(m->MetaFlags & 0xFF));
+    _emitByte((byte)((m->MetaFlags >> 8) & 0xFF));
 
-      uint16_t symbolId = (uint16_t)i;
-      _bufByte((byte)(symbolId & 0xFF));
-      _bufByte((byte)((symbolId >> 8) & 0xFF));
-      _bufByte((byte)(m->MetaFlags & 0xFF));
-      _bufByte((byte)((m->MetaFlags >> 8) & 0xFF));
-
-      if (m->MetaFlags & BLAECK_SIG_HAS_UNIT)
-        _bufFlashStr0(m->Unit);
-      if (m->MetaFlags & BLAECK_SIG_HAS_DEVICE_CLASS)
-        _bufFlashStr0(m->DeviceClass);
-      if (m->MetaFlags & BLAECK_SIG_HAS_ICON)
-        _bufFlashStr0(m->Icon);
-      if (m->MetaFlags & BLAECK_SIG_HAS_DISPLAY_PRECISION)
-        _bufByte(m->DisplayPrecision);
-      if (m->MetaFlags & BLAECK_SIG_HAS_OPTIONS)
-        _bufFlashStr0(m->Options);
-      if (m->MetaFlags & BLAECK_SIG_HAS_DISPLAY_NAME)
-        _bufFlashStr0(m->DisplayName);
-    }
-
-    _bufFooter();
-    _bufSend();
+    if (m->MetaFlags & BLAECK_SIG_HAS_UNIT)
+      _emitFlashStr0(m->Unit);
+    if (m->MetaFlags & BLAECK_SIG_HAS_DEVICE_CLASS)
+      _emitFlashStr0(m->DeviceClass);
+    if (m->MetaFlags & BLAECK_SIG_HAS_ICON)
+      _emitFlashStr0(m->Icon);
+    if (m->MetaFlags & BLAECK_SIG_HAS_DISPLAY_PRECISION)
+      _emitByte(m->DisplayPrecision);
+    if (m->MetaFlags & BLAECK_SIG_HAS_OPTIONS)
+      _emitFlashStr0(m->Options);
+    if (m->MetaFlags & BLAECK_SIG_HAS_DISPLAY_NAME)
+      _emitFlashStr0(m->DisplayName);
   }
-  else
-  {
-    StreamRef->write("<BLAECK:");
-    byte msg_key = 0xF0;
-    StreamRef->write(msg_key);
-    StreamRef->write(":");
-    ulngCvt.val = msg_id;
-    StreamRef->write(ulngCvt.bval, 4);
-    StreamRef->write(":");
 
-    for (int i = 0; i < _signalIndex; i++)
-    {
-      const SignalMeta *m = Signals[i].Meta;
-      if (m == nullptr || m->MetaFlags == 0)
-        continue;
-
-      uint16_t symbolId = (uint16_t)i;
-      StreamRef->write((byte)(symbolId & 0xFF));
-      StreamRef->write((byte)((symbolId >> 8) & 0xFF));
-      StreamRef->write((byte)(m->MetaFlags & 0xFF));
-      StreamRef->write((byte)((m->MetaFlags >> 8) & 0xFF));
-
-      if (m->MetaFlags & BLAECK_SIG_HAS_UNIT)
-      {
-        StreamRef->print(m->Unit);
-        StreamRef->print('\0');
-      }
-      if (m->MetaFlags & BLAECK_SIG_HAS_DEVICE_CLASS)
-      {
-        StreamRef->print(m->DeviceClass);
-        StreamRef->print('\0');
-      }
-      if (m->MetaFlags & BLAECK_SIG_HAS_ICON)
-      {
-        StreamRef->print(m->Icon);
-        StreamRef->print('\0');
-      }
-      if (m->MetaFlags & BLAECK_SIG_HAS_DISPLAY_PRECISION)
-        StreamRef->write(m->DisplayPrecision);
-      if (m->MetaFlags & BLAECK_SIG_HAS_OPTIONS)
-      {
-        StreamRef->print(m->Options);
-        StreamRef->print('\0');
-      }
-      if (m->MetaFlags & BLAECK_SIG_HAS_DISPLAY_NAME)
-      {
-        StreamRef->print(m->DisplayName);
-        StreamRef->print('\0');
-      }
-    }
-
-    StreamRef->write("/BLAECK>");
-    StreamRef->write("\r\n");
-    StreamRef->flush();
-  }
+  _frameClose();
 }
 #endif
 
@@ -5312,8 +4706,8 @@ void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
   // palette / autocomplete of every command the device accepts.
   // Before a single frame byte goes out. The catalog is still where the omission becomes
   // knowable - a builder chain that never reached withRange() has nothing to report at
-  // registration - but the unbuffered writer below hands each byte straight to the stream, so
-  // warning from inside its loop writes the text into the open frame when the debug stream is
+  // registration - but with buffered writes off each byte goes straight to the stream, so
+  // warning from inside the loop writes the text into the open frame when the debug stream is
   // that same stream. Everything after it is then read as catalog data.
   if (_debugStream != nullptr)
   {
@@ -5329,250 +4723,109 @@ void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
     }
   }
 
-  if (_bufReady())
+  _frameOpen(0xA0, msg_id);
+
+  for (uint16_t i = 0; i < _commandSlots(); i++)
   {
-    _bufReset();
-    _bufHeader(0xA0, msg_id);
+    CommandHandlerEntry &e = _commandHandlers[i];
+    if (!e.inUse)
+      continue;
 
-    for (uint16_t i = 0; i < _commandSlots(); i++)
+    uint32_t flags = 0;
+    // Only when there is one to send. A number command with no withRange() leaves the
+    // bytes out entirely rather than announcing 0 to 0, which a host would build a
+    // control from - and that control would accept nothing but zero.
+    if (e.kind == BLAECK_CMD_NUMBER && _rangeDeclared(e))
+      flags |= 0x0001;
+    if (e.unit != nullptr)
+      flags |= 0x0002;
+    if (e.kind == BLAECK_CMD_SELECT && _optionsDeclared(e))
+      flags |= 0x0004;
+    if (e.stateSignal != nullptr)
+      flags |= 0x0008;
+    if (e.kind == BLAECK_CMD_TEXT)
+      flags |= 0x0010;
+    // Entity category in bits 5-6, so it needs no trailing payload.
+    flags |= (uint32_t)((e.category & 0x03) << 5);
+    if (e.disabledByDefault)
+      flags |= 0x4000;
+    // Resolution rides on its own bit rather than with the range: a range with no step is
+    // ordinary, and the bit is what tells that apart from a step of 0.
+    if (e.kind == BLAECK_CMD_NUMBER && _stepDeclared(e))
+      flags |= 0x0080;
+    if (e.displayName != nullptr)
+      flags |= 0x0100;
+    // Input hint in bits 9-10, needing no payload either: a number's box or slider, a text
+    // command's masked field. Read against the kind, which is what lets one pair of bits serve
+    // both - no entry is ever both kinds. Zero is the default of each, so a command that never
+    // asked for one leaves the bits clear and the host keeps its own default rather than being
+    // handed one that says nothing.
+    if (e.kind == BLAECK_CMD_NUMBER || e.kind == BLAECK_CMD_TEXT)
+      flags |= (uint32_t)((e.mode & 0x03) << 9);
+    if (e.deviceClass != nullptr)
+      flags |= 0x0800;
+    if (e.icon != nullptr)
+      flags |= 0x1000;
+    // Buttons only. Every other kind carries its value in the payload a host sends, so a
+    // fixed one there would overwrite what the control is for.
+    if (e.kind == BLAECK_CMD_BUTTON && e.pressPayload != nullptr)
+      flags |= 0x2000;
+
+    // How long a command this device can receive: characters between the delimiters, terminator
+    // excluded. The same on every entry - one buffer serves them all - but carried here so each
+    // entry keeps the shape every catalog frame uses. A host subtracts the name and its comma
+    // for the room left for parameters; anything longer is dropped on arrival, which the sender
+    // cannot otherwise know.
+    uint16_t payloadMax = (uint16_t)(MAXIMUM_CHAR_COUNT - 1);
+    _emitByte((byte)0);
+    _emitByte((byte)0);
+    _emitByte((byte)(payloadMax & 0xFF));
+    _emitByte((byte)((payloadMax >> 8) & 0xFF));
+    _emitStr0(e.command);
+    _emitByte(e.kind);
+    _emitByte((byte)(flags & 0xFF));
+    _emitByte((byte)((flags >> 8) & 0xFF));
+    _emitByte((byte)((flags >> 16) & 0xFF));
+    _emitByte((byte)((flags >> 24) & 0xFF));
+
+    if (flags & 0x0001)
     {
-      CommandHandlerEntry &e = _commandHandlers[i];
-      if (!e.inUse)
-        continue;
-
-      uint32_t flags = 0;
-      // Only when there is one to send. A number command with no withRange() leaves the
-      // bytes out entirely rather than announcing 0 to 0, which a host would build a
-      // control from - and that control would accept nothing but zero.
-      if (e.kind == BLAECK_CMD_NUMBER && _rangeDeclared(e))
-        flags |= 0x0001;
-      if (e.unit != nullptr)
-        flags |= 0x0002;
-      if (e.kind == BLAECK_CMD_SELECT && _optionsDeclared(e))
-        flags |= 0x0004;
-      if (e.stateSignal != nullptr)
-        flags |= 0x0008;
-      if (e.kind == BLAECK_CMD_TEXT)
-        flags |= 0x0010;
-      // Entity category in bits 5-6, so it needs no trailing payload.
-      flags |= (uint32_t)((e.category & 0x03) << 5);
-      if (e.disabledByDefault)
-        flags |= 0x4000;
-      // Resolution rides on its own bit rather than with the range: a range with no step is
-      // ordinary, and the bit is what tells that apart from a step of 0.
-      if (e.kind == BLAECK_CMD_NUMBER && _stepDeclared(e))
-        flags |= 0x0080;
-      if (e.displayName != nullptr)
-        flags |= 0x0100;
-      // Input hint in bits 9-10, needing no payload either: a number's box or slider, a text
-      // command's masked field. Read against the kind, which is what lets one pair of bits serve
-      // both - no entry is ever both kinds. Zero is the default of each, so a command that never
-      // asked for one leaves the bits clear and the host keeps its own default rather than being
-      // handed one that says nothing.
-      if (e.kind == BLAECK_CMD_NUMBER || e.kind == BLAECK_CMD_TEXT)
-        flags |= (uint32_t)((e.mode & 0x03) << 9);
-      if (e.deviceClass != nullptr)
-        flags |= 0x0800;
-      if (e.icon != nullptr)
-        flags |= 0x1000;
-      // Buttons only. Every other kind carries its value in the payload a host sends, so a
-      // fixed one there would overwrite what the control is for.
-      if (e.kind == BLAECK_CMD_BUTTON && e.pressPayload != nullptr)
-        flags |= 0x2000;
-
-      // How long a command this device can receive: characters between the delimiters, terminator
-      // excluded. The same on every entry - one buffer serves them all - but carried here so each
-      // entry keeps the shape every catalog frame uses. A host subtracts the name and its comma
-      // for the room left for parameters; anything longer is dropped on arrival, which the sender
-      // cannot otherwise know.
-      uint16_t payloadMax = (uint16_t)(MAXIMUM_CHAR_COUNT - 1);
-      _bufByte((byte)0);
-      _bufByte((byte)0);
-      _bufByte((byte)(payloadMax & 0xFF));
-      _bufByte((byte)((payloadMax >> 8) & 0xFF));
-      _bufStr0(e.command);
-      _bufByte(e.kind);
-      _bufByte((byte)(flags & 0xFF));
-      _bufByte((byte)((flags >> 8) & 0xFF));
-      _bufByte((byte)((flags >> 16) & 0xFF));
-      _bufByte((byte)((flags >> 24) & 0xFF));
-
-      if (flags & 0x0001)
-      {
-        fltCvt.val = e.meta_min;
-        _bufBytes(fltCvt.bval, 4);
-        fltCvt.val = e.meta_max;
-        _bufBytes(fltCvt.bval, 4);
-      }
-      if (flags & 0x0002)
-        _bufFlashStr0(e.unit);
-      if (flags & 0x0004)
-        _bufFlashStr0(e.options);
-      if (flags & 0x0008)
-      {
-        _bufFlashStr0(e.stateSignal);
-        _bufByte(e.stateSource);
-      }
-      if (flags & 0x0010)
-      {
-        uint16_t maxLen = (uint16_t)e.meta_max;
-        _bufByte((byte)(maxLen & 0xFF));
-        _bufByte((byte)((maxLen >> 8) & 0xFF));
-      }
-      if (flags & 0x0080)
-      {
-        fltCvt.val = e.meta_step;
-        _bufBytes(fltCvt.bval, 4);
-      }
-      if (flags & 0x0100)
-        _bufFlashStr0(e.displayName);
-      if (flags & 0x0800)
-        _bufFlashStr0(e.deviceClass);
-      if (flags & 0x1000)
-        _bufFlashStr0(e.icon);
-      if (flags & 0x2000)
-        _bufFlashStr0(e.pressPayload);
+      fltCvt.val = e.meta_min;
+      _emitBytes(fltCvt.bval, 4);
+      fltCvt.val = e.meta_max;
+      _emitBytes(fltCvt.bval, 4);
     }
-
-      _bufFooter();
-      _bufSend();
-
-  }
-  else
-  {
-    StreamRef->write("<BLAECK:");
-    byte msg_key = 0xA0;
-    StreamRef->write(msg_key);
-    StreamRef->write(":");
-    ulngCvt.val = msg_id;
-    StreamRef->write(ulngCvt.bval, 4);
-    StreamRef->write(":");
-
-    for (uint16_t i = 0; i < _commandSlots(); i++)
+    if (flags & 0x0002)
+      _emitFlashStr0(e.unit);
+    if (flags & 0x0004)
+      _emitFlashStr0(e.options);
+    if (flags & 0x0008)
     {
-      CommandHandlerEntry &e = _commandHandlers[i];
-      if (!e.inUse)
-        continue;
-
-      uint32_t flags = 0;
-      // Only when there is one to send. A number command with no withRange() leaves the
-      // bytes out entirely rather than announcing 0 to 0, which a host would build a
-      // control from - and that control would accept nothing but zero.
-      if (e.kind == BLAECK_CMD_NUMBER && _rangeDeclared(e))
-        flags |= 0x0001;
-      if (e.unit != nullptr)
-        flags |= 0x0002;
-      if (e.kind == BLAECK_CMD_SELECT && _optionsDeclared(e))
-        flags |= 0x0004;
-      if (e.stateSignal != nullptr)
-        flags |= 0x0008;
-      if (e.kind == BLAECK_CMD_TEXT)
-        flags |= 0x0010;
-      // Entity category in bits 5-6, so it needs no trailing payload.
-      flags |= (uint32_t)((e.category & 0x03) << 5);
-      if (e.disabledByDefault)
-        flags |= 0x4000;
-      // Resolution rides on its own bit rather than with the range: a range with no step is
-      // ordinary, and the bit is what tells that apart from a step of 0.
-      if (e.kind == BLAECK_CMD_NUMBER && _stepDeclared(e))
-        flags |= 0x0080;
-      if (e.displayName != nullptr)
-        flags |= 0x0100;
-      // Input hint in bits 9-10, needing no payload either: a number's box or slider, a text
-      // command's masked field. Read against the kind, which is what lets one pair of bits serve
-      // both - no entry is ever both kinds. Zero is the default of each, so a command that never
-      // asked for one leaves the bits clear and the host keeps its own default rather than being
-      // handed one that says nothing.
-      if (e.kind == BLAECK_CMD_NUMBER || e.kind == BLAECK_CMD_TEXT)
-        flags |= (uint32_t)((e.mode & 0x03) << 9);
-      if (e.deviceClass != nullptr)
-        flags |= 0x0800;
-      if (e.icon != nullptr)
-        flags |= 0x1000;
-      // Buttons only. Every other kind carries its value in the payload a host sends, so a
-      // fixed one there would overwrite what the control is for.
-      if (e.kind == BLAECK_CMD_BUTTON && e.pressPayload != nullptr)
-        flags |= 0x2000;
-
-      // How long a command this device can receive: characters between the delimiters, terminator
-      // excluded. The same on every entry - one buffer serves them all - but carried here so each
-      // entry keeps the shape every catalog frame uses. A host subtracts the name and its comma
-      // for the room left for parameters; anything longer is dropped on arrival, which the sender
-      // cannot otherwise know.
-      uint16_t payloadMax = (uint16_t)(MAXIMUM_CHAR_COUNT - 1);
-      StreamRef->write((byte)0);
-      StreamRef->write((byte)0);
-      StreamRef->write((byte)(payloadMax & 0xFF));
-      StreamRef->write((byte)((payloadMax >> 8) & 0xFF));
-      StreamRef->print(e.command);
-      StreamRef->write((byte)0);
-      StreamRef->write(e.kind);
-      StreamRef->write((byte)(flags & 0xFF));
-      StreamRef->write((byte)((flags >> 8) & 0xFF));
-      StreamRef->write((byte)((flags >> 16) & 0xFF));
-      StreamRef->write((byte)((flags >> 24) & 0xFF));
-
-      if (flags & 0x0001)
-      {
-        fltCvt.val = e.meta_min;
-        StreamRef->write(fltCvt.bval, 4);
-        fltCvt.val = e.meta_max;
-        StreamRef->write(fltCvt.bval, 4);
-      }
-      if (flags & 0x0002)
-      {
-        StreamRef->print(e.unit);
-        StreamRef->write((byte)0);
-      }
-      if (flags & 0x0004)
-      {
-        StreamRef->print(e.options);
-        StreamRef->write((byte)0);
-      }
-      if (flags & 0x0008)
-      {
-        StreamRef->print(e.stateSignal);
-        StreamRef->write((byte)0);
-        StreamRef->write(e.stateSource);
-      }
-      if (flags & 0x0010)
-      {
-        uint16_t maxLen = (uint16_t)e.meta_max;
-        StreamRef->write((byte)(maxLen & 0xFF));
-        StreamRef->write((byte)((maxLen >> 8) & 0xFF));
-      }
-      if (flags & 0x0080)
-      {
-        fltCvt.val = e.meta_step;
-        StreamRef->write(fltCvt.bval, 4);
-      }
-      if (flags & 0x0100)
-      {
-        StreamRef->print(e.displayName);
-        StreamRef->write((byte)0);
-      }
-      if (flags & 0x0800)
-      {
-        StreamRef->print(e.deviceClass);
-        StreamRef->write((byte)0);
-      }
-      if (flags & 0x1000)
-      {
-        StreamRef->print(e.icon);
-        StreamRef->write((byte)0);
-      }
-      if (flags & 0x2000)
-      {
-        StreamRef->print(e.pressPayload);
-        StreamRef->write((byte)0);
-      }
+      _emitFlashStr0(e.stateSignal);
+      _emitByte(e.stateSource);
     }
-
-      StreamRef->write("/BLAECK>");
-      StreamRef->write("\r\n");
-      StreamRef->flush();
-
+    if (flags & 0x0010)
+    {
+      uint16_t maxLen = (uint16_t)e.meta_max;
+      _emitByte((byte)(maxLen & 0xFF));
+      _emitByte((byte)((maxLen >> 8) & 0xFF));
+    }
+    if (flags & 0x0080)
+    {
+      fltCvt.val = e.meta_step;
+      _emitBytes(fltCvt.bval, 4);
+    }
+    if (flags & 0x0100)
+      _emitFlashStr0(e.displayName);
+    if (flags & 0x0800)
+      _emitFlashStr0(e.deviceClass);
+    if (flags & 0x1000)
+      _emitFlashStr0(e.icon);
+    if (flags & 0x2000)
+      _emitFlashStr0(e.pressPayload);
   }
+
+  _frameClose();
 }
 #endif
 

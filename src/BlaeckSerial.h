@@ -4704,12 +4704,11 @@ private:
   // The two kinds, read the one way that is right for each. Every use of a name goes
   // through these: the schema hash, both catalog writers, and the by-name lookups.
   bool _signalNameEquals(const Signal &s, const char *name) const;
-  // Where a name's bytes are going. One walk serves all three writers, so a name cannot
-  // be sent one way and hashed another.
+  // Where a name's bytes are going. One walk serves the frame and the hash, so a name
+  // cannot be sent one way and hashed another.
   enum NameSink : uint8_t
   {
-    NAME_SINK_BUFFER,
-    NAME_SINK_STREAM,
+    NAME_SINK_FRAME,
     NAME_SINK_HASH
   };
   void _emitSignalName(const Signal &s, NameSink sink);
@@ -4718,8 +4717,7 @@ private:
   // the entry, and shared so a name is matched, hashed and sent as the same bytes.
   static byte _signalSuffixDigits(const Signal &s, char *out);
   void _signalNameFeedHash(const Signal &s);
-  void _bufSignalName0(const Signal &s);
-  void _printSignalName(const Signal &s);
+  void _emitSignalName0(const Signal &s);
   void _setTimedDataState(bool timedActivated, unsigned long timedInterval_ms);
   void _parseCommandTokens(const char *raw);
   // Acts on what _parseCommandTokens() last produced; read() parses each frame once and
@@ -4897,8 +4895,7 @@ private:
   // chain of overloads that all have their own public signatures.
   bool _frameRequested = false;
 
-  // The data frame's flags byte, built in one place so the buffered writer and the direct one
-  // cannot disagree about it. Bit 0 says this is the first frame after a restart, bit 1 that
+  // The data frame's flags byte. Bit 0 says this is the first frame after a restart, bit 1 that
   // the frame answers a request rather than the interval a host set. Bits 2-7 are reserved and
   // sent clear.
   byte _frameFlags(bool restarted) const
@@ -5109,16 +5106,40 @@ private:
     _bufOverflow = false;
     _bufOverflowWarned = false;
   }
-  void _bufByte(byte b)
+  // ── Frame output ──────────────────────────────────────────────────
+  // Every frame is written once, through these. Between _frameOpen() and _frameClose() the
+  // bytes go into the buffer, or straight to the stream when buffered writes are off or the
+  // buffer could not be built - decided per frame, so a writer never knows which.
+  bool _frameDirect = false;
+  // On between the key and the CRC field of a data frame, the only frame that carries one.
+  bool _frameCrcOn = false;
+
+  void _frameOpen(byte msgKey, unsigned long msgId, bool withCrc = false);
+  // True when the frame left: a buffered frame that overflowed is dropped instead.
+  bool _frameClose();
+  uint32_t _frameCrcEnd()
   {
-    if (_bufEnsure(1))
+    _frameCrcOn = false;
+    return _crc.calc();
+  }
+  void _emitByte(byte b)
+  {
+    if (_frameCrcOn)
+      _crc.add(b);
+    if (_frameDirect)
+      StreamRef->write(b);
+    else if (_bufEnsure(1))
       _frameBuf[_framePos++] = b;
     else
       _bufOverflow = true;
   }
-  void _bufBytes(const byte *data, size_t len)
+  void _emitBytes(const byte *data, size_t len)
   {
-    if (_bufEnsure(len))
+    if (_frameCrcOn)
+      _crc.add(data, len);
+    if (_frameDirect)
+      StreamRef->write(data, len);
+    else if (_bufEnsure(len))
     {
       memcpy(_frameBuf + _framePos, data, len);
       _framePos += len;
@@ -5126,41 +5147,34 @@ private:
     else
       _bufOverflow = true;
   }
-  void _bufStr(const char *s)
+  void _emitStr(const char *s)
   {
     // Null reads as empty, the same as Arduino's Print does with a null char* - so a
     // DeviceName left unset writes an empty field rather than walking off address zero.
     if (s == nullptr)
       return;
-    size_t n = strlen(s);
-    if (_bufEnsure(n))
-    {
-      memcpy(_frameBuf + _framePos, s, n);
-      _framePos += n;
-    }
-    else
-      _bufOverflow = true;
+    _emitBytes((const byte *)s, strlen(s));
   }
-  void _bufStr0(const char *s)
+  void _emitStr0(const char *s)
   {
-    _bufStr(s);
-    _bufByte(0);
+    _emitStr(s);
+    _emitByte(0);
   }
-  void _bufFlashStr(const __FlashStringHelper *s)
+  void _emitFlashStr(const __FlashStringHelper *s)
   {
     if (s == nullptr)
       return;
     PGM_P p = reinterpret_cast<PGM_P>(s);
     byte c;
     while ((c = pgm_read_byte(p++)) != 0)
-      _bufByte(c);
+      _emitByte(c);
   }
-  void _bufFlashStr0(const __FlashStringHelper *s)
+  void _emitFlashStr0(const __FlashStringHelper *s)
   {
-    _bufFlashStr(s);
-    _bufByte(0);
+    _emitFlashStr(s);
+    _emitByte(0);
   }
-  void _bufSend()
+  bool _bufSend()
   {
     if (_bufOverflow)
     {
@@ -5169,7 +5183,7 @@ private:
         _debugStream->println("Buffered frame exceeds available memory; frame dropped.");
         _bufOverflowWarned = true;
       }
-      return;
+      return false;
     }
     // A frame that is a whole number of USB packets ends on a full one, and a full packet does
     // not close a bulk transfer - only a short one does. The host is left holding the data
@@ -5201,7 +5215,7 @@ private:
     bool padded = false;
     if (_framePos > 0 && (_framePos % BLAECK_USB_PACKET_BYTES) == 0 && _bufEnsure(1))
     {
-      // Deliberately not _bufByte(), which flags an overflow the frame would then be dropped
+      // Deliberately not _emitByte(), which flags an overflow the frame would then be dropped
       // for. A byte of padding must never cost a reading.
       _frameBuf[_framePos++] = '\n';
       padded = true;
@@ -5215,13 +5229,9 @@ private:
       StreamRef->write('\n');
 
     StreamRef->flush();
+    return true;
   }
-  void _bufHeader(byte msgKey, unsigned long msgId);
-  void _bufFooter()
-  {
-    _bufStr("/BLAECK>\r\n");
-  }
-  void _bufDevice(const char *name, const char *hw, const char *fw);
+  void _emitDevice(const char *name, const char *hw, const char *fw);
 
   static unsigned long long _microsWrapper()
   {
@@ -5289,9 +5299,7 @@ private:
   // the list, and complains once.
   const char *_checkedSelectName(const StateChannelEntry &e, const char *text) const;
 
-  // The 0x90 flag word for one channel. Both writer paths call this so the bits are decided
-  // once: the buffered and unbuffered writers are otherwise the same code twice, and a flag
-  // added to only one of them would make a board's catalog depend on how it was configured.
+  // The 0x90 flag word for one channel.
   uint16_t _stateChannelFlags(const StateChannelEntry &e, bool hasStateValue) const;
 
 
@@ -5337,7 +5345,7 @@ private:
   static bool _eventTypeEquals(const EventTypeEntry &e, const __FlashStringHelper *eventType);
   // The entry's name, NUL-terminated, into the frame buffer. Declared here rather than
   // beside the other _buf helpers because it needs EventTypeEntry, declared just above.
-  void _bufEventType0(const EventTypeEntry &e);
+  void _emitEventType0(const EventTypeEntry &e);
   EventTypeEntry *_eventTypes = nullptr;
   uint16_t _eventTypeCapacity = DEFAULT_EVENT_TYPES;
   uint16_t _eventTypeSlots() const { return _eventTypes != nullptr ? _eventTypeCapacity : 0; }
