@@ -133,7 +133,7 @@ bool BlaeckCore::hasRejections() const
   return false;
 }
 
-void BlaeckCore::_printRejectionLine(Stream *out, const __FlashStringHelper *what,
+void BlaeckCore::_printRejectionLine(Print *out, const __FlashStringHelper *what,
                                        const __FlashStringHelper *chainCall, uint16_t dropped,
                                        unsigned int capacity)
 {
@@ -151,7 +151,7 @@ void BlaeckCore::_printRejectionLine(Stream *out, const __FlashStringHelper *wha
   out->println(F(")"));
 }
 
-bool BlaeckCore::printRejections(Stream *out)
+bool BlaeckCore::printRejections(Print *out)
 {
   if (out == nullptr || !hasRejections())
     return false;
@@ -804,7 +804,7 @@ void BlaeckCore::_emitSignalName0(const Signal &s)
   _emitByte(0);
 }
 
-bool blaeck_detail::optionsAccepted(const __FlashStringHelper *optionsCsv, Stream *debug,
+bool blaeck_detail::optionsAccepted(const __FlashStringHelper *optionsCsv, Print *debug,
                                     const char *name, bool nameInFlash)
 {
   const bool empty = BlaeckCore::_flashCsvOptionCount(optionsCsv) == 0;
@@ -828,7 +828,7 @@ bool blaeck_detail::optionsAccepted(const __FlashStringHelper *optionsCsv, Strea
 }
 
 bool blaeck_detail::stateGetterAccepted(const void *stateValue, dataType want, dataType have,
-                                        const __FlashStringHelper *method, Stream *debug,
+                                        const __FlashStringHelper *method, Print *debug,
                                         const char *name, bool nameInFlash)
 {
   const bool taken = (stateValue != nullptr);
@@ -1089,6 +1089,9 @@ void BlaeckCore::read()
   {
     // Parsed once, for both the built-ins and the registered handlers.
     _parseCommandTokens(_receiver.chars);
+    // Before the truncation check, so even a cut-off built-in counts.
+    if (strncmp(_parsedCommand, "BLAECK.", 7) == 0)
+      _builtinCommandReceived();
     if (_debugStream != nullptr)
     {
       _debugStream->print("<");
@@ -3401,7 +3404,7 @@ static inline bool _optionsDeclared(const blaeck_detail::CommandHandlerEntry &e)
 // Warns about a number command without withRange(), when the catalog goes out. A host would
 // otherwise use its own range or drop the control. BLAECK_NODISCARD makes this rare: it
 // needs the handle to be dropped.
-static void _warnCommandWithoutRange(Stream *dbg, const blaeck_detail::CommandHandlerEntry &e)
+static void _warnCommandWithoutRange(Print *dbg, const blaeck_detail::CommandHandlerEntry &e)
 {
   if (dbg == nullptr)
     return;
@@ -3411,7 +3414,7 @@ static void _warnCommandWithoutRange(Stream *dbg, const blaeck_detail::CommandHa
 }
 
 // The same for a select without options, which accepts nothing at all.
-static void _warnCommandWithoutOptions(Stream *dbg, const blaeck_detail::CommandHandlerEntry &e)
+static void _warnCommandWithoutOptions(Print *dbg, const blaeck_detail::CommandHandlerEntry &e)
 {
   if (dbg == nullptr)
     return;

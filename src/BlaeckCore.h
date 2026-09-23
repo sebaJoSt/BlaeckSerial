@@ -489,14 +489,15 @@ public:
 
     Without one, problems such as a full table show only in hasRejections().
 
-    @param   debugStream  Where to print. It can be the same port the data uses.
+    @param   debugStream  Where to print: a serial port, the same one the data uses, or
+                          anything else that can print, such as a display.
     @return  The same handle, for chaining.
 
     @code
       Blaeck.begin(&Serial).withSignals(50).withDebugStream(&Serial);
     @endcode
   */
-  BlaeckBeginRef &withDebugStream(Stream *debugStream);
+  BlaeckBeginRef &withDebugStream(Print *debugStream);
 
 private:
   BlaeckCore *_owner;
@@ -526,13 +527,13 @@ inline bool flashStrEmpty(const __FlashStringHelper *value)
 // Checks an options list for withOptions(): it must have at least one entry and no blank
 // ones. Prints why on debug when it refuses. `name` is the signal, channel or command named
 // in that message.
-bool optionsAccepted(const __FlashStringHelper *optionsCsv, Stream *debug,
+bool optionsAccepted(const __FlashStringHelper *optionsCsv, Print *debug,
                      const char *name, bool nameInFlash);
 
 // Checks that a channel can take a getter: it must not already read a variable, and the
 // getter must return the channel's type.
 bool stateGetterAccepted(const void *stateValue, dataType want, dataType have,
-                         const __FlashStringHelper *method, Stream *debug,
+                         const __FlashStringHelper *method, Print *debug,
                          const char *name, bool nameInFlash);
 
 // Turns what a switch's getter returned into "1" or "0". Accepts 1/on/true/yes and
@@ -1894,7 +1895,7 @@ protected:
   void _markDirty() const;
 
   // The debug stream, or nullptr.
-  Stream *_debugStream() const;
+  Print *_debugStream() const;
 
   void _setStateClass(BlaeckStateClass stateClass)
   {
@@ -3584,7 +3585,7 @@ public:
       Blaeck.printRejections(&Serial);
     @endcode
   */
-  bool printRejections(Stream *out);
+  bool printRejections(Print *out);
 
   // ----- Typed commands -----
   // Like onCommand(), but the returned handle describes the control, so a host can build one:
@@ -3834,6 +3835,9 @@ protected:
   // Feeds received bytes to _receiveByte(_receiver, ...). True when _receiver holds a
   // complete command.
   virtual bool _receiveCommand() = 0;
+  // Called when a received command's name starts with BLAECK., before anything answers it.
+  // A transport with several connections marks the sender as a host here.
+  virtual void _builtinCommandReceived() {}
   // Sent in the device frames.
   virtual const char *_libraryName() const = 0;
   virtual const char *_libraryVersion() const = 0;
@@ -3996,7 +4000,7 @@ protected:
 
   static void validatePlatformSizes();
 
-  Stream *_debugStream = nullptr;
+  Print *_debugStream = nullptr;
   Signal *Signals = nullptr;
   // Allocates the signal table on first use.
   bool _ensureSignalTable();
@@ -4053,7 +4057,7 @@ protected:
   void _warnTableFull(const __FlashStringHelper *table, unsigned int capacity,
                       const __FlashStringHelper *droppedName);
   // One line of printRejections(), for a table that dropped something.
-  void _printRejectionLine(Stream *out, const __FlashStringHelper *what,
+  void _printRejectionLine(Print *out, const __FlashStringHelper *what,
                            const __FlashStringHelper *chainCall, uint16_t dropped,
                            unsigned int capacity);
 
@@ -4477,7 +4481,7 @@ protected:
   } dblCvt;
 
   friend class BlaeckSignalRefBase;
-  friend bool blaeck_detail::optionsAccepted(const __FlashStringHelper *, Stream *,
+  friend bool blaeck_detail::optionsAccepted(const __FlashStringHelper *, Print *,
                                              const char *, bool);
   friend class BlaeckCommandRefBase;
   friend class BlaeckStateRefBase;
@@ -4557,7 +4561,7 @@ inline BlaeckBeginRef &BlaeckBeginRef::withCommands(unsigned int count)
   return *this;
 }
 
-inline BlaeckBeginRef &BlaeckBeginRef::withDebugStream(Stream *debugStream)
+inline BlaeckBeginRef &BlaeckBeginRef::withDebugStream(Print *debugStream)
 {
   if (_owner != nullptr)
     _owner->_debugStream = debugStream;
@@ -4860,7 +4864,7 @@ inline void BlaeckStateRefBase::_markDirty() const
 #endif
 }
 
-inline Stream *BlaeckStateRefBase::_debugStream() const
+inline Print *BlaeckStateRefBase::_debugStream() const
 {
   return _owner != nullptr ? _owner->_debugStream : nullptr;
 }
