@@ -87,9 +87,9 @@ configuring a build. Those comments may say which frames a switch removes.
 ## Checking
 
 ```
-python extras/scripts/checkdocs.py src/BlaeckSerial.h              # undocumented names
-python extras/scripts/checkdocs.py src/BlaeckSerial.h --show tick  # what a hover shows
-python extras/scripts/checkdocs.py src/BlaeckSerial.h --extract    # every block -> extras/tests/DocCodeBlocks/DocCodeBlocks.ino
+python extras/scripts/checkdocs.py src/BlaeckSerial.h src/BlaeckCore.h              # undocumented names
+python extras/scripts/checkdocs.py src/BlaeckSerial.h src/BlaeckCore.h --show tick  # what a hover shows
+python extras/scripts/checkdocs.py src/BlaeckSerial.h src/BlaeckCore.h --extract    # every block -> extras/tests/DocCodeBlocks/DocCodeBlocks.ino
 ```
 
 The build fails on a public name with no comment, a comment with no `@code` block, a

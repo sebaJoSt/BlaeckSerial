@@ -5,6 +5,10 @@ Arduino library sending binary sensor data over Serial using the Blaeck protocol
 ## Layout
 
 - `src/` — the library. The only folder compiled into a sketch
+  - `BlaeckCore.h/.cpp` — everything that doesn't depend on the transport. BlaeckTCP is
+    meant to carry identical copies, so nothing serial-specific goes in them
+  - `BlaeckCoreLibrary.h` — this library's namespace and settings; differs per library
+  - `BlaeckSerial.h/.cpp` — the Stream transport: begin(), writes, reads, USB padding
 - `examples/` — sketches listed under *File → Examples*
 - `extras/` — the style guide, the doc tooling, and the test harness under
   `extras/tests/harness/`. Installed alongside the library, so keep it small
@@ -29,9 +33,9 @@ Rules: [extras/API-STYLE.md](extras/API-STYLE.md). Every public name needs a doc
 comment and an example, and CI fails without the comment.
 
 ```
-python extras/scripts/checkdocs.py src/BlaeckSerial.h              # undocumented names
-python extras/scripts/checkdocs.py src/BlaeckSerial.h --show tick  # what a hover shows
-python extras/scripts/checkdocs.py src/BlaeckSerial.h --extract    # every block -> extras/tests/DocCodeBlocks/DocCodeBlocks.ino
+python extras/scripts/checkdocs.py src/BlaeckSerial.h src/BlaeckCore.h              # undocumented names
+python extras/scripts/checkdocs.py src/BlaeckSerial.h src/BlaeckCore.h --show tick  # what a hover shows
+python extras/scripts/checkdocs.py src/BlaeckSerial.h src/BlaeckCore.h --extract    # every block -> extras/tests/DocCodeBlocks/DocCodeBlocks.ino
 ```
 
 Examples in `@code` blocks are extracted and compiled by CI, so one naming a method
