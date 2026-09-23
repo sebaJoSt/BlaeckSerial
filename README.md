@@ -1,4 +1,4 @@
-<img width="590" height="257" alt="blaeckSerial-light" src="https://github.com/user-attachments/assets/bef5e2e5-f0c0-4b70-b08f-f4b4d061268c" /><a href="url"><img src="https://user-images.githubusercontent.com/388152/185908831-4eccf7a6-5f43-405d-b7fe-5225eeba302d.png" height="75"></a>
+<img src="https://user-images.githubusercontent.com/388152/185908831-4eccf7a6-5f43-405d-b7fe-5225eeba302d.png" height="75"></a>
 <a href="url"><img src="https://user-images.githubusercontent.com/388152/186109775-c7f1bb61-4cc0-4dc1-9969-49c2f2e1303f.png"  alt="BlaeckSerial Logo SeeSaw Font" height="70"></a>
 ===
 
