@@ -30,6 +30,15 @@ BlaeckSerial Blaeck;
 // Signals
 float sine;
 
+unsigned long long GetRTCUnixTimeMicros()
+{
+  RTCTime currentTime;
+  RTC.getTime(currentTime);
+
+  // The RTC counts whole seconds, so the microsecond part is always zero.
+  return (unsigned long long)currentTime.getUnixTime() * 1000000ULL;
+}
+
 void setup()
 {
   // Initialize Serial port
@@ -74,13 +83,4 @@ void loop()
 void UpdateSineNumbers()
 {
   sine = sin(millis() * 0.00005);
-}
-
-unsigned long long GetRTCUnixTimeMicros()
-{
-  RTCTime currentTime;
-  RTC.getTime(currentTime);
-
-  // The RTC counts whole seconds, so the microsecond part is always zero.
-  return (unsigned long long)currentTime.getUnixTime() * 1000000ULL;
 }

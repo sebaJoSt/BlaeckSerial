@@ -53,6 +53,27 @@ float Input = 1.0f;
 byte Clients = 0;
 bool Fault = false;
 
+// ---- B: the getters ----------------------------------------------------------------------
+// Each is worked out from two or more variables, which is why none of them is a variable.
+
+const char *statusText()
+{
+  static char text[32];
+  snprintf(text, sizeof(text), "%s, %u client%s", Fault ? "fault" : "ok",
+           Clients, Clients == 1 ? "" : "s");
+  return text;
+}
+
+float efficiency()
+{
+  return Input == 0.0f ? 0.0f : (Output / Input) * 100.0f;
+}
+
+bool isRunning()
+{
+  return Mode[0] == 'r' && !Fault;
+}
+
 void setup()
 {
   Serial.begin(115200);
@@ -138,27 +159,6 @@ void loop()
   UpdateTheVariables();
   PushTheDerived();
   ReportWhatHappened();
-}
-
-// ---- B: the getters ----------------------------------------------------------------------
-// Each is worked out from two or more variables, which is why none of them is a variable.
-
-const char *statusText()
-{
-  static char text[32];
-  snprintf(text, sizeof(text), "%s, %u client%s", Fault ? "fault" : "ok",
-           Clients, Clients == 1 ? "" : "s");
-  return text;
-}
-
-float efficiency()
-{
-  return Input == 0.0f ? 0.0f : (Output / Input) * 100.0f;
-}
-
-bool isRunning()
-{
-  return Mode[0] == 'r' && !Fault;
 }
 
 // ---- Moving what A reports and what B is worked out from ----------------------------------

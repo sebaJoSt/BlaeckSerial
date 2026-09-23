@@ -117,8 +117,8 @@ jobs:
       - name: Build examples
         run: |
           for ex in Basic Commands EventChannels \
-                    SineGeneratorAdvanced SineGeneratorBasic WriteModes \
-                    WaveformGenerator; do
+                    SineGeneratorAdvanced SineGeneratorBasic StateChannels \
+                    WriteModes WaveformGenerator; do
             echo "::group::$ex"
             pio ci --board=megaatmega2560 \
                    --lib="." \
