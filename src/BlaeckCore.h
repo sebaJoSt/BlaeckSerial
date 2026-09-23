@@ -489,8 +489,8 @@ public:
 
     Without one, problems such as a full table show only in hasRejections().
 
-    @param   debugStream  Where to print: a serial port, the same one the data uses, or
-                          anything else that can print, such as a display.
+    @param   debugStream  Where to print: a serial port, or anything else that can print,
+                          such as a display.
     @return  The same handle, for chaining.
 
     @code
