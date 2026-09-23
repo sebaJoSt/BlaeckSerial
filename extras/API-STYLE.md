@@ -1,235 +1,51 @@
-# Documenting the public API
+# Writing comments
 
-How the doc comments in `src/BlaeckSerial.h` are written, and why.
+How comments in `src/` are written. There are two kinds, for two readers.
 
-The audience is someone new to the library reading a hover in an editor, not
-someone reading the header top to bottom. Most of these rules follow from that:
-a hover is read in isolation, out of order, at the moment somebody is deciding
-what to type next.
+## Doc comments on public names
 
-**What these rules govern:** the doc comment attached to a public name — what an
-editor shows on hover. Not every comment in the file. The `BLAECK_ENABLE_*`
-documentation at the top of the header is read by someone configuring a build, not
-writing a sketch, so it names the frames a switch removes and is right to; the same
-goes for comments inside private members and function bodies. Rule 3 in particular
-would strip information those readers need.
+This is what an editor shows when someone hovers a call. The reader is writing a
+sketch, has probably not read the rest of the header, and wants to know what to type.
 
-Drawn from four style guides that agree more than they differ — [Go Doc
-Comments](https://go.dev/doc/comment), the [Rust API
-Guidelines](https://rust-lang.github.io/api-guidelines/documentation.html),
-[Javadoc](https://www.oracle.com/technical-resources/articles/java/javadoc-tool.html),
-and the [Arduino Language Reference](https://docs.arduino.cc/language-reference/)
-— with the differences settled in favour of Arduino, since that is who reads this.
+- **Start with what the call does**, in one plain sentence: *"Sends every signal's
+  current value."* That sentence is what autocomplete shows, so it has to stand
+  alone. A field says what it holds: *"The board this firmware runs on."*
+- **Then add only what the signature doesn't tell you.** That usually means limits,
+  defaults, what it costs in RAM or time when that matters on a small board, and what
+  goes wrong if it is used wrongly. Stop there. A getter needs a line and an example.
+- **Write for a sketch, not for a host.** No frame codes or byte layouts; those are in
+  the [protocol spec](https://sebajost.github.io/blaeck-protocol/). Built-in commands
+  like `<BLAECK.WRITE_DATA>` are fine, since people type them. Say "a host" rather than
+  naming a program.
+- **Put a warning on the call where the mistake happens**, and only there. Something
+  every call depends on, such as `begin()` coming first, is said once on `begin()`.
+- **Numbers have to be right.** If you give a size, measure it. A template declared
+  without a body makes the compiler print a `sizeof`, even for a board you can't run:
 
-## The rules
+  ```cpp
+  template <int N> struct Show;
+  Show<sizeof(blaeck_detail::StateChannelEntry)> a;   // error: 'Show<26> a' has incomplete type
+  ```
 
-**1. The first sentence stands alone.** It is what autocomplete shows and where
-most readers stop. No clause of context before it.
+- **Name other methods as calls**, like `writeState(channelName)` or `tick()`. The
+  checker matches those against the header, so a rename can't leave stale prose behind.
 
-**2. Verb first, third person, no "you".** *"Sends every signal's current value"*,
-not *"Send the signals"* or *"You can send"*. Booleans borrow Go's phrasing:
-*"Reports whether…"*.
+### Format
 
-A field is not an action, so it says what the value is: *"The board this firmware
-runs on"*, not *"Names the board this firmware runs on"*. Go does the same for
-variables — *"Version is the Unicode edition from which the tables are derived."*
-
-**3. No wire format.** No frame codes, no byte layout, not even the word "frame".
-Say what happens and what breaks if the order is wrong. Whoever implements a host
-reads the [protocol spec](https://sebajost.github.io/blaeck-protocol/); whoever
-reads this header is writing a sketch.
-
-`<BLAECK.WRITE_DATA>` and friends are an exception — a user types those into
-Serial Monitor, so they are interface, not encoding.
-
-**And no host by name.** Say "a host", not "Home Assistant". It is one consumer,
-reached through a bridge, and naming it makes the library sound like it serves only
-that — while tying the docs to someone else's release schedule. A `@warning` that
-read *"stops accepting it in 2027.4"* had to be rewritten the moment that date
-moved. Where behaviour genuinely varies, "a host may" is both shorter and true.
-
-There is one distinction worth drawing, and the library already draws it: a host
-that **records** values needs only names and types, while one that **presents**
-them also reads what the device declares about itself. `withUnit`, `withIcon`,
-`withDeviceClass`, `withStateClass`, `diagnostic` and their neighbours mean
-something only to the second kind — which is why `BLAECK_ENABLE_SIGNAL_META`
-can remove all of them and everything else keeps working. Say so where it matters,
-rather than implying every host cares.
-
-What not to claim is **which program enforces a rule**. A device class from the
-wrong list may be refused by whatever reads the frames or by whatever that feeds,
-and a sketch sees one thing either way: the entity never appears. So describe the
-effect, not the actor — "the entity never appears" is observable and stays true,
-where "Loggbok validates it" is a guess about someone else's code unless you have
-opened it. The term is defined above `class BlaeckSerial`.
-
-**4. Numbers, not adjectives.** Ranges, caps, defaults, per-board differences,
-costs. *"up to 255"*, *"about 25 bytes"*, *"24 on a Mega, 8 on an Uno"* — never
-*"a reasonable number"*. A number you cannot support is worse than none: check it
-or leave it out.
-
-**5. Every public field gets its own comment, with its default.** One comment over
-a group shows the group's text whichever member is hovered, which is how
-`DeviceName` ended up documented as "set these variables".
-
-**6. Hazards go last, in their own paragraph.** Silent failures especially — the
-ones with no crash and no error, where the only symptom is something quietly not
-happening.
-
-**7. Every public name gets a `@code` block.** A signature says what a call looks
-like; only a worked call says why you would make one. See [`@code` blocks](#code-blocks)
-below.
-
-**8. What it does for the caller, not how it works inside.** Cost is the licensed
-exception, and on a microcontroller it is often the point: SRAM, flash, blocking,
-allocation.
-
-**9. Description first, parameters after.** All four guides put the summary first;
-none lead with parameters. Name them inside the sentence where that reads
-naturally, and break them out only when there are three or more, or when one
-carries a constraint that would otherwise be guesswork.
-
-**10. Entry points explain the concept; everything else stays tight.** `begin()`,
-`addSignal()`, `onXCommand()`, `tick()` are where a beginner lands. Define by
-contrast — a beginner's question is not "what is a signal" but "which of the three
-do I want", and one clause of contrast answers it where a definition does not.
-
-**11. A reference may add to a doc, never carry it.** *"As `tick()`, with a
-messageID"* is fine — it still means something alone. *"Not copied, as DeviceName
-is not"* is not: it sends the reader somewhere else to find out what the warning
-was about.
-
-**12. Prominence tracks likelihood.** `@warning` for what the common path can
-reach. `@note` for what only an unusual one can. A lifetime rule that every quoted
-literal satisfies is a note, however true it is.
-
-**13. A blank line before `@code`.** Prose stops, code starts; it reads as a change
-of register only when it is set apart.
-
-**14. Say what it buys before what it costs.** Where a design was chosen, explaining
-it only through its risks makes it read as a defect nobody fixed. The shared
-event-type table was documented as something that accumulates — true, and entirely
-downside, when the reason it exists is that a channel with two types costs two slots
-instead of reserving room for the largest.
-
-Only where there *is* a tradeoff. A plain limit — a capacity clamped at 255 — buys
-nothing, and inventing an upside for it would be worse than saying nothing.
-
-**15. Name a method in prose as a call.** `writeState(channelName)` or `tick()` —
-never "the channel form of writeState", never "the state writer". Written as a call,
-with no space before the parenthesis, the name is checked against the header on every
-build, so a rename that leaves the prose behind fails instead of shipping.
-
-This is what makes it safe to point a `@warning` at another method at all, and the
-pointing is usually the useful part: *"use writeState(channelName)"* saves a reader
-the search that *"send it as a number instead"* would cost them. `@code` blocks are
-compiled and cannot rot; before this check, prose was the one place in the header a
-rename could quietly survive.
-
-A name that is not a call is invisible to the checker — inside `@code`, in a
-parenthetical like *"a float (32-bit)"*, or spelled out in words.
-
-**16. State a hazard once, on the call that can commit it.** *"A value on a channel
-that was never declared is dropped"* was written on `addStateChannel`, where the
-reader is already declaring one; on `writeState`, where the mistake is actually made;
-and again in that method's `@param`. Three hovers for one fact, and the two on the
-wrong name teach nothing — nobody hovers `addStateChannel` wondering whether to skip
-it.
-
-An `@code` block usually settles the ordering on its own. Every warning here that
-names a prerequisite — `deleteSignals` needing `writeSymbols()`, `onNumberCommand`
-needing `withRange()` — has a block directly beneath it that shows the two calls in
-order. Where the block already demonstrates it, the warning is repeating what the
-next two lines show.
-
-What a block cannot show is a path it does not take: a three-line example of
-`writeState()` has no room for "and this vanishes if you skipped setup()". So the
-ordering facts stay — once each, on the call that drops the value.
-
-**A precondition the whole API shares belongs to the call that establishes it.**
-Everything here needs `begin()` first, and every example opens with it, so saying so
-again on `addSignal`, `addStateChannel`, `addEventChannel` and each command
-registration would be the same sentence five times, in five places a reader who
-already called `begin()` will hover. It is stated on `begin()`, which is also where
-the reader is when the ordering is still theirs to get wrong.
-
-State the precondition; do not go on to enumerate what breaks when it is ignored.
-`begin()` says it is the first call a sketch makes, and that is the whole instruction.
-A paragraph describing what becomes of a signal declared before it documents a sketch
-nobody should write — and that paragraph was wrong twice before it was right, first
-about which tables are affected and then about whether anything is reported, which is
-a fair measure of what it was worth.
-
-This needs an establishing call to apply. Repetition between siblings a reader
-reaches independently is a different thing and stays: `DeviceName`,
-`DeviceHWVersion` and `DeviceFWVersion` each state the pointer-lifetime rule,
-because nobody hovers one on the way to another — that is rule 5, and collapsing it
-is how `DeviceName` once came to be documented as "set these variables".
-
-**17. Say what a call costs, where the cost is spent.** Someone hovering `withCommands`
-is deciding a capacity, so "48 bytes an entry on AVR" belongs in that hover — not in the
-section comment above the chain, and not as "a command entry is fairly large". The cost
-*is* the question at that line. This is rule 8's licensed exception aimed at a
-particular spot: mechanism stays out, price does not.
-
-Measure it rather than counting struct fields. Every number in the five sizers came out
-of the compiler — a template declared without a body names the size in its error, which
-is the only way to read a `sizeof` for a target you cannot run:
-
-```cpp
-template <int N> struct Show;
-Show<sizeof(blaeck_detail::StateChannelEntry)> a;   // error: 'Show<26> a' has incomplete type
-```
-
-A number nobody measured is rule 4's problem, not a cost.
-
-Where the cost lands on another table, say so as well: a command that reports its own
-state takes a state channel with it, so `withCommands` points at `withStateChannels`.
-That is the one part of sizing a reader cannot work out from the call in front of them.
-
-**18. Duplicate a property, never an instruction.** A sentence saying what a name *is*
-belongs on every name it is true of. `DeviceName`, `DeviceHWVersion` and `DeviceFWVersion`
-each carry the same constraint on where the string may live, because nobody hovering the
-third has read the first; `writeState()` and `writeEvent()` each say the value is never
-stored. Repetition there is the design - a hover has to stand alone.
-
-A sentence telling a sketch to *do* something is the opposite. It makes a claim about
-behaviour that lives somewhere else, and when that behaviour changes the sentence goes false
-in every place it was copied to. `clearAllStateChannels()`, `clearAllEventChannels()` and
-`clearAllCommandHandlers()` each told a sketch to follow with the matching write. The
-library began announcing its own changes, and all three were wrong at once - `@code` blocks
-included, which is the half a reader copies.
-
-So state a property wherever it applies, and state an instruction once, at the thing that
-makes it true. If an instruction has to appear twice, that is a sign the behaviour it
-describes should be the library's job instead - which is how those three came to be deleted
-rather than reworded.
-
-## Format
-
-Doxygen `/*!` blocks, in the Adafruit house style, because it renders structured
-in hover and can generate a reference site later.
-
-Order: `@brief` → prose → `@param` → `@return` → `@note` / `@warning` → `@code`.
-
-Ceremony scales with the call. Full slots for entry points and anything taking
-three or more parameters; `@brief` plus `@code` for a one-line getter. The Arduino
-reference is not uniform either — short entries are short.
+Doxygen `/*!` blocks, in this order: `@brief`, a short paragraph if needed, `@param`
+and `@return` where they add something, `@note` or `@warning`, a blank line, then
+`@code`.
 
 ```cpp
   /*!
-    @brief   Copies the option at a given position from a select command's list.
+    @brief   Copies the name of a select command's option at a given position.
 
-    Lets a sketch show what is selected without keeping its own copy of the names.
-
-    @param   command  Name the select command was registered with.
-    @param   index    Position in the list given to withOptions(), counting from 0.
-    @param   out      Buffer the name is copied into. Left empty unless true is returned.
-    @param   outSize  Size of that buffer, terminator included.
-    @return  True if the name was copied. False if the command is not a select, the
-             index is past the end of the list, or the name would not fit.
-    @note    A name too long for the buffer is refused rather than shortened: a
-             truncated name would not match any option the device declared.
+    @param   command  The name the select command was registered with.
+    @param   index    Position in the withOptions() list, starting at 0.
+    @param   out      Where the name is copied. Left empty if this returns false.
+    @param   outSize  Size of out, including the terminator.
+    @return  False if the command is not a select, the index is past the end, or the
+             name doesn't fit. A name is never cut short.
 
     @code
       char name[12];
@@ -238,110 +54,49 @@ reference is not uniform either — short entries are short.
   */
 ```
 
-### Overloads
+Overloads that differ only in an argument's type share one comment. Overloads that
+do different things get one each.
 
-Share one comment where they differ only in the type of an argument — there is
-nothing different to say. Give one each where they differ in what they *do*,
-writing the second as a delta from the first.
+### `@code` blocks
 
-`tick()` is what settled this: it shared a comment with `tick(messageID)`, so
-hovering the no-arg form a sketch calls in `loop()` explained a parameter it does
-not take.
+Every public name needs one, and CI compiles them all, so an example can't go stale
+without failing the build. Each block becomes the body of a function, which means:
 
-## `@code` blocks
-
-Every one is extracted and compiled, so a block calling a method that has since been
-renamed fails the build instead of being shown on hover as instructions that do not
-work. Only a real `@code` block counts. An indented example in a plain `//` comment
-used to satisfy the gate as well, which let five names keep the old style long after
-the conversion was thought finished — and one of them, `setIntervalMs`, had no
-compiled example at all, because what looked like a block was a table of values. This is the only reason rule 7 is affordable; Rust requires one on every public
-item for the same reason, and checks them the same way.
-
-The generated sketch carries `#line` directives, so a failure names the header and
-the line of the offending block:
-
-```
-src/BlaeckSerial.h:1969:8: error: 'class BlaeckSerial' has no member named ...
-```
-
-which matters because the generated sketch is gitignored — without them, the error
-would point at the one file a contributor does not have.
-
-That imposes three things:
-
-- **Complete statements, not fragments of a chain.** Each block becomes a
-  function body. A dangling `.withRange(...)` cannot compile, and would not teach
-  much anyway.
-- **Draw on the shared vocabulary.** `Temperature`, `Frequency`, `waveIndex`,
-  `readSensor()` and the rest live in `extras/tests/DocCodeBlocks/preamble.h`. Reach for an
-  existing name before adding one: blocks that all speak of `Temperature` teach the
-  library faster than blocks that each invent a cast of characters.
-- **Call the instance `Blaeck`.** Never `BlaeckSerial` — a global variable with the
-  same name as its type switches off IntelliSense for everything derived from it
+- Write complete statements, not a loose `.withRange(...)`.
+- Use the shared names in `extras/tests/DocCodeBlocks/preamble.h` (`Temperature`,
+  `readSensor()` and so on) before adding new ones.
+- Call the instance `Blaeck`, never `BlaeckSerial`. A variable named like its type
+  breaks IntelliSense for every chained call
   ([vscode-cpptools#4251](https://github.com/microsoft/vscode-cpptools/issues/4251)).
-  The sketches under `examples/` were renamed for this; the docs have to agree with
-  them.
+- A handler can be written as a whole function, and so can `void loop()`.
 
-A block that shows a handler is written as a whole function — that is the natural
-shape for a command callback, and the extractor emits it at file scope. `void loop()`
-is welcome too; it is renamed on the way into the generated sketch so several blocks
-can use it.
+## Other comments
 
-The folder and its `.ino` share a name because `arduino-cli` requires it, so renaming
-one means renaming both. `preamble.h` is reached by an `#include` resolved against
-that sketch, so getting it half right fails the build with an error pointing at the
-include rather than at the rename.
-Moving it means updating `DEFAULT_EXTRACT` in `checkdocs.py`, `.gitignore`, and the
-workflow that compiles it.
+Comments inside functions, on private members, and in the `.cpp`. The reader is
+changing the library.
+
+- **Only where the code doesn't explain itself.** Say why, not what.
+- **Keep it to a sentence or two.** How a bug was found, what was tried first and
+  what was rejected all belong in the commit message.
+- **Don't copy values or layouts the code or the spec already has.** They go stale.
+  A pointer to the spec page is enough.
+
+The `BLAECK_ENABLE_*` switches at the top of the header are read by someone
+configuring a build. Those comments may say which frames a switch removes.
 
 ## Checking
 
 ```
-python extras/scripts/checkdocs.py src/BlaeckSerial.h              # what is undocumented
-python extras/scripts/checkdocs.py src/BlaeckSerial.h --show tick  # what a hover will show
+python extras/scripts/checkdocs.py src/BlaeckSerial.h              # undocumented names
+python extras/scripts/checkdocs.py src/BlaeckSerial.h --show tick  # what a hover shows
 python extras/scripts/checkdocs.py src/BlaeckSerial.h --extract    # every block -> extras/tests/DocCodeBlocks/DocCodeBlocks.ino
 ```
 
-`--show` reads `Cursor.raw_comment`, the same attachment clangd hovers, so a doc can
-be checked against what an editor will display without opening one.
+The build fails on a public name with no comment, a comment with no `@code` block, a
+block that doesn't compile, or prose naming a method the header doesn't declare.
+Sentences that appear on more than one name are listed but don't fail; a property
+repeated on sibling fields is fine, an instruction repeated in several places usually
+isn't.
 
-The duplicate-sentence list the first command prints is advisory, not a failure. A property
-repeated across siblings is rule 18 working as intended; what to look for is the same
-*instruction* in more than one place.
-
-When something in `preamble.h` breaks, every block fails at once and the same error
-repeats once per block — which reads as one cause, not many, because each names its
-own line in the header. To see only the first:
-
-```
-arduino-cli compile --fqbn arduino:avr:mega --build-property compiler.cpp.extra_flags=-fmax-errors=1 extras/tests/DocCodeBlocks
-```
-
-CI runs the first and builds the third.
-
-Four things fail a build: a public name with no comment, one with no `@code` block, a
-block that does not compile, and prose naming a method the header does not declare.
-The rest are reported and counted - a section divider standing in for a comment, a
-comment too short to say anything, a missing blank line before `@code`, and a
-sentence carried by more than one name.
-
-That last one is a prompt, not a verdict, which is why it stays a count. Three
-sentences repeat today and all three are right to: the checker cannot tell a
-precondition that should move to its establishing call from sibling fields that each
-have to state the same rule. It can only put them in front of someone who can.
-
-The fourth reads names out of the parse, not out of the file's text. Deriving them
-from the source with a regex matches the mentions inside the comments too, so every
-reference declares itself and the check passes on anything - which it did, silently,
-until a deliberately broken name was fed to it. Names from `preamble.h` count as
-declared: prose naming `readSensor()` points at the blocks' cast, not at the library.
-
-Rule 7 became a gate once the header met it. It was only counted while 84 names
-lacked a block, because a red build nobody can fix is a red build everybody learns to
-ignore.
-
-What they cannot catch: whether any of it is **true**. Every rule above is about
-form. Accuracy comes from reading the implementation before writing the comment,
-and several docs in this header were wrong on the first attempt in ways no checker
-would have flagged.
+The checker only looks at form. Whether a comment is true comes from reading the code
+it describes.

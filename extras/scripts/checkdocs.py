@@ -342,8 +342,8 @@ def extract(tu, path, dest):
             continue
         n += 1
         where = "%s::%s" % key if key[0] else key[1]
-        # The comment sits immediately above the declaration - rule 1 requires it, and
-        # a blank line between them would detach it - so its first line is the
+        # The comment sits immediately above the declaration - a blank line between
+        # them would detach it - so its first line is the
         # declaration's line less the comment's height. The block's own lines are
         # contiguous within it, which makes one #line per block exact for all of them.
         first = c.location.line - len(raw.splitlines()) + offset
