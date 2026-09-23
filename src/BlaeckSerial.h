@@ -5012,7 +5012,20 @@ private:
 #else
   static const byte MAX_EVENT_NAME_COUNT = 32;
 #endif
-  char receivedChars[MAXIMUM_CHAR_COUNT];
+  // One command being collected between its markers. Apart from the parse results, so a
+  // transport with several connections can hold one for each.
+  struct Receiver
+  {
+    char chars[MAXIMUM_CHAR_COUNT];
+    byte ndx = 0;
+    bool inProgress = false;
+    // Set once the command's characters no longer fit and are being dropped. The receive
+    // loop is the only place that can see it happen.
+    bool overflowed = false;
+  };
+  Receiver _receiver;
+  // Takes one byte into r; true when it ended a command, which r.chars then holds.
+  bool _receiveByte(Receiver &r, char c);
 
   CRC32 _crc;
   uint16_t _schemaHash = 0;
@@ -5362,9 +5375,6 @@ private:
   // Set when the frame did not fit: strncpy shortened it, or the argument list hit the cap.
   // What was parsed is then not what was sent, so no handler may act on it.
   bool _parsedTruncated = false;
-  // Set while a frame is being received, once its characters no longer fit and are being
-  // dropped. The receive loop is the only place that can see it happen.
-  bool _receiveOverflowed = false;
   // The message id the sender put in the frame's '#' prefix, echoed in the 0xA5 header so an
   // ack can be paired with the command it answers - the same field, and the same meaning, that
   // a BLAECK.* response echoes from its parameters. 0 when the frame carried none, which is

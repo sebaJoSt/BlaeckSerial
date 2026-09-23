@@ -1147,11 +1147,11 @@ void BlaeckSerial::read()
   {
     // Parsed once, here: the built-in commands below and the registered handlers that
     // follow all read the same parse, rather than each running its own over the same bytes.
-    _parseCommandTokens(receivedChars);
+    _parseCommandTokens(_receiver.chars);
     if (_debugStream != nullptr)
     {
       _debugStream->print("<");
-      _debugStream->print(receivedChars);
+      _debugStream->print(_receiver.chars);
       _debugStream->println(">");
     }
 
@@ -1159,7 +1159,7 @@ void BlaeckSerial::read()
     // a built-in whose name survived the cut must not run on the remains either.
     if (_parsedTruncated)
     {
-      _writeCommandAck(receivedChars, 1, BLAECK_ACK_TRUNCATED);
+      _writeCommandAck(_receiver.chars, 1, BLAECK_ACK_TRUNCATED);
     }
     else
     {
@@ -1171,17 +1171,17 @@ void BlaeckSerial::read()
 
       if (equalsFlash(_parsedCommand, F(BLAECK_BUILTIN_WRITE_SYMBOLS)))
       {
-        _writeCommandAck(receivedChars, 0, BLAECK_ACK_OK);
+        _writeCommandAck(_receiver.chars, 0, BLAECK_ACK_OK);
         this->writeSymbols(msg_id);
       }
       else if (equalsFlash(_parsedCommand, F(BLAECK_BUILTIN_WRITE_SIGNAL_CONFIG)))
       {
-        _writeCommandAck(receivedChars, 0, BLAECK_ACK_OK);
+        _writeCommandAck(_receiver.chars, 0, BLAECK_ACK_OK);
         this->writeSignalConfig(msg_id);
       }
       else if (equalsFlash(_parsedCommand, F(BLAECK_BUILTIN_WRITE_DATA)))
       {
-        _writeCommandAck(receivedChars, 0, BLAECK_ACK_OK);
+        _writeCommandAck(_receiver.chars, 0, BLAECK_ACK_OK);
         // The one place a data frame answers a request, so the one place the bit is set.
         _frameRequested = true;
         this->writeAllData(msg_id, getTimeStamp());
@@ -1189,22 +1189,22 @@ void BlaeckSerial::read()
       }
       else if (equalsFlash(_parsedCommand, F(BLAECK_BUILTIN_GET_DEVICES)))
       {
-        _writeCommandAck(receivedChars, 0, BLAECK_ACK_OK);
+        _writeCommandAck(_receiver.chars, 0, BLAECK_ACK_OK);
         this->writeDevices(msg_id);
       }
       else if (equalsFlash(_parsedCommand, F(BLAECK_BUILTIN_WRITE_COMMANDS)))
       {
-        _writeCommandAck(receivedChars, 0, BLAECK_ACK_OK);
+        _writeCommandAck(_receiver.chars, 0, BLAECK_ACK_OK);
         this->writeCommands(msg_id);
       }
       else if (equalsFlash(_parsedCommand, F(BLAECK_BUILTIN_WRITE_STATE_CHANNELS)))
       {
-        _writeCommandAck(receivedChars, 0, BLAECK_ACK_OK);
+        _writeCommandAck(_receiver.chars, 0, BLAECK_ACK_OK);
         this->writeStateChannels(msg_id);
       }
       else if (equalsFlash(_parsedCommand, F(BLAECK_BUILTIN_WRITE_EVENT_CHANNELS)))
       {
-        _writeCommandAck(receivedChars, 0, BLAECK_ACK_OK);
+        _writeCommandAck(_receiver.chars, 0, BLAECK_ACK_OK);
         this->writeEventChannels(msg_id);
       }
       else if (equalsFlash(_parsedCommand, F(BLAECK_BUILTIN_ACTIVATE)))
@@ -1214,12 +1214,12 @@ void BlaeckSerial::read()
         unsigned long timedInterval_ms = 0;
         if (_parsedParamCount > 0 && _parsedParamPtrs[0] != nullptr)
           timedInterval_ms = strtoul(_parsedParamPtrs[0], nullptr, 10);
-        _writeCommandAck(receivedChars, 0, BLAECK_ACK_OK);
+        _writeCommandAck(_receiver.chars, 0, BLAECK_ACK_OK);
         this->_setTimedDataState(true, timedInterval_ms);
       }
       else if (equalsFlash(_parsedCommand, F(BLAECK_BUILTIN_DEACTIVATE)))
       {
-        _writeCommandAck(receivedChars, 0, BLAECK_ACK_OK);
+        _writeCommandAck(_receiver.chars, 0, BLAECK_ACK_OK);
         this->_setTimedDataState(false, _timedInterval_ms);
       }
       else if (equalsFlash(_parsedCommand, F(BLAECK_BUILTIN_PAUSE_WRITES)))
@@ -1234,7 +1234,7 @@ void BlaeckSerial::read()
           pause_ms = strtoul(_parsedParamPtrs[0], nullptr, 10);
         // Acknowledged before the pause starts, so the one frame the host is waiting on is
         // not the first casualty of what it just asked for.
-        _writeCommandAck(receivedChars, 0, BLAECK_ACK_OK);
+        _writeCommandAck(_receiver.chars, 0, BLAECK_ACK_OK);
 
         if (forever)
           this->_setWritesPausedForever();
@@ -1244,7 +1244,7 @@ void BlaeckSerial::read()
       else if (equalsFlash(_parsedCommand, F(BLAECK_BUILTIN_RESUME_WRITES)))
       {
         _clearWritesPaused();
-        _writeCommandAck(receivedChars, 0, BLAECK_ACK_OK);
+        _writeCommandAck(_receiver.chars, 0, BLAECK_ACK_OK);
       }
       else
       {
@@ -1818,57 +1818,58 @@ bool BlaeckSerial::recvWithStartEndMarkers()
   if (StreamRef == nullptr)
     return false;
 
-  bool newData = false;
-  static boolean recvInProgress = false;
-  static byte ndx = 0;
-  char startMarker = '<';
-  char endMarker = '>';
-  char rc;
-
-  while (StreamRef->available() > 0 && newData == false)
+  // One command at a time: what follows it stays in the stream for the next read().
+  while (StreamRef->available() > 0)
   {
-    rc = StreamRef->read();
-    if (recvInProgress == true)
+    if (_receiveByte(_receiver, (char)StreamRef->read()))
+      return true;
+  }
+  return false;
+}
+
+bool BlaeckSerial::_receiveByte(Receiver &r, char rc)
+{
+  const char startMarker = '<';
+  const char endMarker = '>';
+
+  if (r.inProgress)
+  {
+    if (rc == startMarker)
     {
-      if (rc == startMarker)
+      // A command that never arrived at its end marker - a write cut short by a timeout or a
+      // link going down halfway - would otherwise sit in the buffer and swallow the next one,
+      // which would be dropped as garbage without anything saying so. A start marker cannot
+      // appear inside a command, so the one being collected is abandoned for the new one.
+      r.ndx = 0;
+      r.overflowed = false;
+    }
+    else if (rc != endMarker)
+    {
+      r.chars[r.ndx] = rc;
+      r.ndx++;
+      if (r.ndx >= MAXIMUM_CHAR_COUNT)
       {
-        // A command that never arrived at its end marker - a write cut short by a timeout or a
-        // link going down halfway - would otherwise sit in the buffer and swallow the next one,
-        // which would be dropped as garbage without anything saying so. A start marker cannot
-        // appear inside a command, so the one being collected is abandoned for the new one.
-        ndx = 0;
-        _receiveOverflowed = false;
-      }
-      else if (rc != endMarker)
-      {
-        receivedChars[ndx] = rc;
-        ndx++;
-        if (ndx >= MAXIMUM_CHAR_COUNT)
-        {
-          // Full: this character and every one after it overwrites the last slot and is lost.
-          // Recorded here because it is the only point at which the loss is visible - by the
-          // time the frame is parsed it looks like a complete, shorter command.
-          ndx = MAXIMUM_CHAR_COUNT - 1;
-          _receiveOverflowed = true;
-        }
-      }
-      else
-      {
-        // terminate the string
-        receivedChars[ndx] = '\0';
-        recvInProgress = false;
-        ndx = 0;
-        newData = true;
+        // Full: this character and every one after it overwrites the last slot and is lost.
+        // Recorded here because it is the only point at which the loss is visible - by the
+        // time the frame is parsed it looks like a complete, shorter command.
+        r.ndx = MAXIMUM_CHAR_COUNT - 1;
+        r.overflowed = true;
       }
     }
-    else if (rc == startMarker)
+    else
     {
-      recvInProgress = true;
-      _receiveOverflowed = false;
+      r.chars[r.ndx] = '\0';
+      r.inProgress = false;
+      r.ndx = 0;
+      return true;
     }
   }
-
-  return newData;
+  else if (rc == startMarker)
+  {
+    r.inProgress = true;
+    r.overflowed = false;
+  }
+  return false;
 }
 
 bool BlaeckSerial::_setChannelName(const char *&slot, bool &inFlash, const char *ram, const __FlashStringHelper *flash)
@@ -2046,7 +2047,7 @@ void BlaeckSerial::_parseCommandTokens(const char *raw)
   // Characters were dropped while the frame was being received, so whatever follows is a
   // fragment however complete it looks. Reset here with the rest of the parse state rather
   // than after the empty-frame check, or an empty frame would inherit the previous verdict.
-  _parsedTruncated = _receiveOverflowed;
+  _parsedTruncated = _receiver.overflowed;
   for (byte i = 0; i < MAX_COMMAND_PARAM_COUNT; i++)
   {
     _parsedParamPtrs[i] = nullptr;
@@ -2202,7 +2203,7 @@ void BlaeckSerial::_dispatchRegisteredHandlers(bool sendAck)
   // and is answered UNKNOWN, like any other name the device does not have.
   if (sendAck)
   {
-    _writeCommandAck(receivedChars, ackStatus, ackReason);
+    _writeCommandAck(_receiver.chars, ackStatus, ackReason);
   }
 }
 
@@ -3821,7 +3822,7 @@ byte BlaeckSerial::_validateTypedCommand(uint16_t handlerIndex)
   else if (e.kind == BLAECK_CMD_TEXT)
   {
     // Percent-decode in place (SELECT-style param normalization) so the handler
-    // receives raw UTF-8. The 0xA5 ack still hashes the encoded receivedChars,
+    // receives raw UTF-8. The 0xA5 ack still hashes the command as received,
     // so it keeps matching the host's hash of what it sent.
     char *decoded = (char *)_parsedParamPtrs[0];
     _percentDecodeInPlace(decoded);
