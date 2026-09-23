@@ -9,10 +9,13 @@ differs only by argument type is the normal C++ shape, and an editor shows it
 whichever member it resolves to. A group with no comment anywhere is the defect.
 
 Usage:
-  checkdocs.py src/BlaeckSerial.h                 what has no comment (exit 1 if any)
-  checkdocs.py src/BlaeckSerial.h --show tick     what an editor will attach
-  checkdocs.py src/BlaeckSerial.h --extract       every @code block -> DocCodeBlocks.ino
+  checkdocs.py src/BlaeckSerial.h src/BlaeckCore.h                what has no comment (exit 1 if any)
+  checkdocs.py src/BlaeckSerial.h src/BlaeckCore.h --show tick    what an editor will attach
+  checkdocs.py src/BlaeckSerial.h src/BlaeckCore.h --extract      every @code block -> DocCodeBlocks.ino
 
+The first header is parsed and must include the others. Options:
+  --skip-class NAME        leave a class out of every check and of --extract
+  --same-prose A=B         fail when a method of A has doc text differing from B's
 Append "-- <clang args>" to any of them to add include paths.
 Needs: pip install libclang
 """
@@ -234,11 +237,18 @@ def source_of(c, paths):
     return None
 
 
+# Classes left out of the check, from --skip-class. A class hidden behind a library's own
+# wrappers is one no sketch of that library hovers.
+SKIP = set()
+
+
 def public_api(tu, paths):
     for c in tu.cursor.walk_preorder():
         if c.kind not in KINDS:
             continue
         if source_of(c, paths) is None:
+            continue
+        if owner(c) in SKIP:
             continue
         if c.semantic_parent is not None and c.semantic_parent.kind == ci.CursorKind.NAMESPACE:
             continue
@@ -388,12 +398,45 @@ def extract(tu, paths, dest):
     return NL.join(out), n
 
 
+def prose(raw):
+    """A doc comment's text without its @code block, whitespace collapsed."""
+    out, incode = [], False
+    for line in (raw or "").splitlines():
+        b = line.strip().lstrip("/*").strip()
+        if b.startswith("@code"):
+            incode = True
+            continue
+        if b.startswith("@endcode"):
+            incode = False
+            continue
+        if not incode and b:
+            out.append(b)
+    return " ".join(" ".join(out).split())
+
+
+def prose_mismatches(tu, derived, base):
+    """Methods of derived whose doc text differs from the same method's in base.
+
+    For wrappers that repeat a base class's docs: the text has to stay the same, while
+    each keeps an example of its own.
+    """
+    docs = {derived: {}, base: {}}
+    for c in tu.cursor.walk_preorder():
+        if c.kind == ci.CursorKind.CXX_METHOD and owner(c) in docs and c.raw_comment:
+            docs[owner(c)].setdefault(c.spelling, c)
+    return [(c, name) for name, c in docs[derived].items()
+            if name in docs[base] and prose(c.raw_comment) != prose(docs[base][name].raw_comment)]
+
+
 def main(argv):
     extra = argv[argv.index("--") + 1:] if "--" in argv else []
     own = argv[:argv.index("--")] if "--" in argv else argv
+    valued = ("--show", "--skip-class", "--same-prose")
+    SKIP.update(own[i + 1] for i, a in enumerate(own[:-1]) if a == "--skip-class")
+    same_prose = [own[i + 1].split("=", 1) for i, a in enumerate(own[:-1]) if a == "--same-prose"]
     # Every header named is checked; the first is the one parsed, and has to include the rest.
     paths = [a for i, a in enumerate(own)
-             if not a.startswith("--") and not (i > 0 and own[i - 1] == "--show")]
+             if not a.startswith("--") and not (i > 0 and own[i - 1] in valued)]
     path = " + ".join(paths)
     tu = ci.Index.create().parse(paths[0], args=PARSE_ARGS + extra,
                                  options=ci.TranslationUnit.PARSE_SKIP_FUNCTION_BODIES)
@@ -481,7 +524,16 @@ def main(argv):
             where = "%s::%s" % (cls, name) if cls else name
             print("  %-24s  %-40s mentions %s()" % (line, where, ref))
 
-    return 1 if (bare or no_block or stale) else 0
+    drifted = []
+    for derived, base in same_prose:
+        drifted += prose_mismatches(tu, derived, base)
+    if drifted:
+        print()
+        print("%d wrapper doc(s) differing from the text they repeat:" % len(drifted))
+        for c, name in drifted:
+            print("  %-24s  %s::%s" % (at(c), owner(c), name))
+
+    return 1 if (bare or no_block or stale or drifted) else 0
 
 if __name__ == "__main__":
     sys.exit(main(sys.argv[1:]))
