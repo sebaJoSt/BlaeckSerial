@@ -641,18 +641,15 @@ uint16_t BlaeckSerial::_computeSchemaHash()
 {
   // CRC16-CCITT (init=0x0000, poly=0x1021) over signal names + datatype codes.
   // Must match Python: binascii.crc_hqx(data, 0) & 0xFFFF
-  // Runs through the same accumulator the frame writers feed, so a name in flash and a
-  // name in RAM cannot hash differently: both arrive here as the same bytes.
-  uint16_t saved = _schemaHashAccum;
+  // Names are walked by _emitSignalName(), the same as the symbol list sends them, so a name
+  // in flash and a name in RAM cannot hash differently.
   _schemaHashAccum = 0x0000;
   for (int j = 0; j < _signalIndex; j++)
   {
     _signalNameFeedHash(Signals[j]);
     _schemaHashFeedByte(_dtypeCode(Signals[j].DataType));
   }
-  uint16_t crc = _schemaHashAccum;
-  _schemaHashAccum = saved;
-  return crc & 0xFFFF;
+  return _schemaHashAccum;
 }
 
 void BlaeckSerial::setSignalName(int signalIndex, const char *signalName)
@@ -2248,7 +2245,8 @@ void BlaeckSerial::_writeCommandAck(const char *rawCommand, byte status, byte re
   // nothing it could use.
   uint32_t ackMsgId = (uint32_t)_parsedPrefixMsgId;
 
-  _frameOpen(0xA5, ackMsgId);
+  if (!_frameOpen(0xA5, ackMsgId))
+    return;
   // Payload: command hash (4 bytes, little-endian) + name hash (4) + status (1) + reason (1).
   ulngCvt.val = _fnv1a32(payload);
   _emitBytes(ulngCvt.bval, 4);
@@ -2757,7 +2755,8 @@ void BlaeckSerial::_writeStateFrame(int channelIndex, const char *text, const by
       _debugStream->println();
   }
 
-  _frameOpen(0x95, 0);
+  if (!_frameOpen(0x95, 0))
+    return;
   // Device identity, the channel index, the datatype, then the value: fixed width for a
   // number, a 1-byte length followed by that many UTF-8 bytes for a string - the same rule
   // a data frame follows.
@@ -3052,10 +3051,23 @@ void BlaeckSerial::writeStateChannelsFrame(unsigned long msg_id)
   // padding - without them a catalog could name only one device.
   // Declared up-front so the host can announce one text entity per channel
   // before any 0x95 push arrives, the same way 0xA0 announces commands.
-  if (!_mayWriteFrame())
-    return;
+  //
+  // _channelText() warns about a value it will not report, and with buffered writes off a
+  // warning from inside the loop below lands in the open frame when the debug stream is the
+  // frame stream. Each warning fires once, so asking first spends them before the frame opens.
+  if (_debugStream != nullptr && !_bufferedWrites)
+  {
+    for (uint16_t i = 0; i < _stateChannelSlots(); i++)
+    {
+      if (!_stateChannels[i].inUse)
+        continue;
+      char optionBuf[BLAECK_STATE_MAX_OPTION_CHARS];
+      _channelText(_stateChannels[i], optionBuf, sizeof(optionBuf));
+    }
+  }
 
-  _frameOpen(0x90, msg_id);
+  if (!_frameOpen(0x90, msg_id))
+    return;
 
   for (uint16_t i = 0; i < _stateChannelSlots(); i++)
   {
@@ -3517,10 +3529,8 @@ void BlaeckSerial::writeEventChannelsFrame(unsigned long msg_id)
   // Declared up-front so the host can announce one event entity per channel,
   // including its list of types, before any 0x85 event arrives. The count is
   // what lets a host reject an out-of-range index without parsing the run.
-  if (!_mayWriteFrame())
+  if (!_frameOpen(0x80, msg_id))
     return;
-
-  _frameOpen(0x80, msg_id);
 
   for (uint16_t i = 0; i < _eventChannelSlots(); i++)
   {
@@ -3613,7 +3623,8 @@ void BlaeckSerial::writeEvent(const char *channelName, const __FlashStringHelper
     return;
   }
 
-  _frameOpen(0x85, 0);
+  if (!_frameOpen(0x85, 0))
+    return;
   _emitByte((byte)0);
   _emitByte((byte)0);
   _emitByte((byte)(channelIndex & 0xFF));
@@ -3933,10 +3944,8 @@ void BlaeckSerial::writeCommands(unsigned long msg_id) { _commandCatalogDirty = 
 // needs no special handling: it simply announces no entities.
 void BlaeckSerial::_writeEmptyFrame(byte msgKey, unsigned long msg_id)
 {
-  if (!_mayWriteFrame())
+  if (!_frameOpen(msgKey, msg_id))
     return;
-
-  _frameOpen(msgKey, msg_id);
   _frameClose();
 }
 
@@ -4368,8 +4377,11 @@ void BlaeckSerial::setBufferedWrites(bool enabled)
     _bufFree();
 }
 
-void BlaeckSerial::_frameOpen(byte msgKey, unsigned long msgId, bool withCrc)
+bool BlaeckSerial::_frameOpen(byte msgKey, unsigned long msgId, bool withCrc)
 {
+  if (!_mayWriteFrame())
+    return false;
+
   _frameDirect = !_bufReady();
   if (!_frameDirect)
     _bufReset();
@@ -4392,6 +4404,7 @@ void BlaeckSerial::_frameOpen(byte msgKey, unsigned long msgId, bool withCrc)
   ulngCvt.val = msgId;
   _emitBytes(ulngCvt.bval, 4);
   _emitByte(':');
+  return true;
 }
 
 bool BlaeckSerial::_frameClose()
@@ -4435,7 +4448,8 @@ void BlaeckSerial::writeRestarted(unsigned long msg_id)
   {
     _writeRestartedAlreadyDone = true;
 
-    _frameOpen(0xC0, msg_id);
+    if (!_frameOpen(0xC0, msg_id))
+      return;
     _emitDevice(_deviceName(), DeviceHWVersion, DeviceFWVersion);
     _frameClose();
 
@@ -4491,7 +4505,8 @@ void BlaeckSerial::writeDevices(unsigned long msg_id)
 
 void BlaeckSerial::writeDevicesFrame(unsigned long msg_id)
 {
-  _frameOpen(0xB3, msg_id);
+  if (!_frameOpen(0xB3, msg_id))
+    return;
   _emitDevice(_deviceName(), DeviceHWVersion, DeviceFWVersion);
   _frameClose();
 }
@@ -4512,7 +4527,8 @@ void BlaeckSerial::writeDataFrame(unsigned long msg_id, int signalIndex_start, i
   if (signalIndex_start > signalIndex_end)
     return; // No valid range
 
-  _frameOpen(0xD2, msg_id, true);
+  if (!_frameOpen(0xD2, msg_id, true))
+    return;
 
   bool restartFlagSnapshot = _sendRestartFlag;
   _emitByte(_frameFlags(restartFlagSnapshot));
@@ -4585,7 +4601,8 @@ void BlaeckSerial::writeDataFrame(unsigned long msg_id, int signalIndex_start, i
 
 void BlaeckSerial::writeSymbolsFrame(unsigned long msg_id)
 {
-  _frameOpen(0xB0, msg_id);
+  if (!_frameOpen(0xB0, msg_id))
+    return;
 
   for (int i = 0; i < _signalIndex; i++)
   {
@@ -4596,12 +4613,8 @@ void BlaeckSerial::writeSymbolsFrame(unsigned long msg_id)
     // them once per signal per frame.
     const Signal &signal = Signals[i];
 
-    _signalNameFeedHash(signal);
     _emitSignalName0(signal);
-
-    byte dtCode = _dtypeCode(signal.DataType);
-    _emitByte(dtCode);
-    _schemaHashFeedByte(dtCode);
+    _emitByte(_dtypeCode(signal.DataType));
   }
   _frameClose();
 }
@@ -4628,7 +4641,8 @@ void BlaeckSerial::writeSignalConfigFrame(unsigned long msg_id)
   // entries is the ordinary case and not an error. The signal is named by its
   // index in the 0xB0 Symbol List, which already says which device it belongs
   // to - so unlike the other catalogs this frame carries no device fields.
-  _frameOpen(0xF0, msg_id);
+  if (!_frameOpen(0xF0, msg_id))
+    return;
 
   for (int i = 0; i < _signalIndex; i++)
   {
@@ -4723,7 +4737,8 @@ void BlaeckSerial::writeCommandsFrame(unsigned long msg_id)
     }
   }
 
-  _frameOpen(0xA0, msg_id);
+  if (!_frameOpen(0xA0, msg_id))
+    return;
 
   for (uint16_t i = 0; i < _commandSlots(); i++)
   {

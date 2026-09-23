@@ -5043,7 +5043,7 @@ private:
   bool _writesPausedForever = false;
   unsigned long _writesPausedUntil = 0;
 
-  // Asked once per frame, by every writer, in both write modes - never per byte. An
+  // Asked by _frameOpen(), once per frame - never per byte. An
   // unbuffered frame leaves as it is produced, so a pause taken mid-frame would hand the
   // host a truncated one, which is worse than the frame it was avoiding.
   bool _mayWriteFrame()
@@ -5114,7 +5114,9 @@ private:
   // On between the key and the CRC field of a data frame, the only frame that carries one.
   bool _frameCrcOn = false;
 
-  void _frameOpen(byte msgKey, unsigned long msgId, bool withCrc = false);
+  // False when no frame may be written - no stream yet, or writes paused - and then the
+  // writer returns without emitting anything.
+  bool _frameOpen(byte msgKey, unsigned long msgId, bool withCrc = false);
   // True when the frame left: a buffered frame that overflowed is dropped instead.
   bool _frameClose();
   uint32_t _frameCrcEnd()
