@@ -1107,6 +1107,7 @@ void BlaeckCore::read()
       // below then doesn't acknowledge again.
       bool builtinMatched = true;
       const unsigned long msg_id = _parsedPrefixMsgId;
+      _replying = true;
 
       if (equalsFlash(_parsedCommand, F(BLAECK_BUILTIN_WRITE_SYMBOLS)))
       {
@@ -1186,6 +1187,8 @@ void BlaeckCore::read()
       {
         builtinMatched = false;
       }
+      // A handler may write state or events, which are for every host.
+      _replying = false;
 
       _dispatchRegisteredHandlers(!builtinMatched);
     }
@@ -2090,7 +2093,7 @@ void BlaeckCore::_writeCommandAck(const char *rawCommand, byte status, byte reas
   // which of two same-named commands it answers.
   uint32_t ackMsgId = (uint32_t)_parsedPrefixMsgId;
 
-  if (!_frameOpen(0xA5, ackMsgId))
+  if (!_frameOpen(0xA5, ackMsgId, false, AUDIENCE_REQUESTER))
     return;
   // Command hash (4 bytes, little-endian), name hash (4), status (1), reason (1).
   ulngCvt.val = _fnv1a32(payload);
@@ -4062,10 +4065,12 @@ void BlaeckCore::setBufferedWrites(bool enabled)
     _bufFree();
 }
 
-bool BlaeckCore::_frameOpen(byte msgKey, unsigned long msgId, bool withCrc)
+bool BlaeckCore::_frameOpen(byte msgKey, unsigned long msgId, bool withCrc, Audience audience)
 {
   if (!_mayWriteFrame())
     return false;
+
+  _frameAudience = _replying ? AUDIENCE_REQUESTER : audience;
 
   _frameDirect = !_bufReady();
   if (!_frameDirect)
@@ -4187,7 +4192,7 @@ void BlaeckCore::writeDataFrame(unsigned long msg_id, int signalIndex_start, int
   if (signalIndex_start > signalIndex_end)
     return; // No valid range
 
-  if (!_frameOpen(0xD2, msg_id, true))
+  if (!_frameOpen(0xD2, msg_id, true, AUDIENCE_SUBSCRIBERS))
     return;
 
   bool restartFlagSnapshot = _sendRestartFlag;

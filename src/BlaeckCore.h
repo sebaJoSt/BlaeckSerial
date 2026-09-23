@@ -3838,6 +3838,19 @@ protected:
   virtual const char *_libraryName() const = 0;
   virtual const char *_libraryVersion() const = 0;
 
+  // Who a frame is for. Over one port it makes no difference; a transport with several
+  // connections reads _frameAudience in its hooks and sends the frame only there.
+  enum Audience : uint8_t
+  {
+    AUDIENCE_ALL,         // every host: restart notice, catalogs, state values, events
+    AUDIENCE_REQUESTER,   // the host whose command is being handled: acks and replies
+    AUDIENCE_SUBSCRIBERS  // hosts receiving data
+  };
+  // The current frame's audience, set by _frameOpen().
+  Audience _frameAudience = AUDIENCE_ALL;
+  // Set while read() answers a built-in command, so the answer goes only to the requester.
+  bool _replying = false;
+
   unsigned long long getTimeStamp();
   void setSignalName(int signalIndex, const char *signalName);
   // Sets a signal's name: a heap copy of ram, or the flash pointer. Exactly one is non-null.
@@ -4211,7 +4224,9 @@ protected:
   bool _frameCrcOn = false;
 
   // Starts a frame. False if no frame may be written (no stream yet, or writes paused).
-  bool _frameOpen(byte msgKey, unsigned long msgId, bool withCrc = false);
+  // While _replying, every frame goes to the requester whatever audience is passed.
+  bool _frameOpen(byte msgKey, unsigned long msgId, bool withCrc = false,
+                  Audience audience = AUDIENCE_ALL);
   // Ends the frame. False if a buffered frame overflowed and was dropped.
   bool _frameClose();
   uint32_t _frameCrcEnd()
