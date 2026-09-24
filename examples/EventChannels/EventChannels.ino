@@ -45,7 +45,6 @@ void setup()
       .withEventTypes(10);
 
   Blaeck.DeviceName = "Event Channels Demo";
-  Blaeck.DeviceHWVersion = "Arduino Mega 2560 Rev3";
   Blaeck.DeviceFWVersion = "1.0";
 
   Blaeck.addSignal(F("Uptime"), &Uptime)

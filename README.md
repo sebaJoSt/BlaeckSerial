@@ -82,8 +82,25 @@ per second, and `<BLAECK.DEACTIVATE>` to stop. Your sketch does not need to know
 The examples are in `examples/`. In the Arduino IDE, open them with
 **File > Examples > BlaeckSerial**.
 
-Start with **Basic**. **WaveformGenerator** uses every feature and shows what a complete
-dashboard looks like.
+Start with **Basic**, then **Signals** and **Commands**. Follow with **StateChannels** and
+**EventChannels**, then **WaveformGenerator** to see the pieces working together.
+
+| Example | What it teaches |
+|---|---|
+| [Basic](examples/Basic) | The smallest sketch that logs two values |
+| [Signals](examples/Signals) | Numeric, boolean and text signals, metadata, and numbered arrays |
+| [Commands](examples/Commands) | Plain commands and typed dashboard controls |
+| [StateChannels](examples/StateChannels) | Values shown but never logged, from variables, getters or explicit writes |
+| [EventChannels](examples/EventChannels) | Declaring and reporting occurrences |
+| [WaveformGenerator](examples/WaveformGenerator) | A complete, controllable waveform dashboard |
+| [WriteModes](examples/WriteModes) | Immediate writes versus updated-only data sent on the host's interval |
+| [more / ConfigurableSignals](examples/more/ConfigurableSignals) | Choose which signals to log through commands and save the selection in EEPROM |
+| [more / SHT31TempHumiditySensor](examples/more/SHT31TempHumiditySensor) | Read a real temperature and humidity sensor; requires Adafruit SHT31 |
+| [more / TimestampsRTC](examples/more/TimestampsRTC) | Wall-clock timestamps using the UNO R4's RTC |
+
+The seven core topics stay at the top level. `more/` holds the additional examples.
+Exhaustive test harnesses stay in
+`extras/tests/harness/`, outside the examples menu.
 
 ## Reference
 

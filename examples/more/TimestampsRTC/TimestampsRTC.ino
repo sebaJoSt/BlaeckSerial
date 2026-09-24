@@ -1,15 +1,12 @@
 /*
-  TimeStampModes.ino
+  TimestampsRTC.ino
 
-  Every data frame can carry a time, and this sketch shows the three modes it
-  can be sent in. Pick one with TIMESTAMP_MODE below, then flash the board.
-
-    BLAECK_NO_TIMESTAMP  no time is sent, so the host timestamps on arrival
-    BLAECK_MICROS        micros() since power-up, supplied by the library
-    BLAECK_UNIX          the wall clock, the only mode needing a clock source
+  Timestamp data with a real-time clock using BLAECK_UNIX and a callback that returns
+  microseconds since the Unix epoch. The RTC here has whole-second resolution.
 
   Requires an RTC. This sketch uses the one built into the Arduino UNO R4;
   another board just needs its own RTC library inside GetRTCUnixTimeMicros().
+  For timestamp modes without RTC hardware, see docs/sending-data.md.
 
   Author: Sebastian Strobl,
   More information on: https://github.com/sebaJoSt/BlaeckSerial
@@ -20,9 +17,6 @@
 #include "BlaeckSerial.h"
 
 #define ExampleVersion "1.0"
-
-// The mode to run. This is the only line to change when trying another one.
-#define TIMESTAMP_MODE BLAECK_UNIX
 
 // Instantiate a new BlaeckSerial object
 BlaeckSerial Blaeck;
@@ -54,22 +48,15 @@ void setup()
   RTC.setTime(startTime);
 
   // Setup BlaeckSerial
-  Blaeck.begin(
-      &Serial, // Serial reference
-      1        // Maximal signal count used;
-  );
+  Blaeck.begin(&Serial).withSignals(1);
 
-  Blaeck.DeviceName = "Timestamp Modes";
-  Blaeck.DeviceHWVersion = "Arduino UNO R4";
+  Blaeck.DeviceName = "RTC Timestamps Demo";
   Blaeck.DeviceFWVersion = ExampleVersion;
 
   Blaeck.addSignal(F("Sine_1"), &sine);
 
-  Blaeck.setTimestampMode(TIMESTAMP_MODE);
-
-  // Only BLAECK_UNIX needs a clock source. The other two modes bring their own.
-  if (TIMESTAMP_MODE == BLAECK_UNIX)
-    Blaeck.setTimestampCallback(GetRTCUnixTimeMicros);
+  Blaeck.setTimestampCallback(GetRTCUnixTimeMicros);
+  Blaeck.setTimestampMode(BLAECK_UNIX);
 }
 
 void loop()

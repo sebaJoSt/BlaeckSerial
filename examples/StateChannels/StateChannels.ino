@@ -84,7 +84,6 @@ void setup()
       .withDebugStream(&Serial);
 
   Blaeck.DeviceName = "State Channels Demo";
-  Blaeck.DeviceHWVersion = "Arduino Mega 2560 Rev3";
   Blaeck.DeviceFWVersion = "1.0";
 
   // A logging session needs something to log; state channels are never logged themselves,

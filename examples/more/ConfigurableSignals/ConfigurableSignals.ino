@@ -1,8 +1,10 @@
 /*
-  SineGeneratorAdvanced.ino
+  ConfigurableSignals.ino
 
-  This example sends configurable sine-wave signals from the Arduino to Loggbok.
-  Loggbok forwards the data and device metadata through MQTT to Home Assistant.
+  Choose which signals to log, change the selection through commands, and save it in EEPROM.
+  The sketch always computes the same 25 sine waves. Only the selected ones are registered
+  with BlaeckSerial, and that selection survives a restart.
+  Loggbok forwards the data and controls through MQTT to Home Assistant.
 
   Requirements:
   - none beyond the library itself: EEPROM comes with the board's core
@@ -93,8 +95,7 @@ void setup()
       .withCommands(6)
       .withStateChannels(2);
 
-  Blaeck.DeviceName = "Advanced Sine Number Generator";
-  Blaeck.DeviceHWVersion = "Arduino Mega 2560 Rev3";
+  Blaeck.DeviceName = "Configurable Signals Demo";
   Blaeck.DeviceFWVersion = FW_VERSION;
 
   // Typed: each becomes a dashboard control. The bounds are numbers keeping their value on a

@@ -155,6 +155,9 @@ It runs in normal `loop()` context, so `Serial` and `delay()` are safe in it.
 
 ## Timestamps
 
+[TimestampsRTC](../examples/more/TimestampsRTC) supplies wall-clock
+timestamps using the UNO R4's RTC.
+
 By default the data carries no time and the host stamps it when it arrives. That is fine when
 the link is quick and nothing buffers.
 

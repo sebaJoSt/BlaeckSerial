@@ -4,6 +4,11 @@ A signal is a variable your sketch sends: a temperature, a counter, a switch pos
 BlaeckSerial reads it every time it sends data, so you only have to keep the variable up to
 date.
 
+The [Signals example](../examples/Signals/Signals.ino) demonstrates numeric, boolean and text
+signals with metadata and numbered arrays, using simulated values so no sensor hardware is
+needed. [ConfigurableSignals](../examples/more/ConfigurableSignals) shows how a user can
+choose which signals to log through commands and keep that selection in EEPROM.
+
 ## Registering a signal
 
 Call `addSignal()` in `setup()`, once per variable. Pass a name and the address of the

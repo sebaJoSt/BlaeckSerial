@@ -30,14 +30,10 @@ void setup()
   Serial.begin(115200);
 
   // Setup BlaeckSerial
-  Blaeck.begin(
-      &Serial, // Serial reference
-      2        // Maximal signal count used
-  );
+  Blaeck.begin(&Serial).withSignals(2);
 
   // Names the device wherever it turns up
   Blaeck.DeviceName = "Random Number Generator";
-  Blaeck.DeviceHWVersion = "Arduino Mega 2560 Rev3";
   Blaeck.DeviceFWVersion = ExampleVersion;
 
   // F() keeps the name in flash instead of SRAM, which is worth having on an

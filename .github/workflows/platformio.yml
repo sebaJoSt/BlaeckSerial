@@ -111,13 +111,13 @@ jobs:
         run: pip install --upgrade platformio
 
       # Only the examples that need nothing beyond CRC. SHT31TempHumiditySensor
-      # wants Adafruit SHT31 and TimeStampModes wants RTC.h - the arduino-cli
+      # wants Adafruit SHT31 and TimestampsRTC wants RTC.h - the arduino-cli
       # matrix covers those. The sketch folder is passed rather than the .ino so
       # a sketch split across several files is built whole.
       - name: Build examples
         run: |
           for ex in Basic Commands EventChannels \
-                    SineGeneratorAdvanced SineGeneratorBasic StateChannels \
+                    more/ConfigurableSignals Signals StateChannels \
                     WriteModes WaveformGenerator; do
             echo "::group::$ex"
             pio ci --board=megaatmega2560 \

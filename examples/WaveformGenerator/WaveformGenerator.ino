@@ -13,7 +13,7 @@
   per cycle. Sample slower than that and Output aliases into a waveform the device never made.
 
   Signals, state channels and events are three different jobs:
-    signal   a value that is sampled and logged       -> Output, Frequency, RunNote
+    signal   a value that is sampled and logged       -> Output, Frequency, Annotation
     state    what a control is set to, not logged     -> Amplitude, Wave, "running Sine @ 1.00 Hz"
     event    a discrete event from a fixed list       -> idle_warning, resumed
 
@@ -25,13 +25,13 @@
     SET_ENABLE  switch  off -> Output = Offset          "Output enabled"  state: own channel
     SET_LABEL   text    max 32 bytes, config category   "Device label"    state: own channel,
                 and the name the status line reports under
-    SET_NOTE    text    max 24 bytes                    "Run note"        state: RunNote signal
+    SET_ANNOTATION text max 24 bytes                    "Annotation"      state: Annotation signal
     STATUS      button  writes the StatusOnDemand channel   "Request status"
 
   Signals that describe themselves (Frequency declares nothing, and costs nothing):
     Output      measurement, 3 decimals, mdi:sine-wave, shown as "Output" while the column
                 it is logged to stays "Output [V]"
-    RunNote     free text, logged with every row - what SET_NOTE wrote
+    Annotation  free text, logged with every row - what SET_ANNOTATION wrote
 
   Shown but never logged (state channels):
     Uptime      seconds since boot, which Home Assistant may show in minutes or hours instead
@@ -69,7 +69,7 @@ BlaeckSerial Blaeck;
 // addSignal() keeps a pointer to these, so they have to be globals.
 float Output = 0.0;
 float Frequency = 1.0; // [Hz]
-char RunNote[25] = ""; // "swapped probe", "run 3 after warm-up"
+char Annotation[25] = ""; // "swapped probe", "run 3 after warm-up"
 
 //---PUBLISHED AS A STATE CHANNEL, AND SO NOT LOGGED
 unsigned long Uptime = 0; // [s], about the board rather than the wave
@@ -111,7 +111,6 @@ void setup()
       .withEventChannels(1);
 
   Blaeck.DeviceName = "Waveform Generator Demo";
-  Blaeck.DeviceHWVersion = "Arduino Mega 2560 Rev3";
   Blaeck.DeviceFWVersion = "1.0";
 
   // Everything after addSignal() is optional, and each call changes how Home Assistant shows it.
@@ -127,7 +126,7 @@ void setup()
 
   // A string signal: logged like any other, one text column in the table. Every data frame
   // carries it, so keep the buffer as small as the note needs to be.
-  Blaeck.addSignal(F("RunNote"), RunNote)
+  Blaeck.addSignal(F("Annotation"), Annotation)
       .withIcon(F("mdi:note-text"));
 
   Blaeck.onNumberCommand("SET_FREQ", onSetFreq)
@@ -162,12 +161,12 @@ void setup()
       .withIcon(F("mdi:tag"))
       .withOwnState(F("DeviceLabel"), DeviceLabel)
       .config();
-  // The pair: SET_LABEL keeps its value on a state channel, SET_NOTE on a signal, so only the
+  // The pair: SET_LABEL keeps its value on a state channel, SET_ANNOTATION on a signal, so only the
   // note reaches the table. Nothing else about the two calls differs.
-  Blaeck.onTextCommand("SET_NOTE", onSetNote)
-      .withMaxLength(sizeof(RunNote) - 1)
-      .withDisplayName(F("Run note"))
-      .withStateFromSignal(F("RunNote"));
+  Blaeck.onTextCommand("SET_ANNOTATION", onSetAnnotation)
+      .withMaxLength(sizeof(Annotation) - 1)
+      .withDisplayName(F("Annotation"))
+      .withStateFromSignal(F("Annotation"));
   Blaeck.onButtonCommand("STATUS", onStatus)
       .withDisplayName(F("Request status"))
       .diagnostic();
@@ -368,13 +367,13 @@ void onSetLabel(const char *command, const char *const *params, byte paramCount)
   Blaeck.writeCommandState(command);
 }
 
-void onSetNote(const char *command, const char *const *params, byte paramCount)
+void onSetAnnotation(const char *command, const char *const *params, byte paramCount)
 {
   // Arrives decoded: Loggbok percent-encodes the value, so a note may hold the characters the
   // frame itself is built from - a comma, an angle bracket, a percent sign.
-  strcpy(RunNote, params[0]);
+  strcpy(Annotation, params[0]);
   // Backed by a signal, like SET_FREQ, so writing it is what reports the value back.
-  Blaeck.write("RunNote", RunNote);
+  Blaeck.write("Annotation", Annotation);
 }
 
 void onStatus(const char *command, const char *const *params, byte paramCount)

@@ -9,7 +9,9 @@ Arduino library sending binary sensor data over Serial using the Blaeck protocol
     meant to carry identical copies, so nothing serial-specific goes in them
   - `BlaeckCoreLibrary.h` — this library's namespace and settings; differs per library
   - `BlaeckSerial.h/.cpp` — the Stream transport: begin(), writes, reads, USB padding
-- `examples/` — sketches listed under *File → Examples*
+- `examples/` — sketches listed under *File → Examples*. Core topics are at the top level;
+  `more/` holds configurable signals with EEPROM persistence, the SHT31 sensor and
+  UNO R4 RTC examples
 - `extras/` — the style guide, the doc tooling, and the test harness under
   `extras/tests/harness/`. Installed alongside the library, so keep it small
 - A harness sketch is not an example: it exercises every type and every form to
@@ -50,7 +52,7 @@ arduino-cli compile --fqbn arduino:avr:mega examples/Basic
 ```
 
 CI compiles every example for AVR, ESP32 and SAMD, so a local build is only needed
-to answer a specific question. `examples/TimeStampModes` needs `RTC.h` and does not
+to answer a specific question. `examples/more/TimestampsRTC` needs `RTC.h` and does not
 build without it.
 
 ## Running a harness

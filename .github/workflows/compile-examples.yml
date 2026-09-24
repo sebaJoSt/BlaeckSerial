@@ -40,9 +40,9 @@ jobs:
               - examples/Basic
               - examples/Commands
               - examples/EventChannels
-              - examples/SHT31TempHumiditySensor
-              - examples/SineGeneratorAdvanced
-              - examples/SineGeneratorBasic
+              - examples/more/SHT31TempHumiditySensor
+              - examples/Signals
+              - examples/more/ConfigurableSignals
               - examples/StateChannels
               - examples/WaveformGenerator
               - examples/WriteModes
@@ -59,8 +59,8 @@ jobs:
               - examples/Basic
               - examples/Commands
               - examples/EventChannels
-              - examples/SHT31TempHumiditySensor
-              - examples/SineGeneratorBasic
+              - examples/more/SHT31TempHumiditySensor
+              - examples/Signals
               - examples/StateChannels
               - examples/WaveformGenerator
               - examples/WriteModes
@@ -77,8 +77,8 @@ jobs:
               - examples/Basic
               - examples/Commands
               - examples/EventChannels
-              - examples/SHT31TempHumiditySensor
-              - examples/SineGeneratorBasic
+              - examples/more/SHT31TempHumiditySensor
+              - examples/Signals
               - examples/StateChannels
               - examples/WaveformGenerator
               - examples/WriteModes
@@ -95,10 +95,10 @@ jobs:
               - examples/Basic
               - examples/Commands
               - examples/EventChannels
-              - examples/SHT31TempHumiditySensor
-              - examples/SineGeneratorBasic
+              - examples/more/SHT31TempHumiditySensor
+              - examples/Signals
               - examples/StateChannels
-              - examples/TimeStampModes
+              - examples/more/TimestampsRTC
               - examples/WaveformGenerator
               - examples/WriteModes
             artifact-name-suffix: arduino-renesas_uno-unor4wifi
@@ -116,8 +116,8 @@ jobs:
               - examples/Basic
               - examples/Commands
               - examples/EventChannels
-              - examples/SHT31TempHumiditySensor
-              - examples/SineGeneratorBasic
+              - examples/more/SHT31TempHumiditySensor
+              - examples/Signals
               - examples/StateChannels
               - examples/WaveformGenerator
               - examples/WriteModes

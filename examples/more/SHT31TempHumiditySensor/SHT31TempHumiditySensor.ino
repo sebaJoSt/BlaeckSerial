@@ -41,17 +41,23 @@ void setup()
   // sht31.heater(true);
 
   // Setup BlaeckSerial
-  Blaeck.begin(
-      &Serial, // Serial reference
-      2        // Maximal signal count used;
-  );
+  Blaeck.begin(&Serial).withSignals(2);
 
   Blaeck.DeviceName = "Temp Humidity Sensor";
-  Blaeck.DeviceHWVersion = "Arduino Mega 2560 Rev3";
   Blaeck.DeviceFWVersion = ExampleVersion;
 
-  Blaeck.addSignal(F("Temperature [°C]"), &temperature);
-  Blaeck.addSignal(F("Humidity [%]"), &humidity);
+  Blaeck.addSignal(F("Temperature [°C]"), &temperature)
+      .withDisplayName(F("Temperature"))
+      .withUnit(F("\xC2\xB0" "C"))
+      .withDeviceClass(F("temperature"))
+      .withStateClass(BLAECK_STATE_CLASS_MEASUREMENT)
+      .withDisplayPrecision(1);
+  Blaeck.addSignal(F("Humidity [%]"), &humidity)
+      .withDisplayName(F("Humidity"))
+      .withUnit(F("%"))
+      .withDeviceClass(F("humidity"))
+      .withStateClass(BLAECK_STATE_CLASS_MEASUREMENT)
+      .withDisplayPrecision(1);
 }
 
 void loop()
