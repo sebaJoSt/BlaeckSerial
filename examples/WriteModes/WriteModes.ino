@@ -44,7 +44,7 @@ void setup()
   // Setup BlaeckSerial
   Blaeck.begin(&Serial).withSignals(3);
 
-  Blaeck.DeviceName = "Write Modes Demo";
+  Blaeck.DeviceName = "WriteModes";
   Blaeck.DeviceFWVersion = ExampleVersion;
 
   // Add signals to BlaeckSerial

@@ -33,7 +33,7 @@ void setup()
   Blaeck.begin(&Serial).withSignals(2);
 
   // Names the device wherever it turns up
-  Blaeck.DeviceName = "Random Number Generator";
+  Blaeck.DeviceName = "Basic";
   Blaeck.DeviceFWVersion = ExampleVersion;
 
   // F() keeps the name in flash instead of SRAM, which is worth having on an

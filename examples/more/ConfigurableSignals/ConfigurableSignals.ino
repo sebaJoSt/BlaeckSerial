@@ -95,7 +95,7 @@ void setup()
       .withCommands(6)
       .withStateChannels(2);
 
-  Blaeck.DeviceName = "Configurable Signals Demo";
+  Blaeck.DeviceName = "ConfigurableSignals";
   Blaeck.DeviceFWVersion = FW_VERSION;
 
   // Typed: each becomes a dashboard control. The bounds are numbers keeping their value on a

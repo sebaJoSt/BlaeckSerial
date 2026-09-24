@@ -50,7 +50,7 @@ void setup()
   // Setup BlaeckSerial
   Blaeck.begin(&Serial).withSignals(1);
 
-  Blaeck.DeviceName = "RTC Timestamps Demo";
+  Blaeck.DeviceName = "TimestampsRTC";
   Blaeck.DeviceFWVersion = ExampleVersion;
 
   Blaeck.addSignal(F("Sine_1"), &sine);

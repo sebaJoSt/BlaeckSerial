@@ -43,7 +43,7 @@ void setup()
   // Setup BlaeckSerial
   Blaeck.begin(&Serial).withSignals(2);
 
-  Blaeck.DeviceName = "Temp Humidity Sensor";
+  Blaeck.DeviceName = "SHT31TempHumiditySensor";
   Blaeck.DeviceFWVersion = ExampleVersion;
 
   Blaeck.addSignal(F("Temperature [°C]"), &temperature)

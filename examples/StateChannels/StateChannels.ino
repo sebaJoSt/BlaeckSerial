@@ -43,7 +43,7 @@ void setup()
       .withStateChannels(3)
       .withDebugStream(&Serial);
 
-  Blaeck.DeviceName = "State Channels Demo";
+  Blaeck.DeviceName = "StateChannels";
   Blaeck.DeviceFWVersion = "1.0";
 
   Blaeck.addSignal(F("Uptime"), &Uptime).withUnit(F("s"));

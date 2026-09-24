@@ -24,6 +24,7 @@ Arduino library sending binary sensor data over Serial using the Blaeck protocol
   name switches off IntelliSense for every builder chain
   ([vscode-cpptools#4251](https://github.com/microsoft/vscode-cpptools/issues/4251))
 - Sources are CRLF. Check after any scripted edit
+- Example device names match the sketch name and the corresponding BlaeckTCP example.
 - `extras/tests/DocCodeBlocks/DocCodeBlocks.ino` is generated. It is gitignored; do not commit it
 - Frame codes and byte layout belong in the
   [protocol spec](https://sebajost.github.io/blaeck-protocol/), not in the header.

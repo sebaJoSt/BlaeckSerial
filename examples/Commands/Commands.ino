@@ -90,7 +90,7 @@ void setup()
   Blaeck.begin(&Serial).withSignals(1);
 
   // Names the device wherever it turns up
-  Blaeck.DeviceName = "Command Demo";
+  Blaeck.DeviceName = "Commands";
   Blaeck.DeviceFWVersion = ExampleVersion;
 
   // The state signal the typed switch below refers to

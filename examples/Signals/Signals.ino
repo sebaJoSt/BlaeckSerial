@@ -41,7 +41,7 @@ void setup()
   Serial.begin(115200);
   Blaeck.begin(&Serial).withSignals(5 + SINE_COUNT);
 
-  Blaeck.DeviceName = "Signals Demo";
+  Blaeck.DeviceName = "Signals";
   Blaeck.DeviceFWVersion = "1.0";
 
   // The display name changes the dashboard label, not the logged column name.
