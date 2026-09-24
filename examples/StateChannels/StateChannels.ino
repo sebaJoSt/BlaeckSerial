@@ -1,33 +1,18 @@
 /*
   StateChannels.ino
 
-  Every way a state channel can get its value, side by side, so the choice is easy to see.
-  A state channel reports what something *is* - a status line, a setting, a reading - and is
-  shown but never logged. A signal is the opposite: sampled on an interval and kept as history.
+  State channels are shown but never logged. This example uses one per value source:
+    Temperature  pointer         reads a variable the sketch keeps
+    Running      getter          derives a value from the current operating phase
+    LastError    explicit write  has no value until a fault is reported
 
-  There are three ways a channel gets its value, and the question that picks one is always the
-  same: where does the value live?
+  Temperature and Running are pushed every two seconds with writeState(name).
+  LastError is sent only when a fault occurs, with writeState(name, value).
+  These approaches work with text, numbers and booleans, not just the types shown here.
 
-    A  POINTER  the value is a variable you keep      the channel reads it
-    B  GETTER   the value is worked out from others   a function is asked for it
-    C  TAG      there is no value until something     writeState() hands it over
-                happens
-
-  Text, numbers and bool all support all three, so there are nine combinations. This sketch
-  declares one channel per combination and marks each with its letter.
-
-  What to look for once it is logging:
-    A   Mode / Temperature / DoorOpen   read a variable the sketch keeps
-    B   Status / Efficiency / Running   worked out when read, so never stale
-    C   LastError / SetPoint / SelfTest empty until something writes them
-
-  A and B both need a push to reach a host - writeState(name), with no value, because both
-  already know where their value comes from. The difference is what that value is worth: A
-  reports a variable, B works one out at the moment it is asked. Only C is handed a value.
-
-  C is the one a pointer cannot imitate. A channel pointed at a variable always reports
-  something, and 0 or false cannot be told apart from a reading not yet taken. A channel
-  declared with a tag reports nothing at all until it has something to say.
+  The simulation repeats normal -> fault -> recovery, ten seconds per phase.
+  Running is true only during normal operation. LastError reports the last fault,
+  not the current status. Uptime is the only signal, so it alone is logged.
 
   Author: Sebastian Strobl, https://github.com/sebaJoSt/BlaeckSerial
 */
@@ -37,41 +22,16 @@
 
 BlaeckSerial Blaeck;
 
-// The one signal, so a logging session has something to log. State channels are never logged,
-// which is the whole difference between the two.
 unsigned long Uptime = 0;
-
-// A: a channel keeps a pointer to these, so they have to be globals - as a signal's do.
-char Mode[16] = "starting";
 float Temperature = 20.0f;
-bool DoorOpen = false;
 
-// B: read by the getters below. No channel points at them - they are what the getters are
-// worked out from, which is the whole difference between A and B.
-float Output = 0.0f;
-float Input = 1.0f;
-byte Clients = 0;
-bool Fault = false;
+enum class Phase { Normal, Fault, Recovery };
+Phase CurrentPhase = Phase::Normal;
 
-// ---- B: the getters ----------------------------------------------------------------------
-// Each is worked out from two or more variables, which is why none of them is a variable.
-
-const char *statusText()
-{
-  static char text[32];
-  snprintf(text, sizeof(text), "%s, %u client%s", Fault ? "fault" : "ok",
-           Clients, Clients == 1 ? "" : "s");
-  return text;
-}
-
-float efficiency()
-{
-  return Input == 0.0f ? 0.0f : (Output / Input) * 100.0f;
-}
-
+// Getters run while a frame is assembled: compute a value, but do not send anything.
 bool isRunning()
 {
-  return Mode[0] == 'r' && !Fault;
+  return CurrentPhase == Phase::Normal;
 }
 
 void setup()
@@ -80,154 +40,74 @@ void setup()
 
   Blaeck.begin(&Serial)
       .withSignals(1)
-      .withStateChannels(9)
+      .withStateChannels(3)
       .withDebugStream(&Serial);
 
   Blaeck.DeviceName = "State Channels Demo";
   Blaeck.DeviceFWVersion = "1.0";
 
-  // A logging session needs something to log; state channels are never logged themselves,
-  // so this signal is the only thing here that reaches a database.
   Blaeck.addSignal(F("Uptime"), &Uptime).withUnit(F("s"));
 
-  // --- A: POINTER - the channel reads a variable you keep --------------------------------
-  // Cheapest, and right whenever the value already lives somewhere. The variable *is* the
-  // value, so what the channel reports cannot be out of date.
-
-  Blaeck.addStateChannel(F("Mode"), Mode)
-      .withIcon(F("mdi:state-machine"));
-
+  // Pointer: Temperature must remain alive for as long as the channel uses it.
   Blaeck.addStateChannel(F("Temperature"), &Temperature)
-      .withUnit(F("C"))
+      .withUnit(F("\xC2\xB0" "C"))
       .withDeviceClass(F("temperature"))
       .withDisplayPrecision(1);
 
-  Blaeck.addStateChannel(F("DoorOpen"), &DoorOpen)
-      .withDeviceClass(F("door"));
-
-  // --- B: GETTER - the channel works the value out when asked ----------------------------
-  // For a value *derived* from other state. A variable holding a calculation is a copy of one,
-  // right only until something it was worked out from moves - and the catalog is rebuilt at
-  // moments the sketch cannot anticipate: at startup, when the channel list changes, and
-  // whenever a host asks. A getter has no copy to fall out of step.
-  //
-  // The getter guarantees the value is current whenever it is read; it does not decide when
-  // anyone is told. A host is told when the catalog is rebuilt - at startup, when the channel
-  // list changes, or when it asks - and whenever the sketch pushes with writeState(name), which
-  // takes no value because the getter supplies it. PushTheDerived() below does that on a timer.
-  //
-  // The getter runs while a frame is being assembled. Read variables and compute, nothing else.
-
-  Blaeck.addStateChannel(F("Status"), BlaeckText)
-      .withStateText(statusText)
-      .withIcon(F("mdi:message-text"));
-
-  Blaeck.addStateChannel(F("Efficiency"), BlaeckFloat)
-      .withStateValue(efficiency)
-      .withUnit(F("%"))
-      .withDisplayPrecision(1);
-
+  // Getter: evaluated when read, but still needs a push to notify the host of changes.
   Blaeck.addStateChannel(F("Running"), BlaeckBool)
       .withStateValue(isRunning);
 
-  // --- C: TAG - the channel holds nothing until something happens ------------------------
-  // Declared with a tag naming the type. Until writeState() is called the catalog says the
-  // channel has no value, which is the honest answer for something that has not happened yet -
-  // and the one thing a pointer cannot express.
-
+  // Type tag only: unlike a pointer, this can represent "no value yet".
   Blaeck.addStateChannel(F("LastError"), BlaeckText)
       .withIcon(F("mdi:alert-circle"))
       .diagnostic();
 
-  Blaeck.addStateChannel(F("SetPoint"), BlaeckFloat)
-      .withUnit(F("C"));
-
-  Blaeck.addStateChannel(F("SelfTest"), BlaeckBool)
-      .withDeviceClass(F("problem"))
-      .diagnostic();
-
-  // One summary for every table, printed only if something was dropped. Safe here: nothing
-  // has been written to Serial as a Blaeck frame yet.
   Blaeck.printRejections(&Serial);
 }
 
 void loop()
 {
   Uptime = millis() / 1000;
+  UpdateSimulation();
   Blaeck.tick();
-  UpdateTheVariables();
-  PushTheDerived();
-  ReportWhatHappened();
 }
 
-// ---- Moving what A reports and what B is worked out from ----------------------------------
-
-void UpdateTheVariables()
+void UpdateSimulation()
 {
-  static unsigned long last = 0;
-  if (millis() - last < 2000)
+  static unsigned long lastUpdate = 0;
+  static unsigned long lastPhase = 0;
+  const unsigned long now = millis();
+  if (now - lastUpdate < 2000UL)
     return;
-  last = millis();
+  lastUpdate = now;
 
-  // What B is worked out from. Both move, and independently, which is the case a variable
-  // holding the ratio could not keep up with.
-  Output = (float)((millis() / 100) % 100) / 100.0f;
-  Input = 1.0f + (float)Clients * 0.5f;
-  Clients = (byte)((millis() / 2000) % 4);
-
-  // What A reports. Each is pushed where the sketch already knows it changed - that push is
-  // what reaches a host, since nothing else asks a channel for its value on a timer.
-  DoorOpen = !DoorOpen;
-  // Cools toward the outside with the door open, warms toward the room with it shut. An
-  // approach rather than a step, so it always moves and never leaves the range: a sketch left
-  // running overnight still reads something plausible.
-  Temperature += ((DoorOpen ? 18.0f : 22.0f) - Temperature) * 0.25f;
-  Blaeck.writeState(F("Temperature"));
-  Blaeck.writeState(F("DoorOpen"));
-
-  // Late enough that a host connecting after the device has booted still sees the change
-  // happen, rather than finding it already made.
-  if (Uptime >= 60 && strcmp(Mode, "running") != 0)
+  if (now - lastPhase >= 10000UL)
   {
-    strcpy(Mode, "running");
-    Blaeck.writeState(F("Mode"));
+    lastPhase = now;
+    switch (CurrentPhase)
+    {
+    case Phase::Normal:
+      CurrentPhase = Phase::Fault;
+      break;
+    case Phase::Fault:
+      CurrentPhase = Phase::Recovery;
+      break;
+    case Phase::Recovery:
+      CurrentPhase = Phase::Normal;
+      break;
+    }
+
+    if (CurrentPhase == Phase::Fault)
+    {
+      // The local text is copied into the frame before writeState() returns.
+      char error[40];
+      snprintf(error, sizeof(error), "simulated fault after %lu s", Uptime);
+      Blaeck.writeState(F("LastError"), error);
+    }
   }
-}
 
-// ---- B: telling a host what the getters now say -------------------------------------------
-// The getters are asked when the catalog is built, which is rare. These pushes are what make a
-// dashboard move: writeState(name) with no value asks the getter and sends the answer. Nothing
-// here recalculates - that is the getter's job, and it cannot be out of date when it runs.
-
-void PushTheDerived()
-{
-  static unsigned long last = 0;
-  if (millis() - last < 3000)
-    return;
-  last = millis();
-
-  Blaeck.writeState(F("Status"));
-  Blaeck.writeState(F("Efficiency"));
+  Temperature += ((isRunning() ? 21.0f : 18.0f) - Temperature) * 0.25f;
+  Blaeck.writeState(F("Temperature"));
   Blaeck.writeState(F("Running"));
-}
-
-// ---- C: writing the channels that hold nothing --------------------------------------------
-
-void ReportWhatHappened()
-{
-  static unsigned long last = 0;
-  if (millis() - last < 7000)
-    return;
-  last = millis();
-
-  // Text: the buffer is local, because writeState() copies it into the frame before returning.
-  char line[40];
-  snprintf(line, sizeof(line), "sensor timeout after %lu s", Uptime);
-  Blaeck.writeState(F("LastError"), line);
-
-  // Numbers convert to whatever the channel was declared as, so the literal does not have to
-  // match: 21 lands on a float channel as 21.0.
-  Blaeck.writeState(F("SetPoint"), 21);
-
-  Blaeck.writeState(F("SelfTest"), Fault);
 }
