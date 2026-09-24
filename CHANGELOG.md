@@ -86,6 +86,10 @@ without being configured for that board in advance.
   `getIntervalMs()` returned the lock mode before, not the rate.
 
 ### Changed
+- **`DeviceHWVersion` defaults to the selected build target.** Known boards use a friendly
+  name, other targets use the core's `ARDUINO_BOARD` string when available, and unknown
+  targets keep `"n/a"`. This is not physical hardware or PCB revision detection. An explicit
+  sketch assignment still overrides it and survives `begin()`.
 - **Buffered writes are back on for the mbed boards, reversing 6.0.1.** That release turned
   them off believing a bulk write could freeze the main loop; retesting on the same Giga R1
   showed the loop still running. Only AVR still defaults to unbuffered.

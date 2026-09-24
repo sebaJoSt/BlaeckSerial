@@ -2541,16 +2541,21 @@ public:
   const char *DeviceName = BLAECK_DEVICE_NAME_UNNAMED;
 
   /*!
-    @brief  The board the firmware runs on. Defaults to "n/a".
+    @brief  The hardware's name or revision. Defaults to the selected build target.
+
+    Recognised boards use a friendly name, otherwise the core's ARDUINO_BOARD string
+    is used if available, or "n/a". This identifies the target selected when compiling,
+    not the physical board or PCB revision. Assign your own value to describe custom
+    hardware; begin() does not overwrite it.
 
     @note   Only the pointer is kept. A string literal is fine; a name built at
             runtime must be in a global buffer.
 
     @code
-      Blaeck.DeviceHWVersion = "Arduino Mega 2560 Rev3";
+      Blaeck.DeviceHWVersion = "Weather Station PCB v2";
     @endcode
   */
-  const char *DeviceHWVersion = "n/a";
+  const char *DeviceHWVersion;
 
   /*!
     @brief  The firmware's version. Defaults to "n/a".

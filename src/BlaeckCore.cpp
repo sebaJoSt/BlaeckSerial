@@ -9,7 +9,36 @@
 namespace BLAECK_CORE_NAMESPACE
 {
 
-BlaeckCore::BlaeckCore()
+static const char *_defaultBoardName()
+{
+#if defined(ARDUINO_AVR_MEGA2560)
+  return "Arduino Mega 2560";
+#elif defined(ARDUINO_AVR_UNO)
+  return "Arduino Uno";
+#elif defined(ARDUINO_AVR_NANO)
+  return "Arduino Nano";
+#elif defined(ARDUINO_AVR_LEONARDO)
+  return "Arduino Leonardo";
+#elif defined(ARDUINO_AVR_MICRO)
+  return "Arduino Micro";
+#elif defined(ARDUINO_GIGA)
+  return "Arduino GIGA R1";
+#elif defined(ARDUINO_UNOWIFIR4)
+  return "Arduino UNO R4 WiFi";
+#elif defined(ARDUINO_MINIMA)
+  return "Arduino UNO R4 Minima";
+#elif defined(ARDUINO_SAMD_MKRZERO)
+  return "Arduino MKR Zero";
+#elif defined(ARDUINO_NANO_ESP32)
+  return "Arduino Nano ESP32";
+#elif defined(ARDUINO_BOARD)
+  return ARDUINO_BOARD;
+#else
+  return "n/a";
+#endif
+}
+
+BlaeckCore::BlaeckCore() : DeviceHWVersion(_defaultBoardName())
 {
   validatePlatformSizes();
 }
