@@ -1,8 +1,9 @@
 /*
-  Basic.ino
+  SHT31TempHumiditySensor.ino
 
-  This is a sample sketch to show how to use the BlaeckSerial library to transmit data
-  from the Arduino board to your PC every minute (or the user-set interval).
+  This is an example for the SHT31 Temperature & Humidity Sensor.
+  The sensor uses I2C to communicate, 2 pins are required to interface.
+  This example requires Adafruit SHT31 Libray to be installed.
 
   Author: Sebastian Strobl,
   More information on: https://github.com/sebaJoSt/BlaeckSerial
@@ -14,7 +15,7 @@
 
     <BLAECK.GET_DEVICES>              Writes the device's information to the PC
     <BLAECK.WRITE_SYMBOLS>            Writes the symbol list to the PC
-    <BLAECK.WRITE_DATA>               Writes the data to the PC
+    <BLAECK.WRITE_DATA>               Writes the temperature and humidity from the sensor to the PC
     <BLAECK.ACTIVATE,96,234>          The data is written every 60 seconds (60 000ms)
                                       first Byte:  0b01100000 = 96 DEC
                                       second Byte: 0b11101010 = 234 DEC
@@ -23,21 +24,25 @@
 */
 
 #include "Arduino.h"
+#include "Adafruit_SHT31.h"
 #include "BlaeckSerial.h"
 
 #define ExampleVersion "1.0"
 
+float temperature;
+float humidity;
+
+Adafruit_SHT31 sht31 = Adafruit_SHT31();
+
 // Instantiate a new BlaeckSerial object
 BlaeckSerial BlaeckSerial;
 
-// Signals
-float randomSmallNumber;
-long randomBigNumber;
-
 void setup()
 {
-  // Initialize Serial port
   Serial.begin(9600);
+
+  sht31.begin(0x44);
+  // sht31.heater(true);
 
   // Setup BlaeckSerial
   BlaeckSerial.begin(
@@ -45,33 +50,18 @@ void setup()
       2        // Maximal signal count used;
   );
 
-  BlaeckSerial.DeviceName = "Random Number Generator";
+  BlaeckSerial.DeviceName = "Temp Humidity Sensor";
   BlaeckSerial.DeviceHWVersion = "Arduino Mega 2560 Rev3";
   BlaeckSerial.DeviceFWVersion = ExampleVersion;
 
-  // Add signals to BlaeckSerial
-  BlaeckSerial.addSignal("Small Number", &randomSmallNumber);
-  BlaeckSerial.addSignal("Big Number", &randomBigNumber);
-
-  /*Uncomment for fixed interval lock (ms)
-    - ignores ACTIVATE/DEACTIVATE while locked */
-  // BlaeckSerial.setIntervalMs(60000);
+  BlaeckSerial.addSignal("Temperature [°C]", &temperature);
+  BlaeckSerial.addSignal("Humidity [%]", &humidity);
 }
 
 void loop()
 {
-  UpdateRandomNumbers();
+  temperature = sht31.readTemperature();
+  humidity = sht31.readHumidity();
 
-  /*Keeps watching for serial input (Serial.read) and
-    transmits the data at the user-set interval (Serial.write)*/
   BlaeckSerial.tick();
-}
-
-void UpdateRandomNumbers()
-{
-  // Random small number from 0.00 to 10.00
-  randomSmallNumber = random(1001) / 100.0;
-
-  // Random big number from 2 000 000 000 to 2 100 000 000
-  randomBigNumber = random(2000000000, 2100000001);
 }

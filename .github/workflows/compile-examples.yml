@@ -26,9 +26,33 @@ jobs:
 
       matrix:
         board:
-          # --- AVR boards ---
-          # No nano: the examples have outgrown its 30720 bytes, the smallest
-          # needing 31240 and WaveformGenerator 44874.
+          # --- AVR boards: all examples including EEPROMEx-based ones ---
+          - fqbn: arduino:avr:nano
+            platforms: |
+              - name: arduino:avr
+            libraries: |
+              - source-path: ./
+              - name: CRC
+              - name: Adafruit SHT31 Library
+              - name: EEPROMEx
+            sketch-paths: |
+              - examples/Basic
+              - examples/BasicMaster
+              - examples/BasicSlave
+              - examples/BasicUpdatesOnlyMaster
+              - examples/BasicUpdatesOnlySlave
+              - examples/Commands
+              - examples/DatatypeTest
+              - examples/DatatypeTestLimitsMaster
+              - examples/DatatypeTestLimitsSlave
+              - examples/DatatypeTestRandomMaster
+              - examples/DatatypeTestRandomSlave
+              - examples/SHT31TempHumiditySensor
+              - examples/SignalNamesInFlashLessRAMUsage
+              - examples/SineGeneratorAdvanced
+              - examples/SineGeneratorBasic
+              - examples/WriteModes
+            artifact-name-suffix: arduino-avr-nano
           - fqbn: arduino:avr:mega
             platforms: |
               - name: arduino:avr
@@ -36,18 +60,26 @@ jobs:
               - source-path: ./
               - name: CRC
               - name: Adafruit SHT31 Library
+              - name: EEPROMEx
             sketch-paths: |
               - examples/Basic
+              - examples/BasicMaster
+              - examples/BasicSlave
+              - examples/BasicUpdatesOnlyMaster
+              - examples/BasicUpdatesOnlySlave
               - examples/Commands
-              - examples/EventChannels
-              - examples/more/SHT31TempHumiditySensor
-              - examples/Signals
-              - examples/more/ConfigurableSignals
-              - examples/StateChannels
-              - examples/WaveformGenerator
+              - examples/DatatypeTest
+              - examples/DatatypeTestLimitsMaster
+              - examples/DatatypeTestLimitsSlave
+              - examples/DatatypeTestRandomMaster
+              - examples/DatatypeTestRandomSlave
+              - examples/SHT31TempHumiditySensor
+              - examples/SignalNamesInFlashLessRAMUsage
+              - examples/SineGeneratorAdvanced
+              - examples/SineGeneratorBasic
               - examples/WriteModes
             artifact-name-suffix: arduino-avr-mega
-          # --- ESP32: no RTC ---
+          # --- ESP32: no EEPROMEx, no RTC ---
           - fqbn: arduino:esp32:nano_nora
             platforms: |
               - name: arduino:esp32
@@ -57,15 +89,22 @@ jobs:
               - name: Adafruit SHT31 Library
             sketch-paths: |
               - examples/Basic
+              - examples/BasicMaster
+              - examples/BasicSlave
+              - examples/BasicUpdatesOnlyMaster
+              - examples/BasicUpdatesOnlySlave
               - examples/Commands
-              - examples/EventChannels
-              - examples/more/SHT31TempHumiditySensor
-              - examples/Signals
-              - examples/StateChannels
-              - examples/WaveformGenerator
+              - examples/DatatypeTest
+              - examples/DatatypeTestLimitsMaster
+              - examples/DatatypeTestLimitsSlave
+              - examples/DatatypeTestRandomMaster
+              - examples/DatatypeTestRandomSlave
+              - examples/SHT31TempHumiditySensor
+              - examples/SignalNamesInFlashLessRAMUsage
+              - examples/SineGeneratorBasic
               - examples/WriteModes
             artifact-name-suffix: arduino-esp32-nano_nora
-          # --- SAMD: no RTC ---
+          # --- SAMD: no EEPROMEx, no RTC ---
           - fqbn: arduino:samd:mkrzero
             platforms: |
               - name: arduino:samd
@@ -75,15 +114,22 @@ jobs:
               - name: Adafruit SHT31 Library
             sketch-paths: |
               - examples/Basic
+              - examples/BasicMaster
+              - examples/BasicSlave
+              - examples/BasicUpdatesOnlyMaster
+              - examples/BasicUpdatesOnlySlave
               - examples/Commands
-              - examples/EventChannels
-              - examples/more/SHT31TempHumiditySensor
-              - examples/Signals
-              - examples/StateChannels
-              - examples/WaveformGenerator
+              - examples/DatatypeTest
+              - examples/DatatypeTestLimitsMaster
+              - examples/DatatypeTestLimitsSlave
+              - examples/DatatypeTestRandomMaster
+              - examples/DatatypeTestRandomSlave
+              - examples/SHT31TempHumiditySensor
+              - examples/SignalNamesInFlashLessRAMUsage
+              - examples/SineGeneratorBasic
               - examples/WriteModes
             artifact-name-suffix: arduino-samd-mkrzero
-          # --- Uno R4 WiFi: has RTC in core ---
+          # --- Uno R4 WiFi: has RTC in core, no EEPROMEx ---
           - fqbn: arduino:renesas_uno:unor4wifi
             platforms: |
               - name: arduino:renesas_uno
@@ -93,35 +139,22 @@ jobs:
               - name: Adafruit SHT31 Library
             sketch-paths: |
               - examples/Basic
+              - examples/BasicMaster
+              - examples/BasicSlave
+              - examples/BasicUpdatesOnlyMaster
+              - examples/BasicUpdatesOnlySlave
               - examples/Commands
-              - examples/EventChannels
-              - examples/more/SHT31TempHumiditySensor
-              - examples/Signals
-              - examples/StateChannels
-              - examples/more/TimestampsRTC
-              - examples/WaveformGenerator
+              - examples/DatatypeTest
+              - examples/DatatypeTestLimitsMaster
+              - examples/DatatypeTestLimitsSlave
+              - examples/DatatypeTestRandomMaster
+              - examples/DatatypeTestRandomSlave
+              - examples/SHT31TempHumiditySensor
+              - examples/SignalNamesInFlashLessRAMUsage
+              - examples/SineGeneratorBasic
+              - examples/TimeStampModes
               - examples/WriteModes
             artifact-name-suffix: arduino-renesas_uno-unor4wifi
-          # --- ArduinoCore-mbed (Giga R1): no RTC.
-          #     Covered because the buffered-writes defaults treat mbed as a
-          #     special case, so this family must not regress unnoticed. ---
-          - fqbn: arduino:mbed_giga:giga
-            platforms: |
-              - name: arduino:mbed_giga
-            libraries: |
-              - source-path: ./
-              - name: CRC
-              - name: Adafruit SHT31 Library
-            sketch-paths: |
-              - examples/Basic
-              - examples/Commands
-              - examples/EventChannels
-              - examples/more/SHT31TempHumiditySensor
-              - examples/Signals
-              - examples/StateChannels
-              - examples/WaveformGenerator
-              - examples/WriteModes
-            artifact-name-suffix: arduino-mbed_giga-giga
 
     steps:
       - name: Checkout repository

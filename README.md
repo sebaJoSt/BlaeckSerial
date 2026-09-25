@@ -1,121 +1,158 @@
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="extras/blaeckSerial-dark.svg">
-  <source media="(prefers-color-scheme: light)" srcset="extras/blaeckSerial-light.svg">
-  <img src="extras/blaeckSerial-light.svg" alt="BlaeckSerial" height="75">
-</picture>
+<a href="url"><img src="https://user-images.githubusercontent.com/388152/185908831-4eccf7a6-5f43-405d-b7fe-5225eeba302d.png" height="75"></a>
+<a href="url"><img src="https://user-images.githubusercontent.com/388152/186109775-c7f1bb61-4cc0-4dc1-9969-49c2f2e1303f.png"  alt="BlaeckSerial Logo SeeSaw Font" height="70"></a>
+===
 
----
 
-BlaeckSerial is an Arduino library. It sends any value your sketch holds - sensor readings,
-calculated results, text - over the serial port as binary data, using the
-[Blaeck protocol](https://sebajost.github.io/blaeck-protocol/).
 
-It is the first part of a chain:
+BlaeckSerial is a simple Arduino library to send binary (sensor) data via Serial port to your PC using the [Blaeck protocol](https://sebajost.github.io/blaeck-protocol/). The data can be sent periodically or requested on demand with [serial commands](#blaeckserial-commands). It supports Master/Slave configuration to include data from additional slave boards connected to the master Arduino over I2C.  
+Also included is a message parser which reads input in the syntax of `<HelloWorld, 12, 47>`. You can register exact command handlers (`onCommand`) and a catch-all handler (`onAnyCommand`) in your sketch.
 
-1. **Your Arduino sketch** uses BlaeckSerial to register each variable it sends as a *signal* -
-   a temperature, a counter, a switch position. You can also register the commands the board
-   accepts and the events it fires.
-2. **Loggbok**, a data logging tool, reads the signals over the serial port and stores
-   them in a database. It is also an MQTT bridge: it publishes the signals and commands to a
-   broker.
-3. **Home Assistant** subscribes to that broker and creates one entity for each: a sensor for
-   a signal, a slider or button for a command.
+## Getting Started
 
-Because your sketch declares what it has, no part of the chain has to be set up by hand. A
-signal with a unit arrives in Home Assistant as a sensor with that unit.
+Clone this repository into `Arduino/Libraries` or use the built-in Arduino IDE Library manager to install
+a copy of this library. You can find more detail about installing libraries 
+[here, on Arduino's website](https://docs.arduino.cc/software/ide-v2/tutorials/ide-v2-installing-a-library).
 
-Loggbok is an internal tool and is not publicly released. The protocol is documented, so you
-can write your own host. The examples in this repository also work with a plain serial monitor.
+(Open Basic Example under `File -> Examples -> BlaeckSerial` for reference)
 
-## A first sketch
-
-This sketch sends two values:
-
-```cpp
+```CPP
+#include <Arduino.h>
 #include <BlaeckSerial.h>
-
-BlaeckSerial Blaeck;
-
-float temperature;
-long  pressure;
-
+```
+### Instantiate BlaeckSerial
+```CPP
+BlaeckSerial BlaeckSerial;
+```
+### Initialize Serial & BlaeckSerial
+```CPP
 void setup()
 {
-  Serial.begin(115200);
-  Blaeck.begin(&Serial);
+  Serial.begin(9600);
 
-  Blaeck.DeviceName = "Weather Station";
-
-  Blaeck.addSignal(F("Temperature"), &temperature);
-  Blaeck.addSignal(F("Pressure"), &pressure);
-}
-
-void loop()
-{
-  ReadSensors();
-
-  Blaeck.tick();
+  BlaeckSerial.begin(
+    &Serial,   //Serial reference
+    2          //Maxmimal signal count used;
+  );
 }
 ```
 
-Three calls do the work:
+### Add signals
+```CPP
+ BlaeckSerial.addSignal("Test Signal 1", &someGlobalVariable);
+ BlaeckSerial.addSignal("Test Signal 2", &anotherGlobalVariable);
+```
 
-- `begin(&Serial)` hands BlaeckSerial the serial port you opened on the line above. On a board
-  with more than one port you can pass `&Serial1` instead.
-- `addSignal(...)` registers a variable. BlaeckSerial keeps a pointer to it and reads it
-  whenever it sends data, so you only have to keep the variable up to date.
-- `tick()` reads incoming commands and sends the values when they are due. Call it in every
-  `loop()`.
+If more signals are added than the configured capacity in `begin(...)`, extra signals are ignored.
+You can detect this in your sketch:
+```CPP
+if (BlaeckSerial.hasSignalOverflow()) {
+  Serial.print("Ignored signals: ");
+  Serial.println(BlaeckSerial.getSignalOverflowCount());
+}
+```
 
-The host decides how often data is sent. It sends `<BLAECK.ACTIVATE,1000>` to get one frame
-per second, and `<BLAECK.DEACTIVATE>` to stop. Your sketch does not need to know the interval.
+### Update your variables and don't forget to `tick()`!
+```CPP
+void loop()
+{
+  UpdateYourVariables();
 
-## Documentation
+  /*Keeps watching for serial input (Serial.read) and
+    transmits the data at the user-set interval (Serial.write)*/
+  BlaeckSerial.tick();
+}
+```
 
-| Guide | What it covers |
-|---|---|
-| [Signals](docs/signals.md) | Registering values, naming them, and describing how they are shown |
-| [Commands](docs/commands.md) | Reacting to commands, and declaring them as controls |
-| [State channels](docs/state-channels.md) | Reporting a value that is displayed but not logged |
-| [Events](docs/events.md) | Reporting that something happened |
-| [Sending data](docs/sending-data.md) | Intervals, sending it yourself, timestamps, buffered writes |
-| [Configuration](docs/configuration.md) | Table sizes and compile-time settings |
+## BlaeckSerial commands
 
-## Examples
+See the [protocol documentation](https://sebajost.github.io/blaeck-protocol/protocol/commands) for the full list of serial commands and their parameters.
 
-The examples are in `examples/`. In the Arduino IDE, open them with
-**File > Examples > BlaeckSerial**.
+### Interval lock mode
 
-Start with **Basic**, then **Signals** and **Commands**. Follow with **StateChannels** and
-**EventChannels**, then **WaveformGenerator** to see the pieces working together.
+By default, timed data is client-controlled (`BLAECK.ACTIVATE` / `BLAECK.DEACTIVATE`).
+You can lock interval behavior from sketch code:
 
-| Example | What it teaches |
-|---|---|
-| [Basic](examples/Basic) | The smallest sketch that logs two values |
-| [Signals](examples/Signals) | Numeric, boolean and text signals, metadata, and numbered arrays |
-| [Commands](examples/Commands) | Plain commands and typed dashboard controls |
-| [StateChannels](examples/StateChannels) | Values shown but never logged, from variables, getters or explicit writes |
-| [EventChannels](examples/EventChannels) | Declaring and reporting occurrences |
-| [WaveformGenerator](examples/WaveformGenerator) | A complete, controllable waveform dashboard |
-| [WriteModes](examples/WriteModes) | Immediate writes versus updated-only data sent on the host's interval |
-| [more / ConfigurableSignals](examples/more/ConfigurableSignals) | Choose which signals to log through commands and save the selection in EEPROM |
-| [more / SHT31TempHumiditySensor](examples/more/SHT31TempHumiditySensor) | Read a real temperature and humidity sensor; requires Adafruit SHT31 |
-| [more / TimestampsRTC](examples/more/TimestampsRTC) | Wall-clock timestamps using the UNO R4's RTC |
+```CPP
+// Fixed interval lock: always send every 500 ms, ignore ACTIVATE/DEACTIVATE
+BlaeckSerial.setIntervalMs(500);
 
-The seven core topics stay at the top level. `more/` holds the additional examples.
-Exhaustive test harnesses stay in
-`extras/tests/harness/`, outside the examples menu.
+// Off lock: disable timed data and ignore ACTIVATE
+BlaeckSerial.setIntervalMs(BLAECK_INTERVAL_OFF);
 
-## Reference
+// Back to client control (default behavior)
+BlaeckSerial.setIntervalMs(BLAECK_INTERVAL_CLIENT);
+```
 
-Every method is documented in `src/BlaeckSerial.h`, with an example. Your editor shows it when
-you hover over a call.
+`setTimedData(...)` has been removed. Use `setIntervalMs(...)` instead.
 
-The frame formats are described in the
-[Blaeck protocol specification](https://sebajost.github.io/blaeck-protocol/blaeckserial/overview).
+### Command handler API
 
-## Help and licence
+Available callbacks:
+- `onCommand(...)` and `onAnyCommand(...)` for parsed incoming commands
+- `setCommandCallback(...)` (deprecated, still supported with runtime warning)
+- `setBeforeWriteCallback(...)` before data is written
 
-For questions and bug reports, see [SUPPORT.md](SUPPORT.md). To contribute, see
-[CONTRIBUTING.md](CONTRIBUTING.md). BlaeckSerial is released under the MIT licence
-([LICENSE.md](LICENSE.md)).
+Command parser defaults are architecture-aware:
+- AVR (`__AVR__`): 48 command chars, 4 registered handlers, 24 command-name chars, 10 params
+- Non-AVR: 96 command chars, 12 registered handlers, 40 command-name chars, 10 params
+
+These defaults can be overridden by placing a `BlaeckSerialConfig.h` file in your sketch folder:
+```CPP
+// BlaeckSerialConfig.h
+#define BLAECK_COMMAND_MAX_CHARS_DEFAULT 128
+#define BLAECK_COMMAND_MAX_HANDLERS_DEFAULT 8
+#define BLAECK_COMMAND_MAX_NAME_CHARS_DEFAULT 48
+#define BLAECK_COMMAND_MAX_PARAMS_DEFAULT 16
+#define BLAECK_BUFFERED_WRITES_DEFAULT false
+```
+
+PlatformIO users can also use compiler flags in `platformio.ini`:
+```ini
+build_flags = -DBLAECK_COMMAND_MAX_CHARS_DEFAULT=128
+```
+
+```CPP
+void onSwitchLED(const char *command, const char *const *params, byte paramCount)
+{
+  if (paramCount < 1) return;
+  int state = atoi(params[0]);
+  digitalWrite(LED_BUILTIN, state == 1 ? HIGH : LOW);
+}
+
+void onAny(const char *command, const char *const *params, byte paramCount)
+{
+  // Optional catch-all hook
+}
+
+void setup()
+{
+  // ...
+  BlaeckSerial.onCommand("SwitchLED", onSwitchLED);
+  BlaeckSerial.onAnyCommand(onAny);
+}
+```
+
+### Buffered writes
+
+On boards with UART-to-USB bridges (e.g. **Arduino Uno R4 WiFi**), rapid
+individual `Serial.write()` calls can cause bytes to be dropped.  BlaeckSerial
+can assemble entire frames in RAM and send them with a single write.
+
+| Board family | Default |
+| ------------ | ------- |
+| AVR (Uno, Mega, Nano) | OFF (saves SRAM) |
+| Everything else (R4 WiFi, ESP32, ARM, …) | **ON** |
+
+Override at runtime:
+
+```CPP
+BlaeckSerial.setBufferedWrites(true);   // force ON
+BlaeckSerial.setBufferedWrites(false);  // force OFF
+
+Serial.println(BlaeckSerial.isBufferedWrites() ? "ON" : "OFF");
+```
+
+## Protocol
+
+Full protocol specification with version history: [sebajost.github.io/blaeck-protocol](https://sebajost.github.io/blaeck-protocol/blaeckserial/overview)
+

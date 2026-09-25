@@ -1,26 +1,21 @@
 /*
   WriteModes.ino
 
-  Three signals get the same value once per second. Only the sending method differs:
+  This sketch demonstrates two different data transmission patterns:
 
-    Immediate  write() stores the value and sends it immediately.
-    Marked     assign the variable, then markSignalUpdated() flags it for sending.
-    Updated    update() stores the value and flags it in one call.
+  1. Direct Write (Sine_1):
+     - Data is immediately transmitted after updating
+     - Updates every 100ms using BlaeckSerial.write()
 
-  Marked and Updated behave identically. tickUpdated() sends the latest values of flagged
-  signals on the host's interval; intermediate values are not queued.
-
-  Try this:
-    Set the host's logging interval to 5000 ms, or send <BLAECK.ACTIVATE,5000>.
-    Immediate sends each new value once per second. After the initial interval-driven
-    response, Marked and Updated send their latest values every five seconds.
-    Send <BLAECK.DEACTIVATE>: interval-driven sends stop, but the explicit write() calls
-    keep sending Immediate. Deactivation does not stop the sketch's own writes.
-
-  These are binary data frames, not readable text in a serial monitor.
-
-  Author: Sebastian Strobl,
-  More information on: https://github.com/sebaJoSt/BlaeckSerial
+  2. Interval Mode (Sine_2 & Sine_3):
+     - Data is marked as updated but transmitted only when tickUpdated() is called
+     - Sine_2:
+        - updates every 2 seconds
+        - Data is calculated and stored in the signal variable
+        - Signal is marked as updated using BlaeckSerial.markSignalUpdated()
+     - Sine_3
+        - updates every 10 seconds
+        - Sames as Sine_2, but BlaeckSerial.update() combines updating and marking in a single function call
 */
 
 #include "Arduino.h"
@@ -29,12 +24,24 @@
 #define ExampleVersion "1.0"
 
 // Instantiate a new BlaeckSerial object
-BlaeckSerial Blaeck;
+BlaeckSerial BlaeckSerial;
 
 // Signals
-float Immediate = 0.0f;
-float Marked = 0.0f;
-float Updated = 0.0f;
+float sine_1;
+float sine_2;
+float sine_3;
+
+unsigned long updateLastTimeDone_s1 = 0;
+unsigned long updateInterval_s1 = 100; // 100ms interval
+bool updateFirstTime_s1 = true;
+
+unsigned long updateLastTimeDone_s2 = 0;
+unsigned long updateInterval_s2 = 2000; // 2s interval
+bool updateFirstTime_s2 = true;
+
+unsigned long updateLastTimeDone_s3 = 0;
+unsigned long updateInterval_s3 = 10000; // 10s interval
+bool updateFirstTime_s3 = true;
 
 void setup()
 {
@@ -42,39 +49,63 @@ void setup()
   Serial.begin(115200);
 
   // Setup BlaeckSerial
-  Blaeck.begin(&Serial).withSignals(3);
+  BlaeckSerial.begin(
+      &Serial, // Serial reference
+      3        // Maximal signal count used;
+  );
 
-  Blaeck.DeviceName = "WriteModes";
-  Blaeck.DeviceFWVersion = ExampleVersion;
+  BlaeckSerial.DeviceName = "Basic Sine Number Generator";
+  BlaeckSerial.DeviceHWVersion = "Arduino Mega 2560 Rev3";
+  BlaeckSerial.DeviceFWVersion = ExampleVersion;
 
   // Add signals to BlaeckSerial
-  Blaeck.addSignal(F("Immediate"), &Immediate);
-  Blaeck.addSignal(F("Marked"), &Marked);
-  Blaeck.addSignal(F("Updated"), &Updated);
+  BlaeckSerial.addSignal(F("Sine_1"), &sine_1);
+  BlaeckSerial.addSignal(F("Sine_2"), &sine_2);
+  BlaeckSerial.addSignal(F("Sine_3"), &sine_3);
 }
 
 void loop()
 {
-  UpdateSignals();
+  TransmitFirstSine();
 
-  // Reads what has come in and sends the signals marked above.
-  Blaeck.tickUpdated();
+  UpdateSecondSine();
+  UpdateThirdSine();
+
+  BlaeckSerial.tickUpdated();
 }
 
-void UpdateSignals()
+void TransmitFirstSine()
 {
-  static unsigned long lastUpdate = 0;
-  const unsigned long now = millis();
-  if (now - lastUpdate < 1000UL)
-    return;
-  lastUpdate = now;
+  if ((millis() - updateLastTimeDone_s1 >= updateInterval_s1) || updateFirstTime_s1)
+  {
+    updateLastTimeDone_s1 = millis();
+    updateFirstTime_s1 = false;
 
-  const float value = sin(now * 0.00005f);
+    float calcSine = sin(millis() * 0.00005);
+    BlaeckSerial.write("Sine_1", calcSine);
+  }
+}
 
-  Blaeck.write("Immediate", value);
+void UpdateSecondSine()
+{
+  if ((millis() - updateLastTimeDone_s2 >= updateInterval_s2) || updateFirstTime_s2)
+  {
+    updateLastTimeDone_s2 = millis();
+    updateFirstTime_s2 = false;
 
-  Marked = value;
-  Blaeck.markSignalUpdated("Marked");
+    sine_2 = sin(millis() * 0.00005);
+    BlaeckSerial.markSignalUpdated("Sine_2");
+  }
+}
 
-  Blaeck.update("Updated", value);
+void UpdateThirdSine()
+{
+  if ((millis() - updateLastTimeDone_s3 >= updateInterval_s3) || updateFirstTime_s3)
+  {
+    updateLastTimeDone_s3 = millis();
+    updateFirstTime_s3 = false;
+
+    float calcSine = sin(millis() * 0.00005);
+    BlaeckSerial.update("Sine_3", calcSine);
+  }
 }

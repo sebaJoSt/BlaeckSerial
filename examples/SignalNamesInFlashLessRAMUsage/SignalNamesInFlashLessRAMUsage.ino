@@ -1,13 +1,13 @@
 /*
-  Basic.ino
+  SignalNamesInFlashLessRAMUsage.ino
 
-  This is a sample sketch to show how to use the BlaeckSerial library to transmit data
-  from the Arduino board to your PC every minute (or the user-set interval).
+  This example sketch is similar to Basic.ino but stores the
+  Signal names in flash memory using the F() Macro thereby saving RAM.
 
-  Author: Sebastian Strobl,
-  More information on: https://github.com/sebaJoSt/BlaeckSerial
+  This is useful for the AVR architecture (ATMega328p,..).
+  Other microcontrollers, like the ESP32, handle RAM differently.
 
-  Setup:
+  Usage:
     Upload the sketch to your Arduino.
     Open the Serial Monitor and set the baudrate to 9600 baud.
     Type the following commands and press enter:
@@ -20,7 +20,11 @@
                                       second Byte: 0b11101010 = 234 DEC
                                       Minimum: 0[milliseconds] Maximum: 4 294 967 295[milliseconds]
     <BLAECK.DEACTIVATE>               Stops writing the data every 60s
-*/
+
+
+  created by Sebastian Strobl
+  More information on: https://github.com/sebaJoSt/BlaeckSerial
+ */
 
 #include "Arduino.h"
 #include "BlaeckSerial.h"
@@ -49,9 +53,9 @@ void setup()
   BlaeckSerial.DeviceHWVersion = "Arduino Mega 2560 Rev3";
   BlaeckSerial.DeviceFWVersion = ExampleVersion;
 
-  // Add signals to BlaeckSerial
-  BlaeckSerial.addSignal("Small Number", &randomSmallNumber);
-  BlaeckSerial.addSignal("Big Number", &randomBigNumber);
+  // Add signals to BlaeckSerial using the F() Macro
+  BlaeckSerial.addSignal(F("Small Number"), &randomSmallNumber);
+  BlaeckSerial.addSignal(F("Big Number"), &randomBigNumber);
 
   /*Uncomment for fixed interval lock (ms)
     - ignores ACTIVATE/DEACTIVATE while locked */
