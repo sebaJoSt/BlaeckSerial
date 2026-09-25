@@ -7,8 +7,7 @@
 > [!IMPORTANT]
 > BlaeckSerial is no longer developed; 6.0.1 is its final release. Its successor is
 > [blaeck](https://github.com/sebaJoSt/blaeck), which combines BlaeckSerial and BlaeckTCP in one
-> library from version 7.0.0. Work that followed 6.0.1 here is kept on the
-> [`7.0-dev`](https://github.com/sebaJoSt/BlaeckSerial/tree/7.0-dev) branch.
+> library from version 7.0.0.
 
 BlaeckSerial is a simple Arduino library to send binary (sensor) data via Serial port to your PC using the [Blaeck protocol](https://sebajost.github.io/blaeck-protocol/). The data can be sent periodically or requested on demand with [serial commands](#blaeckserial-commands). It supports Master/Slave configuration to include data from additional slave boards connected to the master Arduino over I2C.  
 Also included is a message parser which reads input in the syntax of `<HelloWorld, 12, 47>`. You can register exact command handlers (`onCommand`) and a catch-all handler (`onAnyCommand`) in your sketch.
